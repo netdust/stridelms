@@ -9,6 +9,7 @@ use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\Enrollment\RegistrationTransitions;
 use Stride\Modules\Invoicing\QuoteRepository;
 use WP_Error;
 
@@ -228,11 +229,15 @@ final class BulkRegistrationHandler
         }
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
-            // M3: only pending/interest may be approved into the pipe. A confirmed
-            // row is rejected HERE, before the domain confirm path is re-entered —
-            // this is the gate that prevents a second LD grant (D2).
+            // M3 / B5: a row may be approved into the pipe only if the ONE
+            // transition map (RegistrationTransitions, V15) permits
+            // <status> -> Confirmed. A confirmed/terminal row is rejected HERE,
+            // before the domain confirm path is re-entered — this is the gate that
+            // prevents a second LD grant (D2). Deriving from the map (not a
+            // hard-coded Pending|Interest literal) keeps the handler from drifting
+            // if the map changes; the domain confirmRegistration() re-guards.
             $from = RegistrationStatus::tryFrom((string) $reg->status);
-            if ($from !== RegistrationStatus::Pending && $from !== RegistrationStatus::Interest) {
+            if ($from === null || !RegistrationTransitions::isAllowed($from, RegistrationStatus::Confirmed)) {
                 return new WP_Error('invalid_status', __('Deze inschrijving kan niet goedgekeurd worden.', 'stride'));
             }
 

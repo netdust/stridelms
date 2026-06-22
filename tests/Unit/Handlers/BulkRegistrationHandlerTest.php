@@ -139,7 +139,7 @@ class BulkRegistrationHandlerTest extends TestCase
             203 => (object) ['id' => 203, 'status' => 'confirmed', 'edition_id' => 10],
         ];
         $repo = $this->createMock(RegistrationRepository::class);
-        $repo->method('find')->willReturnCallback(fn (int $id) => $rows[$id] ?? null);
+        $repo->method('find')->willReturnCallback(fn(int $id) => $rows[$id] ?? null);
         ntdst_set(RegistrationRepository::class, $repo);
 
         $enrollment = $this->createMock(EnrollmentService::class);
@@ -187,11 +187,91 @@ class BulkRegistrationHandlerTest extends TestCase
 
         $this->handler->handleBulkCancel([], ['ids' => [210]]);
 
-        $errorLogs = array_filter($_test_log_entries, fn (array $e) => $e['level'] === 'error');
+        $errorLogs = array_filter($_test_log_entries, fn(array $e) => $e['level'] === 'error');
         $this->assertNotEmpty($errorLogs, 'an error must be logged for the caught exception');
         $entry = array_values($errorLogs)[0];
         $this->assertSame('enrollment', $entry['channel']);
         $this->assertSame(210, $entry['context']['registration_id'] ?? null);
+    }
+
+    /**
+     * B5 (sibling-audit drift): the approve pre-check derives from the ONE
+     * transition map (RegistrationTransitions), not a hard-coded status literal.
+     * A terminal source status (Completed) — which the old hard-coded
+     * Pending|Interest check also rejected — is refused with invalid_status, and
+     * the domain confirm path is never entered (no double-apply).
+     */
+    public function test_bulk_approve_rejects_completed_via_transition_map(): void
+    {
+        $completedRow = (object) ['id' => 560, 'status' => 'completed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($completedRow);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $completion = $this->createMock(EnrollmentCompletion::class);
+        $completion->expects($this->never())->method('completeTask');
+        ntdst_set(EnrollmentCompletion::class, $completion);
+
+        $enrollment = $this->createMock(EnrollmentService::class);
+        $enrollment->expects($this->never())->method('confirmRegistration');
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        $report = $this->handler->handleBulkApprove([], ['ids' => [560]]);
+
+        $this->assertCount(0, $report['succeeded']);
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame('invalid_status', $report['failed'][0]['code']);
+    }
+
+    /**
+     * B5: an Interest row lands in failed[] with invalid_status. The transition
+     * map says Interest -> {Pending, Cancelled} (NOT Confirmed), so the handler
+     * now rejects it up front. Net report outcome is identical to before: the old
+     * hard-coded check let Interest INTO the handler but the domain
+     * confirmRegistration() then rejected it with invalid_status — same failed[]
+     * code, just decided one layer earlier (and without a wasted completeTask).
+     */
+    public function test_bulk_approve_interest_lands_in_failed_invalid_status(): void
+    {
+        $interestRow = (object) ['id' => 562, 'status' => 'interest', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($interestRow);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $completion = $this->createMock(EnrollmentCompletion::class);
+        $completion->expects($this->never())->method('completeTask');
+        ntdst_set(EnrollmentCompletion::class, $completion);
+
+        $report = $this->handler->handleBulkApprove([], ['ids' => [562]]);
+
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame('invalid_status', $report['failed'][0]['code']);
+    }
+
+    /**
+     * B5: a Pending row — the canonical Pending->Confirmed transition — still
+     * proceeds through the domain sequence (completeTask + confirmRegistration).
+     * Proves the transition-map refactor preserves the happy path.
+     */
+    public function test_bulk_approve_pending_still_proceeds_via_transition_map(): void
+    {
+        $pendingRow = (object) ['id' => 561, 'status' => 'pending', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($pendingRow);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $completion = $this->createMock(EnrollmentCompletion::class);
+        $completion->expects($this->once())->method('completeTask')->with(561, 'approval')->willReturn(true);
+        ntdst_set(EnrollmentCompletion::class, $completion);
+
+        $enrollment = $this->createMock(EnrollmentService::class);
+        $enrollment->expects($this->once())->method('confirmRegistration')->with(561)->willReturn(true);
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        $report = $this->handler->handleBulkApprove([], ['ids' => [561]]);
+
+        $this->assertCount(1, $report['succeeded']);
+        $this->assertCount(0, $report['failed']);
     }
 
     // =========================================================================
@@ -235,7 +315,7 @@ class BulkRegistrationHandlerTest extends TestCase
             $rows[$id] = (object) ['id' => $id, 'status' => 'confirmed', 'edition_id' => 10];
         }
         $repo = $this->createMock(RegistrationRepository::class);
-        $repo->method('find')->willReturnCallback(fn (int $id) => $rows[$id] ?? null);
+        $repo->method('find')->willReturnCallback(fn(int $id) => $rows[$id] ?? null);
         ntdst_set(RegistrationRepository::class, $repo);
 
         $quoteRepo = $this->createMock(QuoteRepository::class);
@@ -266,7 +346,7 @@ class BulkRegistrationHandlerTest extends TestCase
             $rows[$id] = (object) ['id' => $id, 'status' => 'confirmed', 'edition_id' => 10];
         }
         $repo = $this->createMock(RegistrationRepository::class);
-        $repo->method('find')->willReturnCallback(fn (int $id) => $rows[$id] ?? null);
+        $repo->method('find')->willReturnCallback(fn(int $id) => $rows[$id] ?? null);
         ntdst_set(RegistrationRepository::class, $repo);
 
         $quoteRepo = $this->createMock(QuoteRepository::class);
