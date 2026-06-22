@@ -1582,10 +1582,11 @@ final class RegistrationRepository
 
         $order = strtolower($filters['order'] ?? '') === 'asc' ? 'ASC' : 'DESC';
 
-        // group_by: validated against GROUP_BY_ALLOWLIST (M4 — column name never from user input).
-        $groupBy = in_array($filters['group_by'] ?? '', self::GROUP_BY_ALLOWLIST, true)
-            ? $filters['group_by']
-            : null;
+        // group_by is intentionally NOT applied here. queryForGrid is the FLAT
+        // read-model: one row per registration. Grouping rows by a non-aggregated
+        // column (over the 14 selected columns) returns arbitrary rows under
+        // MariaDB's relaxed ONLY_FULL_GROUP_BY. Grouped/aggregate reads are owned
+        // by queryForGridGrouped (the service routes group_by requests there).
 
         // --- Build shared WHERE / JOIN (all filters including q) ---
         $built   = $this->buildGridFilters($filters);
@@ -1598,21 +1599,11 @@ final class RegistrationRepository
         $whereClause = $built['where_clause'];
         $params      = $built['params'];
 
-        // --- GROUP BY (validated M4 allowlist — column name never from user input) ---
-        $groupByClause = $groupBy !== null ? "GROUP BY r.{$groupBy}" : '';
-
-        // --- COUNT total ---
-        // Count query: structured columns only (M5).
+        // --- COUNT total (row count — flat read-model, M5: structured columns only) ---
         $countSql = "SELECT COUNT(*) FROM {$regTable} r
                      LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
                      {$activeJoin}
-                     {$whereClause}
-                     {$groupByClause}";
-
-        // When group_by is active, COUNT(*) counts groups — wrap it.
-        if ($groupBy !== null) {
-            $countSql = "SELECT COUNT(*) FROM ({$countSql}) AS _grp_count";
-        }
+                     {$whereClause}";
 
         $total = (int) ($params
             ? $wpdb->get_var($wpdb->prepare($countSql, ...$params))
@@ -1628,7 +1619,6 @@ final class RegistrationRepository
                     LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
                     {$activeJoin}
                     {$whereClause}
-                    {$groupByClause}
                     ORDER BY r.{$sort} {$order}
                     LIMIT %d OFFSET %d";
 
@@ -1682,21 +1672,21 @@ final class RegistrationRepository
 
         $groupColSql = "r.{$groupBy}";  // column name from allowlist — never user input
 
-        // --- Count total matching ROWS (mirrors queryForGrid's total) ---
-        $countSql = $params
-            ? $wpdb->prepare(
-                "SELECT COUNT(*) FROM {$regTable} r
-                 LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
-                 {$activeJoin}
-                 {$whereClause}",
-                ...$params,
-            )
-            : "SELECT COUNT(*) FROM {$regTable} r
-               LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
-               {$activeJoin}
-               {$whereClause}";
+        // --- Count total DISTINCT GROUPS (the page is paginated over groups) ---
+        // total = number of group-pages' worth of rows, NOT the matching ROW count.
+        // Counting rows here invented phantom pages (ceil(rowTotal/perPage) when the
+        // LIMIT/OFFSET is applied to the grouped aggregate). Mirror queryForGrid's
+        // group-count subquery wrap.
+        $innerCountSql = "SELECT 1 FROM {$regTable} r
+                          LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                          {$activeJoin}
+                          {$whereClause}
+                          GROUP BY {$groupColSql}";
+        $countSql = "SELECT COUNT(*) FROM ({$innerCountSql}) AS _grp_count";
 
-        $total = (int) $wpdb->get_var($countSql);
+        $total = (int) ($params
+            ? $wpdb->get_var($wpdb->prepare($countSql, ...$params))
+            : $wpdb->get_var($countSql));
 
         // --- Aggregate SELECT: one row per group, ordered by count DESC ---
         $aggSql = "SELECT {$groupColSql} AS group_value,
@@ -1724,13 +1714,40 @@ final class RegistrationRepository
         }
 
         // --- Fetch reg IDs per group for the current page's groups only ---
-        // This feeds the bounded two-step offerte resolver without a JSON aggregate (M5).
-        $groupValues      = array_map(fn($r) => $r->group_value, $aggRows);
-        $groupPlaceholders = implode(',', array_fill(0, count($groupValues), '%s'));
-        $groupValuesCast  = array_map('strval', $groupValues);
+        // This feeds the two-step offerte resolver without a JSON aggregate (M5).
+        // TODO(perf, deferred): this IDs subquery is unbounded per group — it pulls
+        // every reg-id of each visible group into PHP to tally offerte_verdeling.
+        // A bounded fix (aggregating the per-quote-status tally in SQL) is a larger
+        // rewrite than a fix-pass should carry; the FIX 1 trajectory-parent corpus
+        // exclusion already shrinks the corpus. A blind LIMIT here would desync the
+        // tally from the group count, so it is intentionally NOT applied. Tracked.
+        // A NULL group_value (defensive — the edition_id-NULL corpus exclusion in
+        // buildGridFilters means this should never occur for edition_id, but other
+        // allowlist columns could in principle hold NULL) must route via IS NULL,
+        // NEVER `IN ('')` — strval(null)='' would silently miss the IS NULL rows.
+        $nonNullGroupValues = [];
+        $hasNullGroup       = false;
+        foreach ($aggRows as $r) {
+            if ($r->group_value === null) {
+                $hasNullGroup = true;
+            } else {
+                $nonNullGroupValues[] = (string) $r->group_value;
+            }
+        }
 
-        $groupFilter = "r.{$groupBy} IN ({$groupPlaceholders})";
-        $fullWhere   = $whereClause
+        $groupClauses    = [];
+        $groupFilterArgs = [];
+        if (!empty($nonNullGroupValues)) {
+            $groupPlaceholders = implode(',', array_fill(0, count($nonNullGroupValues), '%s'));
+            $groupClauses[]    = "r.{$groupBy} IN ({$groupPlaceholders})";
+            $groupFilterArgs   = $nonNullGroupValues;
+        }
+        if ($hasNullGroup) {
+            $groupClauses[] = "r.{$groupBy} IS NULL";
+        }
+        $groupFilter = '(' . implode(' OR ', $groupClauses) . ')';
+
+        $fullWhere = $whereClause
             ? "{$whereClause} AND {$groupFilter}"
             : "WHERE {$groupFilter}";
 
@@ -1739,7 +1756,7 @@ final class RegistrationRepository
                       LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
                       {$activeJoin}
                       {$fullWhere}";
-        $idsParams = array_merge($params, $groupValuesCast);
+        $idsParams = array_merge($params, $groupFilterArgs);
         $idsRows   = $wpdb->get_results($wpdb->prepare($idsSql, ...$idsParams));
 
         $groupRegIds = [];
@@ -1776,6 +1793,16 @@ final class RegistrationRepository
      *
      * M4 guarantee: every param reaches SQL only via $wpdb->prepare() %s/%d placeholders.
      * M5 guarantee: enrollment_data, selections, completion_tasks are never read here.
+     *
+     * Corpus & scope semantics (by design):
+     *  - Base predicate `r.edition_id IS NOT NULL` excludes trajectory PARENT rows
+     *    from EVERY scope — they are never an edition-grained grid row.
+     *  - The default 'active' scope JOINs editions with post_status='publish'. A
+     *    registration on a NON-published edition (trashed/draft) therefore gets
+     *    `ae.ID IS NULL` and is EXCLUDED from the default view (mirrors archived-
+     *    edition hiding). Such registrations remain reachable via an explicit
+     *    edition_id (which bypasses active scope) or edition_scope='all'. This is
+     *    intentional: a trashed edition is also absent from the picker.
      *
      * @param  array<string,mixed> $filters
      * @return array{active_join:string,where_clause:string,params:array,page:int,per_page:int}
@@ -1814,16 +1841,29 @@ final class RegistrationRepository
         $where  = [];
         $params = [];
 
+        // Base corpus predicate — the grid is EDITION-GRAINED.
+        // Trajectory PARENT rows carry trajectory_id SET + edition_id NULL; they
+        // are NEVER a grid row in ANY scope (they live in TRAJ_PARENTS, surfaced
+        // by the trajectory layer, not the edition grid). Interest rows — even on
+        // dateless editions — ALWAYS carry a real edition_id, so this predicate
+        // excludes only trajectory parents and never an interest/enrolment row.
+        // (Fixes the leak where edition_id-NULL parents bypassed age/status scope,
+        // and the grouped NULL-group `IN ('')` offerte loss — that group can no
+        // longer form.)
+        $where[] = 'r.edition_id IS NOT NULL';
+
         // Active-edition scope predicate (mirrors getEditions() commit e2ace22b).
         // LEFT JOIN on start_date; WHERE start_date >= twoDaysAgo OR IS NULL.
-        // This guarantees dateless editions (sessionless §10.7) always show through.
+        // The dateless-edition carve-out (sessionless §10.7) rides on
+        // pm_start.meta_value IS NULL (edition_id SET, no _ntdst_start_date) —
+        // NOT on an edition_id-NULL disjunct (parents are already excluded above).
         $activeJoin = '';
         if ($useActiveScope) {
             $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
             $activeJoin =
                 "LEFT JOIN {$wpdb->posts} ae ON ae.ID = r.edition_id AND ae.post_type = 'vad_edition' AND ae.post_status = 'publish'
                  LEFT JOIN {$wpdb->postmeta} pm_start ON pm_start.post_id = ae.ID AND pm_start.meta_key = '_ntdst_start_date'";
-            $where[]  = '(r.edition_id IS NULL OR ae.ID IS NOT NULL)';
+            $where[]  = 'ae.ID IS NOT NULL';
             $where[]  = '(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)';
             $params[] = $twoDaysAgo;
         }

@@ -445,6 +445,193 @@ class RegistrationGridQueryTest extends IntegrationTestCase
     }
 
     // =========================================================================
+    // FIX 1: trajectory-PARENT rows (edition_id IS NULL) must NEVER appear in
+    // the edition-grained grid corpus — any scope.
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function trajectoryParentRowExcludedFromGridCorpusEveryScope(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        // A trajectory PARENT row: trajectory_id SET, edition_id NULL,
+        // parent_registration_id NULL, status=completed, enrollment_path='trajectory'.
+        $trajId = self::$datelessEditionId; // any int — used only as the trajectory_id value
+        $parentReg = $repo->create([
+            'user_id'         => self::$user3Id,
+            'trajectory_id'   => $trajId,
+            'company_id'      => self::$companyId,
+            'status'          => RegistrationStatus::Completed->value,
+            'enrollment_path' => 'trajectory',
+        ]);
+        self::assertValidRegId($parentReg, 'trajectory-parent');
+        self::$regIds[] = (int) $parentReg;
+
+        // Sanity: it really is a parent (edition_id NULL).
+        global $wpdb;
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT edition_id, trajectory_id FROM {$wpdb->prefix}vad_registrations WHERE id = %d",
+            (int) $parentReg,
+        ));
+        $this->assertNull($row->edition_id, 'fixture must be a trajectory parent (edition_id NULL)');
+
+        // Default (active) scope — parent must NOT leak in.
+        $active = $repo->queryForGrid(['company_id' => self::$companyId]);
+        $activeIds = array_map(fn($r) => (int) $r->id, $active['rows']);
+        $this->assertNotContains(
+            (int) $parentReg,
+            $activeIds,
+            'Trajectory parent (edition_id NULL) must NOT appear in the default active scope',
+        );
+
+        // edition_scope=all — parent must STILL NOT appear (never a grid row).
+        $all = $repo->queryForGrid([
+            'company_id'    => self::$companyId,
+            'edition_scope' => 'all',
+        ]);
+        $allIds = array_map(fn($r) => (int) $r->id, $all['rows']);
+        $this->assertNotContains(
+            (int) $parentReg,
+            $allIds,
+            'Trajectory parent (edition_id NULL) must NOT appear even with edition_scope=all',
+        );
+    }
+
+    // =========================================================================
+    // FIX 5: grouped path forms no spurious NULL/'' group from trajectory parents.
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function groupedByEditionFormsNoNullGroupFromTrajectoryParent(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        // A trajectory PARENT row (edition_id NULL).
+        $parentReg = $repo->create([
+            'user_id'         => self::$user1Id,
+            'trajectory_id'   => self::$activeEditionId,
+            'company_id'      => self::$companyId,
+            'status'          => RegistrationStatus::Completed->value,
+            'enrollment_path' => 'trajectory',
+        ]);
+        self::assertValidRegId($parentReg, 'trajectory-parent-grouped');
+        self::$regIds[] = (int) $parentReg;
+
+        $result = $repo->queryForGridGrouped(
+            ['company_id' => self::$companyId, 'edition_scope' => 'all'],
+            'edition_id',
+        );
+
+        // No group_value may be null or '' (the NULL-edition trajectory parent).
+        foreach ($result['agg_rows'] as $agg) {
+            $this->assertNotNull($agg->group_value, 'No NULL edition_id group may form');
+            $this->assertNotSame('', (string) $agg->group_value, 'No empty edition_id group may form');
+        }
+
+        // Every group must have a consistent reg-id set (count matches resolved ids,
+        // proving no IN('') miss silently dropped the group's ids).
+        foreach ($result['agg_rows'] as $agg) {
+            $gv  = $agg->group_value;
+            $ids = $result['group_reg_ids'][$gv] ?? [];
+            $this->assertSame(
+                (int) $agg->cnt,
+                count($ids),
+                "Group {$gv}: resolved reg-id count must equal the aggregate count (no IN('') miss)",
+            );
+        }
+    }
+
+    // =========================================================================
+    // FIX 2: grouped pagination must count GROUPS, not ROWS.
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function groupedTotalCountsGroupsNotRows(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        // Our company has rows across distinct statuses: confirmed (R1,R2),
+        // waitlist (R3), completed (R4), interest (R5) = 4 distinct statuses,
+        // 5 rows (with edition_scope=all). Grouping by status → 4 groups.
+        $perPage = 50; // >= number of groups
+
+        $result = $repo->queryForGridGrouped(
+            ['company_id' => self::$companyId, 'edition_scope' => 'all', 'per_page' => $perPage],
+            'status',
+        );
+
+        $distinctGroups = count($result['agg_rows']);
+        $this->assertGreaterThanOrEqual(4, $distinctGroups, 'expected >=4 distinct status groups');
+
+        // total must equal the number of GROUPS, not the number of ROWS.
+        $this->assertSame(
+            $distinctGroups,
+            (int) $result['total'],
+            'Grouped total must be the GROUP count, not the row count (no phantom pages)',
+        );
+
+        // Cross-check: the flat row total is strictly larger than the group count
+        // (5 rows > 4 groups), so this assertion would fail on the old row-count code.
+        $flat = $repo->queryForGrid(['company_id' => self::$companyId, 'edition_scope' => 'all']);
+        $this->assertGreaterThan(
+            (int) $result['total'],
+            (int) $flat['total'],
+            'flat row total must exceed grouped group total for this fixture',
+        );
+    }
+
+    // =========================================================================
+    // FIX 4: flat queryForGrid must NOT collapse rows by group_by.
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function flatQueryDoesNotCollapseRowsByGroupBy(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        // group_by=status is IN the allowlist. The flat row path must still
+        // return ONE ROW PER REGISTRATION, not one arbitrary row per status.
+        $flatGrouped = $repo->queryForGrid([
+            'company_id'    => self::$companyId,
+            'edition_scope' => 'all',
+            'group_by'      => 'status',
+            'per_page'      => 100,
+        ]);
+
+        $baseline = $repo->queryForGrid([
+            'company_id'    => self::$companyId,
+            'edition_scope' => 'all',
+            'per_page'      => 100,
+        ]);
+
+        // Same number of rows as without group_by (one row per registration).
+        $this->assertSame(
+            count($baseline['rows']),
+            count($flatGrouped['rows']),
+            'Flat path with in-allowlist group_by must NOT collapse rows',
+        );
+
+        // All ids distinct + real (no arbitrary one-row-per-status collapse).
+        $ids = array_map(fn($r) => (int) $r->id, $flatGrouped['rows']);
+        $this->assertSame(count($ids), count(array_unique($ids)), 'Flat rows must be distinct real ids');
+
+        // total must remain the ROW total, not a group total.
+        $this->assertSame(
+            (int) $baseline['total'],
+            (int) $flatGrouped['total'],
+            'Flat path total must remain the row total even when group_by is passed',
+        );
+    }
+
+    // =========================================================================
     // Helpers
     // =========================================================================
 
