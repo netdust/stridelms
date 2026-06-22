@@ -415,6 +415,13 @@ final class AdminAPIController
             'callback' => [$this, 'exportRegistrations'],
             'permission_callback' => [$this, 'canManageAdmin'],
         ]);
+
+        // Task 1.3 — admin registration grid (strangle: thin route, delegates to service)
+        register_rest_route(self::NAMESPACE, '/admin/registrations', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'getRegistrations'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+        ]);
     }
 
     /**
@@ -1677,6 +1684,41 @@ final class AdminAPIController
             'perPage' => $perPage,
             'totalPages' => (int) ceil($total / $perPage),
         ]);
+    }
+
+    /**
+     * GET /admin/registrations
+     *
+     * Registration grid — thin callback, all logic in AdminRegistrationQueryService.
+     * Validates + sanitises params, delegates to the service, returns response.
+     * NO $wpdb / business logic here (strangle discipline INV-3).
+     */
+    public function getRegistrations(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $params = [
+            'page'         => absint($request->get_param('page') ?: 1),
+            'per_page'     => absint($request->get_param('per_page') ?: 50),
+            'edition_id'   => absint($request->get_param('edition_id') ?: 0) ?: null,
+            'company_id'   => absint($request->get_param('company_id') ?: 0) ?: null,
+            'status'       => sanitize_text_field((string) ($request->get_param('status') ?? '')),
+            'sort'         => sanitize_text_field((string) ($request->get_param('sort') ?? '')),
+            'order'        => sanitize_text_field((string) ($request->get_param('order') ?? '')),
+            'q'            => sanitize_text_field((string) ($request->get_param('q') ?? '')),
+            'edition_scope' => sanitize_text_field((string) ($request->get_param('edition_scope') ?? 'active')),
+            'group_by'     => sanitize_text_field((string) ($request->get_param('group_by') ?? '')),
+        ];
+
+        // Remove empty strings so queryForGrid's isset/!empty checks work correctly.
+        $params = array_filter($params, fn($v) => $v !== '' && $v !== null);
+
+        $service = ntdst_get(\Stride\Admin\AdminRegistrationQueryService::class);
+        $result  = $service->getGridPage($params);
+
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        return new WP_REST_Response($result);
     }
 
     /**
