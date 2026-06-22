@@ -498,7 +498,10 @@ document.addEventListener('alpine:init', () => {
 
         async loadQuoteEditions() {
             try {
-                const data = await this.api('/admin/editions?per_page=100&view=list');
+                // Lightweight typeahead (Task 1.4a). scope=all so the quotes
+                // filter can see archived/past editions too. Envelope returns
+                // {items:[{id,title,...}]} — template-compatible.
+                const data = await this.api('/admin/editions/options?scope=all');
                 this.quoteEditions = data.items || [];
             } catch (e) {}
         },

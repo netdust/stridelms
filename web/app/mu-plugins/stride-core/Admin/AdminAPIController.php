@@ -114,6 +114,38 @@ final class AdminAPIController
             ],
         ]);
 
+        // Task 1.4a — lightweight searchable edition typeahead (grid filter +
+        // group-by source + queue scoping). NOT the heavy getEditions payload.
+        register_rest_route(self::NAMESPACE, '/admin/editions/options', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getEditionOptions'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'q' => [
+                    'type' => 'string',
+                    'default' => '',
+                ],
+                'scope' => [
+                    'type' => 'string',
+                    'default' => 'active',
+                    'enum' => ['active', 'all'],
+                ],
+                'page' => [
+                    'type' => 'integer',
+                    'default' => 1,
+                    'minimum' => 1,
+                ],
+                'per_page' => [
+                    // No 'maximum' in the schema: an over-cap value must CLAMP
+                    // in the callback (typeahead UX), not 400-reject. The hard
+                    // cap of 100 is enforced in getEditionOptions().
+                    'type' => 'integer',
+                    'default' => 50,
+                    'minimum' => 1,
+                ],
+            ],
+        ]);
+
         // Edition detail
         register_rest_route(self::NAMESPACE, '/admin/editions/(?P<id>\d+)', [
             'methods' => 'GET',
@@ -932,6 +964,123 @@ final class AdminAPIController
             'perPage' => $perPage,
             'totalPages' => (int) ceil($total / $perPage),
             'view' => 'list',
+        ]);
+    }
+
+    /**
+     * GET /admin/editions/options
+     *
+     * Lightweight, searchable edition typeahead for the admin grid filter,
+     * group-by source, and queue scoping. Returns only {id, title,
+     * effective_status} per edition — NOT the heavy getEditions payload.
+     *
+     * Params:
+     *  - q        server-side title LIKE (bound via $wpdb->prepare).
+     *  - scope    active (default) | all. active excludes terminal/past
+     *             editions via getEffectiveStatus (INV-7) but KEEPS dateless
+     *             editions (sessionless §10.7 carve-out).
+     *  - page / per_page  paged, per_page capped at 100.
+     *
+     * §10.6: scope=all warrants NO extra capability — gate is canViewAdmin only.
+     * M4: every param is validated and bound through $wpdb->prepare.
+     */
+    public function getEditionOptions(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $q = sanitize_text_field((string) ($request->get_param('q') ?? ''));
+
+        $scope = (string) ($request->get_param('scope') ?? 'active');
+        if (!in_array($scope, ['active', 'all'], true)) {
+            $scope = 'active';
+        }
+
+        $page = max(1, absint($request->get_param('page')));
+        $perPage = absint($request->get_param('per_page'));
+        $perPage = $perPage > 0 ? min($perPage, 100) : 50;
+        $offset = ($page - 1) * $perPage;
+
+        $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
+
+        // Base predicate: published editions.
+        $where = ['p.post_type = %s', "p.post_status = 'publish'"];
+        $params = [EditionCPT::POST_TYPE];
+
+        // scope=active → pre-filter to NOT-yet-past, but PERMIT NULL start_date
+        // so dateless (sessionless §10.7) editions stay in scope. Mirrors the
+        // getEditions list-view default predicate (commit e2ace22b).
+        if ($scope === 'active') {
+            $where[] = '(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)';
+            $params[] = $twoDaysAgo;
+        }
+
+        // q → server-side title search, bound LIKE (never interpolated).
+        if ($q !== '') {
+            $where[] = 'p.post_title LIKE %s';
+            $params[] = '%' . $wpdb->esc_like($q) . '%';
+        }
+
+        $whereClause = implode(' AND ', $where);
+
+        // Total (DISTINCT — LEFT JOIN can multiply rows).
+        $countParams = $params;
+        $total = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+             WHERE {$whereClause}",
+            ...$countParams,
+        ));
+
+        // Page of candidate ids, NULL-last ordering (dateless sink to the end).
+        $pageParams = $params;
+        $pageParams[] = $perPage;
+        $pageParams[] = $offset;
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value AS start_date
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+             WHERE {$whereClause}
+             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC
+             LIMIT %d OFFSET %d",
+            ...$pageParams,
+        ));
+
+        $editionIds = array_map(static fn($r) => (int) $r->ID, $rows);
+
+        // INV-7: display status via getEffectiveStatus — batch to avoid N+1.
+        $statuses = [];
+        if (!empty($editionIds)) {
+            $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+            $statuses = $editionService->getEffectiveStatuses($editionIds);
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            $id = (int) $row->ID;
+            $status = $statuses[$id] ?? null;
+
+            // scope=active also drops editions whose EFFECTIVE status is
+            // terminal (Cancelled/Completed/Archived) even if the SQL date
+            // pre-filter let them through (e.g. terminal stored status, or a
+            // past end_date with no/future start_date). Dateless editions are
+            // never terminal here, so they survive (sessionless §10.7).
+            if ($scope === 'active' && $status !== null && $status->isTerminal()) {
+                continue;
+            }
+
+            $items[] = [
+                'id' => $id,
+                'title' => $row->post_title,
+                'effective_status' => $status !== null ? $status->value : '',
+            ];
+        }
+
+        return new WP_REST_Response([
+            'items' => $items,
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
         ]);
     }
 
