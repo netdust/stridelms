@@ -25,12 +25,6 @@ parameters:
 			path: web/app/mu-plugins/stride-core/Admin/AdminAPIController.php
 
 		-
-			message: '#^Action callback returns bool but should not return anything\.$#'
-			identifier: return.void
-			count: 5
-			path: web/app/mu-plugins/stride-core/Admin/AdminDashboardService.php
-
-		-
 			message: '#^Function ntdst_enqueue_api_client not found\.$#'
 			identifier: function.notFound
 			count: 1

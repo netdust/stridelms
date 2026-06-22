@@ -124,6 +124,47 @@ final class BulkRegistrationHandler
     }
 
     /**
+     * M10 — fire the coarse "a batch finished, recount" event at the tail of
+     * every public bulk handler, then return the report unchanged.
+     *
+     * D5: the handler is a thin Handler (not an AbstractService), so the event
+     * is fired via do_action directly with the full `stride/` prefix — the same
+     * name AdminDashboardService binds the action-queue bust to. Per-row
+     * stride/registration/{confirmed,cancelled} already fire inside the domain
+     * methods; this is only the batch-level recount trigger.
+     *
+     * Reached only after runBulk ran (a denied call returns before this), so a
+     * pure capability denial never fires it.
+     *
+     * @param array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}} $report
+     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}
+     */
+    private function finishBatch(array $report): array
+    {
+        do_action('stride/registration/bulk_completed', ['summary' => $report['summary'] ?? []]);
+
+        return $report;
+    }
+
+    /**
+     * M10 — quote-action tail. A quote status set via the repo does NOT trip
+     * save_post_vad_quote, so the offerte-opvolging queue would go stale without
+     * an explicit bust. Fire quote_status_changed once when ≥1 row succeeded,
+     * then the shared bulk_completed recount.
+     *
+     * @param array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}} $report
+     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}
+     */
+    private function finishQuoteBatch(array $report): array
+    {
+        if (($report['summary']['ok'] ?? 0) > 0) {
+            do_action('stride/registration/quote_status_changed', ['count' => $report['summary']['ok']]);
+        }
+
+        return $this->finishBatch($report);
+    }
+
+    /**
      * stride_bulk_approve — pending/interest → confirmed.
      *
      * Wraps the DOMAIN SEQUENCE (D1): completeTask('approval') then
@@ -138,7 +179,7 @@ final class BulkRegistrationHandler
             return $deny;
         }
 
-        return $this->runBulk($params, function (int $id, object $reg): true|WP_Error {
+        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             // M3: only pending/interest may be approved into the pipe. A confirmed
             // row is rejected HERE, before the domain confirm path is re-entered —
             // this is the gate that prevents a second LD grant (D2).
@@ -159,7 +200,7 @@ final class BulkRegistrationHandler
             // D2: confirmRegistration returns WP_Error('invalid_status') for non-pending,
             // so an already-confirmed row never double-grants.
             return $enrollment->confirmRegistration($id);
-        });
+        }));
     }
 
     /**
@@ -176,7 +217,7 @@ final class BulkRegistrationHandler
             return $deny;
         }
 
-        return $this->runBulk($params, function (int $id, object $reg): true|WP_Error {
+        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             $enrollment = ntdst_get(EnrollmentService::class);
             $result = $enrollment->cancel($id); // bool|WP_Error
             if (is_wp_error($result)) {
@@ -184,7 +225,7 @@ final class BulkRegistrationHandler
             }
 
             return true;
-        });
+        }));
     }
 
     /**
@@ -228,7 +269,9 @@ final class BulkRegistrationHandler
      */
     public function handleBulkQuoteSent(mixed $data, array $params): array|WP_Error
     {
-        return $this->setQuoteStatusForRows($params, QuoteStatus::Sent);
+        $report = $this->setQuoteStatusForRows($params, QuoteStatus::Sent);
+
+        return is_wp_error($report) ? $report : $this->finishQuoteBatch($report);
     }
 
     /**
@@ -239,7 +282,9 @@ final class BulkRegistrationHandler
      */
     public function handleBulkQuoteExported(mixed $data, array $params): array|WP_Error
     {
-        return $this->setQuoteStatusForRows($params, QuoteStatus::Exported);
+        $report = $this->setQuoteStatusForRows($params, QuoteStatus::Exported);
+
+        return is_wp_error($report) ? $report : $this->finishQuoteBatch($report);
     }
 
     /**
@@ -259,11 +304,11 @@ final class BulkRegistrationHandler
             return $deny;
         }
 
-        return $this->runBulk($params, function (int $id, object $reg): true|WP_Error {
+        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             $enrollment = ntdst_get(EnrollmentService::class);
 
             return $enrollment->promoteFromWaitlist($id);
-        });
+        }));
     }
 
     /**
@@ -281,11 +326,11 @@ final class BulkRegistrationHandler
             return $deny;
         }
 
-        return $this->runBulk($params, function (int $id, object $reg): true|WP_Error {
+        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             $completion = ntdst_get(EnrollmentCompletion::class);
 
             return $completion->completeTask($id, 'post_approval');
-        });
+        }));
     }
 
     /**
@@ -307,9 +352,9 @@ final class BulkRegistrationHandler
             return $deny;
         }
 
-        return $this->runBulk($params, function (int $id, object $reg): true|WP_Error {
+        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             return new WP_Error('not_available', __('Berichten versturen volgt in een latere fase.', 'stride'));
-        });
+        }));
     }
 
     /**
@@ -329,9 +374,9 @@ final class BulkRegistrationHandler
             return $deny;
         }
 
-        return $this->runBulk($params, function (int $id, object $reg): true|WP_Error {
+        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             return new WP_Error('not_available', __('Documentgeneratie volgt in een latere fase.', 'stride'));
-        });
+        }));
     }
 
     /**
@@ -371,12 +416,12 @@ final class BulkRegistrationHandler
 
         $repo = ntdst_get(RegistrationRepository::class);
 
-        return $this->runBulk($params, function (int $id, object $reg) use ($repo, $field, $value): true|WP_Error {
+        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg) use ($repo, $field, $value): true|WP_Error {
             if (!$repo->update($id, [$field => $value])) {
                 return new WP_Error('update_failed', __('Veld kon niet worden bijgewerkt.', 'stride'));
             }
 
             return true;
-        });
+        }));
     }
 }

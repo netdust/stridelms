@@ -382,4 +382,103 @@ class BulkRegistrationHandlerTest extends TestCase
         $this->assertSame('forbidden', $result->get_error_code());
         $this->assertSame(403, $result->get_error_data()['status'] ?? null);
     }
+
+    // =========================================================================
+    // Task 2.4 — cache-bust events fired by the handler (M10, handler side)
+    // =========================================================================
+
+    /**
+     * M10 (handler side): a finished bulk batch fires stride/registration/bulk_completed
+     * exactly once at the batch tail. The integration test proves the listener
+     * busts the queue; this proves the handler actually fires the event the
+     * listener is bound to — closing the handler half of the wire.
+     */
+    public function test_bulk_approve_fires_bulk_completed_once(): void
+    {
+        $this->resetActionCalls();
+
+        $this->handler->handleBulkApprove([], ['ids' => []]);
+
+        $this->assertSame(1, $this->actionFireCount('stride/registration/bulk_completed'));
+    }
+
+    /**
+     * M10 negative (handler side): a DENIED bulk call fires NOTHING — the
+     * capability gate returns before runBulk, so no batch ran and no recount
+     * event is emitted. Proves the fire is at the batch tail, not method entry.
+     */
+    public function test_denied_bulk_call_fires_no_completion_event(): void
+    {
+        global $current_user_caps;
+        $current_user_caps = ['stride_manage' => false];
+        $this->resetActionCalls();
+
+        $result = $this->handler->handleBulkApprove([], ['ids' => [1, 2]]);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame(0, $this->actionFireCount('stride/registration/bulk_completed'));
+    }
+
+    /**
+     * M10 (handler side, quote path): a successful quote batch fires BOTH
+     * quote_status_changed (the offerte-opvolging bust) and the shared
+     * bulk_completed recount, once each.
+     */
+    public function test_quote_batch_fires_quote_status_changed_and_bulk_completed(): void
+    {
+        $row = (object) ['id' => 95, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $quoteRepo = $this->createMock(QuoteRepository::class);
+        $quoteRepo->method('findQuoteIdsByRegistrations')->willReturn([95 => 950]);
+        $quoteRepo->method('updateStatus')->willReturn(true);
+        ntdst_set(QuoteRepository::class, $quoteRepo);
+
+        $this->resetActionCalls();
+
+        $this->handler->handleBulkQuoteSent([], ['ids' => [95]]);
+
+        $this->assertSame(1, $this->actionFireCount('stride/registration/quote_status_changed'));
+        $this->assertSame(1, $this->actionFireCount('stride/registration/bulk_completed'));
+    }
+
+    /**
+     * M10 negative (quote path): a quote batch where NO row succeeded must NOT
+     * fire quote_status_changed (nothing changed), but still fires the coarse
+     * bulk_completed recount.
+     */
+    public function test_quote_batch_with_no_success_skips_quote_status_changed(): void
+    {
+        $row = (object) ['id' => 96, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $quoteRepo = $this->createMock(QuoteRepository::class);
+        $quoteRepo->method('findQuoteIdsByRegistrations')->willReturn([]); // no quote → row fails
+        ntdst_set(QuoteRepository::class, $quoteRepo);
+
+        $this->resetActionCalls();
+
+        $report = $this->handler->handleBulkQuoteSent([], ['ids' => [96]]);
+
+        $this->assertSame(0, $report['summary']['ok']);
+        $this->assertSame(0, $this->actionFireCount('stride/registration/quote_status_changed'));
+        $this->assertSame(1, $this->actionFireCount('stride/registration/bulk_completed'));
+    }
+
+    private function resetActionCalls(): void
+    {
+        global $_test_action_calls;
+        $_test_action_calls = [];
+    }
+
+    private function actionFireCount(string $hook): int
+    {
+        global $_test_action_calls;
+
+        return count($_test_action_calls[$hook] ?? []);
+    }
 }

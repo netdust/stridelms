@@ -76,13 +76,21 @@ class AdminDashboardService extends AbstractService
             }, 999);
         }
 
-        // Cache invalidation for action queue transient
-        $invalidateQueue = fn() => delete_transient('stride_action_queue');
+        // Cache invalidation for action queue transient.
+        // Void closure: do not surface delete_transient()'s bool to the action
+        // dispatcher (an action callback must return nothing).
+        $invalidateQueue = static function (): void {
+            delete_transient('stride_action_queue');
+        };
         add_action('stride/registration/created', $invalidateQueue);
         add_action('stride/registration/confirmed', $invalidateQueue);
         add_action('stride/registration/cancelled', $invalidateQueue);
         add_action('stride/attendance/marked', $invalidateQueue);
         add_action('save_post_vad_quote', $invalidateQueue);
+        // M10 (Task 2.4) — bulk batch completion + quote-status changes set via
+        // the repo (which never touch save_post_vad_quote) must recount the queue.
+        add_action('stride/registration/bulk_completed', $invalidateQueue);
+        add_action('stride/registration/quote_status_changed', $invalidateQueue);
 
         add_action('admin_menu', [$this, 'registerAdminPage']);
         add_action('admin_menu', [$this, 'reorderSubmenus'], 999);
