@@ -313,6 +313,134 @@ final class AdminEditionOptionsEndpointTest extends IntegrationTestCase
     // CAP / PAGING
     // =========================================================================
 
+    // =========================================================================
+    // CR-2: active-scope pagination must be CONSISTENT.
+    //
+    // OLD bug: scope=active dropped editions whose EFFECTIVE status is terminal
+    // in a PHP loop AFTER the SQL LIMIT, while `total` was the PRE-filter SQL
+    // COUNT. Net: an active page could return FEWER than perPage items, and
+    // total / perPage / items.length disagreed → broken typeahead paging.
+    //
+    // A Cancelled-stored edition with a FUTURE start_date survives the SQL date
+    // pre-filter (meta_value >= twoDaysAgo) but is terminal under
+    // getEffectiveStatusFromPrefetched → it WAS counted in `total` yet dropped
+    // from `items`. Sorting it first (earliest start_date) put it on page 1
+    // under the old behavior, shortening that page.
+    // =========================================================================
+
+    /**
+     * @test
+     * Build a q-scoped corpus of 3 active (non-terminal, future) editions + 1
+     * Cancelled (terminal, future, earliest-dated) edition. Under scope=active:
+     *  (a) total == 3 (the NON-terminal count), NOT 4 (the pre-filter count);
+     *  (b) a full page returns exactly min(total, perPage) items, with the
+     *      terminal edition NEVER present;
+     *  (c) page 1 + page 2 (perPage=2) together return all 3 active editions
+     *      with no gap and no overlap.
+     */
+    public function activeScopePaginationIsConsistentWithEffectiveStatusFilter(): void
+    {
+        $token   = 'CR2Pag' . substr(uniqid(), -6);
+        $base    = strtotime('+10 days');
+        $created = [];
+
+        // 3 active (Open) editions, future-dated.
+        $activeIds = [];
+        for ($i = 0; $i < 3; $i++) {
+            $id = wp_insert_post([
+                'post_title'  => "{$token} Active {$i}",
+                'post_type'   => 'vad_edition',
+                'post_status' => 'publish',
+            ]);
+            $this->assertIsInt($id);
+            // Stagger dates AFTER the terminal one so the terminal sorts first.
+            update_post_meta($id, '_ntdst_start_date', wp_date('Y-m-d', $base + ($i + 1) * 86400));
+            update_post_meta($id, '_ntdst_status', \Stride\Domain\OfferingStatus::Open->value);
+            $activeIds[]       = $id;
+            $created[]         = $id;
+            self::$testPosts[] = $id;
+        }
+
+        // 1 Cancelled (terminal) edition, future-dated, EARLIEST → sorts first
+        // → lands on page 1 under the old (buggy) post-LIMIT PHP drop.
+        $terminalId = wp_insert_post([
+            'post_title'  => "{$token} Cancelled",
+            'post_type'   => 'vad_edition',
+            'post_status' => 'publish',
+        ]);
+        $this->assertIsInt($terminalId);
+        update_post_meta($terminalId, '_ntdst_start_date', wp_date('Y-m-d', $base));
+        update_post_meta($terminalId, '_ntdst_status', \Stride\Domain\OfferingStatus::Cancelled->value);
+        $created[]         = $terminalId;
+        self::$testPosts[] = $terminalId;
+
+        // (a) total must be the post-effective-status-filter count: 3, not 4.
+        $full = $this->dispatch('GET', '/stride/v1/admin/editions/options', [
+            'scope'    => 'active',
+            'q'        => $token,
+            'per_page' => 50,
+        ]);
+        $this->assertEquals(200, $full->get_status());
+        $fullData = $full->get_data();
+
+        $this->assertSame(
+            3,
+            (int) $fullData['total'],
+            'total must equal the 3 NON-terminal editions, not the pre-filter count of 4',
+        );
+
+        // (b) a full page returns exactly min(total, perPage) = 3 items, and the
+        //     terminal edition is never present.
+        $this->assertCount(
+            3,
+            $fullData['items'],
+            'A full page must return exactly min(total, perPage) items — no short page',
+        );
+        $this->assertNull(
+            $this->findItem($fullData['items'], $terminalId),
+            'Terminal (Cancelled) edition must NOT appear in active scope',
+        );
+        foreach ($activeIds as $aid) {
+            $this->assertNotNull(
+                $this->findItem($fullData['items'], $aid),
+                "Active edition {$aid} must be present in the full active page",
+            );
+        }
+
+        // (c) page 1 + page 2 (perPage=2) cover all 3 active editions, no gap/overlap.
+        $p1 = $this->dispatch('GET', '/stride/v1/admin/editions/options', [
+            'scope' => 'active', 'q' => $token, 'per_page' => 2, 'page' => 1,
+        ]);
+        $p2 = $this->dispatch('GET', '/stride/v1/admin/editions/options', [
+            'scope' => 'active', 'q' => $token, 'per_page' => 2, 'page' => 2,
+        ]);
+        $this->assertEquals(200, $p1->get_status());
+        $this->assertEquals(200, $p2->get_status());
+
+        $p1Ids = array_map('intval', array_column($p1->get_data()['items'], 'id'));
+        $p2Ids = array_map('intval', array_column($p2->get_data()['items'], 'id'));
+
+        // Page 1 is a FULL page of 2 (the terminal must not steal a slot).
+        $this->assertCount(2, $p1Ids, 'Page 1 must be a full page of 2 active editions');
+        $this->assertCount(1, $p2Ids, 'Page 2 must hold the remaining 1 active edition');
+
+        // No overlap.
+        $this->assertEmpty(array_intersect($p1Ids, $p2Ids), 'Pages must not overlap');
+
+        // Union == all 3 active editions, no gap, terminal absent.
+        $union = array_merge($p1Ids, $p2Ids);
+        sort($union);
+        $expected = $activeIds;
+        sort($expected);
+        $this->assertSame($expected, $union, 'page1 ∪ page2 must equal all active editions (no gap)');
+        $this->assertNotContains($terminalId, $union, 'Terminal edition must never appear across pages');
+
+        // Cleanup
+        foreach ($created as $id) {
+            wp_delete_post($id, true);
+        }
+    }
+
     /**
      * @test
      * per_page is capped: requesting an absurd per_page clamps to the cap, and

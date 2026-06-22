@@ -1054,59 +1054,111 @@ final class AdminAPIController
 
         $whereClause = implode(' AND ', $where);
 
-        // Total (DISTINCT — LEFT JOIN can multiply rows).
-        $countParams = $params;
-        $total = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
-             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
-             WHERE {$whereClause}",
-            ...$countParams,
-        ));
+        // CR-2: scope=active drops editions whose EFFECTIVE status is terminal
+        // (INV-7) — a PHP-side decision that pure SQL cannot mirror, since
+        // getEffectiveStatus derives status from stored status + dates + session
+        // count. The OLD code applied that drop AFTER the SQL LIMIT while `total`
+        // was the PRE-filter SQL COUNT, so an active page could come back SHORT
+        // and total/perPage/items disagreed → broken typeahead paging.
+        //
+        // Fix (pragmatic + correct for a typeahead over a small corpus — editions
+        // number in the hundreds, not the millions): fetch the date-pre-filtered
+        // candidate id+title set (still bounded by the SQL WHERE), apply the
+        // effective-status filter in PHP, then paginate the FILTERED list in PHP.
+        // This guarantees total, perPage, the page slice, and items are mutually
+        // consistent. NULL-last ordering is preserved.
+        //
+        // scope=all has no effective-status drop, so its SQL LIMIT/OFFSET +
+        // pre-filter COUNT are already consistent — keep the cheap SQL paging
+        // path for it and avoid loading the whole corpus.
+        if ($scope === 'all') {
+            $countParams = $params;
+            $total = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
+                 LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+                 WHERE {$whereClause}",
+                ...$countParams,
+            ));
 
-        // Page of candidate ids, NULL-last ordering (dateless sink to the end).
-        $pageParams = $params;
-        $pageParams[] = $perPage;
-        $pageParams[] = $offset;
+            $pageParams = $params;
+            $pageParams[] = $perPage;
+            $pageParams[] = $offset;
 
-        $rows = $wpdb->get_results($wpdb->prepare(
+            $rows = $wpdb->get_results($wpdb->prepare(
+                "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value AS start_date
+                 FROM {$wpdb->posts} p
+                 LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+                 WHERE {$whereClause}
+                 ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC
+                 LIMIT %d OFFSET %d",
+                ...$pageParams,
+            ));
+
+            $editionIds = array_map(static fn($r) => (int) $r->ID, $rows);
+            $statuses = [];
+            if (!empty($editionIds)) {
+                $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+                $statuses = $editionService->getEffectiveStatuses($editionIds);
+            }
+
+            $items = [];
+            foreach ($rows as $row) {
+                $id = (int) $row->ID;
+                $status = $statuses[$id] ?? null;
+                $items[] = [
+                    'id' => $id,
+                    'title' => $row->post_title,
+                    'effective_status' => $status !== null ? $status->value : '',
+                ];
+            }
+
+            return new WP_REST_Response([
+                'items' => $items,
+                'total' => $total,
+                'page' => $page,
+                'perPage' => $perPage,
+            ]);
+        }
+
+        // scope=active: fetch the full date-pre-filtered candidate set (NULL-last
+        // ordering), then effective-status-filter + paginate in PHP so the count
+        // and the page agree.
+        $candidates = $wpdb->get_results($wpdb->prepare(
             "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value AS start_date
              FROM {$wpdb->posts} p
              LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
              WHERE {$whereClause}
-             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC
-             LIMIT %d OFFSET %d",
-            ...$pageParams,
+             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC",
+            ...$params,
         ));
 
-        $editionIds = array_map(static fn($r) => (int) $r->ID, $rows);
-
-        // INV-7: display status via getEffectiveStatus — batch to avoid N+1.
+        $candidateIds = array_map(static fn($r) => (int) $r->ID, $candidates);
         $statuses = [];
-        if (!empty($editionIds)) {
+        if (!empty($candidateIds)) {
             $editionService = ntdst_get(\Stride\Modules\Edition\EditionService::class);
-            $statuses = $editionService->getEffectiveStatuses($editionIds);
+            $statuses = $editionService->getEffectiveStatuses($candidateIds);
         }
 
-        $items = [];
-        foreach ($rows as $row) {
+        // Apply the effective-status filter (INV-7) BEFORE paginating, so total
+        // is the count of what actually survives. Terminal editions
+        // (Cancelled/Completed/Archived) are dropped; dateless editions are
+        // never terminal here, so they survive (sessionless §10.7).
+        $filtered = [];
+        foreach ($candidates as $row) {
             $id = (int) $row->ID;
             $status = $statuses[$id] ?? null;
-
-            // scope=active also drops editions whose EFFECTIVE status is
-            // terminal (Cancelled/Completed/Archived) even if the SQL date
-            // pre-filter let them through (e.g. terminal stored status, or a
-            // past end_date with no/future start_date). Dateless editions are
-            // never terminal here, so they survive (sessionless §10.7).
-            if ($scope === 'active' && $status !== null && $status->isTerminal()) {
+            if ($status !== null && $status->isTerminal()) {
                 continue;
             }
-
-            $items[] = [
+            $filtered[] = [
                 'id' => $id,
                 'title' => $row->post_title,
                 'effective_status' => $status !== null ? $status->value : '',
             ];
         }
+
+        $total = count($filtered);
+        $items = array_slice($filtered, $offset, $perPage);
 
         return new WP_REST_Response([
             'items' => $items,
