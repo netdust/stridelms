@@ -26,6 +26,20 @@ use WP_Error;
  */
 final class BulkRegistrationHandler
 {
+    /**
+     * M7 server-side field allowlist for stride_bulk_set_field.
+     *
+     * Only dumb, side-effect-free columns the registration table actually stores
+     * AND that RegistrationRepository::update() persists. NEVER a lifecycle field
+     * (status/completed_at/cancelled_at) — those carry domain effects (seat
+     * release, LD access, notifications) and route through the smart bulk actions.
+     *
+     * NOTE: the spec named `tags`, but there is no `tags` column or meta on the
+     * registration table — persisting it would be a silent no-op success. The
+     * honest safe set is the columns update() writes: notes + company_id.
+     */
+    private const SAFE_FIELDS = ['notes', 'company_id'];
+
     public function __construct()
     {
         $this->init();
@@ -44,7 +58,9 @@ final class BulkRegistrationHandler
         add_filter('ntdst/api_data/stride_bulk_approve_post_course', [$this, 'handleBulkApprovePostCourse'], 10, 2);
         add_filter('ntdst/api_data/stride_bulk_message', [$this, 'handleBulkMessage'], 10, 2);
         add_filter('ntdst/api_data/stride_bulk_generate_doc', [$this, 'handleBulkGenerateDoc'], 10, 2);
-        // Task 2.3 adds: set_field.
+
+        // Task 2.3 — generic safe-column setter with a server-side allowlist (M7).
+        add_filter('ntdst/api_data/stride_bulk_set_field', [$this, 'handleBulkSetField'], 10, 2);
     }
 
     /**
@@ -315,6 +331,52 @@ final class BulkRegistrationHandler
 
         return $this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             return new WP_Error('not_available', __('Documentgeneratie volgt in een latere fase.', 'stride'));
+        });
+    }
+
+    /**
+     * stride_bulk_set_field — generic safe-column setter across the selection.
+     *
+     * M7 (THE control): the server enforces a hard field allowlist BEFORE touching
+     * any row. A field outside self::SAFE_FIELDS — status, completed_at,
+     * cancelled_at, ANY lifecycle field — is refused with a 400 regardless of
+     * payload. The UI hiding such fields is cosmetic; THIS rejection is the
+     * integrity guard. Lifecycle changes must route through the smart bulk actions
+     * so domain effects (seat release, LD access, notifications) fire.
+     *
+     * The value is sanitized per field type (company_id → absint;
+     * notes → sanitize_text_field) and persisted via RegistrationRepository::update
+     * (INV-3 — repository, no raw $wpdb). Per-row write failures land in failed[].
+     *
+     * @param array<string,mixed> $params
+     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}|WP_Error
+     */
+    public function handleBulkSetField(mixed $data, array $params): array|WP_Error
+    {
+        if ($deny = $this->denyIfNotManager()) {
+            return $deny; // M2 first
+        }
+
+        $field = sanitize_key((string) ($params['field'] ?? ''));
+
+        // M7: server-side allowlist — reject any non-safe field with a 400, BEFORE
+        // resolving or mutating a single row. This is the load-bearing control.
+        if (!in_array($field, self::SAFE_FIELDS, true)) {
+            return new WP_Error('invalid_field', __('Dit veld kan niet in bulk worden gewijzigd.', 'stride'), ['status' => 400]);
+        }
+
+        $value = $field === 'company_id'
+            ? absint($params['value'] ?? 0)
+            : sanitize_text_field((string) ($params['value'] ?? ''));
+
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        return $this->runBulk($params, function (int $id, object $reg) use ($repo, $field, $value): true|WP_Error {
+            if (!$repo->update($id, [$field => $value])) {
+                return new WP_Error('update_failed', __('Veld kon niet worden bijgewerkt.', 'stride'));
+            }
+
+            return true;
         });
     }
 }

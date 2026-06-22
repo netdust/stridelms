@@ -1407,7 +1407,7 @@ final class RegistrationRepository
     {
         global $wpdb;
 
-        $allowed = ['status', 'selections', 'selections_locked_at', 'quote_id', 'completed_at', 'cancelled_at', 'notes', 'completion_tasks', 'enrollment_data', 'parent_registration_id'];
+        $allowed = ['status', 'selections', 'selections_locked_at', 'quote_id', 'company_id', 'completed_at', 'cancelled_at', 'notes', 'completion_tasks', 'enrollment_data', 'parent_registration_id'];
         $update = [];
 
         foreach ($allowed as $field) {

@@ -275,4 +275,111 @@ class BulkRegistrationHandlerTest extends TestCase
             $this->assertSame(403, $result->get_error_data()['status'] ?? null, "$m denial status");
         }
     }
+
+    // =========================================================================
+    // Task 2.3 — stride_bulk_set_field with server-side field allowlist (M7)
+    // =========================================================================
+
+    /**
+     * M7 (load-bearing): a lifecycle field is rejected 400 server-side regardless
+     * of UI, and the rejection happens BEFORE any row is touched — the repository
+     * update mutator is never called.
+     */
+    public function test_bulk_set_field_rejects_status_field_400_before_any_write(): void
+    {
+        // The repo MUST NOT be reached for a rejected field — no row may be mutated.
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->expects($this->never())->method('find');
+        $repo->expects($this->never())->method('update');
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $result = $this->handler->handleBulkSetField([], ['ids' => [101], 'field' => 'status', 'value' => 'confirmed']);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('invalid_field', $result->get_error_code());
+        $this->assertSame(400, $result->get_error_data()['status'] ?? null);
+    }
+
+    /** M7: completed_at (a lifecycle field) is refused 400 server-side. */
+    public function test_bulk_set_field_rejects_completed_at_400(): void
+    {
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->expects($this->never())->method('update');
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $result = $this->handler->handleBulkSetField([], ['ids' => [101], 'field' => 'completed_at', 'value' => '2026-01-01']);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('invalid_field', $result->get_error_code());
+        $this->assertSame(400, $result->get_error_data()['status'] ?? null);
+    }
+
+    /** M7: cancelled_at (a lifecycle field) is refused 400 server-side. */
+    public function test_bulk_set_field_rejects_cancelled_at_400(): void
+    {
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->expects($this->never())->method('update');
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $result = $this->handler->handleBulkSetField([], ['ids' => [101], 'field' => 'cancelled_at', 'value' => '2026-01-01']);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame(400, $result->get_error_data()['status'] ?? null);
+    }
+
+    /**
+     * A safe field (notes) succeeds and persists via RegistrationRepository::update.
+     *
+     * DIVERGENCE: the plan's allowlist named `tags`, but there is NO `tags` column
+     * or meta on the registration table (RegistrationTable schema + update()
+     * allowlist) — persisting it would be a silent no-op success-lie. The honest
+     * safe set is {notes, company_id}, the columns update() actually writes.
+     */
+    public function test_bulk_set_field_allows_notes(): void
+    {
+        $row = (object) ['id' => 90, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        $repo->expects($this->once())
+            ->method('update')
+            ->with(90, ['notes' => 'belangrijke nota'])
+            ->willReturn(true);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $report = $this->handler->handleBulkSetField([], ['ids' => [90], 'field' => 'notes', 'value' => 'belangrijke nota']);
+
+        $this->assertCount(1, $report['succeeded']);
+        $this->assertCount(0, $report['failed']);
+    }
+
+    /** A safe field (company_id) is absint-sanitized and persisted. */
+    public function test_bulk_set_field_allows_company_id_absint(): void
+    {
+        $row = (object) ['id' => 91, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        $repo->expects($this->once())
+            ->method('update')
+            ->with(91, ['company_id' => 42])
+            ->willReturn(true);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $report = $this->handler->handleBulkSetField([], ['ids' => [91], 'field' => 'company_id', 'value' => '42abc']);
+
+        $this->assertCount(1, $report['succeeded']);
+        $this->assertCount(0, $report['failed']);
+    }
+
+    /** M2 inherited: a view-only actor is denied 403 before the loop. */
+    public function test_bulk_set_field_denies_view_only(): void
+    {
+        global $current_user_caps;
+        $current_user_caps = ['stride_manage' => false];
+
+        $result = $this->handler->handleBulkSetField([], ['ids' => [1], 'field' => 'notes', 'value' => 'x']);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('forbidden', $result->get_error_code());
+        $this->assertSame(403, $result->get_error_data()['status'] ?? null);
+    }
 }
