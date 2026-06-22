@@ -698,6 +698,7 @@ defined('ABSPATH') || exit;
                                             @click="setGridStatus(key)">
                                         <span class="ws-stage-chip__no" x-text="i + 1"></span>
                                         <span class="ws-stage-chip__txt" x-text="regStatusMeta[key].pipe"></span>
+                                        <span class="ws-stage-chip__count" x-text="gridStatusCount(key)"></span>
                                     </button>
                                     <span class="ws-pipeline__arrow" x-show="i < statusPipeline.length - 1">→</span>
                                 </div>
@@ -708,6 +709,7 @@ defined('ABSPATH') || exit;
                                     :class="gridFilters.status === statusExit ? ' is-active' : ''"
                                     @click="setGridStatus(statusExit)">
                                 <span class="ws-stage-chip__txt" x-text="regStatusMeta[statusExit].pipe"></span>
+                                <span class="ws-stage-chip__count" x-text="gridStatusCount(statusExit)"></span>
                             </button>
                         </div>
                     </div>

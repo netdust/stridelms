@@ -98,6 +98,10 @@ document.addEventListener('alpine:init', () => {
         // server query params on /admin/registrations; any change re-fetches.
         gridRows: [],            // one page of flat registration items (or [] when grouped)
         gridGroups: [],          // grouped aggregates (when groupBy is set)
+        // Per-status funnel counts from the server (Task 3.3 Part B). Reflects the
+        // active filter set MINUS the status filter, so each pipeline chip shows a
+        // live count regardless of which chip is selected.
+        gridStatusCounts: {},
         gridLoaded: false,
         gridPagination: { page: 1, perPage: 25, total: 0, totalPages: 1 },
         gridSort: { key: '', dir: 'asc' },   // '' = server default
@@ -717,6 +721,7 @@ document.addEventListener('alpine:init', () => {
                     this.gridRows = data.items || [];
                     this.gridGroups = [];
                 }
+                this.gridStatusCounts = data.statusCounts || {};
                 this.gridPagination = {
                     page: data.page || 1,
                     perPage: data.perPage || this.gridPagination.perPage,
@@ -824,6 +829,12 @@ document.addEventListener('alpine:init', () => {
             if (p >= 1 && p <= this.gridPagination.totalPages && p !== this.gridPagination.page) {
                 this.loadGrid(p);
             }
+        },
+
+        // Live per-status count for a funnel chip (Task 3.3 Part B). Server
+        // returns a zero-filled map, so this is always a number.
+        gridStatusCount(key) {
+            return this.gridStatusCounts[key] ?? 0;
         },
 
         // ── Empty-state headline (F1 edges) ────────────────────────

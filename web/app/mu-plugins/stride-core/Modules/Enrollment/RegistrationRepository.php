@@ -1844,6 +1844,55 @@ final class RegistrationRepository
      * @param  array<string,mixed> $filters
      * @return array{active_join:string,where_clause:string,params:array,page:int,per_page:int}
      */
+    /**
+     * Per-status row counts for the grid pipeline funnel (Task 3.3 Part B).
+     *
+     * Returns `status => count` for the CURRENT filter set MINUS the status
+     * filter itself: the funnel shows "how many of each status match the OTHER
+     * active filters (edition/company/trajectory/q/active-scope)", so selecting a
+     * status chip never collapses the funnel to a single stage.
+     *
+     * Built on the SAME buildGridFilters() construction as queryForGrid (one
+     * WHERE/JOIN source — no second divergent scoping copy), with the `status`
+     * key dropped before building. Structured columns only (M5); the column name
+     * `status` is a literal, never user input (M4).
+     *
+     * @param  array<string,mixed> $filters  Same key-set as queryForGrid.
+     * @return array<string,int>  status value => count (only statuses with rows;
+     *                            callers zero-fill the full enum as needed).
+     */
+    public function statusBreakdown(array $filters): array
+    {
+        global $wpdb;
+
+        // Drop the status filter — the funnel counts every status under the
+        // OTHER filters. group_by/sort/pagination are irrelevant to a tally.
+        unset($filters['status'], $filters['group_by']);
+
+        $built       = $this->buildGridFilters($filters);
+        $activeJoin  = $built['active_join'];
+        $whereClause = $built['where_clause'];
+        $params      = $built['params'];
+        $regTable    = $this->table();
+
+        $sql = "SELECT r.status AS status, COUNT(*) AS c
+                FROM {$regTable} r
+                LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                {$activeJoin}
+                {$whereClause}
+                GROUP BY r.status";
+
+        $rows = $params
+            ? $wpdb->get_results($wpdb->prepare($sql, ...$params))
+            : $wpdb->get_results($sql);
+
+        $out = [];
+        foreach ($rows ?? [] as $row) {
+            $out[(string) $row->status] = (int) $row->c;
+        }
+        return $out;
+    }
+
     private function buildGridFilters(array $filters): array
     {
         global $wpdb;

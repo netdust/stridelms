@@ -48,11 +48,58 @@ final class AdminRegistrationQueryService
     {
         $groupBy = $params['group_by'] ?? null;
 
-        if ($groupBy !== null) {
-            return $this->getGroupedPage($params, (string) $groupBy);
+        $page = $groupBy !== null
+            ? $this->getGroupedPage($params, (string) $groupBy)
+            : $this->getFlatPage($params);
+
+        if (is_wp_error($page)) {
+            return $page;
         }
 
-        return $this->getFlatPage($params);
+        // ADDITIVE (Task 3.3 Part B): per-status funnel counts. Reflects the
+        // current filter set MINUS the status filter itself, so the pipeline
+        // funnel shows the live distribution under the OTHER active filters
+        // (F4 acceptance). Independent of the flat/grouped shape — same key on
+        // both. Existing envelope keys are unchanged.
+        $page['statusCounts'] = $this->statusCounts($params);
+
+        return $page;
+    }
+
+    /**
+     * Build the zero-filled per-status count map for the funnel.
+     *
+     * Delegates the count to RegistrationRepository::statusBreakdown (INV-3 —
+     * structured columns through the repo, the status filter dropped there), then
+     * zero-fills every RegistrationStatus so each funnel chip always has a number.
+     *
+     * @param  array<string,mixed> $params  The grid request params.
+     * @return array<string,int>  status value => count, all enum cases present.
+     */
+    private function statusCounts(array $params): array
+    {
+        if (!RegistrationTable::exists()) {
+            return $this->zeroStatusCounts();
+        }
+
+        $breakdown = $this->registrations->statusBreakdown($params);
+
+        return array_merge($this->zeroStatusCounts(), array_intersect_key(
+            $breakdown,
+            $this->zeroStatusCounts(),
+        ));
+    }
+
+    /**
+     * @return array<string,int>  every RegistrationStatus value => 0.
+     */
+    private function zeroStatusCounts(): array
+    {
+        $zero = [];
+        foreach (RegistrationStatus::cases() as $case) {
+            $zero[$case->value] = 0;
+        }
+        return $zero;
     }
 
     // =========================================================================

@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stride\Tests\Integration;
 
 use IntegrationTestCase;
+use Stride\Admin\AdminRegistrationQueryService;
 use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Enrollment\RegistrationRepository;
 
@@ -936,6 +937,100 @@ class RegistrationGridQueryTest extends IntegrationTestCase
         foreach ($result['rows'] as $row) {
             $this->assertSame('confirmed', $row->status, 'status param must bind — only confirmed rows');
             $this->assertContains((int) $row->id, $allowedConfirmed, 'Only T1 confirmed children may appear');
+        }
+    }
+
+    // =========================================================================
+    // Task 3.3 Part B: per-status funnel counts (statusCounts) in the grid DTO
+    // =========================================================================
+
+    /**
+     * @test
+     * The grid page DTO carries a `statusCounts` map reflecting the CURRENT
+     * filter set MINUS the status filter itself (so the pipeline funnel can show
+     * "how many of each status match the OTHER active filters"). With a company
+     * filter applied (edition_scope=all), the per-status counts must respect it:
+     * our company's fixture rows are confirmed×2 (R1,R2) + waitlist×1 (R3) +
+     * completed×1 (R4) + interest×1 (R5), PLUS the trajectory child rows under
+     * the same company. F4 acceptance ("funnel shows per-stage live counts").
+     */
+    public function gridDtoCarriesStatusCountsRespectingActiveFilters(): void
+    {
+        $service = ntdst_get(AdminRegistrationQueryService::class);
+
+        $dto = $service->getGridPage([
+            'company_id'    => self::$companyId,
+            'edition_scope' => 'all',
+            'per_page'      => 100,
+        ]);
+
+        $this->assertIsArray($dto);
+        $this->assertArrayHasKey('statusCounts', $dto, 'Grid DTO must expose a statusCounts map for the funnel');
+
+        $counts = $dto['statusCounts'];
+
+        // Zero-filled across every lifecycle status so the funnel chips always
+        // have a number to render (never undefined).
+        foreach (RegistrationStatus::cases() as $case) {
+            $this->assertArrayHasKey($case->value, $counts, "statusCounts must include '{$case->value}' (zero-filled)");
+            $this->assertIsInt($counts[$case->value]);
+        }
+
+        // Our company's non-trajectory fixtures: confirmed R1+R2, waitlist R3,
+        // completed R4, interest R5. Trajectory children add MORE confirmed +
+        // waitlist rows for the same company — so assert the floor, not equality
+        // (other suites' fixtures share the test DB, but never our company id).
+        $this->assertGreaterThanOrEqual(2, $counts[RegistrationStatus::Confirmed->value], 'expected >=2 confirmed for our company');
+        $this->assertGreaterThanOrEqual(1, $counts[RegistrationStatus::Waitlist->value], 'expected >=1 waitlist for our company');
+        $this->assertGreaterThanOrEqual(1, $counts[RegistrationStatus::Completed->value], 'expected >=1 completed for our company');
+        $this->assertGreaterThanOrEqual(1, $counts[RegistrationStatus::Interest->value], 'expected >=1 interest for our company');
+    }
+
+    /**
+     * @test
+     * statusCounts IGNORES the status filter in the request (the funnel shows the
+     * full distribution under the OTHER filters, regardless of which chip is
+     * active) — but RESPECTS a company filter that scopes a foreign company out.
+     * A different company id returns all-zero counts for our fixtures.
+     */
+    public function statusCountsIgnoreStatusFilterButRespectCompanyScope(): void
+    {
+        $service = ntdst_get(AdminRegistrationQueryService::class);
+
+        // Same company, but with an active status chip selected: statusCounts
+        // must be the SAME distribution as with no status filter — the count is
+        // "of each status, under the other filters", not "rows matching the chip".
+        $noStatus = $service->getGridPage([
+            'company_id'    => self::$companyId,
+            'edition_scope' => 'all',
+            'per_page'      => 100,
+        ]);
+        $withStatus = $service->getGridPage([
+            'company_id'    => self::$companyId,
+            'edition_scope' => 'all',
+            'status'        => RegistrationStatus::Confirmed->value,
+            'per_page'      => 100,
+        ]);
+
+        $this->assertSame(
+            $noStatus['statusCounts'],
+            $withStatus['statusCounts'],
+            'statusCounts must drop the status filter — same distribution regardless of the active chip',
+        );
+
+        // A foreign company id → our fixtures excluded → all-zero counts.
+        $foreign = $service->getGridPage([
+            'company_id'    => self::$companyId + 999999,
+            'edition_scope' => 'all',
+            'per_page'      => 100,
+        ]);
+        foreach ($foreign['statusCounts'] as $status => $n) {
+            $this->assertSame(0, $n, "Foreign company must yield 0 for status '{$status}'");
+        }
+
+        // Existing envelope keys remain present + unchanged in shape (additive-only).
+        foreach (['items', 'total', 'page', 'perPage', 'totalPages'] as $key) {
+            $this->assertArrayHasKey($key, $noStatus, "Existing envelope key '{$key}' must remain");
         }
     }
 
