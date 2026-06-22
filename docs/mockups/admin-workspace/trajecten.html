@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="nl-BE">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Trajecten · Stride Admin Workspace</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/css/workspace.css">
+  <link rel="stylesheet" href="assets/css/grid.css">
+</head>
+<body>
+<div class="ws-shell" x-data="trajecten()" x-init="init()" x-cloak>
+
+  <!-- ===== COMMAND RAIL ===== -->
+  <aside class="ws-rail">
+    <div class="ws-brand">
+      <div class="ws-brand__mark" x-html="WS.icon('layers')"></div>
+      <div><div class="ws-brand__name">Stride</div><div class="ws-brand__sub">Workspace</div></div>
+    </div>
+    <nav class="ws-nav">
+      <div class="ws-nav__group">
+        <div class="ws-nav__label">Werkbank</div>
+        <a class="ws-nav__item" href="vandaag.html"><span x-html="WS.icon('sun')"></span> Vandaag <span class="ws-nav__count is-alert">24</span></a>
+        <a class="ws-nav__item" href="inschrijvingen.html"><span x-html="WS.icon('grid')"></span> Inschrijvingen <span class="ws-nav__count">247</span></a>
+      </div>
+      <div class="ws-nav__group">
+        <div class="ws-nav__label">Beheer</div>
+        <a class="ws-nav__item" href="#"><span x-html="WS.icon('layers')"></span> Edities <span class="ws-nav__count">7</span></a>
+        <a class="ws-nav__item" href="#"><span x-html="WS.icon('calendar')"></span> Sessies</a>
+        <a class="ws-nav__item" href="#"><span x-html="WS.icon('receipt')"></span> Offertes <span class="ws-nav__count">12</span></a>
+        <a class="ws-nav__item is-active" href="trajecten.html"><span x-html="WS.icon('route')"></span> Trajecten <span class="ws-nav__count">3</span></a>
+        <a class="ws-nav__item" href="#"><span x-html="WS.icon('users')"></span> Gebruikers</a>
+      </div>
+    </nav>
+    <div class="ws-rail__foot">
+      <div class="ws-user"><div class="ws-user__avatar">SC</div><div><div class="ws-user__name">Sofie Coördinator</div><div class="ws-user__role">stride_coordinator</div></div></div>
+    </div>
+  </aside>
+
+  <!-- ===== MAIN ===== -->
+  <main class="ws-main">
+    <header class="ws-topbar">
+      <div class="ws-topbar__crumbs">
+        <span>Beheer</span><span class="sep" x-html="WS.icon('chevRight')" style="width:14px;height:14px"></span><b>Trajecten</b>
+      </div>
+      <div class="ws-topbar__spacer"></div>
+      <div class="ws-search">
+        <span x-html="WS.icon('search')"></span>
+        <input type="text" placeholder="Zoek traject op titel…" x-model.debounce.250ms="q">
+        <kbd>⌘K</kbd>
+      </div>
+    </header>
+
+    <div class="ws-content">
+      <div class="ws-stagger">
+
+        <!-- Page head -->
+        <div class="ws-page-head">
+          <div>
+            <span class="ws-eyebrow">Beheer · leertrajecten</span>
+            <h1>Trajecten</h1>
+            <p>Meerdelige leertrajecten — verplichte cursussen plus keuzemodules. Alleen-lezen overzicht; open een traject voor de cursussen en deelnemers.</p>
+          </div>
+        </div>
+
+        <!-- Toolbar: status filter + active-scope pill -->
+        <div class="ws-traj-toolbar">
+          <!-- the "Actieve trajecten" default-scope pill (mirrors §10 editions posture) -->
+          <span class="ws-chip" :class="scope==='active' && 'is-active'" @click="scope = (scope==='active' ? 'all' : 'active')"
+                :title="scope==='active' ? 'Toon ook afgesloten trajecten' : 'Beperk tot actieve trajecten'">
+            <span x-html="WS.icon(scope==='active' ? 'check' : 'archive')" style="width:13px;height:13px"></span>
+            <span x-text="scope==='active' ? 'Actieve trajecten' : 'Alle trajecten'"></span>
+            <span class="ws-chip__x" x-show="scope==='active'" @click.stop="scope='all'" x-html="WS.icon('x')" title="Toon ook afgesloten"></span>
+          </span>
+
+          <div class="ws-select-wrap" style="margin-left:var(--ws-3)">
+            <span x-html="WS.icon('filter')" style="width:14px;height:14px"></span>
+            Status
+            <select class="ws-select" x-model="statusFilter">
+              <option value="">Alle statussen</option>
+              <template x-for="key in ['draft','open','full','closed','archived']" :key="key">
+                <option :value="key" x-text="WS.TRAJ_STATUS[key].label"></option>
+              </template>
+            </select>
+          </div>
+
+          <div class="ws-toolbar__spacer" style="flex:1"></div>
+          <div class="ws-count">Toont <b x-text="visible.length"></b> van <b x-text="Object.keys(trajectories).length"></b> trajecten</div>
+        </div>
+
+        <!-- List -->
+        <div class="ws-card" style="overflow:hidden;margin-top:var(--ws-4)">
+          <table class="ws-table ws-traj-table">
+            <thead>
+              <tr>
+                <th>Traject</th>
+                <th class="ws-col-status">Status</th>
+                <th>Vorm</th>
+                <th class="ws-num">Capaciteit</th>
+                <th class="ws-num">Ingeschreven</th>
+                <th class="ws-num">Cursussen</th>
+                <th class="ws-col-traject-action"></th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="t in visible" :key="t.id">
+                <tr @click="openDetail(t.id)">
+                  <td>
+                    <div class="ws-traj-namecell">
+                      <span class="ws-traj-namecell__icon" x-html="WS.icon('route')"></span>
+                      <div>
+                        <div class="ws-traj-namecell__title" x-text="t.title"></div>
+                        <div class="ws-traj-namecell__sub" x-text="t.description"></div>
+                      </div>
+                    </div>
+                  </td>
+                  <td><span class="ws-badge" :class="'ws-badge--'+WS.TRAJ_STATUS[t.status].cls" x-text="WS.TRAJ_STATUS[t.status].label"></span></td>
+                  <td><span class="ws-traj-mode" x-text="WS.TRAJ_MODE[t.mode]"></span></td>
+                  <td class="ws-num" x-text="t.capacity ? t.capacity : 'onbeperkt'"></td>
+                  <td class="ws-num">
+                    <span :class="t.users.length===0 && 'ws-muted'" x-text="t.users.length"></span>
+                  </td>
+                  <td class="ws-num" x-text="WS.trajCourseCount(t)"></td>
+                  <td class="ws-col-traject-action">
+                    <span class="ws-traj-open"><span>Open</span> <span x-html="WS.icon('chevRight')"></span></span>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
+
+          <!-- empty state (search/filter yields nothing) -->
+          <div class="ws-empty" x-show="visible.length === 0" style="padding:var(--ws-10) var(--ws-6)">
+            <div class="ws-empty__icon" x-html="WS.icon('route')"></div>
+            <h3>Geen trajecten gevonden</h3>
+            <p>Pas de zoekterm, status of het bereik aan.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ===== DETAIL SLIDE-OVER ===== -->
+  <template x-if="detail">
+    <div>
+      <div class="ws-overlay" @click="closeDetail()"></div>
+      <aside class="ws-slideover" role="dialog" aria-modal="true">
+        <!-- header -->
+        <div class="ws-slideover__head">
+          <div class="ws-slideover__head-main">
+            <span class="ws-eyebrow" style="margin-bottom:4px">Traject</span>
+            <h2 class="ws-slideover__title" x-text="detail.title"></h2>
+            <div class="ws-slideover__meta">
+              <span class="ws-badge" :class="'ws-badge--'+WS.TRAJ_STATUS[detail.status].cls" x-text="WS.TRAJ_STATUS[detail.status].label"></span>
+              <span class="ws-traj-mode" x-html="WS.icon('route')+WS.TRAJ_MODE[detail.mode]"></span>
+              <span class="ws-traj-mode" x-html="WS.icon('users')+(detail.users.length+' ingeschreven')"></span>
+              <span class="ws-traj-mode" x-html="WS.icon('book')+(WS.trajCourseCount(detail)+' cursussen')"></span>
+            </div>
+          </div>
+          <button class="ws-btn ws-btn--icon ws-btn--ghost" @click="closeDetail()" title="Sluiten"><span x-html="WS.icon('x')"></span></button>
+        </div>
+
+        <div class="ws-slideover__body">
+          <!-- jump to grid -->
+          <a class="ws-btn" style="width:100%;margin-bottom:var(--ws-5)" :href="'inschrijvingen.html?trajectory='+detail.id">
+            <span x-html="WS.icon('grid')"></span> Toon inschrijvingen
+          </a>
+
+          <!-- COURSE LIST -->
+          <div class="ws-section-title ws-mt-0"><span x-html="WS.icon('book')"></span> Cursussen <span class="ws-section-title__line"></span></div>
+
+          <!-- required -->
+          <div class="ws-traj-courseblock">
+            <div class="ws-traj-courseblock__label">Verplichte cursussen</div>
+            <template x-for="c in detail.required" :key="c.edition">
+              <div class="ws-traj-course">
+                <span class="ws-traj-course__dot ws-traj-course__dot--req"></span>
+                <div class="ws-traj-course__body">
+                  <div class="ws-traj-course__title" x-text="c.title"></div>
+                  <div class="ws-traj-course__sub" x-text="c.cohort"></div>
+                </div>
+                <span class="ws-pill" style="background:var(--ws-primary-subtle);border-color:var(--ws-primary-light);color:var(--ws-primary-active)">Verplicht</span>
+              </div>
+            </template>
+          </div>
+
+          <!-- elective groups -->
+          <template x-for="(g, gi) in detail.electiveGroups" :key="gi">
+            <div class="ws-traj-courseblock">
+              <div class="ws-traj-courseblock__label">
+                <span x-html="WS.icon('route')" style="width:13px;height:13px;color:#7c3aed"></span>
+                Keuzegroep: <b x-text="g.name"></b> — <span x-text="'kies '+g.required+' uit '+g.courses.length"></span>
+              </div>
+              <template x-for="c in g.courses" :key="c.edition">
+                <div class="ws-traj-course">
+                  <span class="ws-traj-course__dot ws-traj-course__dot--elect"></span>
+                  <div class="ws-traj-course__body">
+                    <div class="ws-traj-course__title" x-text="c.title"></div>
+                    <div class="ws-traj-course__sub" x-text="c.cohort"></div>
+                  </div>
+                  <span class="ws-pill">Keuze</span>
+                </div>
+              </template>
+            </div>
+          </template>
+
+          <!-- ENROLLED USERS -->
+          <div class="ws-section-title"><span x-html="WS.icon('users')"></span> Ingeschreven deelnemers <span class="ws-grouphead__count" x-text="detail.users.length"></span><span class="ws-section-title__line"></span></div>
+          <template x-if="detail.users.length">
+            <div class="ws-traj-roster">
+              <template x-for="u in detail.users" :key="u.email">
+                <a class="ws-traj-rosteritem" :href="'dossier.html#reg-103'">
+                  <div class="ws-traj-rosteritem__avatar" :style="`background:${WS.avatarColor(u.name)}`" x-text="WS.initials(u.name)"></div>
+                  <div class="ws-traj-rosteritem__body">
+                    <div class="ws-traj-rosteritem__name" x-text="u.name"></div>
+                    <div class="ws-traj-rosteritem__sub" x-text="(WS.COMPANIES[u.company] || 'Particulier') + ' · ' + u.completed + ' van ' + u.total + ' afgerond'"></div>
+                  </div>
+                  <span class="ws-badge" :class="'ws-badge--'+WS.TRAJ_STATUS[u.status].cls" x-text="WS.TRAJ_STATUS[u.status].label"></span>
+                </a>
+              </template>
+            </div>
+          </template>
+          <!-- empty roster (F7 empty edge) -->
+          <template x-if="!detail.users.length">
+            <div class="ws-empty" style="padding:var(--ws-8) var(--ws-4);text-align:left;display:flex;gap:var(--ws-3);align-items:center">
+              <div class="ws-empty__icon" style="width:32px;height:32px;margin:0" x-html="WS.icon('inbox')"></div>
+              <div>
+                <h3 style="margin:0">Nog geen inschrijvingen</h3>
+                <p style="margin:2px 0 0;max-width:none">Dit traject heeft nog geen deelnemers.</p>
+              </div>
+            </div>
+          </template>
+        </div>
+      </aside>
+    </div>
+  </template>
+
+  <!-- ===== TOASTS ===== -->
+  <div class="ws-toast-zone">
+    <template x-for="t in toasts" :key="t.id">
+      <div class="ws-toast">
+        <div class="ws-toast__icon ws-toast__icon--mixed" x-html="WS.icon('info')"></div>
+        <div class="ws-toast__msg" x-html="t.msg"></div>
+      </div>
+    </template>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/alpinejs@3.14.1/dist/cdn.min.js" defer></script>
+<script src="assets/js/data.js"></script>
+<script>
+function trajecten() {
+  return {
+    trajectories: WS.TRAJECTORIES,
+    q: '',
+    statusFilter: '',
+    scope: 'active',            // 'active' | 'all' — the default-scope pill
+    detail: null,               // the open trajectory (slide-over)
+    toasts: [], toastSeq: 0,
+
+    init() {
+      // deep-link support: ?open=<id> opens that trajectory's detail directly
+      const id = new URLSearchParams(location.search).get('open');
+      if (id && this.trajectories[id]) this.detail = this.trajectories[id];
+    },
+
+    /* the filtered + scoped list */
+    get visible() {
+      const q = this.q.trim().toLowerCase();
+      return Object.values(this.trajectories).filter(t => {
+        if (this.scope === 'active' && !WS.trajIsActive(t)) return false;
+        if (this.statusFilter && t.status !== this.statusFilter) return false;
+        if (q && !t.title.toLowerCase().includes(q)) return false;
+        return true;
+      });
+    },
+
+    openDetail(id) { this.detail = this.trajectories[id]; },
+    closeDetail() { this.detail = null; },
+
+    toast(msg) {
+      const id = ++this.toastSeq;
+      this.toasts.push({ id, msg });
+      setTimeout(() => { this.toasts = this.toasts.filter(t => t.id !== id); }, 4200);
+    },
+  };
+}
+</script>
+</body>
+</html>
