@@ -267,8 +267,14 @@ final class BulkRegistrationHandler
 
         $quoteRepo = ntdst_get(QuoteRepository::class);
 
-        return $this->runBulk($params, function (int $id, object $reg) use ($quoteRepo, $status): true|WP_Error {
-            $map = $quoteRepo->findQuoteIdsByRegistrations([$id]); // regId => quoteId (V11)
+        // B2 (N+1 fix): resolve the reg→quote map ONCE for the whole selection in
+        // a single IN query, instead of one postmeta lookup per row. The id set
+        // here MUST match what runBulk iterates (it applies the same
+        // absint+dedupe), so every row reads its quote id from $map[$id].
+        $ids = array_values(array_unique(array_map('absint', (array) ($params['ids'] ?? []))));
+        $map = $quoteRepo->findQuoteIdsByRegistrations($ids); // regId => quoteId (V11)
+
+        return $this->runBulk($params, function (int $id, object $reg) use ($quoteRepo, $status, $map): true|WP_Error {
             $quoteId = (int) ($map[$id] ?? 0);
             if (!$quoteId) {
                 return new WP_Error('no_quote', __('Geen offerte voor deze inschrijving.', 'stride'));

@@ -223,6 +223,67 @@ class BulkRegistrationHandlerTest extends TestCase
         $this->assertCount(0, $report['failed']);
     }
 
+    /**
+     * B2 (N+1): a multi-row bulk quote action resolves the reg→quote map in ONE
+     * batched query, not one query per row. findQuoteIdsByRegistrations must be
+     * called exactly ONCE for the whole selection, with all (deduped) ids.
+     */
+    public function test_bulk_quote_exported_resolves_quote_ids_in_one_batched_call(): void
+    {
+        $rows = [];
+        foreach ([301, 302, 303] as $id) {
+            $rows[$id] = (object) ['id' => $id, 'status' => 'confirmed', 'edition_id' => 10];
+        }
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturnCallback(fn (int $id) => $rows[$id] ?? null);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $quoteRepo = $this->createMock(QuoteRepository::class);
+        // EXACTLY ONCE — not once per row. With() asserts the full id set is
+        // resolved up front, not sliced into per-row [$id] lookups.
+        $quoteRepo->expects($this->once())
+            ->method('findQuoteIdsByRegistrations')
+            ->with([301, 302, 303])
+            ->willReturn([301 => 401, 302 => 402, 303 => 403]);
+        $quoteRepo->method('updateStatus')->willReturn(true);
+        ntdst_set(QuoteRepository::class, $quoteRepo);
+
+        $report = $this->handler->handleBulkQuoteExported([], ['ids' => [301, 302, 303]]);
+
+        $this->assertCount(3, $report['succeeded']);
+        $this->assertCount(0, $report['failed']);
+    }
+
+    /**
+     * B2: with the map pre-resolved once, a row missing from the map still lands
+     * in failed[] with no_quote — the batched-resolve must not lose the per-row
+     * no_quote failure semantics.
+     */
+    public function test_bulk_quote_exported_batched_row_without_quote_fails(): void
+    {
+        $rows = [];
+        foreach ([311, 312] as $id) {
+            $rows[$id] = (object) ['id' => $id, 'status' => 'confirmed', 'edition_id' => 10];
+        }
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturnCallback(fn (int $id) => $rows[$id] ?? null);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $quoteRepo = $this->createMock(QuoteRepository::class);
+        $quoteRepo->expects($this->once())
+            ->method('findQuoteIdsByRegistrations')
+            ->willReturn([311 => 411]); // 312 has no quote
+        $quoteRepo->method('updateStatus')->willReturn(true);
+        ntdst_set(QuoteRepository::class, $quoteRepo);
+
+        $report = $this->handler->handleBulkQuoteExported([], ['ids' => [311, 312]]);
+
+        $this->assertCount(1, $report['succeeded']);
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame(312, $report['failed'][0]['id']);
+        $this->assertSame('no_quote', $report['failed'][0]['code']);
+    }
+
     /** A row with no quote lands in failed[] with code no_quote. */
     public function test_bulk_quote_sent_no_quote_lands_in_failed(): void
     {
