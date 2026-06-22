@@ -7,6 +7,7 @@ namespace Stride\Admin;
 use NTDST\Audit\AuditTable;
 use Stride\Domain\AttendanceStatus;
 use Stride\Domain\Money;
+use Stride\Domain\OfferingStatus;
 use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Attendance\AttendanceRepository;
@@ -257,6 +258,37 @@ final class AdminAPIController
                 'status' => [
                     'type' => 'string',
                     'default' => '',
+                ],
+            ],
+        ]);
+
+        // Trajectory typeahead options (lightweight {id,title,status})
+        register_rest_route(self::NAMESPACE, '/admin/trajectories/options', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getTrajectoryOptions'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'q' => [
+                    'type' => 'string',
+                    'default' => '',
+                ],
+                'scope' => [
+                    'type' => 'string',
+                    'default' => 'active',
+                    'enum' => ['active', 'all'],
+                ],
+                'page' => [
+                    'type' => 'integer',
+                    'default' => 1,
+                    'minimum' => 1,
+                ],
+                'per_page' => [
+                    // No 'maximum': over-cap CLAMPS in the callback (typeahead UX),
+                    // never 400-rejects. Hard cap of 100 enforced in
+                    // getTrajectoryOptions().
+                    'type' => 'integer',
+                    'default' => 50,
+                    'minimum' => 1,
                 ],
             ],
         ]);
@@ -2104,6 +2136,116 @@ final class AdminAPIController
             'page' => $page,
             'perPage' => $perPage,
             'totalPages' => (int) ceil($total / $perPage),
+        ]);
+    }
+
+    /**
+     * GET /admin/trajectories/options
+     *
+     * Lightweight, searchable trajectory typeahead for the admin grid
+     * trajectory filter. Returns only {id, title, status} per trajectory —
+     * NOT the heavy getTrajectories payload.
+     *
+     * Params:
+     *  - q        server-side title LIKE (bound via $wpdb->prepare + esc_like).
+     *  - scope    active (default) | all. active restricts to non-terminal
+     *             statuses (announcement/open/in_progress — mirrors
+     *             TrajectoryRepository::findActive). Trajectories have no dates,
+     *             so the active scope is purely status-based.
+     *  - page / per_page  paged, per_page capped at 100 (clamp, not 400).
+     *
+     * §10.6: scope=all warrants NO extra capability — gate is canViewAdmin only.
+     * M4: every param is validated and bound through $wpdb->prepare.
+     */
+    public function getTrajectoryOptions(WP_REST_Request $request): WP_REST_Response
+    {
+        global $wpdb;
+
+        $q = sanitize_text_field((string) ($request->get_param('q') ?? ''));
+
+        $scope = (string) ($request->get_param('scope') ?? 'active');
+        if (!in_array($scope, ['active', 'all'], true)) {
+            $scope = 'active';
+        }
+
+        $page = max(1, absint($request->get_param('page')));
+        $perPage = absint($request->get_param('per_page'));
+        $perPage = $perPage > 0 ? min($perPage, 100) : 50;
+        $offset = ($page - 1) * $perPage;
+
+        // Base predicate: published trajectories.
+        $where = ['p.post_type = %s', "p.post_status = 'publish'"];
+        $params = [TrajectoryCPT::POST_TYPE];
+
+        // q → server-side title search, bound LIKE (never interpolated, M4).
+        if ($q !== '') {
+            $where[] = 'p.post_title LIKE %s';
+            $params[] = '%' . $wpdb->esc_like($q) . '%';
+        }
+
+        // scope=active → restrict to non-terminal statuses via an EXISTS subquery
+        // (mirrors TrajectoryRepository::findActive's status set). scope=all adds
+        // no status restriction. No date carve-out: trajectories have no dates.
+        if ($scope === 'active') {
+            $activeStatuses = [
+                OfferingStatus::Announcement->value,
+                OfferingStatus::Open->value,
+                OfferingStatus::InProgress->value,
+            ];
+            $statusPlaceholders = implode(',', array_fill(0, count($activeStatuses), '%s'));
+            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status
+                WHERE pm_status.post_id = p.ID
+                AND pm_status.meta_key = '_ntdst_status'
+                AND pm_status.meta_value IN ({$statusPlaceholders}))";
+            foreach ($activeStatuses as $st) {
+                $params[] = $st;
+            }
+        }
+
+        $whereClause = implode(' AND ', $where);
+
+        $total = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
+            ...$params,
+        ));
+
+        $pageParams = $params;
+        $pageParams[] = $perPage;
+        $pageParams[] = $offset;
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title FROM {$wpdb->posts} p
+             WHERE {$whereClause}
+             ORDER BY p.post_title ASC
+             LIMIT %d OFFSET %d",
+            ...$pageParams,
+        ));
+
+        $trajectoryIds = array_map(static fn($r) => (int) $r->ID, $rows);
+
+        // Batch-fetch status to compose {id,title,status} — avoid N+1.
+        $statusMeta = [];
+        if (!empty($trajectoryIds)) {
+            $statusMeta = BatchQueryHelper::batchGetPostMeta($trajectoryIds, ['_ntdst_status']);
+        }
+
+        $items = [];
+        foreach ($rows as $row) {
+            $id = (int) $row->ID;
+            $status = $statusMeta[$id]['_ntdst_status'] ?? '';
+
+            $items[] = [
+                'id' => $id,
+                'title' => $row->post_title,
+                'status' => is_string($status) ? $status : '',
+            ];
+        }
+
+        return new WP_REST_Response([
+            'items' => $items,
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
         ]);
     }
 
