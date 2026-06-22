@@ -289,18 +289,37 @@ class RegistrationGridQueryTest extends IntegrationTestCase
     {
         $repo = ntdst_get(RegistrationRepository::class);
 
-        // 'enrollment_data' is NOT in the group_by allowlist — must be rejected/ignored
-        // and the query must still succeed.
-        $result = $repo->queryForGrid([
+        // Baseline: no group_by applied
+        $baseline = $repo->queryForGrid([
+            'company_id'    => self::$companyId,
+            'edition_scope' => 'all',
+        ]);
+
+        // 'enrollment_data' is NOT in the group_by allowlist — must be rejected/ignored.
+        // The result must be IDENTICAL to the no-group_by baseline (same row IDs,
+        // same total), proving the bad value never reached SQL.
+        $resultBad = $repo->queryForGrid([
             'group_by'      => 'enrollment_data',
             'company_id'    => self::$companyId,
             'edition_scope' => 'all',
         ]);
 
-        $this->assertIsArray($result);
-        $this->assertArrayHasKey('rows', $result);
-        // The query must return the same rows as no-group_by (the param was ignored)
-        $this->assertGreaterThanOrEqual(1, count($result['rows']));
+        $this->assertIsArray($resultBad);
+        $this->assertArrayHasKey('rows', $resultBad);
+
+        $baselineIds = array_map(fn($r) => (int) $r->id, $baseline['rows']);
+        $badGroupIds = array_map(fn($r) => (int) $r->id, $resultBad['rows']);
+
+        $this->assertEquals(
+            $baselineIds,
+            $badGroupIds,
+            'Out-of-whitelist group_by must be silently ignored; result must match no-group_by baseline',
+        );
+        $this->assertEquals(
+            (int) $baseline['total'],
+            (int) $resultBad['total'],
+            'Total count must be unchanged when group_by is rejected',
+        );
     }
 
     // =========================================================================

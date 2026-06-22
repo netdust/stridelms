@@ -1621,12 +1621,13 @@ final class RegistrationRepository
         $activeJoin = '';
         if ($useActiveScope) {
             $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
-            $activeJoin = $wpdb->prepare(
+            // Plain string — no placeholders, so no prepare() needed.
+            // $twoDaysAgo is bound separately in $params below.
+            $activeJoin =
                 // Join edition posts to get their start_date postmeta.
                 // r.edition_id references the vad_edition post.
                 "LEFT JOIN {$wpdb->posts} ae ON ae.ID = r.edition_id AND ae.post_type = 'vad_edition' AND ae.post_status = 'publish'
-                 LEFT JOIN {$wpdb->postmeta} pm_start ON pm_start.post_id = ae.ID AND pm_start.meta_key = '_ntdst_start_date'",
-            );
+                 LEFT JOIN {$wpdb->postmeta} pm_start ON pm_start.post_id = ae.ID AND pm_start.meta_key = '_ntdst_start_date'";
             $where[]  = '(r.edition_id IS NULL OR ae.ID IS NOT NULL)';
             $where[]  = '(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)';
             $params[] = $twoDaysAgo;
