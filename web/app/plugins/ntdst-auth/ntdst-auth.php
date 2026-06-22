@@ -43,6 +43,12 @@ spl_autoload_register(function (string $class): void {
     }
 });
 
+// Load translations (e.g. languages/ntdst-auth-nl_BE.mo). Without this the
+// UI falls back to the English source strings even on a non-English site.
+add_action('init', function () {
+    load_plugin_textdomain('ntdst-auth', false, dirname(plugin_basename(__FILE__)) . '/languages');
+});
+
 // Load config and register services
 add_action('plugins_loaded', function () {
     $config = require NTDST_AUTH_PATH . 'plugin-config.php';
