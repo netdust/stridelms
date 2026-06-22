@@ -1526,6 +1526,188 @@ final class RegistrationRepository
         do_action('stride/registration/cache_cleared');
     }
 
+    // === Admin grid read-model ===
+
+    /**
+     * Batched-join read-model for the admin registrations grid.
+     *
+     * Returns ['rows' => array<object>, 'total' => int, 'page' => int, 'per_page' => int].
+     * Structured columns only — NEVER reads enrollment_data/selections/completion_tasks (M5).
+     *
+     * Security mitigations live here BY CONSTRUCTION:
+     *  - M4: every structured param goes through a server-side whitelist.
+     *        Unknown sort/group_by → default; unknown status → ignored.
+     *        Integers via absint; q bound via $wpdb->prepare %s; per_page capped at 100.
+     *  - M5: NO code path puts enrollment_data/selections/completion_tasks into
+     *        WHERE/ORDER/GROUP BY.
+     *
+     * Active-scope predicate mirrors AdminAPIController::getEditions() (commit e2ace22b):
+     *  - LEFT JOIN on _ntdst_start_date.
+     *  - WHERE: start_date >= twoDaysAgo OR start_date IS NULL (sessionless carve-out §10.7).
+     *  - Bypassed when edition_scope='all' or an explicit edition_id is passed.
+     *
+     * trajectory_id filter is intentionally deferred to Task 1.4b (parent→child join).
+     * A naive WHERE trajectory_id=X would be wrong for trajectory enrollments.
+     *
+     * @param array $filters Accepts ONLY these keys (everything else ignored):
+     *   status (string ∈ RegistrationStatus values),
+     *   edition_id (int), company_id (int),
+     *   trajectory_id (int — deferred to Task 1.4b; accept+ignore),
+     *   offerte_status (string — endpoint-layer concern; ignore if passed),
+     *   q (string, name search bound via prepare %s),
+     *   edition_scope ('active'|'all', default 'active'),
+     *   sort (string ∈ SORT_ALLOWLIST), order ('asc'|'desc'),
+     *   group_by (string ∈ GROUP_BY_ALLOWLIST),
+     *   page (int ≥1), per_page (int, capped at 100, default 50).
+     * @return array{rows: array<object>, total: int, page: int, per_page: int}
+     */
+    public function queryForGrid(array $filters): array
+    {
+        global $wpdb;
+
+        // --- M4: Column allowlists (load-bearing security — do NOT add user input here) ---
+        $sortAllowlist = ['registered_at', 'status', 'edition_id', 'company_id', 'completed_at', 'cancelled_at'];
+        $groupByAllowlist = ['edition_id', 'status', 'company_id'];
+
+        // --- Sanitize params via allowlists (M4) ---
+        $sort = in_array($filters['sort'] ?? '', $sortAllowlist, true)
+            ? $filters['sort']
+            : 'registered_at';
+
+        $order = strtolower($filters['order'] ?? '') === 'asc' ? 'ASC' : 'DESC';
+
+        $groupBy = in_array($filters['group_by'] ?? '', $groupByAllowlist, true)
+            ? $filters['group_by']
+            : null;
+
+        $page    = max(1, absint($filters['page'] ?? 1));
+        $perPage = min(100, max(1, absint($filters['per_page'] ?? 50)));
+        $offset  = ($page - 1) * $perPage;
+
+        $editionId  = !empty($filters['edition_id'])  ? absint($filters['edition_id'])  : null;
+        $companyId  = !empty($filters['company_id'])  ? absint($filters['company_id'])  : null;
+
+        // Status: validate via enum (M4) — ignore unknown values
+        $statusValue = null;
+        if (!empty($filters['status'])) {
+            $statusEnum = RegistrationStatus::tryFrom((string) $filters['status']);
+            if ($statusEnum !== null) {
+                $statusValue = $statusEnum->value;
+            }
+        }
+
+        // q: name search (M4 — bound via prepare %s, never interpolated)
+        $q = !empty($filters['q']) ? (string) $filters['q'] : null;
+
+        // edition_scope: 'active' (default) or 'all'
+        // Active scope is bypassed when an explicit edition_id is provided.
+        $editionScope = (string) ($filters['edition_scope'] ?? 'active');
+        $useActiveScope = ($editionScope !== 'all') && ($editionId === null);
+
+        // M5: explicitly ignored filter keys (enrollment_data, selections,
+        // completion_tasks, trajectory_id, offerte_status). They are not
+        // read anywhere below. Only the keys consumed above reach SQL.
+
+        $regTable = $this->table();
+
+        // --- Build WHERE / JOIN ---
+
+        $where  = [];
+        $params = [];
+
+        // Active-edition scope predicate (mirrors getEditions() commit e2ace22b).
+        // LEFT JOIN on start_date; WHERE start_date >= twoDaysAgo OR IS NULL.
+        // This guarantees dateless editions (sessionless §10.7) always show through.
+        $activeJoin = '';
+        if ($useActiveScope) {
+            $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
+            $activeJoin = $wpdb->prepare(
+                // Join edition posts to get their start_date postmeta.
+                // r.edition_id references the vad_edition post.
+                "LEFT JOIN {$wpdb->posts} ae ON ae.ID = r.edition_id AND ae.post_type = 'vad_edition' AND ae.post_status = 'publish'
+                 LEFT JOIN {$wpdb->postmeta} pm_start ON pm_start.post_id = ae.ID AND pm_start.meta_key = '_ntdst_start_date'",
+            );
+            $where[]  = '(r.edition_id IS NULL OR ae.ID IS NOT NULL)';
+            $where[]  = '(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)';
+            $params[] = $twoDaysAgo;
+        }
+
+        if ($editionId !== null) {
+            $where[]  = 'r.edition_id = %d';
+            $params[] = $editionId;
+        }
+
+        if ($companyId !== null) {
+            $where[]  = 'r.company_id = %d';
+            $params[] = $companyId;
+        }
+
+        if ($statusValue !== null) {
+            $where[]  = 'r.status = %s';
+            $params[] = $statusValue;
+        }
+
+        if ($q !== null) {
+            // Name search via a join on wp_users display_name / user_login.
+            // Bound as a prepared LIKE — never interpolated (M4).
+            $where[]  = '(u.display_name LIKE %s OR u.user_login LIKE %s OR u.user_email LIKE %s)';
+            $likeTerm  = '%' . $wpdb->esc_like($q) . '%';
+            $params[]  = $likeTerm;
+            $params[]  = $likeTerm;
+            $params[]  = $likeTerm;
+        }
+
+        $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
+
+        // --- GROUP BY (validated M4 allowlist — column name never from user input) ---
+        $groupByClause = $groupBy !== null ? "GROUP BY r.{$groupBy}" : '';
+
+        // --- COUNT total ---
+        // Count query: structured columns only (M5).
+        $countSql = "SELECT COUNT(*) FROM {$regTable} r
+                     LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                     {$activeJoin}
+                     {$whereClause}
+                     {$groupByClause}";
+
+        // When group_by is active, COUNT(*) counts groups — wrap it.
+        if ($groupBy !== null) {
+            $countSql = "SELECT COUNT(*) FROM ({$countSql}) AS _grp_count";
+        }
+
+        $total = $countSql
+            ? (int) ($params
+                ? $wpdb->get_var($wpdb->prepare($countSql, ...$params))
+                : $wpdb->get_var($countSql))
+            : 0;
+
+        // --- Fetch rows (structured columns only — M5) ---
+        // ORDER BY: column name comes from the server-side allowlist (M4), never from user input.
+        $dataSql = "SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
+                           r.parent_registration_id, r.status, r.enrollment_path,
+                           r.company_id, r.registered_at, r.completed_at,
+                           r.cancelled_at, r.quote_id, r.enrolled_by, r.notes
+                    FROM {$regTable} r
+                    LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                    {$activeJoin}
+                    {$whereClause}
+                    {$groupByClause}
+                    ORDER BY r.{$sort} {$order}
+                    LIMIT %d OFFSET %d";
+
+        $dataParams   = array_merge($params, [$perPage, $offset]);
+        $rows         = $dataParams
+            ? $wpdb->get_results($wpdb->prepare($dataSql, ...$dataParams))
+            : $wpdb->get_results($dataSql);
+
+        return [
+            'rows'     => $rows ?? [],
+            'total'    => $total,
+            'page'     => $page,
+            'per_page' => $perPage,
+        ];
+    }
+
     // === Legacy aliases ===
 
     /** @deprecated Use existsForEdition() */
