@@ -124,6 +124,76 @@ class BulkRegistrationHandlerTest extends TestCase
         $this->assertSame('invalid_status', $report['failed'][0]['code']);
     }
 
+    /**
+     * B1 (M9 non-atomic): a per-row domain method that throws a raw Throwable
+     * mid-batch must NOT abort the batch. Row1 succeeds, row2 throws, row3 must
+     * STILL be processed. The throwing row lands in failed[] with a generic
+     * message (the raw exception text is logged, never leaked to the report), and
+     * no exception escapes runBulk.
+     */
+    public function test_bulk_cancel_per_row_exception_does_not_abort_batch(): void
+    {
+        $rows = [
+            201 => (object) ['id' => 201, 'status' => 'confirmed', 'edition_id' => 10],
+            202 => (object) ['id' => 202, 'status' => 'confirmed', 'edition_id' => 10],
+            203 => (object) ['id' => 203, 'status' => 'confirmed', 'edition_id' => 10],
+        ];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturnCallback(fn (int $id) => $rows[$id] ?? null);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $enrollment = $this->createMock(EnrollmentService::class);
+        $enrollment->method('cancel')->willReturnCallback(function (int $id) {
+            if ($id === 202) {
+                throw new \RuntimeException('SECRET DB constraint detail at row 202');
+            }
+
+            return true;
+        });
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        $report = $this->handler->handleBulkCancel([], ['ids' => [201, 202, 203]]);
+
+        // All three rows accounted for — the throw did NOT kill the loop.
+        $this->assertSame(3, $report['total']);
+        $this->assertCount(2, $report['succeeded'], 'rows 201 and 203 still processed');
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame(202, $report['failed'][0]['id']);
+        $this->assertSame('exception', $report['failed'][0]['code']);
+        // The raw exception message must NOT leak to the client report.
+        $this->assertStringNotContainsString('SECRET', $report['failed'][0]['message']);
+        $this->assertStringNotContainsString('constraint', $report['failed'][0]['message']);
+        $this->assertSame(['ok' => 2, 'error' => 1], $report['summary']);
+    }
+
+    /**
+     * B1: the caught exception's detail is logged to the enrollment channel with
+     * the offending registration id, so operators can diagnose without the client
+     * report ever carrying the raw message.
+     */
+    public function test_bulk_cancel_logs_caught_exception_detail(): void
+    {
+        global $_test_log_entries;
+        $_test_log_entries = [];
+
+        $row = (object) ['id' => 210, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $enrollment = $this->createMock(EnrollmentService::class);
+        $enrollment->method('cancel')->willThrowException(new \RuntimeException('boom-detail-210'));
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        $this->handler->handleBulkCancel([], ['ids' => [210]]);
+
+        $errorLogs = array_filter($_test_log_entries, fn (array $e) => $e['level'] === 'error');
+        $this->assertNotEmpty($errorLogs, 'an error must be logged for the caught exception');
+        $entry = array_values($errorLogs)[0];
+        $this->assertSame('enrollment', $entry['channel']);
+        $this->assertSame(210, $entry['context']['registration_id'] ?? null);
+    }
+
     // =========================================================================
     // Task 2.2 — quote / waitlist / post-course / message / generate-doc
     // =========================================================================

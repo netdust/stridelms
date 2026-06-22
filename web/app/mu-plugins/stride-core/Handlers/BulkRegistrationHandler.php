@@ -103,7 +103,27 @@ final class BulkRegistrationHandler
                 continue;
             }
 
-            $result = $perRow($id, $registration);
+            // M9 non-atomic (B1): a per-row domain method may throw a raw
+            // Throwable (e.g. a DB constraint error) rather than return a
+            // WP_Error. Such a throw must NOT abort the batch — the throwing row
+            // is reported failed and the loop continues. The raw exception detail
+            // is logged (operators can diagnose) but NEVER leaked to the client
+            // report, which carries a generic Dutch message.
+            try {
+                $result = $perRow($id, $registration);
+            } catch (\Throwable $e) {
+                ntdst_log('enrollment')->error('Bulk row threw an exception; row reported failed', [
+                    'registration_id' => $id,
+                    'exception' => $e->getMessage(),
+                ]);
+                $failed[] = [
+                    'id' => $id,
+                    'code' => 'exception',
+                    'message' => __('Er ging iets mis bij deze inschrijving.', 'stride'),
+                ];
+                continue;
+            }
+
             if (is_wp_error($result)) {
                 $failed[] = [
                     'id' => $id,
