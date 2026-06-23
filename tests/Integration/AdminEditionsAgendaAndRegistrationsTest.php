@@ -54,13 +54,13 @@ final class AdminEditionsAgendaAndRegistrationsTest extends IntegrationTestCase
         return ntdst_get(\Stride\Admin\AdminAPIController::class);
     }
 
-    /** Create a session post tied to an edition, dated $date. */
-    private function makeSession(int $editionId, string $date): int
+    /** Create a session post tied to an edition, dated $date, with an explicit post_status. */
+    private function makeSession(int $editionId, string $date, string $postStatus = 'publish'): int
     {
         $sessionId = wp_insert_post([
             'post_title'  => 'Test Session ' . wp_generate_password(4, false),
             'post_type'   => 'vad_session',
-            'post_status' => 'publish',
+            'post_status' => $postStatus,
         ]);
 
         if (is_wp_error($sessionId)) {
@@ -165,5 +165,41 @@ final class AdminEditionsAgendaAndRegistrationsTest extends IntegrationTestCase
         $this->assertSame('anon-interest@example.test', $row[0]['user']['email'], 'Email falls back to enrollment_data for anon rows (preserved behavior)');
 
         $wpdb->delete($regTable, ['id' => $regId]);
+    }
+
+    /**
+     * getEditionRegistrations' sessions list is PUBLISH-SCOPED: a draft session
+     * tied to the same edition must NOT appear, while the published one must.
+     *
+     * Pins both the publish predicate AND the meta-key resolution of the
+     * session-ids reader (CR-2B #2/#3 collapsed the raw-SQL twin into the
+     * builder-path findIdsByEdition(postStatus: 'publish')). Without the
+     * post_status='publish' scope this assertion goes RED — the draft leaks in.
+     */
+    public function test_edition_registrations_sessions_list_excludes_draft_sessions(): void
+    {
+        if (!\Stride\Modules\Enrollment\RegistrationTable::exists()) {
+            $this->markTestSkipped('Registration table not present in this DB');
+        }
+
+        $editionId = $this->createTestEdition(['meta' => [
+            '_ntdst_status'    => 'open',
+            '_ntdst_course_id' => 0,
+        ]]);
+
+        $today          = current_time('Y-m-d');
+        $publishedId    = $this->makeSession($editionId, $today, 'publish');
+        $draftSessionId = $this->makeSession($editionId, $today, 'draft');
+
+        $req = new WP_REST_Request('GET', '/stride/v1/admin/editions/' . $editionId . '/registrations');
+        $req->set_param('id', $editionId);
+
+        $res  = $this->controller()->getEditionRegistrations($req);
+        $data = $res->get_data();
+
+        $sessionIds = array_map(static fn($s) => (int) ($s['id'] ?? 0), $data['sessions'] ?? []);
+
+        $this->assertContains($publishedId, $sessionIds, 'The published session must appear in the sessions list');
+        $this->assertNotContains($draftSessionId, $sessionIds, 'A draft session must NOT leak into the publish-scoped sessions list');
     }
 }

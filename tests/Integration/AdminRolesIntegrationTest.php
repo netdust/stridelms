@@ -34,6 +34,7 @@ class AdminRolesIntegrationTest extends IntegrationTestCase
             new \Stride\Modules\Attendance\AttendanceRepository(),
             new \Stride\Modules\Edition\EditionRepository(),
             new \Stride\Modules\Edition\SessionRepository(),
+            new \Stride\Modules\Enrollment\RegistrationRepository(),
         );
         $controller->registerRoutes();
 

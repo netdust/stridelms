@@ -52,6 +52,7 @@ class AdminDashboardService extends AbstractService
             ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class),
             ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
             ntdst_get(\Stride\Modules\Edition\SessionRepository::class),
+            ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
         );
 
         // Admin guide page (registers own menu hook)

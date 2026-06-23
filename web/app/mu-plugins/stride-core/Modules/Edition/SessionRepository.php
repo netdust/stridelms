@@ -32,49 +32,26 @@ final class SessionRepository extends AbstractRepository
     }
 
     /**
-     * Find PUBLISHED session IDs for an edition, ordered by post ID ASC.
+     * Find session IDs for an edition, ordered by post ID ASC.
      *
-     * Owns the $wpdb execution moved out of
-     * AdminAPIController::getEditionRegistrations (INV-3, strangle Task 2a.5).
-     * Distinct from findIdsByEdition, which is post_status=any (cascade-delete
-     * needs trashed/draft sessions too). The registrations view shows only
-     * PUBLISHED sessions ordered by ID — that predicate + ordering is
-     * reproduced VERBATIM here, so the move is behavior-preserving.
-     * M4: editionId bound via $wpdb->prepare.
-     *
-     * @return list<int>
-     */
-    public function findPublishedIdsByEdition(int $editionId): array
-    {
-        global $wpdb;
-
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
-             WHERE p.post_type = %s AND p.post_status = 'publish' AND pm.meta_value = %d
-             ORDER BY p.ID ASC",
-            SessionCPT::POST_TYPE,
-            $editionId,
-        ));
-
-        return array_map(static fn($r): int => (int) $r->ID, $rows);
-    }
-
-    /**
-     * Find session IDs for an edition, any non-trash post_status.
-     *
-     * Used by cascade-delete paths that need just the IDs. Goes through
+     * Single session-ids-by-edition reader on the builder path. Goes through
      * `where('edition_id', ...)` so the relationship matches `findByEdition()`
      * / `countByEdition()` (meta-based, not post_parent-based) — keeps cascade
-     * consistent with the find/count paths.
+     * and the registrations view consistent with the find/count paths. The
+     * builder resolves the edition_id meta key via the model prefix, so no
+     * `_ntdst_*` literal lives here (INV-3).
      *
+     * @param string $postStatus Post status scope. Cascade-delete passes 'any'
+     *                           (needs trashed/draft sessions too); the
+     *                           registrations view passes 'publish'.
      * @return list<int>
      */
-    public function findIdsByEdition(int $editionId): array
+    public function findIdsByEdition(int $editionId, string $postStatus = 'any'): array
     {
         $rows = $this->model()
             ->where('edition_id', $editionId)
-            ->where('post_status', 'any')
+            ->where('post_status', $postStatus)
+            ->orderBy('ID', 'ASC')
             ->get();
 
         return array_map(static fn(array $row): int => (int) ($row['id'] ?? $row['ID'] ?? 0), $rows);

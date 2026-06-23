@@ -17,6 +17,7 @@ use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionCPT;
 use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Enrollment\EnrollmentService;
+use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
 use WP_Error;
@@ -46,6 +47,7 @@ final class AdminAPIController
         private readonly AttendanceRepository $attendance,
         private readonly EditionRepository $editionRepository,
         private readonly SessionRepository $sessionRepository,
+        private readonly RegistrationRepository $registrationRepository,
     ) {
         $this->init();
     }
@@ -1199,10 +1201,10 @@ final class AdminAPIController
             ]);
         }
 
-        // Get PUBLISHED session ids for this edition (ordered by ID). SQL moved
-        // into SessionRepository (INV-3, strangle Task 2a.5) — verbatim
-        // predicate/ordering, behavior-preserving.
-        $sessionIds = $this->sessionRepository->findPublishedIdsByEdition($editionId);
+        // Get PUBLISHED session ids for this edition (ordered by ID). Unified
+        // builder-path reader (INV-3, CR-2B #2/#3) — the published scope is one
+        // argument over the single session-ids reader, no raw SQL twin.
+        $sessionIds = $this->sessionRepository->findIdsByEdition($editionId, 'publish');
 
         // Batch fetch session meta
         $sessionMeta = BatchQueryHelper::batchGetPostMeta($sessionIds, ['_ntdst_date', '_ntdst_start_time']);
@@ -1222,8 +1224,7 @@ final class AdminAPIController
         // edition_id ... ORDER BY registered_at ASC is identical to the prior
         // inline query; INV-3). The anon enrollment_data name fallback below
         // (user_id=0 interest/waitlist rows) is PRESERVED verbatim.
-        $registrationRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
-        $registrations = $registrationRepo->findByEdition($editionId);
+        $registrations = $this->registrationRepository->findByEdition($editionId);
 
         // Collect user IDs for batch fetch
         $userIds = array_map(fn($r) => (int) $r->user_id, $registrations);
@@ -1763,7 +1764,7 @@ final class AdminAPIController
         // INV-3: the registrations table is repository-owned — both scan
         // queries (exact SQL incl. COLLATE pin + scan cap) live in
         // RegistrationRepository; the controller keeps bucketing/pagination.
-        $registrationRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $registrationRepo = $this->registrationRepository;
 
         // Enrollment phase: pending registrations that can still yield an item —
         // an open admin-approval task (bucket 1) or stale-aged (bucket 3 candidate).

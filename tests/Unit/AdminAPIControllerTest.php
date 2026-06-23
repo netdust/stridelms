@@ -8,6 +8,7 @@ use Stride\Admin\AdminAPIController;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\SessionRepository;
+use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Tests\TestCase;
 
 /**
@@ -31,6 +32,7 @@ class AdminAPIControllerTest extends TestCase
             $this->createMock(AttendanceRepository::class),
             $this->createMock(EditionRepository::class),
             $this->createMock(SessionRepository::class),
+            $this->createMock(RegistrationRepository::class),
         );
     }
 

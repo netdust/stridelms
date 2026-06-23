@@ -113,7 +113,7 @@ final class RegistrationExportTest extends IntegrationTestCase
         $this->assertStringContainsString(
             'Naam;E-mail;Organisatie',
             $output,
-            'CSV header row missing — export did not run. Output: ' . $this->snippet($output)
+            'CSV header row missing — export did not run. Output: ' . $this->snippet($output),
         );
 
         $user = get_userdata(self::$testUserId);
@@ -127,7 +127,7 @@ final class RegistrationExportTest extends IntegrationTestCase
             $user->user_email,
             $output,
             'Expected a CSV data row for confirmed registration ' . $regId
-            . ' — export body is empty or the row is missing. Output: ' . $this->snippet($output)
+            . ' — export body is empty or the row is missing. Output: ' . $this->snippet($output),
         );
 
         // Negative/adversarial: the formula payload is prefixed with a quote.
@@ -135,7 +135,7 @@ final class RegistrationExportTest extends IntegrationTestCase
             "'=2+5",
             $output,
             'Formula-injection payload not neutralised — sanitizeCsvCell missing from export. Output: '
-            . $this->snippet($output)
+            . $this->snippet($output),
         );
     }
 
@@ -168,7 +168,7 @@ final class RegistrationExportTest extends IntegrationTestCase
                 $growth,
                 $deltaSmall,
                 $deltaLarge,
-            )
+            ),
         );
     }
 
@@ -226,7 +226,7 @@ final class RegistrationExportTest extends IntegrationTestCase
             $expectedRow,
             $output,
             'Export row format drifted from the characterized '
-            . 'name;email;org;edition;date;status;quote layout. Output: ' . $this->snippet($output)
+            . 'name;email;org;edition;date;status;quote layout. Output: ' . $this->snippet($output),
         );
 
         $user2 = get_userdata($userId2);
@@ -243,7 +243,7 @@ final class RegistrationExportTest extends IntegrationTestCase
         $this->assertStringContainsString(
             $expectedRow2,
             $output,
-            'Empty quote_number meta must fall back to Q-<post id>. Output: ' . $this->snippet($output)
+            'Empty quote_number meta must fall back to Q-<post id>. Output: ' . $this->snippet($output),
         );
     }
 
@@ -294,13 +294,13 @@ final class RegistrationExportTest extends IntegrationTestCase
             ]),
             $output,
             'Two quotes on one registration must deterministically export the lower-ID quote. Output: '
-            . $this->snippet($output)
+            . $this->snippet($output),
         );
         $this->assertStringNotContainsString(
             'OFF-DUPE-HIGH-' . $suffix,
             $output,
             'The higher-ID duplicate quote leaked into the export — MIN(p.ID) determinism broken. Output: '
-            . $this->snippet($output)
+            . $this->snippet($output),
         );
     }
 
@@ -343,7 +343,7 @@ final class RegistrationExportTest extends IntegrationTestCase
         $this->assertStringContainsString(
             $expectedGhostRow,
             $output,
-            'Deleted-user registration must render with blank user cells. Output: ' . $this->snippet($output)
+            'Deleted-user registration must render with blank user cells. Output: ' . $this->snippet($output),
         );
 
         // Stream continued past the ghost row: the surviving user's row exists.
@@ -353,7 +353,7 @@ final class RegistrationExportTest extends IntegrationTestCase
             $alive->user_email,
             $output,
             'Rows after the deleted-user row are missing — export stream aborted. Output: '
-            . $this->snippet($output)
+            . $this->snippet($output),
         );
 
         // The shutdown marker proves the child exited through the normal
@@ -377,7 +377,7 @@ final class RegistrationExportTest extends IntegrationTestCase
         $this->assertStringContainsString(
             'Naam;E-mail;Organisatie',
             $output,
-            'Empty export must still emit the CSV header row. Output: ' . $this->snippet($output)
+            'Empty export must still emit the CSV header row. Output: ' . $this->snippet($output),
         );
 
         // No PHP error / DB error leaked into the stream (the child runs
@@ -386,7 +386,7 @@ final class RegistrationExportTest extends IntegrationTestCase
             $this->assertStringNotContainsString(
                 $needle,
                 $output,
-                "Empty export leaked '{$needle}' into the CSV stream. Output: " . $this->snippet($output)
+                "Empty export leaked '{$needle}' into the CSV stream. Output: " . $this->snippet($output),
             );
         }
 
@@ -404,7 +404,7 @@ final class RegistrationExportTest extends IntegrationTestCase
         $this->assertSame(
             [$expectedHeader],
             $lines,
-            'Empty export must be EXACTLY the header line — found extra rows/output. Output: ' . $this->snippet($output)
+            'Empty export must be EXACTLY the header line — found extra rows/output. Output: ' . $this->snippet($output),
         );
     }
 
@@ -515,6 +515,7 @@ $controller = new \Stride\Admin\AdminAPIController(
     ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class),
     ntdst_get(\Stride\Modules\Edition\EditionRepository::class),
     ntdst_get(\Stride\Modules\Edition\SessionRepository::class),
+    ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class),
 );
 
 $GLOBALS['stride_export_num_queries_before'] = $wpdb->num_queries;
@@ -562,7 +563,7 @@ RUNNER;
             1,
             $matched,
             'Query-delta marker missing — child process died before its shutdown function ran. Output: '
-            . $this->snippet($output)
+            . $this->snippet($output),
         );
 
         return (int) $m[1];
