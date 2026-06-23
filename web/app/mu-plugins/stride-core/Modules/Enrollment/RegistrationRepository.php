@@ -1270,6 +1270,44 @@ final class RegistrationRepository
     }
 
     /**
+     * Get selections for many registrations in one query (batched getSelections).
+     *
+     * The per-row getSelections() calls find() (a SELECT * per id), which is N+1
+     * for a roster. This is the same convergence point — the selections column is
+     * read and decoded HERE, in the repository, so callers never decode the raw
+     * column themselves (INV-6b). Returns [registrationId => array<int>]; ids not
+     * found (or with no selection) yield an empty array.
+     *
+     * @param  array<int> $registrationIds
+     * @return array<int, array<int>>
+     */
+    public function getSelectionsForRegistrations(array $registrationIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $registrationIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT id, selections FROM {$this->table()} WHERE id IN ({$placeholders})",
+            ...$ids,
+        ));
+
+        // Seed every requested id so callers can index without isset() guards.
+        $out = array_fill_keys($ids, []);
+        foreach ($rows as $row) {
+            $decoded = $row->selections ? json_decode($row->selections, true) : [];
+            $out[(int) $row->id] = is_array($decoded)
+                ? array_values(array_filter(array_map('intval', $decoded)))
+                : [];
+        }
+
+        return $out;
+    }
+
+    /**
      * Lock selections (prevent further changes).
      */
     public function lockSelections(int $registrationId): bool

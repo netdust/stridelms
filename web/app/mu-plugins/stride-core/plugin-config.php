@@ -57,6 +57,7 @@ return [
         \Stride\Admin\AdminStatsService::class,
         \Stride\Admin\AdminUserService::class,
         \Stride\Admin\AdminTrajectoryService::class,
+        \Stride\Admin\AdminEditionRosterService::class,
     ],
 
     /**
