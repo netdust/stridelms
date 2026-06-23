@@ -175,6 +175,19 @@ final class AdminAPIController
             ],
         ]);
 
+        // Per-edition cohort roster read-model (Phase 2a, Task 2a.3)
+        register_rest_route(self::NAMESPACE, '/admin/editions/(?P<id>\d+)/roster', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getEditionRoster'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'id' => [
+                    'type' => 'integer',
+                    'required' => true,
+                ],
+            ],
+        ]);
+
         // Course tags for filter
         register_rest_route(self::NAMESPACE, '/admin/course-tags', [
             'methods' => 'GET',
@@ -1320,6 +1333,31 @@ final class AdminAPIController
             'items' => $items,
             'sessions' => $sessionItems,
         ]);
+    }
+
+    /**
+     * GET /admin/editions/{id}/roster
+     *
+     * Per-edition cohort roster read-model (Phase 2a, Task 2a.3). Thin delegator —
+     * NO SQL / business logic here: it validates the edition exists, then returns
+     * AdminEditionRosterService::getRosterForEdition verbatim (INV-3). The {id} is
+     * absint'd via (int) cast (the route's \d+ pattern already constrains it); a
+     * missing edition bubbles a 404 WP_Error rather than being swallowed (INV-4).
+     * No roster filter param is bound into SQL — extras stay loaded-set only (CM-3).
+     */
+    public function getEditionRoster(WP_REST_Request $request): WP_REST_Response|WP_Error
+    {
+        $editionId = (int) $request->get_param('id');
+
+        // Verify edition exists (CM-5 absint + edition-exists guard; INV-4 bubble).
+        $edition = get_post($editionId);
+        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE) {
+            return new WP_Error('not_found', 'Edition not found', ['status' => 404]);
+        }
+
+        $service = ntdst_get(\Stride\Admin\AdminEditionRosterService::class);
+
+        return new WP_REST_Response($service->getRosterForEdition($editionId));
     }
 
     /**
