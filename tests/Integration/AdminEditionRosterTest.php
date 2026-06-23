@@ -399,6 +399,67 @@ class AdminEditionRosterTest extends IntegrationTestCase
         $this->assertSame(self::$editionId, $roster['edition_id']);
     }
 
+    /**
+     * CR-B3 (RED-first): the unmigrated-DB guard is LOAD-BEARING, not decorative.
+     *
+     * The sibling test above asserts only the payload SHAPE on a present table —
+     * it never executes the table-missing branch, so removing the
+     * RegistrationTable::exists() guard would NOT make it RED. This test forces
+     * RegistrationTable::exists() to report the table ABSENT (by filtering its
+     * `SHOW TABLES LIKE ...vad_registrations` probe to a no-row query) while the
+     * real table — and its seeded confirmed rows — stay queryable. That desync is
+     * the discriminator:
+     *
+     *   - guard PRESENT  -> getRosterForEdition short-circuits to the empty payload
+     *     (rows => []) BEFORE any registration query runs.
+     *   - guard ABSENT   -> it falls through to findByEditionWithStatuses(), which
+     *     (untouched by the filter) returns the seeded confirmed rows, so rows is
+     *     NON-empty and the strict equality below FAILS.
+     *
+     * The `query` filter only rewrites the exists()-probe, so this is non-destructive
+     * and self-restoring; the real table is never altered.
+     */
+    public function test_roster_short_circuits_to_empty_when_registration_table_is_absent(): void
+    {
+        // Sanity: under normal conditions the seeded edition HAS cohort rows, so an
+        // empty result below can only come from the guard, not from an empty edition.
+        $present = $this->service()->getRosterForEdition(self::$editionId);
+        $this->assertNotEmpty(
+            $present['rows'],
+            'precondition: the seeded edition must have roster rows when the table is present',
+        );
+
+        // Make RegistrationTable::exists() report the table ABSENT: rewrite ONLY its
+        // `SHOW TABLES LIKE ...vad_registrations` probe to a query that returns nothing.
+        // findByEditionWithStatuses() issues a different (SELECT *) statement, so it is
+        // untouched — the real table and its rows remain queryable.
+        $filter = static function (string $query): string {
+            if (stripos($query, 'SHOW TABLES LIKE') !== false
+                && stripos($query, 'vad_registrations') !== false) {
+                return "SELECT 'x' FROM DUAL WHERE 1 = 0";
+            }
+            return $query;
+        };
+        add_filter('query', $filter);
+
+        try {
+            $roster = $this->service()->getRosterForEdition(self::$editionId);
+        } finally {
+            remove_filter('query', $filter);
+        }
+
+        // The guard short-circuited: the documented empty-payload shape, no
+        // registration query, no fatal. If the guard were removed this would be the
+        // seeded rows and the assertion would FAIL.
+        $this->assertSame(
+            ['edition_id' => self::$editionId, 'rows' => [], 'extras_keys' => []],
+            $roster,
+            'an absent registrations table must yield the empty roster payload via the '
+            . 'RegistrationTable::exists() guard — never a query against the (reportedly) '
+            . 'missing table (CR-B3)',
+        );
+    }
+
     // === Task 2a.2: extras extraction (loaded-set enrollment_data) ===
 
     public function test_roster_surfaces_extras_from_enrollment_data_for_loaded_set(): void
