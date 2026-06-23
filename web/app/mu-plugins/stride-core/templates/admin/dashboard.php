@@ -789,7 +789,6 @@ defined('ABSPATH') || exit;
                             <option value="edition_id">Editie</option>
                             <option value="status">Status</option>
                             <option value="company_id">Organisatie</option>
-                            <option value="trajectory_id">Traject</option>
                         </select>
                         <button type="button" class="ws-group-clear" x-show="gridGroupBy" @click="gridGroupBy=''; onGridGroupChange()" title="Indeling opheffen">×</button>
                     </div>

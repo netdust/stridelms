@@ -469,6 +469,71 @@ class RegistrationGridQueryTest extends IntegrationTestCase
         );
     }
 
+    /**
+     * UI↔server group-by invariant (shakeout Bug 1).
+     *
+     * The grid UI offers a fixed set of group-by axes. EVERY axis the UI can
+     * offer MUST be accepted by the SERVICE (getGroupedPage) and return a
+     * grouped envelope; any value OUTSIDE the server allowlist MUST return the
+     * `invalid_group_by` WP_Error (HTTP 400) — never a silent 200.
+     *
+     * Driven through the SERVICE, not the repo: queryForGrid SILENTLY IGNORES
+     * an out-of-allowlist group_by (M4 sort-style fallback), which is exactly
+     * why the unsupported `trajectory_id` UI option shipped green — the only
+     * existing assertion (m4OutOfWhitelistGroupByRejected) hit the repo. This
+     * pins the affordance↔allowlist contract at the service boundary that the
+     * controller actually calls.
+     *
+     * @test
+     */
+    public function groupByServiceAcceptsExactlyTheAllowlist(): void
+    {
+        $service = ntdst_get(AdminRegistrationQueryService::class);
+
+        // Every value the server allowlist accepts must produce a grouped
+        // envelope (items array + total), NOT an error.
+        foreach (RegistrationRepository::GROUP_BY_ALLOWLIST as $axis) {
+            $result = $service->getGridPage([
+                'group_by'      => $axis,
+                'company_id'    => self::$companyId,
+                'edition_scope' => 'all',
+            ]);
+
+            $this->assertNotInstanceOf(
+                \WP_Error::class,
+                $result,
+                "Allowlisted group_by axis '{$axis}' must return a grouped envelope, not an error",
+            );
+            $this->assertArrayHasKey('items', $result, "Axis '{$axis}' envelope must have items");
+            $this->assertArrayHasKey('total', $result, "Axis '{$axis}' envelope must have total");
+        }
+
+        // The UI-removed value: trajectory_id is NOT in the allowlist and MUST
+        // be a hard invalid_group_by 400 — the server defends the affordance the
+        // UI no longer offers.
+        $rejected = $service->getGridPage([
+            'group_by'      => 'trajectory_id',
+            'company_id'    => self::$companyId,
+            'edition_scope' => 'all',
+        ]);
+
+        $this->assertInstanceOf(
+            \WP_Error::class,
+            $rejected,
+            'Out-of-allowlist group_by (trajectory_id) must return WP_Error, not a silent 200',
+        );
+        $this->assertSame(
+            'invalid_group_by',
+            $rejected->get_error_code(),
+            'Rejected group_by must carry the invalid_group_by error code',
+        );
+        $this->assertSame(
+            400,
+            $rejected->get_error_data()['status'] ?? null,
+            'invalid_group_by must carry HTTP 400 status',
+        );
+    }
+
     // =========================================================================
     // Assertion 4: M5 — JSON-column keys in filters are ignored
     // =========================================================================

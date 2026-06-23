@@ -949,6 +949,15 @@ document.addEventListener('alpine:init', () => {
                 };
                 this.gridLoaded = true;
             } catch (e) {
+                // Clear BOTH page buffers so a failed load never repaints the
+                // previous successful axis's data mislabeled under the new/failed
+                // axis (shakeout Bug 2: "Traject #confirmed 24" built from stale
+                // status groups). gridLoaded stays true so the empty/error state
+                // (x-if !loading && gridLoaded && gridRows.length===0 &&
+                // gridGroups.length===0) renders instead of a perpetual spinner.
+                this.gridGroups = [];
+                this.gridRows = [];
+                this.gridLoaded = true;
                 this.errors.inschrijvingen = 'Inschrijvingen laden mislukt. Probeer opnieuw.';
             }
             this._loadingViews.inschrijvingen = false;
@@ -1000,7 +1009,7 @@ document.addEventListener('alpine:init', () => {
         gridGroupKindLabel() {
             return {
                 edition_id: 'Editie', status: 'Status',
-                company_id: 'Organisatie', trajectory_id: 'Traject',
+                company_id: 'Organisatie',
             }[this.gridGroupBy] || '';
         },
 
@@ -1017,9 +1026,6 @@ document.addEventListener('alpine:init', () => {
             if (this.gridGroupBy === 'edition_id') {
                 const ed = this.editionOptions.find(e => String(e.id) === String(v));
                 return ed?.title || (v ? `Editie #${v}` : 'Geen editie');
-            }
-            if (this.gridGroupBy === 'trajectory_id') {
-                return v ? `Traject #${v}` : 'Geen traject';
             }
             if (this.gridGroupBy === 'company_id') {
                 return v ? `Organisatie #${v}` : 'Geen organisatie';
