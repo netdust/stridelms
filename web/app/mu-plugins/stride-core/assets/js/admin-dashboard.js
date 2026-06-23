@@ -41,6 +41,47 @@ function strideActionsForStates(states) {
     return STRIDE_SMART_ACTIONS.filter(a => uniq.every(s => a.states.includes(s)));
 }
 
+/* ── Cohort-roster bulk-action catalog (Phase 2a, Task 2a.9) ─────────────
+   The roster bulk bar's actions, mirroring STRIDE_SMART_ACTIONS but for the
+   per-edition / per-trajectory roster registry actions (Handlers/RosterBulkHandler).
+   `approve` is the ONE lifecycle action — its offered `states` are validated
+   against the SAME authoritative StrideConfig.transitions map at init (CR-5),
+   exactly like the grid catalog, so a roster button can't drift from the server
+   map. `message`/`generate_doc` are orthogonal-to-status deferred stubs (no map
+   entry, like the grid). The `{scope}` placeholder is rewritten to the actual
+   action id (stride_roster_bulk_* OR stride_traj_roster_bulk_*) per opened scope,
+   so the SAME catalog drives both rosters and the nonce is keyed correctly. */
+const STRIDE_ROSTER_ACTIONS = [
+    { id: 'approve',      label: 'Goedkeuren',          icon: 'approve', states: ['pending', 'interest', 'waitlist'] },
+    { id: 'message',      label: 'Bericht sturen',      icon: 'mail',    states: ['confirmed', 'completed', 'interest', 'pending', 'waitlist'] },
+    { id: 'generate_doc', label: 'Document genereren',  icon: 'doc',     states: ['confirmed', 'completed'] },
+];
+/* Lifecycle roster actions whose offered states must be permitted by the server
+   transition map (same SUBSET check the grid uses). Only `approve` is lifecycle. */
+const STRIDE_ROSTER_LIFECYCLE_TARGET = { approve: 'confirmed' };
+function strideValidateRosterTransitionDrift(transitions) {
+    if (!transitions || typeof transitions !== 'object') return;
+    const canReach = (from, target) => Array.isArray(transitions[from]) && transitions[from].includes(target);
+    STRIDE_ROSTER_ACTIONS.forEach(a => {
+        const target = STRIDE_ROSTER_LIFECYCLE_TARGET[a.id];
+        if (!target) return;
+        const invalid = a.states.filter(s => !canReach(s, target));
+        if (invalid.length) {
+            console.warn(
+                `[strideApp] roster bulk action "${a.id}" is offered for state(s) [${invalid}] that `
+                + `the server transition map does NOT permit to reach "${target}" — `
+                + 'update STRIDE_ROSTER_ACTIONS or RegistrationTransitions::map() (CR-5).',
+            );
+        }
+    });
+}
+/* The safe intersection of roster actions across a set of selected states. */
+function strideRosterActionsForStates(states) {
+    const uniq = [...new Set(states)];
+    if (uniq.length === 0) return [];
+    return STRIDE_ROSTER_ACTIONS.filter(a => uniq.every(s => a.states.includes(s)));
+}
+
 /* Lifecycle actions whose offered `states` MUST be permitted by the server
    transition map (CR-5): each state an action is offered for must be able to
    reach the action's lifecycle target. Several actions may split one target
@@ -157,6 +198,34 @@ document.addEventListener('alpine:init', () => {
         editionRegistrations: [],
         editionSessions: [],
         slideoverOpen: false,
+
+        // ── Cohort lens (Phase 2a, Task 2a.9) ─────────────────────
+        // The per-edition / per-trajectory roster view: sessions → who is in
+        // which session, attendance, loaded-set extras filter, roster bulk bar.
+        // Reads /admin/editions/{id}/roster (2a-A). The `rows[].selections` are
+        // the session/edition ids read THROUGH the endpoint (getSelections /
+        // INV-6b) — NEVER a client-side raw-column decode. Bulk reuses the same
+        // ntdst/v1/action POST + per-row-report pattern as the grid (1D), scoped
+        // by the REQUIRED edition_id / trajectory_id. Extras filtering is over
+        // the LOADED set only (CF3 leak-check — never offered on the global grid).
+        cohort: {
+            open: false,
+            loading: false,
+            error: '',
+            scope: 'edition',      // 'edition' | 'trajectory'
+            scopeId: 0,            // edition_id or trajectory_id (the bulk scope)
+            title: '',
+            rows: [],              // roster rows from the endpoint (loaded set)
+            extrasKeys: [],        // distinct extras keys present (chip source)
+            sessions: [],          // session list (from selectedEdition.sessions)
+            sessionId: 0,          // active per-session filter (0 = all rows)
+            extrasFilter: '',      // active "key=value" extras filter ('' = none)
+            selected: {},          // registration_id -> true
+            bulkBusy: null,        // action id currently running
+            overflowOpen: false,
+            result: null,          // { action, total, succeeded[], failed[], ok, err }
+            resultOpen: false,
+        },
 
         // ── Quotes ───────────────────────────────────────────────
         quotes: [],
@@ -345,6 +414,7 @@ document.addEventListener('alpine:init', () => {
             // CR-5: catch any drift between the JS lifecycle-action catalog and
             // the authoritative server transition map at load.
             strideValidateTransitionDrift(this.config.transitions);
+            strideValidateRosterTransitionDrift(this.config.transitions);
             this.parseHash();
             window.addEventListener('hashchange', () => this.parseHash());
             this.loadViewData(this.view);
@@ -393,6 +463,9 @@ document.addEventListener('alpine:init', () => {
             this.selectedQuote = null;
             this.selectedTrajectory = null;
             this.kebabOpen = null;
+            // Reset the cohort lens so the next edition opens a clean roster
+            // (the "Rooster" tab refetches via openCohort on click regardless).
+            this.closeCohort();
         },
 
         // Build a stride_export_registrations URL for the selected edition.
@@ -725,6 +798,327 @@ document.addEventListener('alpine:init', () => {
 
         attendanceLabel(status) {
             return { present: '\u2713', absent: '\u2717', excused: '!', '': '\u00b7', undefined: '\u00b7', null: '\u00b7' }[status] ?? '\u00b7';
+        },
+
+        // ==============================================================
+        //  COHORT LENS METHODS (Phase 2a, Task 2a.9)
+        //  Per-session roster + attendance + extras filter + roster bulk.
+        //  All reads go through /admin/editions/{id}/roster (2a-A) \u2014 the
+        //  rows[].selections are session/edition ids resolved server-side
+        //  (getSelections / INV-6b), so this UI NEVER decodes a raw column.
+        // ==============================================================
+
+        // Open the cohort lens for an EDITION. Pulls the session list from the
+        // already-loaded selectedEdition (openEdition fetched it) and the roster
+        // from the 2a-A endpoint. Reachable as a tab inside the edition slideover.
+        async openCohort(editionId) {
+            const id = Number(editionId) || 0;
+            if (!id) return;
+            this.cohort.scope = 'edition';
+            this.cohort.scopeId = id;
+            this.cohort.title = this.selectedEdition?.title || '';
+            this.cohort.sessions = (this.selectedEdition?.sessions || this.editionSessionList || []);
+            await this.loadCohortRoster(`/admin/editions/${id}/roster`);
+        },
+
+        // Open the cohort lens for a TRAJECTORY (CF5). The trajectory roster is
+        // its child-edition rows; the bulk scope is the trajectory_id. There is
+        // no per-trajectory roster READ endpoint in 2a \u2014 reuse the already-loaded
+        // selectedTrajectory.registrations (read-only overview from /trajectories/{id})
+        // as the loaded set; session-level drill-down is per-edition only.
+        openTrajectoryRoster(trajectoryId) {
+            const id = Number(trajectoryId) || 0;
+            if (!id) return;
+            const title = this.selectedTrajectory?.title || '';
+            // Snapshot the read-only trajectory registrations into roster-row shape
+            // BEFORE closing the detail slideover (closeSlideOver nulls
+            // selectedTrajectory). No selections/extras axis here (the read
+            // overview doesn't carry them) \u2014 this surface is bulk-only (CF5).
+            const rows = (this.selectedTrajectory?.registrations || []).map(r => ({
+                registration_id: r.id,
+                user_id: r.user_id || r.user?.id || 0,
+                name: r.name || '\u2014',
+                organisation: r.organisation || '',
+                status: r.status || '',
+                is_anonymised: !!r.anonymous,
+                selections: [],
+                attendance: { present: 0, absent: 0, excused: 0 },
+                extras: {},
+            }));
+            // Close the detail slideover (also resets cohort), THEN arm the
+            // trajectory cohort so the reset doesn't wipe it.
+            this.closeSlideOver();
+            this.cohort.scope = 'trajectory';
+            this.cohort.scopeId = id;
+            this.cohort.title = title;
+            this.cohort.sessions = [];
+            this.cohort.sessionId = 0;
+            this.cohort.extrasFilter = '';
+            this.cohort.extrasKeys = [];
+            this.cohort.selected = {};
+            this.cohort.error = '';
+            this.cohort.result = null;
+            this.cohort.resultOpen = false;
+            this.cohort.rows = rows;
+            this.cohort.open = true;
+        },
+
+        async loadCohortRoster(endpoint) {
+            this.cohort.open = true;
+            this.cohort.loading = true;
+            this.cohort.error = '';
+            this.cohort.rows = [];
+            this.cohort.extrasKeys = [];
+            this.cohort.sessionId = 0;
+            this.cohort.extrasFilter = '';
+            this.cohort.selected = {};
+            this.cohort.result = null;
+            this.cohort.resultOpen = false;
+            try {
+                const data = await this.api(endpoint);
+                this.cohort.rows = (data.rows || []).map(r => ({
+                    ...r,
+                    selections: Array.isArray(r.selections) ? r.selections : [],
+                    attendance: r.attendance || { present: 0, absent: 0, excused: 0 },
+                    extras: r.extras || {},
+                }));
+                this.cohort.extrasKeys = data.extras_keys || [];
+            } catch (e) {
+                this.cohort.error = 'Kon rooster niet laden.';
+            } finally {
+                this.cohort.loading = false;
+            }
+        },
+
+        closeCohort() {
+            this.cohort.open = false;
+            this.cohort.rows = [];
+            this.cohort.extrasKeys = [];
+            this.cohort.sessions = [];
+            this.cohort.sessionId = 0;
+            this.cohort.extrasFilter = '';
+            this.cohort.selected = {};
+            this.cohort.error = '';
+            this.cohort.result = null;
+            this.cohort.resultOpen = false;
+        },
+
+        // \u2500\u2500 Per-session roster (CF1) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        // "Who is in which session" = the rows whose selections (resolved server-
+        // side, INV-6b) include the active session id. sessionId 0 = the whole
+        // edition roster. The extras filter (loaded-set, CF3) narrows further.
+        get cohortVisibleRows() {
+            let rows = this.cohort.rows;
+            if (this.cohort.sessionId) {
+                const sid = Number(this.cohort.sessionId);
+                rows = rows.filter(r => (r.selections || []).map(Number).includes(sid));
+            }
+            if (this.cohort.extrasFilter) {
+                const [key, ...rest] = this.cohort.extrasFilter.split('=');
+                const value = rest.join('=');
+                rows = rows.filter(r => String(r.extras?.[key] ?? '') === value);
+            }
+            return rows;
+        },
+        // The count badge "X van Y" \u2014 narrowed set over the session-scoped set.
+        get cohortVisibleCount() { return this.cohortVisibleRows.length; },
+        get cohortSessionScopedCount() {
+            if (!this.cohort.sessionId) return this.cohort.rows.length;
+            const sid = Number(this.cohort.sessionId);
+            return this.cohort.rows.filter(r => (r.selections || []).map(Number).includes(sid)).length;
+        },
+        selectCohortSession(sessionId) {
+            this.cohort.sessionId = Number(sessionId) || 0;
+            this.cohort.selected = {};   // selection is per-visible-set; reset on axis change
+        },
+
+        // \u2500\u2500 Extras filter chips (CF3 \u2014 loaded-set ONLY) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        // The distinct {key=value} pairs present across the LOADED rows. This is
+        // built CLIENT-SIDE over the returned page \u2014 it is NEVER a server param
+        // and NEVER offered on the global Inschrijvingen grid (the leak-check).
+        get cohortExtrasOptions() {
+            const seen = new Map();
+            this.cohort.rows.forEach(r => {
+                Object.entries(r.extras || {}).forEach(([k, v]) => {
+                    const token = `${k}=${v}`;
+                    if (!seen.has(token)) {
+                        seen.set(token, { token, key: k, value: String(v), count: 0 });
+                    }
+                    seen.get(token).count++;
+                });
+            });
+            return [...seen.values()];
+        },
+        setCohortExtrasFilter(token) {
+            this.cohort.extrasFilter = this.cohort.extrasFilter === token ? '' : token;
+            this.cohort.selected = {};
+        },
+        clearCohortExtrasFilter() { this.cohort.extrasFilter = ''; },
+
+        // Attendance summary label for a roster row (aggregate counts \u2014 the
+        // roster read returns present/absent/excused totals per user, CM-3).
+        cohortAttendanceLabel(att) {
+            const a = att || {};
+            const total = (a.present || 0) + (a.absent || 0) + (a.excused || 0);
+            if (total === 0) return '\u2014';
+            return `${a.present || 0}/${total} aanwezig`;
+        },
+
+        // Per-session attendance marking from the cohort lens (CF2). Reuses the
+        // EXISTING canManageAdmin-gated POST /admin/attendance (CM-2 guarded
+        // server-side). Only enabled when a single session is in focus and the
+        // actor can manage. After a write, refetch so the aggregate recomputes.
+        get cohortCanMarkAttendance() {
+            return !!(this.config.canManage && this.cohort.scope === 'edition' && this.cohort.sessionId);
+        },
+        async cohortMarkAttendance(userId, status) {
+            if (!this.cohortCanMarkAttendance) return;
+            const sessionId = Number(this.cohort.sessionId);
+            try {
+                await this.api('/admin/attendance', {
+                    method: 'POST',
+                    body: JSON.stringify({ session_id: sessionId, user_id: Number(userId), status }),
+                });
+                // Recompute the aggregate by reloading the roster (small, loaded set).
+                await this.loadCohortRoster(`/admin/editions/${this.cohort.scopeId}/roster`);
+                this.cohort.sessionId = sessionId; // preserve the session focus
+            } catch (e) {
+                this.showToast('Aanwezigheid opslaan mislukt', 'error');
+            }
+        },
+
+        // \u2500\u2500 Multi-select + roster bulk bar (CF4 / CF5) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        // Selection is over the VISIBLE (session+extras-narrowed) set \u2014 the
+        // loaded roster is one edition / one trajectory, so it is bounded and
+        // there is no cross-page select-all (the grid's \u00a75 concern does not apply).
+        isCohortSelected(id) { return !!this.cohort.selected[id]; },
+        toggleCohortRow(id) { this.cohort.selected[id] = !this.cohort.selected[id]; },
+        get cohortSelectedIds() {
+            return Object.keys(this.cohort.selected).filter(id => this.cohort.selected[id]).map(Number);
+        },
+        get cohortSelectedCount() { return this.cohortSelectedIds.length; },
+        get cohortSelectedRows() {
+            const sel = this.cohort.selected;
+            return this.cohort.rows.filter(r => sel[r.registration_id]);
+        },
+        get cohortPageAllSelected() {
+            const ids = this.cohortVisibleRows.map(r => r.registration_id);
+            return ids.length > 0 && ids.every(id => this.cohort.selected[id]);
+        },
+        toggleCohortAll() {
+            const ids = this.cohortVisibleRows.map(r => r.registration_id);
+            const target = !this.cohortPageAllSelected;
+            ids.forEach(id => this.cohort.selected[id] = target);
+        },
+        clearCohortSelection() { this.cohort.selected = {}; },
+
+        // Bulk actions for the selected states \u2014 derived from the SAME transition
+        // map the grid uses (\u00a7674 sibling-audit), never a hard-coded list.
+        get cohortSelectedStates() {
+            return [...new Set(this.cohortSelectedRows.map(r => r.status))].filter(Boolean);
+        },
+        get cohortBulkActions() {
+            return strideRosterActionsForStates(this.cohortSelectedStates);
+        },
+        get cohortMixedHint() {
+            return this.cohortSelectedCount > 0 && this.cohortBulkActions.length === 0;
+        },
+        cohortStatesSummary() {
+            return this.cohortSelectedStates.map(s => this.regStatusMeta[s]?.label || s).join(', ');
+        },
+
+        // Resolve a roster action id (`approve`/`message`/`generate_doc`) to the
+        // registry action name for the OPENED scope. Edition \u2192 stride_roster_bulk_*,
+        // trajectory \u2192 stride_traj_roster_bulk_* (CF5). The nonce is keyed on the
+        // full action name (StrideConfig.bulkNonces) and bulkApi reads it.
+        cohortActionName(actionId) {
+            const prefix = this.cohort.scope === 'trajectory' ? 'stride_traj_roster_bulk_' : 'stride_roster_bulk_';
+            return prefix + actionId;
+        },
+
+        async runCohortBulk(actionId) {
+            const action = STRIDE_ROSTER_ACTIONS.find(a => a.id === actionId);
+            if (!action || this.cohort.bulkBusy) return;
+            const ids = this.cohortSelectedIds;
+            if (ids.length === 0) return;
+
+            const fullAction = this.cohortActionName(actionId);
+            // CM-1: the OPENED scope is a REQUIRED param \u2014 the server re-checks
+            // each row belongs to it (foreign rows \u2192 out_of_scope, not mutated).
+            const scopeParam = this.cohort.scope === 'trajectory'
+                ? { trajectory_id: this.cohort.scopeId }
+                : { edition_id: this.cohort.scopeId };
+
+            this.cohort.overflowOpen = false;
+            this.cohort.bulkBusy = actionId;
+            try {
+                const report = await this.bulkApi(fullAction, { ids, ...scopeParam });
+                const succeeded = report.succeeded || [];
+                const failed = report.failed || [];
+                const nameById = {};
+                this.cohort.rows.forEach(r => { nameById[r.registration_id] = r.name || ('#' + r.registration_id); });
+                const failRows = failed.map(f => ({ ...f, name: nameById[f.id] || ('#' + f.id) }));
+
+                this.cohort.result = {
+                    action: action.label,
+                    total: report.total ?? ids.length,
+                    succeeded,
+                    failed: failRows,
+                    ok: (report.summary?.ok) ?? succeeded.length,
+                    err: (report.summary?.error) ?? failed.length,
+                };
+
+                if (failRows.length === 0) {
+                    this.showToast(`${action.label}: ${this.cohort.result.ok} geslaagd.`, 'success');
+                    this.clearCohortSelection();
+                } else if (this.cohort.result.ok === 0 && failRows.every(f => f.code === 'not_available')) {
+                    // Deferred-stub path (message/generate_doc return not_available).
+                    this.showToast('Deze actie is nog niet beschikbaar.', 'info');
+                    this.cohort.resultOpen = true;
+                } else {
+                    this.cohort.resultOpen = true;
+                }
+                // Refetch the roster so confirmed rows show their new status
+                // (edition scope only \u2014 the trajectory roster is a read-only map).
+                if (this.cohort.scope === 'edition') {
+                    await this.loadCohortRoster(`/admin/editions/${this.cohort.scopeId}/roster`);
+                }
+            } catch (e) {
+                this.showToast(e.message || 'Bulkactie mislukt.', 'error');
+            } finally {
+                this.cohort.bulkBusy = null;
+            }
+        },
+
+        closeCohortResult() {
+            this.cohort.resultOpen = false;
+            const failIds = new Set((this.cohort.result?.failed || []).map(f => f.id));
+            const next = {};
+            failIds.forEach(id => { next[id] = true; });
+            this.cohort.selected = next;
+            this.cohort.result = null;
+        },
+
+        // \u2500\u2500 Exporter download links (CF6) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+        // The 5 Edition exporters surfaced via the 2a.10 download ROUTE
+        // (GET /admin/editions/{id}/export/{type}, canManageAdmin, type\u2192class
+        // allowlist server-side). REST routes need the wp_rest nonce in the query
+        // string for a plain <a> navigation (no X-WP-Nonce header on a link).
+        cohortExportUrl(type) {
+            const id = this.cohort.scopeId;
+            if (!id || this.cohort.scope !== 'edition') return '#';
+            const base = `${this.config.apiUrl}/admin/editions/${id}/export/${encodeURIComponent(type)}`;
+            return `${base}?_wpnonce=${encodeURIComponent(this.config.nonce || '')}`;
+        },
+        // The exporter types surfaced on the roster (the 2a.10 allowlist).
+        get cohortExporters() {
+            return [
+                { type: 'registration', label: 'Inschrijvingen (Excel)' },
+                { type: 'attendance',   label: 'Aanwezigheidslijst' },
+                { type: 'namecard',     label: 'Naamkaartjes (PDF)' },
+                { type: 'bundle',       label: 'Bundel (ZIP)' },
+                { type: 'files',        label: 'Bestanden (ZIP)' },
+            ];
         },
 
         // ==============================================================

@@ -655,6 +655,7 @@ defined('ABSPATH') || exit;
                     <!-- Tabs -->
                     <div class="sd-slideout__tabs">
                         <button class="sd-slideout__tab" :class="{'active': editionTab === 'students'}" @click="editionTab = 'students'">Studenten</button>
+                        <button class="sd-slideout__tab" :class="{'active': editionTab === 'roster'}" @click="editionTab = 'roster'; openCohort(selectedEdition.id)">Rooster</button>
                         <button class="sd-slideout__tab" :class="{'active': editionTab === 'attendance'}" @click="editionTab = 'attendance'">Aanwezigheid</button>
                         <button class="sd-slideout__tab" :class="{'active': editionTab === 'info'}" @click="editionTab = 'info'">Info</button>
                     </div>
@@ -683,6 +684,13 @@ defined('ABSPATH') || exit;
                                     <p class="sd-empty__hint">Zodra iemand zich inschrijft verschijnt die hier.</p>
                                 </div>
                             </template>
+                        </div>
+
+                        <!-- Rooster tab (Cohort lens — Task 2a.9): per-session
+                             roster, attendance marking, loaded-set extras filter,
+                             roster bulk bar, and the 5 Edition exporters. -->
+                        <div x-show="editionTab === 'roster'">
+                            <?php include __DIR__ . '/dashboard/cohort-lens.php'; ?>
                         </div>
 
                         <!-- Attendance tab -->

@@ -3363,3 +3363,59 @@ body.stride-dashboard {
 }
 .ws-queue__action { font-size: var(--ws-fs-sm, 13px); font-weight: 500; color: var(--ws-text-2, #475569); }
 .ws-queue__go { font-size: var(--ws-fs-sm, 13px); font-weight: 600; color: var(--accent); }
+
+/* ==========================================================================
+   Cohort lens (Phase 2a, Task 2a.9) — per-session roster surface.
+   WP-native: light, system fonts, quiet borders — matches the dashboard,
+   NOT the dark "werkbank" mockup skin (visual decision 2026-06-22).
+   ========================================================================== */
+.sd-cohort__loading { padding: var(--sd-space-6); text-align: center; color: var(--sd-text-muted); }
+.sd-cohort__sessions,
+.sd-cohort__extras,
+.sd-cohort__exports { margin-bottom: var(--sd-space-4); }
+.sd-cohort__sessions-label {
+    font-size: var(--sd-font-size-sm);
+    font-weight: 600;
+    color: var(--sd-text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    margin-bottom: var(--sd-space-2);
+}
+.sd-cohort__note { font-size: var(--sd-font-size-sm); color: var(--sd-text-muted); margin: 0; }
+.sd-cohort__chips { display: flex; flex-wrap: wrap; gap: var(--sd-space-2); align-items: center; }
+.sd-chip {
+    display: inline-flex; align-items: center; gap: var(--sd-space-1);
+    padding: 4px 10px;
+    font-size: var(--sd-font-size-sm);
+    color: var(--sd-text-secondary);
+    background: var(--sd-surface);
+    border: 1px solid var(--sd-border-strong);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: background .12s, border-color .12s, color .12s;
+}
+.sd-chip:hover { background: var(--sd-surface-alt); }
+.sd-chip--active {
+    background: var(--sd-primary);
+    border-color: var(--sd-primary);
+    color: #fff;
+}
+.sd-chip__count {
+    display: inline-block; min-width: 18px; padding: 0 5px;
+    font-size: 11px; font-weight: 600; line-height: 16px; text-align: center;
+    background: var(--sd-primary-light); color: var(--sd-primary-hover);
+    border-radius: 999px;
+}
+.sd-chip--active .sd-chip__count { background: rgba(255, 255, 255, .25); color: #fff; }
+.sd-cohort__count { font-size: var(--sd-font-size-sm); color: var(--sd-text-secondary); margin-bottom: var(--sd-space-3); }
+.sd-cohort__table { width: 100%; border-collapse: collapse; font-size: var(--sd-font-size); }
+.sd-cohort__table th {
+    text-align: left; padding: var(--sd-space-2) var(--sd-space-3);
+    font-size: var(--sd-font-size-sm); font-weight: 600; color: var(--sd-text-secondary);
+    border-bottom: 1px solid var(--sd-border); white-space: nowrap;
+}
+.sd-cohort__table td { padding: var(--sd-space-2) var(--sd-space-3); border-bottom: 1px solid var(--sd-border); vertical-align: middle; }
+.sd-cohort__table tr.is-selected td { background: var(--sd-primary-subtle); }
+.sd-cohort__th-check { width: 32px; }
+.sd-cohort__mark { display: inline-flex; gap: var(--sd-space-1); }
+.sd-cohort__bulkbar { /* inherits .ws-bulkbar; scope to the slideover body */ }

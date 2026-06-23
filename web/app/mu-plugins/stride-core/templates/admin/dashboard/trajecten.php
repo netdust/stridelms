@@ -154,6 +154,15 @@ if (!defined('ABSPATH')) {
                         @click="showTrajectoryRegistrations(selectedTrajectory.id)">
                     Toon inschrijvingen
                 </button>
+                <!-- Cohort roster (Task 2a.9 / CF5): the trajectory's child-edition
+                     rows in the cohort lens, with the trajectory-scoped bulk bar
+                     (stride_traj_roster_bulk_* — server re-checks each row against
+                     this trajectory's child set, CM-1 trajectory variant). -->
+                <button type="button"
+                        class="sd-btn sd-btn--ghost sd-btn--block"
+                        @click="openTrajectoryRoster(selectedTrajectory.id)">
+                    Toon rooster
+                </button>
             </div>
 
             <!-- Tabs -->
@@ -227,5 +236,22 @@ if (!defined('ABSPATH')) {
             </div><!-- /.sd-slideout__body -->
         </div><!-- /.sd-slideout__panel -->
     </div><!-- /.sd-slideout -->
+
+    <!-- Trajectory cohort roster slide-over (Task 2a.9 / CF5). Opened by
+         "Toon rooster"; renders the SAME cohort-lens body, trajectory-scoped. -->
+    <div class="sd-slideout" x-show="cohort.open && cohort.scope === 'trajectory'" x-transition:enter="sd-slideout--enter" x-transition:leave="sd-slideout--leave">
+        <div class="sd-slideout__overlay" @click="closeCohort()"></div>
+        <div class="sd-slideout__panel">
+            <div class="sd-slideout__header">
+                <h3>Rooster — <span x-text="cohort.title"></span></h3>
+                <div class="sd-slideout__header-actions">
+                    <button @click="closeCohort()" class="sd-slideout__close">×</button>
+                </div>
+            </div>
+            <div class="sd-slideout__body">
+                <?php include __DIR__ . '/cohort-lens.php'; ?>
+            </div>
+        </div>
+    </div><!-- /.sd-slideout (trajectory roster) -->
 
 </div><!-- /view: trajecten -->

@@ -277,6 +277,15 @@ class AdminDashboardService extends AbstractService
             'stride_bulk_message',
             'stride_bulk_generate_doc',
             'stride_bulk_set_field',
+            // Cohort-lens roster bulk (Phase 2a, Task 2a.9). Each maps to a
+            // Handlers/RosterBulkHandler ntdst/api_data/* filter; the cohort UI
+            // arms the matching nonce per action via cohortActionName().
+            'stride_roster_bulk_approve',
+            'stride_roster_bulk_message',
+            'stride_roster_bulk_generate_doc',
+            'stride_traj_roster_bulk_approve',
+            'stride_traj_roster_bulk_message',
+            'stride_traj_roster_bulk_generate_doc',
         ];
 
         $nonces = [];
