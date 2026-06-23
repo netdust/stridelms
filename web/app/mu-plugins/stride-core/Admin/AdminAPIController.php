@@ -620,30 +620,12 @@ final class AdminAPIController
 
         $whereClause = implode(' AND ', $where);
 
-        // Get total count
-        $countParams = $params;
-        $total = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
-             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
-             {$tagJoin}
-             WHERE {$whereClause}",
-            ...$countParams,
-        ));
-
-        // Get editions - ordered by start date ASC (nearest first)
-        $params[] = $perPage;
-        $params[] = $offset;
-
-        $editions = $wpdb->get_results($wpdb->prepare(
-            "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value as start_date
-             FROM {$wpdb->posts} p
-             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
-             {$tagJoin}
-             WHERE {$whereClause}
-             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC
-             LIMIT %d OFFSET %d",
-            ...$params,
-        ));
+        // Read SQL extracted to EditionRepository (INV-3, strangle Task 2a.4).
+        // The §10.7 NULL-permitting default-scope predicate + LEFT JOIN +
+        // NULL-last ordering are decided by $where/$whereClause above and
+        // reproduced verbatim in the repo. Behavior-preserving move.
+        $total = $this->editionRepository->countAdminList($whereClause, $params, $tagJoin);
+        $editions = $this->editionRepository->findAdminListRows($whereClause, $params, $tagJoin, $perPage, $offset);
 
         // Format editions with meta
         $items = [];

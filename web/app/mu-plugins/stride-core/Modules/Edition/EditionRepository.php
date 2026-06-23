@@ -171,6 +171,70 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
+     * COUNT of the admin list-view edition corpus for a pre-built predicate.
+     *
+     * The caller (AdminAPIController::getEditions) assembles the WHERE clause +
+     * bound params + the optional course-taxonomy JOIN fragment (the taxonomy
+     * helper is shared with the agenda view and stays in the controller). This
+     * method owns ONLY the $wpdb execution — moved here from getEditions so no
+     * raw query lives in the controller (INV-3), mirroring countEditionOptions.
+     *
+     * Behavior-preserving: the LEFT JOIN on _ntdst_start_date + the
+     * NULL-permitting default-scope predicate (§10.7 / bug_sessionless_edition_cutoff)
+     * are decided by the caller's $whereClause and reproduced VERBATIM here.
+     * M4: every dynamic value arrives as a $wpdb->prepare placeholder param.
+     *
+     * @param string     $whereClause  Pre-built, placeholdered WHERE body.
+     * @param list<mixed> $params       Bound params matching the placeholders.
+     * @param string     $tagJoin      Optional taxonomy JOIN fragment ('' if none).
+     */
+    public function countAdminList(string $whereClause, array $params, string $tagJoin): int
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+             {$tagJoin}
+             WHERE {$whereClause}",
+            ...$params,
+        ));
+    }
+
+    /**
+     * One paged page of admin list-view edition rows (id, title, start_date).
+     *
+     * Companion to countAdminList — owns the $wpdb execution moved out of
+     * getEditions (INV-3). NULL-last ordering by start_date (so dateless
+     * sessionless editions sort to the end, §10.7) is reproduced VERBATIM.
+     * $limit/$offset are appended as the final two placeholders, matching the
+     * pre-extraction param order.
+     *
+     * @param string     $whereClause  Pre-built, placeholdered WHERE body.
+     * @param list<mixed> $params       Bound params matching the WHERE placeholders.
+     * @param string     $tagJoin      Optional taxonomy JOIN fragment ('' if none).
+     * @return array<int, object{ID: int, post_title: string, start_date: ?string}>
+     */
+    public function findAdminListRows(string $whereClause, array $params, string $tagJoin, int $limit, int $offset): array
+    {
+        global $wpdb;
+
+        $params[] = $limit;
+        $params[] = $offset;
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value as start_date
+             FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+             {$tagJoin}
+             WHERE {$whereClause}
+             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC
+             LIMIT %d OFFSET %d",
+            ...$params,
+        ));
+    }
+
+    /**
      * Get upcoming editions (start date >= today).
      *
      * @return array<array<string, mixed>>
