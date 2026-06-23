@@ -860,26 +860,14 @@ final class EditionRegistrationExporter
      */
     private function summarizeEnrollmentData(array $enrollmentData): string
     {
-        $stagesToShow = ['enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'];
-        // Fields already present in their own columns — don't repeat them.
-        $skipKeys = ['name', 'email', 'phone', 'first_name', 'last_name',
-            'company', 'billing_company', 'billing_vat', 'billing_address_1',
-            'billing_postcode', 'billing_city', 'invoice_email', 'gln_number',
-            'organisation', 'department'];
+        // Which keys are PII-skipped vs surfaced as extras is the shared
+        // EnrollmentDataExtras contract (the ONE definition the roster surface
+        // also consumes, so the two cannot drift — CR-3/CR-5). This method owns
+        // only the rendering: scalars as-is, structured values json_encoded.
         $lines = [];
-        foreach ($stagesToShow as $stage) {
-            $stageEnvelope = $enrollmentData[$stage] ?? null;
-            if (!is_array($stageEnvelope)) {
-                continue;
-            }
-            $stageData = is_array($stageEnvelope['data'] ?? null) ? $stageEnvelope['data'] : [];
-            foreach ($stageData as $key => $value) {
-                if (in_array($key, $skipKeys, true)) {
-                    continue;
-                }
-                $rendered = is_scalar($value) ? (string) $value : json_encode($value);
-                $lines[] = $key . ': ' . $rendered;
-            }
+        foreach (\Stride\Support\EnrollmentDataExtras::extract($enrollmentData) as $key => $value) {
+            $rendered = is_scalar($value) ? (string) $value : json_encode($value);
+            $lines[] = $key . ': ' . $rendered;
         }
         return implode("\n", $lines);
     }

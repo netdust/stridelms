@@ -9,6 +9,7 @@ use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
+use Stride\Support\EnrollmentDataExtras;
 
 /**
  * Read-model assembly for the per-edition cohort roster (Admin Workspace Phase 2a).
@@ -51,30 +52,6 @@ final class AdminEditionRosterService
     private const COHORT_STATUSES = [
         RegistrationStatus::Confirmed,
         RegistrationStatus::Completed,
-    ];
-
-    /**
-     * enrollment_data stages walked for extras/logistics fields.
-     *
-     * Mirrors EditionRegistrationExporter::summarizeEnrollmentData (the precedent
-     * reader, D3) so the roster surface and the export surface agree on what an
-     * "extra" is. Pre-account stages (interest/waitlist) and the append-only
-     * initial_selection log are intentionally excluded.
-     */
-    private const EXTRAS_STAGES = ['enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'];
-
-    /**
-     * Known-PII / already-columned keys NOT surfaced as extras.
-     *
-     * Aligned with the exporter's skip list (D3) so the two surfaces agree: a
-     * key here is shown in its own column elsewhere or is personal/billing PII,
-     * never a logistics "extra" (book/lunch/dietary).
-     */
-    private const EXTRAS_SKIP_KEYS = [
-        'name', 'email', 'phone', 'first_name', 'last_name',
-        'company', 'billing_company', 'billing_vat', 'billing_address_1',
-        'billing_postcode', 'billing_city', 'invoice_email', 'gln_number',
-        'organisation', 'department',
     ];
 
     public function __construct(
@@ -162,14 +139,15 @@ final class AdminEditionRosterService
      * Extract the logistics "extras" ({key: value}) for one registration from
      * its enrollment_data JSON — loaded-set only (CM-3/M5).
      *
-     * Mirrors EditionRegistrationExporter::summarizeEnrollmentData (D3): walks the
-     * configured stages, reads each `$stageEnvelope['data']`, skips the known-PII
-     * keys. Keys are DISCOVERED from the row's data, never a fixed allowlist — an
-     * edition whose registrants submitted a `dieet` key surfaces it; one that
-     * didn't does not. NO enrollment_data key is ever bound into SQL.
+     * Delegates the stage walk + PII-skip decision to the shared
+     * {@see EnrollmentDataExtras} contract (the ONE source the exporter also
+     * consumes, so the two surfaces cannot drift on which key is PII — CR-3/CR-5),
+     * then keeps only scalar answers: structured sub-objects are not chip-able
+     * filter values for the roster. Keys are DISCOVERED from the row's data, never
+     * a fixed allowlist. NO enrollment_data key is ever bound into SQL.
      *
      * @param  object $reg  A raw findByEdition() row (enrollment_data is a JSON string).
-     * @return array<string, scalar>  Discovered extras for this row.
+     * @return array<string, scalar>  Discovered scalar extras for this row.
      */
     private function extractExtras(object $reg): array
     {
@@ -179,26 +157,7 @@ final class AdminEditionRosterService
             return [];
         }
 
-        $extras = [];
-        foreach (self::EXTRAS_STAGES as $stage) {
-            $envelope = $data[$stage] ?? null;
-            if (!is_array($envelope)) {
-                continue;
-            }
-            $stageData = is_array($envelope['data'] ?? null) ? $envelope['data'] : [];
-            foreach ($stageData as $key => $value) {
-                if (in_array($key, self::EXTRAS_SKIP_KEYS, true)) {
-                    continue;
-                }
-                // Only scalar logistics answers are extras; structured sub-objects
-                // are not chip-able filter values.
-                if (is_scalar($value)) {
-                    $extras[(string) $key] = $value;
-                }
-            }
-        }
-
-        return $extras;
+        return array_filter(EnrollmentDataExtras::extract($data), 'is_scalar');
     }
 
     /**
