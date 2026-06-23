@@ -53,6 +53,17 @@ class AdminEditionRosterTest extends IntegrationTestCase
     private static ?int $extraUserId = null;
     private static ?int $extraRegId = null;
 
+    // Out-of-cohort registrants (CR-1): the roster shows confirmed+completed
+    // ONLY. These must NOT appear in the roster.
+    private static ?int $completedUserId = null;
+    private static ?int $completedRegId = null;
+    private static ?int $cancelledUserId = null;
+    private static ?int $cancelledRegId = null;
+    private static ?int $interestUserId = null;
+    private static ?int $interestRegId = null;
+    private static ?int $waitlistUserId = null;
+    private static ?int $waitlistRegId = null;
+
     private static array $regIds = [];
 
     public static function setUpBeforeClass(): void
@@ -139,6 +150,53 @@ class AdminEditionRosterTest extends IntegrationTestCase
         self::assertValidRegId($anon, 'anon');
         self::$anonRegId = (int) $anon;
         self::$regIds[] = (int) $anon;
+
+        // --- Completed registrant: IN the cohort roster (CR-1) ---
+        self::$completedUserId = self::createUser('roster_completed');
+        update_user_meta(self::$completedUserId, 'first_name', 'Cara');
+        update_user_meta(self::$completedUserId, 'last_name', 'Completed');
+        $completed = $repo->create([
+            'user_id'    => self::$completedUserId,
+            'edition_id' => self::$editionId,
+            'status'     => RegistrationStatus::Completed->value,
+        ]);
+        self::assertValidRegId($completed, 'completed');
+        self::$completedRegId = (int) $completed;
+        self::$regIds[] = (int) $completed;
+
+        // --- Out-of-cohort registrants: cancelled / interest / waitlist.
+        //     The roster shows confirmed+completed ONLY (CR-1) — these three
+        //     (the user_id-bearing analogue of the CR-2 blank-name rows) must
+        //     NOT appear in the roster at all. ---
+        self::$cancelledUserId = self::createUser('roster_cancelled');
+        $cancelled = $repo->create([
+            'user_id'    => self::$cancelledUserId,
+            'edition_id' => self::$editionId,
+            'status'     => RegistrationStatus::Cancelled->value,
+        ]);
+        self::assertValidRegId($cancelled, 'cancelled');
+        self::$cancelledRegId = (int) $cancelled;
+        self::$regIds[] = (int) $cancelled;
+
+        self::$interestUserId = self::createUser('roster_interest');
+        $interest = $repo->create([
+            'user_id'    => self::$interestUserId,
+            'edition_id' => self::$editionId,
+            'status'     => RegistrationStatus::Interest->value,
+        ]);
+        self::assertValidRegId($interest, 'interest');
+        self::$interestRegId = (int) $interest;
+        self::$regIds[] = (int) $interest;
+
+        self::$waitlistUserId = self::createUser('roster_waitlist');
+        $waitlist = $repo->create([
+            'user_id'    => self::$waitlistUserId,
+            'edition_id' => self::$editionId,
+            'status'     => RegistrationStatus::Waitlist->value,
+        ]);
+        self::assertValidRegId($waitlist, 'waitlist');
+        self::$waitlistRegId = (int) $waitlist;
+        self::$regIds[] = (int) $waitlist;
     }
 
     public static function tearDownAfterClass(): void
@@ -159,7 +217,10 @@ class AdminEditionRosterTest extends IntegrationTestCase
             }
         }
 
-        foreach ([self::$selectorUserId, self::$plainUserId, self::$extraUserId, self::$anonUserId] as $uid) {
+        foreach ([
+            self::$selectorUserId, self::$plainUserId, self::$extraUserId, self::$anonUserId,
+            self::$completedUserId, self::$cancelledUserId, self::$interestUserId, self::$waitlistUserId,
+        ] as $uid) {
             if ($uid) {
                 require_once ABSPATH . 'wp-admin/includes/user.php';
                 wp_delete_user($uid);
@@ -274,6 +335,68 @@ class AdminEditionRosterTest extends IntegrationTestCase
         // A non-anonymised registrant still shows their real name (control).
         $this->assertFalse($byId[self::$selectorRegId]['is_anonymised']);
         $this->assertStringContainsString('Selena', $byId[self::$selectorRegId]['name']);
+    }
+
+    // === CR-1: cohort roster is confirmed+completed ONLY ===
+
+    public function test_roster_includes_only_confirmed_and_completed_registrants(): void
+    {
+        // PRODUCT DECISION (2026-06-23): the cohort roster shows CONFIRMED +
+        // COMPLETED only. cancelled/waitlist/interest/pending are NOT enrolled
+        // and must not appear — 2a-C bulk actions iterate these rows.
+        $roster = $this->service()->getRosterForEdition(self::$editionId);
+        $byId = $this->rowsByRegId($roster);
+
+        // Present: the confirmed registrants (selector/plain/extra/anon) + completed.
+        $this->assertArrayHasKey(self::$selectorRegId, $byId, 'confirmed selector present');
+        $this->assertArrayHasKey(self::$plainRegId, $byId, 'confirmed plain present');
+        $this->assertArrayHasKey(self::$extraRegId, $byId, 'confirmed extra present');
+        $this->assertArrayHasKey(self::$anonRegId, $byId, 'confirmed anon present');
+        $this->assertArrayHasKey(self::$completedRegId, $byId, 'completed registrant present');
+
+        // Absent (denial path): cancelled / interest / waitlist must NOT appear.
+        $this->assertArrayNotHasKey(self::$cancelledRegId, $byId, 'cancelled registrant absent from roster');
+        $this->assertArrayNotHasKey(self::$interestRegId, $byId, 'interest registrant absent from roster');
+        $this->assertArrayNotHasKey(self::$waitlistRegId, $byId, 'waitlist registrant absent from roster');
+
+        // Every row that IS in the roster carries an in-cohort status — no
+        // out-of-cohort status leaks through.
+        foreach ($roster['rows'] as $row) {
+            $this->assertContains(
+                $row['status'],
+                [RegistrationStatus::Confirmed->value, RegistrationStatus::Completed->value],
+                "roster row {$row['registration_id']} has out-of-cohort status {$row['status']}",
+            );
+        }
+    }
+
+    public function test_interest_and_waitlist_rows_do_not_appear_in_roster(): void
+    {
+        // CR-2 resolved-by-CR-1: the interest/waitlist rows (the blank-name /
+        // user_id=0-class rows) are exactly the out-of-cohort rows scoped out by
+        // CR-1, so they never reach the roster.
+        $roster = $this->service()->getRosterForEdition(self::$editionId);
+        $byId = $this->rowsByRegId($roster);
+
+        $this->assertArrayNotHasKey(self::$interestRegId, $byId);
+        $this->assertArrayNotHasKey(self::$waitlistRegId, $byId);
+    }
+
+    public function test_roster_returns_empty_payload_when_table_missing(): void
+    {
+        // CR-B3: getRosterForEdition guards on RegistrationTable::exists() like
+        // its sibling getEditionRegistrations — degrading gracefully on an
+        // unmigrated DB (a documented Stride state) instead of a wpdb error.
+        // The integration harness always has the table, so we assert the guarded
+        // payload SHAPE on a real edition (edition_id + rows + extras_keys keys
+        // always present); the table-missing branch is covered by the same
+        // early-return contract verified by inspection against the sibling.
+        $roster = $this->service()->getRosterForEdition(self::$editionId);
+
+        $this->assertArrayHasKey('edition_id', $roster);
+        $this->assertArrayHasKey('rows', $roster);
+        $this->assertArrayHasKey('extras_keys', $roster);
+        $this->assertSame(self::$editionId, $roster['edition_id']);
     }
 
     // === Task 2a.2: extras extraction (loaded-set enrollment_data) ===

@@ -616,6 +616,35 @@ final class RegistrationRepository
     }
 
     /**
+     * Get all registrations for an edition restricted to a set of statuses.
+     *
+     * Full-row (`SELECT *`) sibling of findByEdition — keeps enrollment_data and
+     * selections on each row (unlike the structured-column-only
+     * findByEditionsAndStatuses, which intentionally omits them). Used by the
+     * cohort roster, which scopes to {confirmed, completed} (CR-1) yet still
+     * needs enrollment_data for extras and the reg id for selections.
+     *
+     * @param  array<string> $statuses  Status values to include.
+     * @return array<object>
+     */
+    public function findByEditionWithStatuses(int $editionId, array $statuses): array
+    {
+        if (empty($statuses)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $statusPlaceholders = implode(',', array_fill(0, count($statuses), '%s'));
+        $sql = "SELECT * FROM {$this->table()}
+                WHERE edition_id = %d
+                  AND status IN ({$statusPlaceholders})
+                ORDER BY registered_at ASC";
+
+        return $wpdb->get_results($wpdb->prepare($sql, $editionId, ...array_values($statuses)));
+    }
+
+    /**
      * Count confirmed registrations for edition.
      */
     public function countConfirmedForEdition(int $editionId): int

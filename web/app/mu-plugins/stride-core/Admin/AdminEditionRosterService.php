@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Stride\Admin;
 
 use Stride\Admin\Support\AdminBatchHelpers;
+use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\Enrollment\RegistrationTable;
 
 /**
  * Read-model assembly for the per-edition cohort roster (Admin Workspace Phase 2a).
@@ -37,6 +39,19 @@ final class AdminEditionRosterService
 
     /** Tombstone shown in place of an anonymised registrant's name (CM-3b). */
     private const ANON_TOMBSTONE = '(verwijderd)';
+
+    /**
+     * Statuses that make a registrant part of the cohort roster (CR-1).
+     *
+     * PRODUCT DECISION (2026-06-23): the cohort roster is the people who are
+     * actually enrolled — confirmed + completed. cancelled/waitlist/interest/
+     * pending are NOT in the cohort and must never reach the roster (2a-C bulk
+     * actions iterate these rows). Matches RegistrationStatus::hasAccess().
+     */
+    private const COHORT_STATUSES = [
+        RegistrationStatus::Confirmed,
+        RegistrationStatus::Completed,
+    ];
 
     /**
      * enrollment_data stages walked for extras/logistics fields.
@@ -74,11 +89,22 @@ final class AdminEditionRosterService
      * @param  array<string,mixed> $filters  Applied over the LOADED set only —
      *         never interpolated into SQL (CM-3 / M5). Currently a placeholder
      *         the UI/Task 2a.2 narrows client-side; no key reaches a query.
-     * @return array{edition_id:int, rows:array<int,array<string,mixed>>}
+     * @return array{edition_id:int, rows:array<int,array<string,mixed>>, extras_keys:array<int,string>}
      */
     public function getRosterForEdition(int $editionId, array $filters = []): array
     {
-        $registrations = $this->registrations->findByEdition($editionId);
+        // Degrade gracefully on an unmigrated DB (a documented Stride state),
+        // mirroring the sibling getEditionRegistrations guard (CR-B3) — never
+        // hit the table with a raw query when it isn't there.
+        if (!RegistrationTable::exists()) {
+            return ['edition_id' => $editionId, 'rows' => [], 'extras_keys' => []];
+        }
+
+        // Cohort roster = confirmed + completed only (CR-1). Out-of-cohort rows
+        // (cancelled/waitlist/interest/pending — incl. the CR-2 blank-name
+        // user_id=0 rows) are excluded at the query, not iterated then filtered.
+        $cohortStatuses = array_map(static fn(RegistrationStatus $s) => $s->value, self::COHORT_STATUSES);
+        $registrations = $this->registrations->findByEditionWithStatuses($editionId, $cohortStatuses);
 
         $regIds = array_map(static fn($r) => (int) $r->id, $registrations);
         $userIds = array_values(array_unique(array_filter(
