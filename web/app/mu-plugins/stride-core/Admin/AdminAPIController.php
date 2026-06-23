@@ -190,6 +190,25 @@ final class AdminAPIController
             ],
         ]);
 
+        // Per-edition exporter download (Phase 2a, Task 2a.10, CM-4).
+        // canManageAdmin — stricter than the roster READ (canViewAdmin) because
+        // the exporters egress the full, non-field-scoped PII roster.
+        register_rest_route(self::NAMESPACE, '/admin/editions/(?P<id>\d+)/export/(?P<type>[a-z]+)', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getEditionExport'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+            'args' => [
+                'id' => [
+                    'type' => 'integer',
+                    'required' => true,
+                ],
+                'type' => [
+                    'type' => 'string',
+                    'required' => true,
+                ],
+            ],
+        ]);
+
         // Course tags for filter
         register_rest_route(self::NAMESPACE, '/admin/course-tags', [
             'methods' => 'GET',
@@ -1320,6 +1339,60 @@ final class AdminAPIController
         $service = ntdst_get(\Stride\Admin\AdminEditionRosterService::class);
 
         return new WP_REST_Response($service->getRosterForEdition($editionId));
+    }
+
+    /**
+     * GET /admin/editions/{id}/export/{type}
+     *
+     * Stream one of the 5 Edition exporters to the browser as a file download
+     * (Task 2a.10, CM-4). On success the chosen exporter's export() sets its own
+     * headers, echoes the file, and exits — so the happy path never returns to
+     * the REST serializer. This method only returns (a WP_Error) on a rejected
+     * request.
+     *
+     * Security (CM-4 / B1):
+     *  - canManageAdmin gate (permission_callback) — PII egress, stricter than
+     *    the roster READ's canViewAdmin.
+     *  - {type} is mapped to an exporter via a fixed SERVER-SIDE allowlist; an
+     *    attacker-supplied {type} (incl. a class name) hits the whitelist, NEVER
+     *    a class lookup. Unknown type -> 404.
+     *  - {id} absint'd (the \d+ route pattern + (int) cast) + edition-exists +
+     *    post_status=publish (CR-4: a trashed/draft edition's PII export is
+     *    unreachable). 404, not 403 — do not reveal existence.
+     *  - The exporters themselves drop GDPR-erased participants via the shared
+     *    FiltersAnonymisedParticipants skip (B1).
+     */
+    public function getEditionExport(WP_REST_Request $request): WP_Error
+    {
+        $editionId = (int) $request->get_param('id');
+
+        $edition = get_post($editionId);
+        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE || $edition->post_status !== 'publish') {
+            return new WP_Error('not_found', 'Edition not found', ['status' => 404]);
+        }
+
+        // CM-4: fixed type -> exporter map, resolved SERVER-SIDE. The request
+        // never names a class; an unknown {type} falls through to the 404 below.
+        $type = (string) $request->get_param('type');
+        $exporter = match ($type) {
+            'registration' => ntdst_get(\Stride\Modules\Edition\Admin\EditionRegistrationExporter::class),
+            'attendance'   => ntdst_get(\Stride\Modules\Edition\Admin\EditionAttendanceExporter::class),
+            'namecard'     => ntdst_get(\Stride\Modules\Edition\Admin\EditionNamecardExporter::class),
+            'files'        => ntdst_get(\Stride\Modules\Edition\Admin\EditionFilesZipExporter::class),
+            'bundle'       => ntdst_get(\Stride\Modules\Edition\Admin\EditionBundleZipExporter::class),
+            default        => null,
+        };
+
+        if ($exporter === null) {
+            return new WP_Error('invalid_export_type', 'Unknown export type', ['status' => 404]);
+        }
+
+        // Terminal: sets headers, streams the file, and exits. Never returns.
+        $exporter->export($editionId);
+
+        // Defensive — export() exits; if a future exporter ever returns, surface
+        // an honest error rather than a silent empty 200.
+        return new WP_Error('export_did_not_stream', 'Export failed to stream', ['status' => 500]);
     }
 
     /**

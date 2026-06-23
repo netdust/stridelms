@@ -96,27 +96,33 @@ class EditionFilesZipExporterTest extends TestCase
         @unlink('/tmp/stride-test-attest.pdf');
     }
 
-    public function testEnumerateSkipsAnonymisedUser(): void
+    /**
+     * B1 (Task 2a.10): the `_stride_anonymised_at` skip moved OUT of enumerate()
+     * and into getRegistrations() via the shared FiltersAnonymisedParticipants
+     * trait, so all 5 exporters honour it from one place. This unit test pins the
+     * new convergence point — dropAnonymisedRows() removes a GDPR-erased
+     * participant before enumerate() ever sees the row. (The un-mocked
+     * end-to-end enumerate() exclusion is proven in
+     * EditionExporterAnonymiseTest::filesExporterExcludesAnonymisedParticipant.)
+     */
+    public function testGetRegistrationsDropsAnonymisedParticipant(): void
     {
-        global $_test_users, $_test_attached_files;
-        $_test_users[8] = $this->makeUser(['ID' => 8, 'first_name' => 'X', 'last_name' => 'Y']);
-        $_test_attached_files[201] = '/tmp/stride-test-x.pdf';
-        file_put_contents('/tmp/stride-test-x.pdf', 'x');
         update_user_meta(8, '_stride_anonymised_at', time());
 
-        $reg = [
-            'id' => 2, 'user_id' => 8, 'edition_id' => 99,
-            'completion_tasks' => wp_json_encode([
-                'documents' => ['status' => 'completed', 'data' => ['files' => [201]]],
-            ]),
+        $rows = [
+            ['id' => 1, 'user_id' => 7, 'edition_id' => 99],  // kept
+            ['id' => 2, 'user_id' => 8, 'edition_id' => 99],  // anonymised — dropped
         ];
 
-        $rows = iterator_to_array($this->makeExporter([$reg])->enumerate(99), false);
-        self::assertCount(0, $rows);
+        $m = new \ReflectionMethod($this->exporter, 'dropAnonymisedRows');
+        $m->setAccessible(true);
+        $filtered = $m->invoke($this->exporter, $rows);
+
+        $ids = array_map(static fn($r) => (int) $r['user_id'], $filtered);
+        self::assertContains(7, $ids, 'the normal participant must be kept');
+        self::assertNotContains(8, $ids, 'the GDPR-erased participant must be dropped at the shared skip (B1)');
 
         delete_user_meta(8, '_stride_anonymised_at');
-        unset($_test_users[8], $_test_attached_files[201]);
-        @unlink('/tmp/stride-test-x.pdf');
     }
 
     public function testEnumerateSkipsMissingFileOnDisk(): void

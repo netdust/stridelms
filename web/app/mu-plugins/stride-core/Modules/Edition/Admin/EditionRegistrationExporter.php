@@ -30,6 +30,8 @@ use Stride\Modules\Edition\SessionService;
  */
 final class EditionRegistrationExporter
 {
+    use FiltersAnonymisedParticipants;
+
     private Style $titleStyle;
     private Style $subtitleStyle;
     private Style $headerStyle;
@@ -935,10 +937,14 @@ final class EditionRegistrationExporter
         global $wpdb;
         $table = $wpdb->prefix . EditionAdminController::REGISTRATIONS_TABLE;
 
-        return $wpdb->get_results($wpdb->prepare(
+        $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$table} WHERE edition_id = %d ORDER BY registered_at DESC",
             $editionId,
         ), ARRAY_A) ?: [];
+
+        // B1: drop GDPR-erased participants before any sheet is rendered (the
+        // universal skip — see FiltersAnonymisedParticipants).
+        return $this->dropAnonymisedRows($rows);
     }
 
     private function batchGetUserMeta(array $userIds): array

@@ -22,6 +22,8 @@ use Stride\Modules\Edition\SessionService;
  */
 final class EditionAttendanceExporter
 {
+    use FiltersAnonymisedParticipants;
+
     public function __construct(
         private readonly EditionService $editionService,
         private readonly EditionRepository $editionRepository,
@@ -234,12 +236,15 @@ final class EditionAttendanceExporter
         global $wpdb;
         $table = $wpdb->prefix . EditionAdminController::REGISTRATIONS_TABLE;
 
-        return $wpdb->get_results($wpdb->prepare(
+        $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT user_id, status FROM {$table}
              WHERE edition_id = %d AND status IN ('confirmed', 'completed')
              ORDER BY registered_at ASC",
             $editionId,
         ), ARRAY_A) ?: [];
+
+        // B1: drop GDPR-erased participants before the presentielijst is built.
+        return $this->dropAnonymisedRows($rows);
     }
 
     private function batchGetOrgMeta(array $userIds): array

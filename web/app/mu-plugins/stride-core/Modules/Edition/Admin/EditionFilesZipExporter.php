@@ -23,6 +23,8 @@ use ZipArchive;
  */
 class EditionFilesZipExporter
 {
+    use FiltersAnonymisedParticipants;
+
     public function __construct(
         private readonly EditionRepository $editionRepository,
         private readonly RegistrationRepository $registrations,
@@ -71,9 +73,6 @@ class EditionFilesZipExporter
             $userId = (int) $reg['user_id'];
             $user = $users[$userId] ?? null;
             if (!$user) {
-                continue;
-            }
-            if ((int) get_user_meta($userId, '_stride_anonymised_at', true) > 0) {
                 continue;
             }
 
@@ -191,7 +190,13 @@ class EditionFilesZipExporter
             "SELECT * FROM {$table} WHERE edition_id = %d ORDER BY registered_at DESC",
             $editionId,
         ), ARRAY_A);
-        return $rows ?: [];
+
+        // B1: the anonymise skip now lives in ONE shared place
+        // (FiltersAnonymisedParticipants) that all 5 exporters honour, replacing
+        // the inline `_stride_anonymised_at` check this exporter used to carry in
+        // enumerate(). Apply it at the source so every consumer (enumerate +
+        // the bundle's enumerate() reuse) drops erased participants.
+        return $this->dropAnonymisedRows($rows ?: []);
     }
 
     private function decodeTasks(mixed $value): array
