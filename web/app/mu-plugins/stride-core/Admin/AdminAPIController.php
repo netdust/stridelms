@@ -1345,12 +1345,24 @@ final class AdminAPIController
             return new WP_Error('invalid_user', 'User not found', ['status' => 404]);
         }
 
+        // CM-2: the user must be registered in the edition the session belongs to.
+        // AttendanceService resolves the editionId from the session's own edition_id, so a
+        // mismatch never corrupts another edition's records — but it WOULD record attendance
+        // and fire auto-completion side effects for a user who is not registered in that
+        // edition. Reject before any write (covers both the mark and the clear branch).
+        $sessionEditionId = (int) ntdst_get(\Stride\Modules\Edition\SessionService::class)
+            ->getSession($sessionId)['edition_id'];
+        if (!$this->registrationRepository->existsForEdition($userId, $sessionEditionId)) {
+            return new WP_Error(
+                'session_edition_mismatch',
+                'Deze deelnemer is niet ingeschreven voor de editie van deze sessie.',
+                ['status' => 400],
+            );
+        }
+
         // Handle clearing attendance (empty status)
         if (empty($statusValue)) {
             // Delete attendance record
-            global $wpdb;
-            $attendanceTable = AttendanceTable::getTableName();
-
             if (AttendanceTable::exists()) {
                 $existing = $this->attendance->findBySessionAndUser($sessionId, $userId);
                 if ($existing) {
