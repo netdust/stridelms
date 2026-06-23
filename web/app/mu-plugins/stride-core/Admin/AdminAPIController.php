@@ -2565,30 +2565,16 @@ final class AdminAPIController
      */
     public function exportRegistrations(WP_REST_Request $request): void
     {
-        global $wpdb;
-        $table = RegistrationTable::getTableName();
-
         if (!RegistrationTable::exists()) {
             wp_die('Registration table not found.');
         }
 
-        // Get confirmed registrations for upcoming editions. Columns are
-        // enumerated (panel perf SF-1): r.* dragged the completion_tasks +
-        // enrollment_data JSON blobs into memory for every row while the CSV
-        // reads five scalars — O(rows x blob) at production scale.
+        // Read-model assembly (the confirmed-upcoming SELECT + per-row enrichment
+        // + formula-injection control) lives in AdminExportService (Task D3, INV-3).
+        // The controller keeps ONLY the HTTP streaming: headers + BOM + fputcsv.
         $today = current_time('Y-m-d');
-        $registrations = $wpdb->get_results($wpdb->prepare(
-            "SELECT r.id, r.user_id, r.status,
-                    p.post_title as edition_title,
-                    pm_date.meta_value as edition_date
-             FROM {$table} r
-             LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
-             LEFT JOIN {$wpdb->postmeta} pm_date ON r.edition_id = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
-             WHERE r.status = 'confirmed'
-             AND (pm_date.meta_value >= %s OR pm_date.meta_value IS NULL)
-             ORDER BY pm_date.meta_value ASC, r.registered_at ASC",
-            $today,
-        ));
+        $export = ntdst_get(\Stride\Admin\AdminExportService::class);
+        $rows = $export->buildExportRows($today);
 
         // Set download headers. nosniff mirrors the universal file-response
         // posture (NTDST_Response::fileHeaders / M4): a browser must never
@@ -2606,80 +2592,14 @@ final class AdminAPIController
         // Header row (semicolons for Dutch Excel)
         fputcsv($output, ['Naam', 'E-mail', 'Organisatie', 'Editie', 'Datum', 'Status', 'Offerte #'], ';');
 
-        // Batch-prime all per-row lookups so the export's query count stays
-        // constant regardless of row count (audit 2.6): one user fetch + one
-        // user-meta prime + one quote map + one quote-meta fetch replace the
-        // previous ~4 queries per row. A missing user (deleted account) maps
-        // to null and renders as blank cells, same as get_userdata() === false.
-        $userIds = array_values(array_unique(array_filter(array_map(
-            static fn($reg) => (int) ($reg->user_id ?? 0),
-            $registrations,
-        ))));
-        $users = BatchQueryHelper::batchGetUsers($userIds);
-        if ($userIds !== []) {
-            update_meta_cache('user', $userIds);
-        }
-
-        $registrationIds = array_values(array_filter(array_map(
-            static fn($reg) => (int) ($reg->id ?? 0),
-            $registrations,
-        )));
-        $quoteIdsByRegistration = ntdst_get(\Stride\Modules\Invoicing\QuoteRepository::class)
-            ->findQuoteIdsByRegistrations($registrationIds);
-        $quoteMeta = BatchQueryHelper::batchGetPostMeta(
-            array_values($quoteIdsByRegistration),
-            ['quote_number'],
-        );
-
-        foreach ($registrations as $reg) {
-            $user = $users[(int) ($reg->user_id ?? 0)] ?? null;
-            $name = $user ? $user->display_name : 'Onbekend';
-            $email = $user ? $user->user_email : '';
-            $org = $user ? (get_user_meta($user->ID, 'organisation', true) ?: '') : '';
-
-            // Linked quote number from the batched map (fallback mirrors the
-            // old per-row behaviour: 'Q-' . post ID when the meta is empty).
-            $quoteNumber = '';
-            $quoteId = $quoteIdsByRegistration[(int) ($reg->id ?? 0)] ?? 0;
-            if ($quoteId) {
-                $quoteNumber = (string) ($quoteMeta[$quoteId]['quote_number'] ?? '') ?: 'Q-' . $quoteId;
-            }
-
-            fputcsv($output, array_map([self::class, 'sanitizeCsvCell'], [
-                $name,
-                $email,
-                $org,
-                $reg->edition_title ?? '',
-                $reg->edition_date ?? '',
-                $reg->status ?? '',
-                $quoteNumber,
-            ]), ';');
+        // Each assembled cell is passed through the service's formula-injection
+        // control before streaming (the security control's home is the service;
+        // the controller invokes it per-cell at stream time).
+        foreach ($rows as $row) {
+            fputcsv($output, array_map([$export, 'sanitizeCsvCell'], $row), ';');
         }
 
         fclose($output);
         exit;
-    }
-
-    /**
-     * Neutralise CSV / spreadsheet formula injection.
-     *
-     * Excel, LibreOffice and Google Sheets execute any cell whose first
-     * character is `=`, `+`, `-`, `@`, TAB or CR. An attacker who can place
-     * arbitrary text into a user-facing field (display_name, organisation,
-     * edition title) could exfiltrate data via `=WEBSERVICE(...)` when an
-     * admin opens the export. Prefix any such cell with a single quote so
-     * the spreadsheet treats it as a literal string.
-     */
-    private static function sanitizeCsvCell(mixed $value): string
-    {
-        $str = (string) $value;
-        if ($str === '') {
-            return '';
-        }
-        $first = $str[0];
-        if ($first === '=' || $first === '+' || $first === '-' || $first === '@' || $first === "\t" || $first === "\r") {
-            return "'" . $str;
-        }
-        return $str;
     }
 }

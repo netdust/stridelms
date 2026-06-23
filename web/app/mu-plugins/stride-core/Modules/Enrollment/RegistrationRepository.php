@@ -645,6 +645,43 @@ final class RegistrationRepository
     }
 
     /**
+     * Confirmed registrations for UPCOMING (or dateless) editions, for the CSV export.
+     *
+     * Verbatim relocation of the reg-side SELECT from
+     * AdminAPIController::exportRegistrations (Task D3, INV-3): the controller now
+     * owns only the CSV streaming; this repo owns the $wpdb->prepare execution and
+     * AdminExportService owns the read-model assembly.
+     *
+     * Columns are enumerated (panel perf SF-1): r.* dragged the completion_tasks +
+     * enrollment_data JSON blobs into memory per row while the CSV reads five
+     * scalars. The `_ntdst_start_date` literal stays inline — this is raw SQL in
+     * the repository, the sanctioned home for the meta-prefix literal (no
+     * getMetaPrefix() helper exists on this custom-table repo).
+     *
+     * @param  string $today  Today's date (Y-m-d); rows whose edition start_date is
+     *                        on/after this, OR which have no start_date, are returned.
+     * @return array<object>  Rows: {id, user_id, status, edition_title, edition_date}.
+     */
+    public function findForExport(string $today): array
+    {
+        global $wpdb;
+        $table = $this->table();
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT r.id, r.user_id, r.status,
+                    p.post_title as edition_title,
+                    pm_date.meta_value as edition_date
+             FROM {$table} r
+             LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
+             LEFT JOIN {$wpdb->postmeta} pm_date ON r.edition_id = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
+             WHERE r.status = 'confirmed'
+             AND (pm_date.meta_value >= %s OR pm_date.meta_value IS NULL)
+             ORDER BY pm_date.meta_value ASC, r.registered_at ASC",
+            $today,
+        ));
+    }
+
+    /**
      * Count confirmed registrations for edition.
      */
     public function countConfirmedForEdition(int $editionId): int
