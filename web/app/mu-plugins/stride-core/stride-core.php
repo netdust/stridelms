@@ -168,6 +168,7 @@ add_action('ntdst/features_ready', function () use ($config): void {
         \Stride\Handlers\ICalHandler::class,
         \Stride\Handlers\AnnualReportHandler::class,
         \Stride\Handlers\BulkRegistrationHandler::class,
+        \Stride\Handlers\RosterBulkHandler::class,
     ];
 
     foreach ($handlers as $handlerClass) {

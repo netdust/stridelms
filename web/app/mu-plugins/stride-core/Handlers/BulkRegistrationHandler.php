@@ -6,6 +6,7 @@ namespace Stride\Handlers;
 
 use Stride\Domain\QuoteStatus;
 use Stride\Domain\RegistrationStatus;
+use Stride\Handlers\Support\BulkRunner;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
@@ -27,6 +28,12 @@ use WP_Error;
  */
 final class BulkRegistrationHandler
 {
+    // M2 capability gate + B3 batch cap + CR-1 select-all expansion + M3/M9
+    // per-row report loop + M10 completion event — the SINGLE shared engine,
+    // also used by RosterBulkHandler (Phase 2a). EXPANSION_FETCH_LIMIT (public,
+    // for the integration boundary test) + MAX_BATCH live on the trait.
+    use BulkRunner;
+
     /**
      * M7 server-side field allowlist for stride_bulk_set_field.
      *
@@ -40,25 +47,6 @@ final class BulkRegistrationHandler
      * honest safe set is the columns update() writes: notes + company_id.
      */
     private const SAFE_FIELDS = ['notes', 'company_id'];
-
-    /**
-     * B3 — hard backstop on bulk batch size. An authorized request with thousands
-     * of ids would otherwise run an unbounded synchronous loop (promoteFromWaitlist
-     * even opens a transaction per row). 500 is generous vs realistic grid
-     * selections; Task 4.4's select-all boundary will formalize this later.
-     */
-    private const MAX_BATCH = 500;
-
-    /**
-     * The select-all expansion fetches ONE id past the cap (CR-2): fetching
-     * MAX_BATCH + 1 is what lets runBulk's `count($ids) > MAX_BATCH` guard
-     * distinguish "exactly MAX_BATCH, OK" from "over cap, reject as too_many"
-     * — fetching exactly MAX_BATCH would silently truncate an over-cap filter
-     * to a 500-row partial mutation. Named so a future caller cannot desync the
-     * +1 from the guard. Public so the integration test asserts the boundary
-     * against the single source instead of recomputing `MAX_BATCH + 1`.
-     */
-    public const EXPANSION_FETCH_LIMIT = self::MAX_BATCH + 1;
 
     public function __construct()
     {
@@ -81,179 +69,6 @@ final class BulkRegistrationHandler
 
         // Task 2.3 — generic safe-column setter with a server-side allowlist (M7).
         add_filter('ntdst/api_data/stride_bulk_set_field', [$this, 'handleBulkSetField'], 10, 2);
-    }
-
-    /**
-     * M2 capability gate — call as the FIRST line of every handler.
-     *
-     * @return WP_Error|null WP_Error(403) when denied, null when allowed.
-     */
-    private function denyIfNotManager(): ?WP_Error
-    {
-        if (!current_user_can('stride_manage')) {
-            return new WP_Error('forbidden', __('Geen toegang.', 'stride'), ['status' => 403]);
-        }
-
-        return null;
-    }
-
-    /**
-     * Task 4.1 — select-all-across-pages: expand a carried grid filter to the
-     * full matching id-set, server-side, BEFORE the per-row loop AND before the
-     * quote path's independent id read.
-     *
-     * When $params['select_all'] is set, the payload carries a structured grid
-     * `filter` (NOT a 4k-row id list — §5) which is expanded to its matching
-     * registration ids via RegistrationRepository::idsForGridFilter — the SAME
-     * buildGridFilters WHERE the grid read uses (single filter definition,
-     * structured-only M4/M5, trajectory parent→child child-rows, empty-filter
-     * bounded to the active edition-grained corpus). The expansion fetches
-     * MAX_BATCH + 1 ids so an over-cap result (count > MAX_BATCH) is rejected by
-     * runBulk's EXISTING cap guard as too_many — never truncated, never a second
-     * cap here.
-     *
-     * Called immediately after denyIfNotManager() (deny-before-expansion) in every
-     * public handler and inside setQuoteStatusForRows (so the B2 reg→quote map at
-     * the quote path also sees the expanded ids — without this, quote select-all
-     * would build $map from the un-expanded empty ids and silently no-op every
-     * row). A plain {ids:[…]} payload (select_all absent/falsey) is returned
-     * unchanged — the explicit-ids path is untouched.
-     *
-     * @param  array<string,mixed> $params registry params (full POST body).
-     * @return array<string,mixed>         $params with ['ids'] populated under select_all.
-     */
-    private function resolveBulkIds(array $params): array
-    {
-        if (empty($params['select_all'])) {
-            return $params;
-        }
-
-        $filter = is_array($params['filter'] ?? null) ? $params['filter'] : [];
-        $repo   = ntdst_get(RegistrationRepository::class);
-
-        // Fetch one past the cap (EXPANSION_FETCH_LIMIT) so runBulk's existing
-        // `count($ids) > MAX_BATCH` guard rejects an over-cap filter as too_many
-        // rather than truncating. The +1 lives in the named constant (CR-2) so
-        // it can't be desynced from the guard.
-        $params['ids'] = $repo->idsForGridFilter($filter, self::EXPANSION_FETCH_LIMIT);
-
-        return $params;
-    }
-
-    /**
-     * Shared bulk loop + per-row report (M3 + M9).
-     *
-     * Resolves each id via the repository (INV-3); a row that doesn't resolve
-     * lands in failed[] with not_found and is never mutated. Per-row WP_Error
-     * results are captured into failed[], never swallowed (INV-4).
-     *
-     * @param array<string,mixed>                                $params  registry params; $params['ids'] = row ids.
-     * @param callable(int $id, object $registration): (true|WP_Error) $perRow
-     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}|WP_Error
-     */
-    private function runBulk(array $params, callable $perRow): array|WP_Error
-    {
-        // CR-1: select-all expansion lives at the SINGLE chokepoint every public
-        // handler routes through, so a future handler cannot forget it and
-        // silently no-op a select_all request. Idempotent — a plain {ids:[…]}
-        // payload (select_all absent) is returned unchanged, and the quote path's
-        // own pre-resolve (setQuoteStatusForRows) re-resolves harmlessly here.
-        $params = $this->resolveBulkIds($params);
-
-        $ids = array_values(array_unique(array_map('absint', (array) ($params['ids'] ?? []))));
-
-        // B3: hard cap BEFORE the loop. Returning a WP_Error here means every
-        // caller must propagate it — finishBatch passes a WP_Error through
-        // untouched, and the quote handlers already guard with is_wp_error.
-        if (count($ids) > self::MAX_BATCH) {
-            return new WP_Error(
-                'too_many',
-                __('Te veel inschrijvingen geselecteerd (max 500).', 'stride'),
-                ['status' => 400],
-            );
-        }
-
-        $repo = ntdst_get(RegistrationRepository::class);
-
-        $succeeded = [];
-        $failed = [];
-
-        foreach ($ids as $id) {
-            $registration = $repo->find($id);
-            if ($registration === null || is_wp_error($registration)) {
-                $failed[] = ['id' => $id, 'code' => 'not_found', 'message' => __('Inschrijving niet gevonden.', 'stride')];
-                continue;
-            }
-
-            // M9 non-atomic (B1): a per-row domain method may throw a raw
-            // Throwable (e.g. a DB constraint error) rather than return a
-            // WP_Error. Such a throw must NOT abort the batch — the throwing row
-            // is reported failed and the loop continues. The raw exception detail
-            // is logged (operators can diagnose) but NEVER leaked to the client
-            // report, which carries a generic Dutch message.
-            try {
-                $result = $perRow($id, $registration);
-            } catch (\Throwable $e) {
-                ntdst_log('enrollment')->error('Bulk row threw an exception; row reported failed', [
-                    'registration_id' => $id,
-                    'exception' => $e->getMessage(),
-                ]);
-                $failed[] = [
-                    'id' => $id,
-                    'code' => 'exception',
-                    'message' => __('Er ging iets mis bij deze inschrijving.', 'stride'),
-                ];
-                continue;
-            }
-
-            if (is_wp_error($result)) {
-                $failed[] = [
-                    'id' => $id,
-                    'code' => $result->get_error_code(),
-                    'message' => $result->get_error_message(),
-                ];
-                continue;
-            }
-            $succeeded[] = ['id' => $id];
-        }
-
-        return [
-            'total' => count($ids),
-            'succeeded' => $succeeded,
-            'failed' => $failed,
-            'summary' => ['ok' => count($succeeded), 'error' => count($failed)],
-        ];
-    }
-
-    /**
-     * M10 — fire the coarse "a batch finished, recount" event at the tail of
-     * every public bulk handler, then return the report unchanged.
-     *
-     * D5: the handler is a thin Handler (not an AbstractService), so the event
-     * is fired via do_action directly with the full `stride/` prefix — the same
-     * name AdminDashboardService binds the action-queue bust to. Per-row
-     * stride/registration/{confirmed,cancelled} already fire inside the domain
-     * methods; this is only the batch-level recount trigger.
-     *
-     * Reached only after runBulk ran (a denied call returns before this), so a
-     * pure capability denial never fires it.
-     *
-     * B3: callers pass runBulk's result straight in; a WP_Error (e.g. the batch
-     * cap) is propagated untouched and fires NO completion event — the batch
-     * never ran.
-     *
-     * @param array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}|WP_Error $report
-     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}|WP_Error
-     */
-    private function finishBatch(array|WP_Error $report): array|WP_Error
-    {
-        if (is_wp_error($report)) {
-            return $report;
-        }
-
-        do_action('stride/registration/bulk_completed', ['summary' => $report['summary'] ?? []]);
-
-        return $report;
     }
 
     /**
