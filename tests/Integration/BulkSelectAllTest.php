@@ -386,10 +386,10 @@ final class BulkSelectAllTest extends IntegrationTestCase
         $ids = $repo->idsForGridFilter([
             'edition_id' => self::$overCapEditionId,
             'edition_scope' => 'all',
-        ], BulkRegistrationHandler::maxBatchForTest() + 1);
+        ], BulkRegistrationHandler::EXPANSION_FETCH_LIMIT);
 
         $this->assertCount(
-            BulkRegistrationHandler::maxBatchForTest() + 1,
+            BulkRegistrationHandler::EXPANSION_FETCH_LIMIT,
             $ids,
             'idsForGridFilter must honor LIMIT = MAX_BATCH+1 so runBulk distinguishes >500 from ==500',
         );
@@ -441,7 +441,7 @@ final class BulkSelectAllTest extends IntegrationTestCase
         $ids = $repo->idsForGridFilter([
             'trajectory_id' => self::$trajT1,
             'edition_scope' => 'all',
-        ], BulkRegistrationHandler::maxBatchForTest() + 1);
+        ], BulkRegistrationHandler::EXPANSION_FETCH_LIMIT);
 
         $this->assertContains(self::$t1ChildARegId, $ids, 'T1 child A must be in the expansion');
         $this->assertContains(self::$t1ChildBRegId, $ids, 'T1 child B must be in the expansion');
@@ -471,14 +471,14 @@ final class BulkSelectAllTest extends IntegrationTestCase
         // (r.edition_id IS NOT NULL) + default active scope — so trajectory
         // parents (edition_id NULL) can never appear, and only active edition
         // rows are in the corpus.
-        $ids = $repo->idsForGridFilter([], BulkRegistrationHandler::maxBatchForTest() + 1);
+        $ids = $repo->idsForGridFilter([], BulkRegistrationHandler::EXPANSION_FETCH_LIMIT);
 
         $this->assertNotContains(self::$t1ParentRegId, $ids, 'empty filter must NOT expand to trajectory parents (edition_id NULL)');
 
         // It is also CAPPED: with the over-cap edition's 501 active rows in the
         // corpus, an empty-filter expansion can never be unbounded.
         $this->assertLessThanOrEqual(
-            BulkRegistrationHandler::maxBatchForTest() + 1,
+            BulkRegistrationHandler::EXPANSION_FETCH_LIMIT,
             count($ids),
             'empty-filter expansion must be bounded by the LIMIT (cap backstop)',
         );

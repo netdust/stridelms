@@ -49,6 +49,17 @@ final class BulkRegistrationHandler
      */
     private const MAX_BATCH = 500;
 
+    /**
+     * The select-all expansion fetches ONE id past the cap (CR-2): fetching
+     * MAX_BATCH + 1 is what lets runBulk's `count($ids) > MAX_BATCH` guard
+     * distinguish "exactly MAX_BATCH, OK" from "over cap, reject as too_many"
+     * — fetching exactly MAX_BATCH would silently truncate an over-cap filter
+     * to a 500-row partial mutation. Named so a future caller cannot desync the
+     * +1 from the guard. Public so the integration test asserts the boundary
+     * against the single source instead of recomputing `MAX_BATCH + 1`.
+     */
+    public const EXPANSION_FETCH_LIMIT = self::MAX_BATCH + 1;
+
     public function __construct()
     {
         $this->init();
@@ -120,24 +131,13 @@ final class BulkRegistrationHandler
         $filter = is_array($params['filter'] ?? null) ? $params['filter'] : [];
         $repo   = ntdst_get(RegistrationRepository::class);
 
-        // Fetch MAX_BATCH + 1 so runBulk's existing `count($ids) > MAX_BATCH`
-        // guard distinguishes "exactly 500, OK" from "more than 500, reject"
-        // and returns too_many rather than truncating.
-        $params['ids'] = $repo->idsForGridFilter($filter, self::MAX_BATCH + 1);
+        // Fetch one past the cap (EXPANSION_FETCH_LIMIT) so runBulk's existing
+        // `count($ids) > MAX_BATCH` guard rejects an over-cap filter as too_many
+        // rather than truncating. The +1 lives in the named constant (CR-2) so
+        // it can't be desynced from the guard.
+        $params['ids'] = $repo->idsForGridFilter($filter, self::EXPANSION_FETCH_LIMIT);
 
         return $params;
-    }
-
-    /**
-     * Read-only accessor for the single-source batch cap (test seam — Task 4.1).
-     *
-     * Lets the integration test assert the LIMIT/cap behavior against the ONE cap
-     * constant rather than duplicating the literal 500, keeping the cap
-     * single-source.
-     */
-    public static function maxBatchForTest(): int
-    {
-        return self::MAX_BATCH;
     }
 
     /**
