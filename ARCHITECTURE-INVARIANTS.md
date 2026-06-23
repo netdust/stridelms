@@ -172,18 +172,37 @@ grep -rn "learndash_\|ld_update_course_access\|sfwd_" --include="*.php" web/app/
 
 ---
 
-## INV-6b — Trajectory selection state is read through `TrajectorySelection`, never the raw `selections` column
+## INV-6b — Selection state is read through the selection convergence points (`TrajectorySelection` for electives, `SessionSelection`/`getSelections()` for sessions), never the raw `selections` column
 
-**Convergence point:** `Modules/Trajectory/TrajectorySelection::getSelectedCourseIds(int): array` (+ `countChosenInGroup()` / `isGroupChosen()` for per-group thresholds).
+**Convergence points:** `wp_vad_registrations.selections` is a single flat-id column read through **two** convergence points depending on the question being asked:
 
-**The rule.** `wp_vad_registrations.selections` stores **flat edition ids** — never grouped, never course ids. Any surface rendering "which elective courses did this registration pick" reads through `getSelectedCourseIds()` (which folds in pure-LD picks from the `initial_selection` phase entries); per-group chosen state goes through `isGroupChosen()`. Re-deriving from the raw column re-introduces the 2026-06-12 bug class where four templates each invented a different (wrong) shape.
+1. **Trajectory electives — which elective courses did this registration pick:** `Modules/Trajectory/TrajectorySelection::getSelectedCourseIds(int): array` (+ `countChosenInGroup()` / `isGroupChosen()` for per-group thresholds).
+2. **Session roster — who is in which session:** `Modules/Edition/SessionSelection::hasSelectedSession(int $registrationId, int $sessionId): bool`, over the underlying read `Modules/Enrollment/RegistrationRepository::getSelections(int $registrationId): array`. `getSelections()` is the ONE decode of the raw column; roster code asks "is this registration in this session" through `hasSelectedSession()`, never by joining or decoding `$reg->selections` itself.
+
+**The rule.** `wp_vad_registrations.selections` stores **flat ids** — flat edition ids for the trajectory-electives shape, flat session ids for the session-roster shape — never grouped, never course ids, never an ad-hoc nested shape. Any surface rendering "which elective courses did this registration pick" reads through `getSelectedCourseIds()` (which folds in pure-LD picks from the `initial_selection` phase entries) with per-group chosen state through `isGroupChosen()`; any surface rendering "who is enrolled in which session" reads through `SessionSelection::hasSelectedSession()` / `RegistrationRepository::getSelections()`. Re-deriving from the raw column re-introduces the 2026-06-12 bug class where four templates each invented a different (wrong) shape — and, for the session-roster shape Phase 2a introduces (`AdminEditionRosterService` + the cohort-lens grid JS), a per-row decode of `$reg->selections` is the same bug class waiting to re-open.
 
 **Audit move:**
 ```bash
-# Raw selections reads outside the convergence point + repository:
+# Raw selections reads outside the convergence-point files + repository.
+# Exempt the convergence-point FILES (TrajectorySelection / SessionSelection)
+# and the repository (the legitimate home of the decode) — NOT the WORD "session":
+# the prior `|session` exclusion blanket-exempted any line mentioning a session,
+# which would let a new roster service decode the raw column unseen. Phase 2a's
+# AdminEditionRosterService MUST be caught here if it bypasses getSelections().
 grep -rn "\->selections" --include="*.php" web/app/themes/stridence web/app/mu-plugins/stride-core \
-  | grep -vE "TrajectorySelection\.php|RegistrationRepository\.php|SessionSelection|session" 
+  | grep -vE "TrajectorySelection\.php|RegistrationRepository\.php|SessionSelection\.php"
 ```
+
+**Known pre-existing direct reads (the landscape this audit move surfaces today — NOT new bypasses; any reader BEYOND this list is a finding):** these legacy surfaces decode `$reg->selections` inline and predate the convergence points. They are the accepted baseline — the audit's signal is "no reader appears here that isn't already on this list," and in particular **no Phase 2a roster code**:
+- `themes/stridence/single-vad_edition.php` — edition page, pre-selected session ids for the logged-in user's own registration.
+- `themes/stridence/templates/forms/completion/task-session_selection.php` — the session-selection completion form, prefilling the user's own current picks.
+- `Modules/Trajectory/TrajectoryCascadeService.php` — copies a parent registration's flat picks when cascading children.
+- `Modules/Mail/StrideMailBridge.php` — mail recipient/payload assembly.
+- `Modules/User/UserDashboardService.php` — the user's own dashboard session list.
+- `Handlers/ICalHandler.php` (×2) — iCal feed for the user's own selected sessions.
+- `Admin/AdminUserService.php` — admin single-user view.
+
+When Phase 2a lands `AdminEditionRosterService`, it MUST route through `SessionSelection::hasSelectedSession()` / `getSelections()` so it does NOT add a tenth entry to this list — that is the whole reason this convergence point is named before the roster code ships.
 
 ---
 
