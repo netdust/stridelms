@@ -69,6 +69,12 @@ final class RosterBulkHandler
         add_filter('ntdst/api_data/stride_roster_bulk_approve', [$this, 'handleRosterBulkApprove'], 10, 2);
         add_filter('ntdst/api_data/stride_roster_bulk_message', [$this, 'handleRosterBulkMessage'], 10, 2);
         add_filter('ntdst/api_data/stride_roster_bulk_generate_doc', [$this, 'handleRosterBulkGenerateDoc'], 10, 2);
+
+        // Trajectory-roster variant (Task 2a.8) — scoped to a trajectory's
+        // MULTI-USER child set, not an edition.
+        add_filter('ntdst/api_data/stride_traj_roster_bulk_approve', [$this, 'handleTrajRosterBulkApprove'], 10, 2);
+        add_filter('ntdst/api_data/stride_traj_roster_bulk_message', [$this, 'handleTrajRosterBulkMessage'], 10, 2);
+        add_filter('ntdst/api_data/stride_traj_roster_bulk_generate_doc', [$this, 'handleTrajRosterBulkGenerateDoc'], 10, 2);
     }
 
     /**
@@ -109,6 +115,170 @@ final class RosterBulkHandler
         }
 
         return null;
+    }
+
+    // =========================================================================
+    // CM-1 trajectory variant (Task 2a.8, B2 fix) — the scope is a trajectory's
+    // MULTI-USER child set, NOT an edition and NOT the per-user
+    // findEditionsByTrajectory() (which cannot serve a multi-user bulk scope).
+    // =========================================================================
+
+    /**
+     * CM-1 (trajectory) — resolve and validate the REQUIRED opened-trajectory scope.
+     *
+     * Returns the absint'd trajectory id, or a 400 WP_Error when absent/zero. A
+     * scope-less trajectory-roster bulk is the confused-deputy with no trajectory
+     * binding — it must NEVER fall through to a global mutation, so the scope is
+     * mandatory and checked before the loop (mirror of requireEditionScope).
+     *
+     * @param array<string,mixed> $params
+     * @return int|WP_Error
+     */
+    private function requireTrajectoryScope(array $params): int|WP_Error
+    {
+        $trajectoryId = absint($params['trajectory_id'] ?? 0);
+        if ($trajectoryId <= 0) {
+            return new WP_Error('missing_scope', __('Geen traject-scope opgegeven.', 'stride'), ['status' => 400]);
+        }
+
+        return $trajectoryId;
+    }
+
+    /**
+     * CM-1 (trajectory) per-row scope predicate — the row must be in the opened
+     * trajectory's child set.
+     *
+     * The scope SET is computed ONCE from
+     * RegistrationRepository::findChildRegistrationIdsByTrajectory() (the MULTI-USER
+     * parent->child join, §676) and passed in; a row id absent from it (a row from
+     * ANOTHER trajectory smuggled into the payload, C-ATK-1) gets a WP_Error so the
+     * caller routes it into failed[] without mutation. Returns null when in scope.
+     *
+     * @param array<int,bool> $scopeLookup id => true for ids in the trajectory child set.
+     * @return WP_Error|null
+     */
+    private function denyIfNotInTrajectorySet(int $id, array $scopeLookup): ?WP_Error
+    {
+        if (!isset($scopeLookup[$id])) {
+            return new WP_Error('out_of_scope', __('Deze inschrijving hoort niet bij dit traject.', 'stride'));
+        }
+
+        return null;
+    }
+
+    /**
+     * Build the per-row trajectory scope: M2 gate, required trajectory_id, and the
+     * computed-once child-id lookup. Returns the lookup map on success, or a
+     * WP_Error to short-circuit (denial / missing scope). Shared front door for
+     * every stride_traj_roster_bulk_* action so the scope can't be forgotten.
+     *
+     * @param array<string,mixed> $params
+     * @return array<int,bool>|WP_Error
+     */
+    private function resolveTrajectoryScopeLookup(array $params): array|WP_Error
+    {
+        if ($deny = $this->denyIfNotManager()) {
+            return $deny; // M2 first
+        }
+
+        $trajectoryId = $this->requireTrajectoryScope($params); // CM-1: scope required
+        if (is_wp_error($trajectoryId)) {
+            return $trajectoryId;
+        }
+
+        // CM-1: compute the scope set ONCE from the opened trajectory — never
+        // re-derive it per row from the row's own (client-supplied) data.
+        $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $childIds = $repo->findChildRegistrationIdsByTrajectory($trajectoryId);
+
+        return array_fill_keys($childIds, true);
+    }
+
+    /**
+     * stride_traj_roster_bulk_approve — pending/interest/waitlist → confirmed,
+     * scoped to the opened trajectory's MULTI-USER child set.
+     *
+     * Same M2 + §674 + M9 layering as the edition variant; the ONLY difference is
+     * the scope predicate (trajectory child set vs a single edition_id).
+     *
+     * @param array<string,mixed> $params
+     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}|WP_Error
+     */
+    public function handleTrajRosterBulkApprove(mixed $data, array $params): array|WP_Error
+    {
+        $scopeLookup = $this->resolveTrajectoryScopeLookup($params);
+        if (is_wp_error($scopeLookup)) {
+            return $scopeLookup;
+        }
+
+        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg) use ($scopeLookup): true|WP_Error {
+            // CM-1: the foreign-trajectory confused-deputy check runs FIRST.
+            if ($scope = $this->denyIfNotInTrajectorySet($id, $scopeLookup)) {
+                return $scope;
+            }
+
+            // §674: derive validity from the ONE transition map, not a literal.
+            $from = RegistrationStatus::tryFrom((string) $reg->status);
+            if ($from === null || !RegistrationTransitions::isAllowed($from, RegistrationStatus::Confirmed)) {
+                return new WP_Error('invalid_status', __('Deze inschrijving kan niet goedgekeurd worden.', 'stride'));
+            }
+
+            $completion = ntdst_get(EnrollmentCompletion::class);
+            $enrollment = ntdst_get(EnrollmentService::class);
+
+            $task = $completion->completeTask($id, 'approval');
+            if (is_wp_error($task)) {
+                return $task;
+            }
+
+            return $enrollment->confirmRegistration($id);
+        }));
+    }
+
+    /**
+     * stride_traj_roster_bulk_message — HONEST DEFERRED STUB (inherits Phase-1C D3),
+     * trajectory-scoped. A foreign-trajectory row is out_of_scope before the stub.
+     *
+     * @param array<string,mixed> $params
+     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}|WP_Error
+     */
+    public function handleTrajRosterBulkMessage(mixed $data, array $params): array|WP_Error
+    {
+        $scopeLookup = $this->resolveTrajectoryScopeLookup($params);
+        if (is_wp_error($scopeLookup)) {
+            return $scopeLookup;
+        }
+
+        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg) use ($scopeLookup): true|WP_Error {
+            if ($scope = $this->denyIfNotInTrajectorySet($id, $scopeLookup)) {
+                return $scope;
+            }
+
+            return new WP_Error('not_available', __('Berichten versturen volgt in een latere fase.', 'stride'));
+        }));
+    }
+
+    /**
+     * stride_traj_roster_bulk_generate_doc — HONEST DEFERRED STUB (inherits
+     * Phase-1C D4), trajectory-scoped.
+     *
+     * @param array<string,mixed> $params
+     * @return array{total:int, succeeded:array<int,array{id:int}>, failed:array<int,array{id:int,code:string,message:string}>, summary:array{ok:int,error:int}}|WP_Error
+     */
+    public function handleTrajRosterBulkGenerateDoc(mixed $data, array $params): array|WP_Error
+    {
+        $scopeLookup = $this->resolveTrajectoryScopeLookup($params);
+        if (is_wp_error($scopeLookup)) {
+            return $scopeLookup;
+        }
+
+        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg) use ($scopeLookup): true|WP_Error {
+            if ($scope = $this->denyIfNotInTrajectorySet($id, $scopeLookup)) {
+                return $scope;
+            }
+
+            return new WP_Error('not_available', __('Documentgeneratie volgt in een latere fase.', 'stride'));
+        }));
     }
 
     /**

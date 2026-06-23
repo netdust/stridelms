@@ -770,6 +770,58 @@ final class RegistrationRepository
     }
 
     /**
+     * All child registration ids for a trajectory, spanning ALL users
+     * (the MULTI-USER, trajectory-scoped child set).
+     *
+     * This is the reusable extraction of the inline trajectory parent->child join
+     * in buildGridFilters() (the queryForGrid trajectory grid-filter, Phase-1B
+     * Task 1.4b). // mirror of the buildGridFilters() trajectory JOIN — the two
+     * sites MUST stay equivalent (§676 sibling-audit). The inline copy keeps a
+     * load-bearing array_unshift param-ordering quirk (the JOIN's %d precedes the
+     * active-scope WHERE %s), so it is intentionally NOT refactored to call this
+     * method — see Task 2a.8 sibling note (prefer safety over DRY; the Phase-1B
+     * grid trajectory-filter tests stay green untouched). Here we own the whole
+     * SQL string, so params are bound in natural source order.
+     *
+     * Unlike findEditionsByTrajectory(int $userId, int $trajectoryId) — which is
+     * per-USER (`WHERE child.user_id = %d`) and therefore CANNOT serve a multi-user
+     * bulk scope (the B2 security finding) — this method drops the user constraint:
+     * the trajectory roster spans all users. It is the scope set for the
+     * trajectory-roster bulk's CM-1 per-row authorization (Task 2a.8).
+     *
+     * Catches BOTH:
+     *  - cascade children: child.parent_registration_id points at a T parent row,
+     *  - legacy pre-cascade children: child.trajectory_id = T directly.
+     * The base `child.edition_id IS NOT NULL` keeps the trajectory PARENT itself
+     * out (parents carry edition_id NULL) and another trajectory's rows out — so
+     * this returns ONLY this trajectory's edition-grained child rows.
+     *
+     * @return array<int> child registration ids (ints), spanning all users.
+     */
+    public function findChildRegistrationIdsByTrajectory(int $trajectoryId): array
+    {
+        global $wpdb;
+        $table = $this->table();
+
+        $rows = $wpdb->get_col($wpdb->prepare(
+            "SELECT child.id FROM {$table} child
+             LEFT JOIN {$table} traj_parent
+                ON traj_parent.id = child.parent_registration_id
+                AND traj_parent.trajectory_id = %d
+                AND traj_parent.edition_id IS NULL
+             WHERE child.edition_id IS NOT NULL
+               AND (
+                    child.trajectory_id = %d
+                    OR traj_parent.id IS NOT NULL
+               )",
+            $trajectoryId,
+            $trajectoryId,
+        ));
+
+        return array_map('intval', $rows ?? []);
+    }
+
+    /**
      * Count enrollments for a trajectory.
      */
     public function countByTrajectory(int $trajectoryId, ?string $status = null): int
@@ -2092,6 +2144,12 @@ final class RegistrationRepository
         // unshifted to the FRONT of $params; the WHERE-disjunct param is appended
         // in WHERE order. Both callers concatenate this join string into every
         // SQL statement via {$activeJoin}, so both paths inherit the filter.
+        // mirror of findChildRegistrationIdsByTrajectory() — the two trajectory
+        // parent->child join sites MUST stay equivalent (§676 sibling-audit). This
+        // inline copy is intentionally NOT refactored to call that method: the
+        // array_unshift param-ordering below is load-bearing here (the JOIN's %d
+        // must precede the active-scope WHERE %s), whereas the standalone method
+        // owns its whole SQL and binds in natural order.
         if ($trajectoryId !== null) {
             $activeJoin .= " LEFT JOIN {$wpdb->prefix}vad_registrations traj_parent
                 ON traj_parent.id = r.parent_registration_id

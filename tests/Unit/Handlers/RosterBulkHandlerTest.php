@@ -310,4 +310,139 @@ class RosterBulkHandlerTest extends TestCase
         $this->assertCount(1, $report['failed']);
         $this->assertSame('out_of_scope', $report['failed'][0]['code']);
     }
+
+    // =========================================================================
+    // CM-1 trajectory variant (Task 2a.8, B2 fix) — the scope is the MULTI-USER
+    // trajectory child set via findChildRegistrationIdsByTrajectory(), NOT the
+    // per-user findEditionsByTrajectory. A row from another trajectory → out_of_scope.
+    // =========================================================================
+
+    /**
+     * CM-1 trajectory variant (RED-first, load-bearing): the trajectory-roster
+     * bulk takes a REQUIRED trajectory_id; the scope set is computed ONCE from
+     * findChildRegistrationIdsByTrajectory(). A row id NOT in that set (a row from
+     * ANOTHER trajectory smuggled into the payload) lands in failed[] out_of_scope
+     * and is NEVER mutated — the domain confirm path is never entered.
+     */
+    public function test_traj_roster_bulk_approve_foreign_trajectory_row_out_of_scope(): void
+    {
+        // Opened trajectory scope = T1; its child set is {700}. The smuggled row
+        // 999 belongs to ANOTHER trajectory (not in T1's child set).
+        $inScopeRow = (object) ['id' => 700, 'status' => 'pending', 'edition_id' => 50];
+        $foreignRow = (object) ['id' => 999, 'status' => 'pending', 'edition_id' => 60];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('findChildRegistrationIdsByTrajectory')->with(1)->willReturn([700]);
+        $repo->method('find')->willReturnCallback(fn(int $id) => $id === 700 ? $inScopeRow : $foreignRow);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $completion = $this->createMock(EnrollmentCompletion::class);
+        $completion->expects($this->never())->method('completeTask');
+        ntdst_set(EnrollmentCompletion::class, $completion);
+
+        $enrollment = $this->createMock(EnrollmentService::class);
+        $enrollment->expects($this->never())->method('confirmRegistration');
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        $report = $this->handler->handleTrajRosterBulkApprove([], ['trajectory_id' => 1, 'ids' => [999]]);
+
+        $this->assertIsArray($report);
+        $this->assertCount(0, $report['succeeded']);
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame(999, $report['failed'][0]['id']);
+        $this->assertSame('out_of_scope', $report['failed'][0]['code']);
+    }
+
+    /**
+     * CM-1 trajectory mixed payload: an in-scope row (in T1's child set, valid
+     * transition) succeeds; a foreign-trajectory row in the SAME payload is
+     * out_of_scope. Proves the scope is the trajectory child set, computed once,
+     * per-row enforced.
+     */
+    public function test_traj_roster_bulk_approve_mixed_payload_partial_report(): void
+    {
+        $rows = [
+            700 => (object) ['id' => 700, 'status' => 'pending', 'edition_id' => 50],
+            999 => (object) ['id' => 999, 'status' => 'pending', 'edition_id' => 60],
+        ];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('findChildRegistrationIdsByTrajectory')->with(1)->willReturn([700]);
+        $repo->method('find')->willReturnCallback(fn(int $id) => $rows[$id] ?? null);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $completion = $this->createMock(EnrollmentCompletion::class);
+        $completion->expects($this->once())->method('completeTask')->with(700, 'approval')->willReturn(true);
+        ntdst_set(EnrollmentCompletion::class, $completion);
+
+        $enrollment = $this->createMock(EnrollmentService::class);
+        $enrollment->expects($this->once())->method('confirmRegistration')->with(700)->willReturn(true);
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        $report = $this->handler->handleTrajRosterBulkApprove([], ['trajectory_id' => 1, 'ids' => [700, 999]]);
+
+        $this->assertSame(2, $report['total']);
+        $this->assertCount(1, $report['succeeded']);
+        $this->assertSame(700, $report['succeeded'][0]['id']);
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame(999, $report['failed'][0]['id']);
+        $this->assertSame('out_of_scope', $report['failed'][0]['code']);
+    }
+
+    /**
+     * CM-1 trajectory guard: a missing/zero trajectory_id scope is refused 400
+     * BEFORE any row or the scope-set query is touched.
+     */
+    public function test_traj_roster_bulk_approve_requires_trajectory_scope(): void
+    {
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->expects($this->never())->method('findChildRegistrationIdsByTrajectory');
+        $repo->expects($this->never())->method('find');
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $result = $this->handler->handleTrajRosterBulkApprove([], ['ids' => [700]]);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('missing_scope', $result->get_error_code());
+        $this->assertSame(400, $result->get_error_data()['status'] ?? null);
+    }
+
+    /** M2 inherited: the trajectory-roster action denies a view-only actor before the loop. */
+    public function test_traj_roster_bulk_approve_denies_view_only_before_loop(): void
+    {
+        global $current_user_caps;
+        $current_user_caps = ['stride_manage' => false];
+
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->expects($this->never())->method('findChildRegistrationIdsByTrajectory');
+        $repo->expects($this->never())->method('find');
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $result = $this->handler->handleTrajRosterBulkApprove([], ['trajectory_id' => 1, 'ids' => [700]]);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('forbidden', $result->get_error_code());
+        $this->assertSame(403, $result->get_error_data()['status'] ?? null);
+    }
+
+    /** M9 happy path: an in-scope pending row proceeds through the SAME domain sequence. */
+    public function test_traj_roster_bulk_approve_in_scope_pending_proceeds(): void
+    {
+        $pendingRow = (object) ['id' => 700, 'status' => 'pending', 'edition_id' => 50];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('findChildRegistrationIdsByTrajectory')->with(1)->willReturn([700]);
+        $repo->method('find')->willReturn($pendingRow);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $completion = $this->createMock(EnrollmentCompletion::class);
+        $completion->expects($this->once())->method('completeTask')->with(700, 'approval')->willReturn(true);
+        ntdst_set(EnrollmentCompletion::class, $completion);
+
+        $enrollment = $this->createMock(EnrollmentService::class);
+        $enrollment->expects($this->once())->method('confirmRegistration')->with(700)->willReturn(true);
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        $report = $this->handler->handleTrajRosterBulkApprove([], ['trajectory_id' => 1, 'ids' => [700]]);
+
+        $this->assertCount(1, $report['succeeded']);
+        $this->assertCount(0, $report['failed']);
+    }
 }
