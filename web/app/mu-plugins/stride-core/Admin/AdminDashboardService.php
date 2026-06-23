@@ -243,6 +243,12 @@ class AdminDashboardService extends AbstractService
             // to ntdst/v1/action carries its action-specific nonce
             // (verified server-side via wp_verify_nonce($nonce, $action)).
             'bulkNonces' => self::bulkActionNonces(),
+            // Authoritative lifecycle transition map (CR-5). The JS bulk bar
+            // validates its lifecycle actions (approve/cancel/promote) against
+            // this server-printed map and warns on drift, instead of trusting a
+            // hand-copied JS constant. Quote/completion/message actions are
+            // orthogonal to lifecycle status and are NOT in this map.
+            'transitions' => \Stride\Modules\Enrollment\RegistrationTransitions::toArray(),
         ]);
     }
 

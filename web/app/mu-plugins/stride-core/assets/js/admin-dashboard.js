@@ -3,18 +3,16 @@
    --------------------------------------------------------------------------
    PORTED from docs/mockups/admin-workspace/assets/js/data.js. These MUST stay
    in sync with the PHP sources (flagged for the review gate):
-     • SMART_ACTIONS / actionsForStates — mirror of RegistrationTransitions
-       (Modules/Enrollment/RegistrationTransitions.php, spec §2.1) PLUS the
-       quote-status + post-course + deferred-stub bulk actions that are NOT
-       lifecycle transitions. The bulk bar derives from this map, never a
-       per-call hard-coded set (Sibling-site audit 2). NOTE divergence: the
-       PHP transition map does NOT permit waitlist→cancelled, yet
-       stride_bulk_cancel lists 'waitlist'; the server's handleBulkCancel
-       calls EnrollmentService::cancel() directly (no isAllowed guard), so a
-       waitlist cancel is attempted server-side. Flagged as a finding.
-     • REG_STATUS — mirror of Domain/RegistrationStatus::label().
-   When the PHP source changes, update this block (or, better, print the map
-   into the admin bootstrap — see localized StrideConfig.transitions TODO). */
+     • SMART_ACTIONS / actionsForStates — the bulk-action CATALOG (labels,
+       icons, which states each action is offered for). The LIFECYCLE actions
+       (approve/cancel/promote) are validated at init against the authoritative
+       server map StrideConfig.transitions (printed from
+       Modules/Enrollment/RegistrationTransitions.php, spec §2.1) — drift logs a
+       console warning instead of silently shipping a wrong button (CR-5). The
+       quote-status + post-course + deferred-stub actions are NOT lifecycle
+       transitions, so they have no entry in the transition map and are not
+       validated against it (they are genuinely orthogonal to status).
+     • REG_STATUS — mirror of Domain/RegistrationStatus::label(). */
 const STRIDE_REG_STATUS = {
     confirmed: { label: 'Bevestigd',     cls: 'confirmed', step: 4, pipe: 'Bevestigd' },
     completed: { label: 'Afgerond',      cls: 'completed', step: 5, pipe: 'Afgerond' },
@@ -27,7 +25,7 @@ const STRIDE_STATUS_PIPELINE = ['interest', 'waitlist', 'pending', 'confirmed', 
 const STRIDE_STATUS_EXIT = 'cancelled';
 
 const STRIDE_SMART_ACTIONS = [
-    { id: 'stride_bulk_approve',            label: 'Goedkeuren',               icon: 'approve', states: ['pending', 'interest'] },
+    { id: 'stride_bulk_approve',            label: 'Goedkeuren',               icon: 'approve', states: ['pending'] },
     { id: 'stride_bulk_promote_waitlist',  label: 'Promoveer van wachtlijst', icon: 'up',      states: ['waitlist'] },
     { id: 'stride_bulk_quote_sent',         label: 'Offerte verzonden',        icon: 'send',    states: ['confirmed'] },
     { id: 'stride_bulk_quote_exported',     label: 'Offerte verwerkt',         icon: 'approve', states: ['confirmed'] },
@@ -41,6 +39,39 @@ function strideActionsForStates(states) {
     const uniq = [...new Set(states)];
     if (uniq.length === 0) return [];
     return STRIDE_SMART_ACTIONS.filter(a => uniq.every(s => a.states.includes(s)));
+}
+
+/* Lifecycle actions whose offered `states` MUST be permitted by the server
+   transition map (CR-5): each state an action is offered for must be able to
+   reach the action's lifecycle target. Several actions may split one target
+   (approve + promote_waitlist both reach 'confirmed'), so the check is SUBSET
+   (every offered state may reach the target), not equality. Non-lifecycle
+   actions (quote/post-course/message/doc) are absent — orthogonal to status,
+   not map-validated. */
+const STRIDE_LIFECYCLE_ACTION_TARGET = {
+    stride_bulk_approve: 'confirmed',
+    stride_bulk_promote_waitlist: 'confirmed',
+    stride_bulk_cancel: 'cancelled',
+};
+/* Validate the JS action catalog's lifecycle `states` against the authoritative
+   StrideConfig.transitions map; warn on any offered state the map does NOT
+   permit for that target. Runs once at init so a stale JS constant (or a map
+   change the JS missed) is caught at load, not as a wrong button in prod. */
+function strideValidateTransitionDrift(transitions) {
+    if (!transitions || typeof transitions !== 'object') return;
+    const canReach = (from, target) => Array.isArray(transitions[from]) && transitions[from].includes(target);
+    STRIDE_SMART_ACTIONS.forEach(a => {
+        const target = STRIDE_LIFECYCLE_ACTION_TARGET[a.id];
+        if (!target) return; // non-lifecycle action — not map-governed
+        const invalid = a.states.filter(s => !canReach(s, target));
+        if (invalid.length) {
+            console.warn(
+                `[strideApp] bulk action "${a.id}" is offered for state(s) [${invalid}] that `
+                + `the server transition map does NOT permit to reach "${target}" — `
+                + 'update STRIDE_SMART_ACTIONS or RegistrationTransitions::map() (CR-5).',
+            );
+        }
+    });
 }
 
 /* ── Vandaag worklist queues (ported from mockup QUEUES + QUEUE_FILTER) ──
@@ -283,6 +314,9 @@ document.addEventListener('alpine:init', () => {
         validViews: ['dashboard', 'vandaag', 'edities', 'inschrijvingen', 'offertes', 'trajecten', 'gebruikers'],
 
         init() {
+            // CR-5: catch any drift between the JS lifecycle-action catalog and
+            // the authoritative server transition map at load.
+            strideValidateTransitionDrift(this.config.transitions);
             this.parseHash();
             window.addEventListener('hashchange', () => this.parseHash());
             this.loadViewData(this.view);
@@ -1014,13 +1048,15 @@ document.addEventListener('alpine:init', () => {
             ids.forEach(id => this.gridSelected[id] = target);
             if (!target) this.gridSelectAllFilter = false;
         },
-        // "Select all N matching the filter" — sets a flag the bulk POST reads to
-        // expand server-side (1F). Here it visibly marks the loaded page + arms
-        // the flag; the confirm copy states it affects N rows.
+        // "Select all on this page" — marks every row of the LOADED page.
+        // Server-side filter→ids expansion across all pages is Task 4.1 (Phase
+        // 1F); until it ships, a bulk action only affects the loaded page, so
+        // the copy must NOT promise the full filtered total (CR-1).
         selectAllFiltered() {
             this.gridRows.forEach(r => this.gridSelected[r.id] = true);
             this.gridSelectAllFilter = true;
-            this.showToast(`${this.gridPagination.total} inschrijvingen geselecteerd — de bulkactie draagt het filter.`, 'info');
+            const n = this.gridRows.length;
+            this.showToast(`${n} inschrijving${n === 1 ? '' : 'en'} op deze pagina geselecteerd.`, 'info');
         },
         clearGridSelection() {
             this.gridSelected = {};
@@ -1074,14 +1110,23 @@ document.addEventListener('alpine:init', () => {
             const action = STRIDE_SMART_ACTIONS.find(a => a.id === actionId);
             if (!action || this.gridBulkBusy) return;
 
-            // Cross-page select-all warns about the true blast radius before firing.
-            if (this.gridSelectAllFilter && this.gridPagination.total > this.gridRows.length) {
-                if (!window.confirm(`Dit raakt ${this.gridPagination.total} inschrijvingen over alle pagina's. Doorgaan?`)) {
+            const ids = this.gridSelectedIds;
+            if (ids.length === 0) return;
+
+            // Honest blast radius: the action affects exactly the ids we POST
+            // (the loaded page). Cross-page filter→ids expansion is Task 4.1
+            // (Phase 1F) — until then, warn that rows on other pages are NOT
+            // included so "select all" can't silently under-apply (CR-1).
+            if (this.gridSelectAllFilter && this.gridPagination.total > ids.length) {
+                const others = this.gridPagination.total - ids.length;
+                if (!window.confirm(
+                    `Deze actie raakt alleen de ${ids.length} inschrijvingen op deze pagina. `
+                    + `${others} inschrijving${others === 1 ? '' : 'en'} op andere pagina's `
+                    + `${others === 1 ? 'wordt' : 'worden'} NIET meegenomen. Doorgaan?`
+                )) {
                     return;
                 }
             }
-            const ids = this.gridSelectedIds;
-            if (ids.length === 0) return;
 
             this.gridOverflowOpen = false;
             this.gridBulkBusy = actionId;

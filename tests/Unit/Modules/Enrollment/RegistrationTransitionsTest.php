@@ -50,20 +50,24 @@ final class RegistrationTransitionsTest extends TestCase
         $this->assertCount(2, $allowed);
     }
 
-    public function testValidForPendingContainsOnlyConfirmed(): void
+    public function testValidForPendingContainsConfirmedAndCancelled(): void
     {
+        // Cancellation is available from every non-terminal state — it mirrors
+        // EnrollmentService::cancel() (rejects only Completed/Cancelled). CR-5.
         $allowed = RegistrationTransitions::validFor(RegistrationStatus::Pending);
 
-        $this->assertCount(1, $allowed);
+        $this->assertCount(2, $allowed);
         $this->assertContains(RegistrationStatus::Confirmed, $allowed);
+        $this->assertContains(RegistrationStatus::Cancelled, $allowed);
     }
 
-    public function testValidForWaitlistContainsOnlyConfirmed(): void
+    public function testValidForWaitlistContainsConfirmedAndCancelled(): void
     {
         $allowed = RegistrationTransitions::validFor(RegistrationStatus::Waitlist);
 
-        $this->assertCount(1, $allowed);
+        $this->assertCount(2, $allowed);
         $this->assertContains(RegistrationStatus::Confirmed, $allowed);
+        $this->assertContains(RegistrationStatus::Cancelled, $allowed);
     }
 
     public function testValidForCompletedIsEmptyArray(): void
@@ -110,35 +114,35 @@ final class RegistrationTransitionsTest extends TestCase
     public function testIsAllowedPendingToConfirmed(): void
     {
         $this->assertTrue(
-            RegistrationTransitions::isAllowed(RegistrationStatus::Pending, RegistrationStatus::Confirmed)
+            RegistrationTransitions::isAllowed(RegistrationStatus::Pending, RegistrationStatus::Confirmed),
         );
     }
 
     public function testIsAllowedWaitlistToConfirmed(): void
     {
         $this->assertTrue(
-            RegistrationTransitions::isAllowed(RegistrationStatus::Waitlist, RegistrationStatus::Confirmed)
+            RegistrationTransitions::isAllowed(RegistrationStatus::Waitlist, RegistrationStatus::Confirmed),
         );
     }
 
     public function testIsAllowedConfirmedToCancelled(): void
     {
         $this->assertTrue(
-            RegistrationTransitions::isAllowed(RegistrationStatus::Confirmed, RegistrationStatus::Cancelled)
+            RegistrationTransitions::isAllowed(RegistrationStatus::Confirmed, RegistrationStatus::Cancelled),
         );
     }
 
     public function testIsAllowedInterestToPending(): void
     {
         $this->assertTrue(
-            RegistrationTransitions::isAllowed(RegistrationStatus::Interest, RegistrationStatus::Pending)
+            RegistrationTransitions::isAllowed(RegistrationStatus::Interest, RegistrationStatus::Pending),
         );
     }
 
     public function testIsAllowedInterestToCancelled(): void
     {
         $this->assertTrue(
-            RegistrationTransitions::isAllowed(RegistrationStatus::Interest, RegistrationStatus::Cancelled)
+            RegistrationTransitions::isAllowed(RegistrationStatus::Interest, RegistrationStatus::Cancelled),
         );
     }
 
@@ -147,21 +151,21 @@ final class RegistrationTransitionsTest extends TestCase
     public function testIsNotAllowedCancelledToConfirmed(): void
     {
         $this->assertFalse(
-            RegistrationTransitions::isAllowed(RegistrationStatus::Cancelled, RegistrationStatus::Confirmed)
+            RegistrationTransitions::isAllowed(RegistrationStatus::Cancelled, RegistrationStatus::Confirmed),
         );
     }
 
     public function testIsNotAllowedCompletedToConfirmed(): void
     {
         $this->assertFalse(
-            RegistrationTransitions::isAllowed(RegistrationStatus::Completed, RegistrationStatus::Confirmed)
+            RegistrationTransitions::isAllowed(RegistrationStatus::Completed, RegistrationStatus::Confirmed),
         );
     }
 
     public function testIsNotAllowedCompletedToCancelled(): void
     {
         $this->assertFalse(
-            RegistrationTransitions::isAllowed(RegistrationStatus::Completed, RegistrationStatus::Cancelled)
+            RegistrationTransitions::isAllowed(RegistrationStatus::Completed, RegistrationStatus::Cancelled),
         );
     }
 
@@ -169,15 +173,22 @@ final class RegistrationTransitionsTest extends TestCase
     {
         // Self-transition is not in the map
         $this->assertFalse(
-            RegistrationTransitions::isAllowed(RegistrationStatus::Confirmed, RegistrationStatus::Confirmed)
+            RegistrationTransitions::isAllowed(RegistrationStatus::Confirmed, RegistrationStatus::Confirmed),
         );
     }
 
-    public function testIsNotAllowedPendingToCancelled(): void
+    public function testIsAllowedPendingToCancelled(): void
     {
-        // Pending can only go to Confirmed per the map
-        $this->assertFalse(
-            RegistrationTransitions::isAllowed(RegistrationStatus::Pending, RegistrationStatus::Cancelled)
+        // Cancellation is available from Pending (CR-5) — mirrors cancel().
+        $this->assertTrue(
+            RegistrationTransitions::isAllowed(RegistrationStatus::Pending, RegistrationStatus::Cancelled),
+        );
+    }
+
+    public function testIsAllowedWaitlistToCancelled(): void
+    {
+        $this->assertTrue(
+            RegistrationTransitions::isAllowed(RegistrationStatus::Waitlist, RegistrationStatus::Cancelled),
         );
     }
 }
