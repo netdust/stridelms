@@ -147,6 +147,19 @@ class EditionService extends AbstractService implements EditionQueryInterface
     }
 
     /**
+     * Canonical date-scoped active-edition ID set (CR-6). Single source of the
+     * "published + start_date within grace OR dateless" rule that the worklist
+     * queue counts and stats scope to — including §10.7 dateless interest
+     * anchors. Routes to the repository so the predicate lives in one place.
+     *
+     * @return list<int>
+     */
+    public function getActiveDateScopedIds(int $graceDays = 2): array
+    {
+        return $this->repository->findActiveDateScopedIds($graceDays);
+    }
+
+    /**
      * Check if this edition is for an online course.
      * Derives format from the linked LearnDash course's stride_format taxonomy.
      */

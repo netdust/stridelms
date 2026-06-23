@@ -50,6 +50,37 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
+     * Canonical "active by date" edition-ID set — the single source of the
+     * date-scoped active rule (CR-6). Active = published editions whose
+     * start_date is within the grace window OR has NO start_date (the
+     * sessionless/dateless interest anchors — §10.7 carve-out,
+     * bug_sessionless_edition_cutoff). A bare `start_date >= X` filter would
+     * silently drop dateless editions; the NULL-permitting predicate lives
+     * HERE so every count surface (worklist queues, stats) routes through one
+     * definition instead of re-deriving it.
+     *
+     * @return list<int>
+     */
+    public function findActiveDateScopedIds(int $graceDays = 2): array
+    {
+        global $wpdb;
+
+        $cutoff = wp_date('Y-m-d', strtotime('-' . max(0, $graceDays) . ' days'));
+
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT p.ID FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm_start
+                    ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+             WHERE p.post_type = %s AND p.post_status = 'publish'
+               AND (pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)",
+            EditionCPT::POST_TYPE,
+            $cutoff,
+        ));
+
+        return array_map('intval', $ids);
+    }
+
+    /**
      * Get upcoming editions (start date >= today).
      *
      * @return array<array<string, mixed>>

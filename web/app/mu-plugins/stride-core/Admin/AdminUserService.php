@@ -267,7 +267,16 @@ final class AdminUserService
         ))));
         $quoteEditions = BatchQueryHelper::batchGetPosts($quoteEditionIds, EditionCPT::POST_TYPE);
 
+        // Two shapes from the same source: $quotes is the SENSITIVE detail list
+        // (totals/dates/numbers — returned only to stride_manage, line ~445);
+        // $quoteStatusFor* is the NON-sensitive offerte-workflow status used to
+        // stamp each registration's offerte_status (shown to everyone in the
+        // grid/dossier). The full detail array is only built when the caller may
+        // see it, so sensitive fields are never assembled for a view-only role
+        // (CR-4 — gate the assembly, not just the return).
         $quotes = [];
+        $quoteStatusById = [];
+        $quoteStatusByEdition = [];
         foreach ($quotePosts as $quotePost) {
             $quoteId = (int) $quotePost->ID;
             $meta = $quoteMeta[$quoteId] ?? [];
@@ -275,6 +284,17 @@ final class AdminUserService
             $quoteEditionId = (int) ($meta['edition_id'] ?? 0);
             $quoteStatus = (string) ($meta['status'] ?? '');
             $statusEnum = QuoteStatus::tryFrom($quoteStatus);
+            $statusLabel = $statusEnum?->label() ?? $quoteStatus;
+
+            // Non-sensitive offerte-status map (workflow value only).
+            $quoteStatusById[$quoteId] = ['value' => $quoteStatus, 'label' => $statusLabel];
+            if ($quoteEditionId > 0 && !isset($quoteStatusByEdition[$quoteEditionId])) {
+                $quoteStatusByEdition[$quoteEditionId] = ['value' => $quoteStatus, 'label' => $statusLabel];
+            }
+
+            if (!$canSeeSensitive) {
+                continue; // Skip building the sensitive detail row entirely.
+            }
 
             $quotes[] = [
                 'id' => $quoteId,
@@ -283,7 +303,7 @@ final class AdminUserService
                 'edition_id' => $quoteEditionId,
                 'edition_title' => isset($quoteEditions[$quoteEditionId]) ? $quoteEditions[$quoteEditionId]->post_title : '',
                 'status' => $quoteStatus,
-                'status_label' => $statusEnum?->label() ?? $quoteStatus,
+                'status_label' => $statusLabel,
                 'total' => Money::cents((int) ($meta['total'] ?? 0))->amount(),
                 'created_at' => $quotePost->post_date,
                 'sent_at' => ($meta['sent_at'] ?? '') ?: null,
@@ -298,17 +318,9 @@ final class AdminUserService
         // (Draft/Sent/Exported/Cancelled) — NEVER a paid/unpaid flag (Stride does not
         // track payment; gotcha_no_payment_tracking).
         if (!empty($registrations)) {
-            // quoteId → status, and editionId → status (first quote per edition).
-            $quoteStatusById = [];
-            $quoteStatusByEdition = [];
-            foreach ($quotes as $q) {
-                $quoteStatusById[(int) $q['id']] = ['value' => $q['status'], 'label' => $q['status_label']];
-                $qe = (int) $q['edition_id'];
-                if ($qe > 0 && !isset($quoteStatusByEdition[$qe])) {
-                    $quoteStatusByEdition[$qe] = ['value' => $q['status'], 'label' => $q['status_label']];
-                }
-            }
-
+            // $quoteStatusById / $quoteStatusByEdition were built during the quote
+            // loop above (non-sensitive workflow status; populated regardless of
+            // $canSeeSensitive so view-only roles still get the offerte stamp).
             foreach ($registrations as &$reg) {
                 $regId = (int) $reg['id'];
                 $linkedQuoteId = $regQuoteIdByReg[$regId] ?? 0;
@@ -360,6 +372,16 @@ final class AdminUserService
                 $status = $row->status;
                 if (isset($grouped[$editionId][$status])) {
                     $grouped[$editionId][$status] = (int) $row->cnt;
+                } else {
+                    // Fail loud, not silent: a status outside the known enum
+                    // (present/absent/excused) would otherwise be dropped from
+                    // the summary with no trace (CR-7).
+                    ntdst_log('admin')->warning('AdminUserService: unknown attendance status dropped from summary', [
+                        'user_id' => $userId,
+                        'edition_id' => $editionId,
+                        'status' => $status,
+                        'count' => (int) $row->cnt,
+                    ]);
                 }
             }
 

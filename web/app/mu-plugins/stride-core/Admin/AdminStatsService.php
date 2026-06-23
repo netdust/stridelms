@@ -445,6 +445,29 @@ final class AdminStatsService
             : [];
         $exportedLabel = QuoteStatus::Exported->label();
 
+        // Pre-resolve the per-edition lookups ONCE per distinct edition, not per
+        // row (CR-2/CR-3): the waitlist capacity check and the completed-row
+        // course lookup otherwise fire a query per matching row even when many
+        // rows share an edition. Build the distinct-edition maps up front.
+        $waitlistEditionIds = [];
+        $completedEditionIds = [];
+        foreach ($rows as $row) {
+            $editionId = (int) $row->edition_id;
+            if ($row->status === RegistrationStatus::Waitlist->value) {
+                $waitlistEditionIds[$editionId] = true;
+            } elseif ($row->status === RegistrationStatus::Completed->value && !empty($row->completed_at)) {
+                $completedEditionIds[$editionId] = true;
+            }
+        }
+        $hasSpotsByEdition = [];
+        foreach (array_keys($waitlistEditionIds) as $editionId) {
+            $hasSpotsByEdition[$editionId] = $this->editions->hasAvailableSpots($editionId);
+        }
+        $courseIdByEdition = [];
+        foreach (array_keys($completedEditionIds) as $editionId) {
+            $courseIdByEdition[$editionId] = $this->editions->getCourseId($editionId) ?? 0;
+        }
+
         $oldInterestCutoff = strtotime('-' . self::OLD_INTEREST_DAYS . ' days');
 
         $waitlistOpen     = 0;
@@ -461,12 +484,13 @@ final class AdminStatsService
             switch ($row->status) {
                 case RegistrationStatus::Waitlist->value:
                     // Open capacity = edition not terminal/past (effective status)
-                    // AND the per-edition capacity check shows free spots.
+                    // AND the per-edition capacity check shows free spots
+                    // (prefetched per distinct edition above).
                     if (
                         $effective !== null
                         && !$effective->isTerminal()
                         && $effective !== OfferingStatus::Completed
-                        && $this->editions->hasAvailableSpots($editionId)
+                        && ($hasSpotsByEdition[$editionId] ?? false)
                     ) {
                         $waitlistOpen++;
                     }
@@ -485,11 +509,13 @@ final class AdminStatsService
                     if (empty($row->completed_at)) {
                         break;
                     }
-                    $courseId = $this->editions->getCourseId($editionId) ?? 0;
+                    $courseId = $courseIdByEdition[$editionId] ?? 0;
                     if ($courseId <= 0) {
                         $nocert++; // No course → no certificate path → needs attention.
                         break;
                     }
+                    // Cert link is a per-(course,user) fact, so it stays per-row,
+                    // but the courseId lookup it depends on is now prefetched.
                     if (LearnDashHelper::getCertificateLink($courseId, $userId) === '') {
                         $nocert++;
                     }
@@ -527,21 +553,10 @@ final class AdminStatsService
      */
     private function activeEditionIds(): array
     {
-        global $wpdb;
-
-        $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
-
-        $ids = $wpdb->get_col($wpdb->prepare(
-            "SELECT p.ID FROM {$wpdb->posts} p
-             LEFT JOIN {$wpdb->postmeta} pm_start
-                    ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
-             WHERE p.post_type = %s AND p.post_status = 'publish'
-               AND (pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)",
-            EditionCPT::POST_TYPE,
-            $twoDaysAgo,
-        ));
-
-        return array_map('intval', $ids ?: []);
+        // Canonical date-scoped active set (CR-6) — owned by the edition domain
+        // (EditionRepository::findActiveDateScopedIds), including the §10.7
+        // dateless carve-out. No second copy of the predicate here.
+        return $this->editions->getActiveDateScopedIds();
     }
 
     // =========================================================================
