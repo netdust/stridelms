@@ -267,15 +267,20 @@ document.addEventListener('alpine:init', () => {
 
         /**
          * The trajectory list after the client-side active-scope filter.
-         * scope='active' hides terminal-status trajectories (closed/archived);
-         * scope='all' shows the full loaded page. The status dropdown is the
-         * server-side control; this toggle is a presentational view filter
-         * (mirrors the mockup's WS.trajIsActive).
+         * Scope ('active'|'all') is now a SERVER-side filter (CR-3): it is sent
+         * as the `scope` param on /admin/trajectories so the active subset is
+         * computed across ALL pages, not just the loaded one. A client-side
+         * filter over a server-paged list silently hid active trajectories on
+         * pages 2+. This getter is now a straight passthrough; the toggle
+         * triggers a refetch via setTrajectoryScope().
          */
         get visibleTrajectories() {
-            if (this.trajectoryScope !== 'active') return this.trajectories;
-            const terminal = ['closed', 'archived'];
-            return this.trajectories.filter(t => !terminal.includes(t.status));
+            return this.trajectories;
+        },
+
+        setTrajectoryScope(scope) {
+            this.trajectoryScope = scope;
+            this.loadTrajectories(1);
         },
 
         /** Courses inside the selected trajectory */
@@ -800,6 +805,21 @@ document.addEventListener('alpine:init', () => {
         //  TRAJECTORY METHODS
         // ==============================================================
 
+        // Single source for the endpoint(camelCase) → template(snake_case) field
+        // aliasing (CR-1): BOTH the list (loadTrajectories) and the detail
+        // (openTrajectory) must apply it, or the detail slide-over binds
+        // undefined snake_case fields and renders blank Status/Ingeschreven/
+        // Deadline. Previously only the list aliased — the detail path drifted.
+        normalizeTrajectory(t) {
+            return {
+                ...t,
+                course_count: t.courseCount ?? t.course_count ?? 0,
+                registered: t.enrolledCount ?? t.registered ?? 0,
+                status_label: t.statusLabel ?? t.status_label ?? t.status ?? '—',
+                deadline: t.enrollmentDeadline ?? t.deadline ?? null,
+            };
+        },
+
         async loadTrajectories(page) {
             if (page != null) this.trajectoryPagination.page = page;
             this._loadingViews.trajecten = true;
@@ -808,16 +828,11 @@ document.addEventListener('alpine:init', () => {
                 page: this.trajectoryPagination.page, per_page: 20,
                 search: this.trajectoryFilters.search,
                 status: this.trajectoryFilters.status,
+                scope: this.trajectoryScope,
             });
             try {
                 const data = await this.api(`/admin/trajectories?${params}`);
-                this.trajectories = (data.items || []).map(t => ({
-                    ...t,
-                    course_count: t.courseCount ?? t.course_count ?? 0,
-                    registered: t.enrolledCount ?? t.registered ?? 0,
-                    status_label: t.statusLabel ?? t.status_label ?? t.status ?? '—',
-                    deadline: t.enrollmentDeadline ?? t.deadline ?? null,
-                }));
+                this.trajectories = (data.items || []).map(t => this.normalizeTrajectory(t));
                 this.trajectoryPagination = { page: data.page || 1, totalPages: data.total_pages || data.totalPages || 1, total: data.total || 0 };
                 this.errors.trajecten = '';
             } catch (e) {
@@ -830,7 +845,7 @@ document.addEventListener('alpine:init', () => {
         async openTrajectory(id) {
             try {
                 const data = await this.api(`/admin/trajectories/${id}`);
-                this.selectedTrajectory = data;
+                this.selectedTrajectory = this.normalizeTrajectory(data);
                 this.trajectoryTab = 'details';
                 this.openSlideOver();
             } catch (e) { this.showToast('Traject laden mislukt', 'error'); }

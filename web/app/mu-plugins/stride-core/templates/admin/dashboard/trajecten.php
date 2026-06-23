@@ -45,12 +45,13 @@ if (!defined('ABSPATH')) {
 
         <!-- Active-default scope toggle (active vs all). Mirrors the §10 editions
              posture: the list lands scoped to actieve trajecten; one click widens
-             to all. Client-side view filter over the current page (the list
-             endpoint has no scope param — status is the server control). -->
+             to all. SERVER-side scope (CR-3): the toggle refetches with the
+             `scope` param so the active subset spans all pages, not just the
+             loaded one. -->
         <button type="button"
                 class="sd-btn sd-btn--ghost sd-btn--sm"
                 :class="{ 'sd-btn--active': trajectoryScope === 'active' }"
-                @click="trajectoryScope = (trajectoryScope === 'active' ? 'all' : 'active')"
+                @click="setTrajectoryScope(trajectoryScope === 'active' ? 'all' : 'active')"
                 :title="trajectoryScope === 'active' ? 'Toon ook afgesloten trajecten' : 'Beperk tot actieve trajecten'"
                 x-text="trajectoryScope === 'active' ? 'Actieve trajecten' : 'Alle trajecten'"></button>
 
@@ -182,11 +183,15 @@ if (!defined('ABSPATH')) {
 
                 <!-- Courses tab -->
                 <div x-show="trajectoryTab === 'courses'">
-                    <template x-for="course in trajectoryCourses" :key="course.id">
+                    <!-- CR-2: each course is one edition-backed entry {editionId,
+                         type, title}; bind the real fields (title = edition
+                         title; type = verplicht/keuze) — not the non-existent
+                         `edition_count`. Key by index since editionId may be 0. -->
+                    <template x-for="(course, idx) in trajectoryCourses" :key="idx">
                         <div class="sd-student-row">
                             <div>
-                                <div class="sd-student-row__name" x-text="course.title"></div>
-                                <div class="sd-student-row__email" x-text="course.edition_count + ' editie(s)'"></div>
+                                <div class="sd-student-row__name" x-text="course.title || 'Cursus zonder editie'"></div>
+                                <div class="sd-student-row__email" x-text="course.type === 'elective' ? 'Keuzecursus' : 'Verplichte cursus'"></div>
                             </div>
                         </div>
                     </template>

@@ -63,6 +63,7 @@ final class AdminTrajectoryService
         $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
+        $scope = sanitize_text_field($request->get_param('scope') ?? '');
         $offset = ($page - 1) * $perPage;
 
         // Build query
@@ -77,6 +78,18 @@ final class AdminTrajectoryService
         if (!empty($status)) {
             $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
             $params[] = $status;
+        }
+
+        // CR-3: server-side active-scope so the active subset spans ALL pages,
+        // not just the loaded one (a client-side filter over a server-paged
+        // list hid active trajectories on pages 2+). 'active' excludes the
+        // terminal statuses; a trajectory with NO _ntdst_status row counts as
+        // active (NOT terminal) — match how the tab treats an unset status.
+        if ($scope === 'active') {
+            $terminal = ['closed', 'archived'];
+            $placeholders = implode(',', array_fill(0, count($terminal), '%s'));
+            $where[] = "NOT EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_scope WHERE pm_scope.post_id = p.ID AND pm_scope.meta_key = '_ntdst_status' AND pm_scope.meta_value IN ({$placeholders}))";
+            array_push($params, ...$terminal);
         }
 
         $whereClause = implode(' AND ', $where);
@@ -423,6 +436,12 @@ final class AdminTrajectoryService
      */
     private function buildCourseEditionMap(array $editionRegistrations): array
     {
+        // CR-4: getProgressData builds the inverse (edition→courseId) map
+        // internally but does not return it; this produces the courseId→edition
+        // map the Dossier needs. The getCourseId calls hit WP's in-request meta
+        // cache already warmed by getProgressData, so the duplication is a few
+        // cached reads, not fresh queries — not worth changing the shared
+        // frontend compute (tab-voortgang.php) for. Deliberate local mirror.
         $map = [];
         foreach ($editionRegistrations as $edReg) {
             $editionId = (int) ($edReg->edition_id ?? 0);

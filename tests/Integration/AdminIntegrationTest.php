@@ -6,7 +6,6 @@ namespace Stride\Tests\Integration;
 
 use IntegrationTestCase;
 use WP_REST_Request;
-use WP_REST_Response;
 
 /**
  * Integration tests for Admin functionality
@@ -477,6 +476,41 @@ class AdminIntegrationTest extends IntegrationTestCase
 
     /**
      * @test
+     *
+     * CR-3: scope=active is a SERVER-side filter — it must exclude terminal
+     * (closed/archived) trajectories across the whole result set, not just the
+     * loaded page, and must INCLUDE a trajectory with no _ntdst_status set
+     * (unset = not terminal = active).
+     */
+    public function trajectoryListScopeActiveExcludesTerminalServerSide(): void
+    {
+        wp_set_current_user(self::$adminUserId);
+
+        $openId = wp_insert_post(['post_type' => 'vad_trajectory', 'post_status' => 'publish', 'post_title' => 'Scope Open Traject']);
+        $closedId = wp_insert_post(['post_type' => 'vad_trajectory', 'post_status' => 'publish', 'post_title' => 'Scope Closed Traject']);
+        $unsetId = wp_insert_post(['post_type' => 'vad_trajectory', 'post_status' => 'publish', 'post_title' => 'Scope Unset Traject']);
+        update_post_meta($openId, '_ntdst_status', 'open');
+        update_post_meta($closedId, '_ntdst_status', 'closed');
+        // $unsetId intentionally has NO _ntdst_status row.
+
+        $req = new \WP_REST_Request('GET', '/stride/v1/admin/trajectories');
+        $req->set_param('scope', 'active');
+        $req->set_param('per_page', 100);
+        $ids = array_map(static fn($t) => (int) $t['id'], rest_do_request($req)->get_data()['items'] ?? []);
+
+        $this->assertContains($openId, $ids, 'open trajectory is active');
+        $this->assertContains($unsetId, $ids, 'trajectory with no status set counts as active');
+        $this->assertNotContains($closedId, $ids, 'closed trajectory is excluded server-side under scope=active');
+
+        // Without scope, the closed one is present (proves the filter, not absence).
+        $reqAll = new \WP_REST_Request('GET', '/stride/v1/admin/trajectories');
+        $reqAll->set_param('per_page', 100);
+        $idsAll = array_map(static fn($t) => (int) $t['id'], rest_do_request($reqAll)->get_data()['items'] ?? []);
+        $this->assertContains($closedId, $idsAll, 'closed trajectory present without scope filter');
+    }
+
+    /**
+     * @test
      */
     public function editionDetailRouteIsRegistered(): void
     {
@@ -635,7 +669,7 @@ class AdminIntegrationTest extends IntegrationTestCase
         $targetId = wp_create_user(
             'imp_target_' . wp_generate_password(6, false),
             'pw',
-            'imp_target_' . wp_generate_password(6, false) . '@test.local'
+            'imp_target_' . wp_generate_password(6, false) . '@test.local',
         );
         $this->assertIsInt($targetId);
         self::$testPosts[] = $targetId;
@@ -653,7 +687,7 @@ class AdminIntegrationTest extends IntegrationTestCase
              WHERE action = %s AND entity_id = %d
              ORDER BY id DESC LIMIT 1",
             'impersonation.started',
-            $targetId
+            $targetId,
         ));
 
         $this->assertNotNull($row, 'Audit row must land — subject_id schema mismatch dropped it under MySQL strict mode');
