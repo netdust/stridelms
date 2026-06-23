@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
+use Stride\Domain\TrajectoryMode;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\EditionService;
@@ -11,7 +12,6 @@ use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Trajectory\TrajectoryCPT;
 use Stride\Modules\Trajectory\TrajectoryDashboardService;
-use Stride\Modules\Trajectory\TrajectoryMode;
 use Stride\Modules\Trajectory\TrajectorySelection;
 use Stride\Modules\Trajectory\TrajectoryService;
 use WP_Error;
@@ -48,8 +48,7 @@ final class AdminTrajectoryService
         private readonly EnrollmentService $enrollmentService,
         private readonly TrajectoryService $trajectoryService,
         private readonly EditionService $editionService,
-    ) {
-    }
+    ) {}
 
     /**
      * GET /admin/trajectories
@@ -285,6 +284,157 @@ final class AdminTrajectoryService
             'perPage' => $perPage,
             'totalPages' => (int) ceil($total / $perPage),
         ]);
+    }
+
+    /**
+     * GET /admin/users/{id}/trajectories
+     *
+     * Case-view trajectory progress for a single user (§11.4 / F8). Composes
+     * existing read compute — adds ZERO SQL (INV-3):
+     *
+     *   getEnrolledTrajectoryIds($userId)            → the user's trajectory ids
+     *     → per id: getProgressData($userId, $id)    → counts + required/elective
+     *     → enrich each elective group with chosen-vs-required via the
+     *       TrajectorySelection read methods (INV-6b — getSelectedCourseIds /
+     *       countChosenInGroup / isGroupChosen, NEVER validateSelections)
+     *     → header {id,title,status,mode} from TrajectoryService::getTrajectory
+     *       (DRIFT #5 — getProgressData returns mode but not title/status).
+     *
+     * Mirrors the live tab-voortgang.php compose exactly (no second progress
+     * definition). Returns an empty `trajectories` list for a non-enrolled user
+     * (not an error, not a 404).
+     */
+    public function getUserTrajectories(WP_REST_Request $request): WP_REST_Response
+    {
+        $userId = (int) $request->get_param('id');
+
+        $trajectoryIds = $this->enrollmentService->getEnrolledTrajectoryIds($userId);
+        if (empty($trajectoryIds)) {
+            return new WP_REST_Response(['trajectories' => []]);
+        }
+
+        // Parent trajectory registration rows → parent id per trajectory, the
+        // anchor getSelectedCourseIds reads the canonical selections from.
+        $parentRegByTrajectory = [];
+        foreach ($this->registrationRepo->findTrajectoryEnrollmentsByUser($userId) as $parent) {
+            $trajId = (int) ($parent->trajectory_id ?? 0);
+            if ($trajId > 0 && !isset($parentRegByTrajectory[$trajId])) {
+                $parentRegByTrajectory[$trajId] = (int) $parent->id;
+            }
+        }
+
+        $trajectories = [];
+        foreach ($trajectoryIds as $trajectoryId) {
+            $trajectoryId = (int) $trajectoryId;
+
+            $progress = $this->dashboardService->getProgressData($userId, $trajectoryId);
+
+            $completedIds = array_map('intval', $progress['completed_courses'] ?? []);
+            $inProgressIds = array_map('intval', $progress['in_progress_courses'] ?? []);
+
+            // Header (DRIFT #5): {id, title, status, mode}. getTrajectory returns
+            // title + status + mode as strings; null-guard a missing trajectory.
+            $traj = $this->trajectoryService->getTrajectory($trajectoryId);
+            $mode = $progress['mode'];
+            $modeValue = $mode instanceof TrajectoryMode ? $mode->value : (string) $mode;
+
+            $header = [
+                'id' => $trajectoryId,
+                'title' => $traj['title'] ?? '',
+                'status' => $traj['status'] ?? '',
+                'mode' => $traj['mode'] ?? $modeValue,
+            ];
+
+            // Required courses with per-course state (the Dutch state values the
+            // Dossier section binds — same rule as tab-voortgang.php).
+            $editionByCourse = $this->buildCourseEditionMap($progress['edition_registrations'] ?? []);
+            $requiredCourses = [];
+            foreach ($progress['required_courses'] ?? [] as $course) {
+                $courseId = (int) $course->ID;
+                if (in_array($courseId, $completedIds, true)) {
+                    $state = 'afgerond';
+                } elseif (in_array($courseId, $inProgressIds, true)) {
+                    $state = 'bezig';
+                } else {
+                    $state = 'nog te volgen';
+                }
+                $editionId = $editionByCourse[$courseId] ?? 0;
+
+                $requiredCourses[] = [
+                    'title' => $course->post_title,
+                    'edition' => $editionId,
+                    'state' => $state,
+                ];
+            }
+
+            // Elective groups enriched with chosen-vs-required (INV-6b). The
+            // selected course ids come from the parent registration's selections.
+            $parentRegId = $parentRegByTrajectory[$trajectoryId] ?? 0;
+            $selectedCourseIds = $parentRegId > 0
+                ? $this->trajectorySelection->getSelectedCourseIds($parentRegId)
+                : [];
+
+            $electiveGroups = [];
+            foreach ($progress['elective_groups'] ?? [] as $group) {
+                $courses = $group['courses'] ?? [];
+                $countChosen = $this->trajectorySelection->countChosenInGroup($group, $selectedCourseIds);
+                $isChosen = $this->trajectorySelection->isGroupChosen($group, $selectedCourseIds);
+
+                $chosen = [];
+                foreach ($courses as $course) {
+                    if (in_array((int) $course->ID, $selectedCourseIds, true)) {
+                        $chosen[] = [
+                            'title' => $course->post_title,
+                            'edition' => $editionByCourse[(int) $course->ID] ?? 0,
+                        ];
+                    }
+                }
+
+                $electiveGroups[] = [
+                    'name' => (string) ($group['name'] ?? ''),
+                    'required' => (int) ($group['required'] ?? 0),
+                    'total' => count($courses),
+                    'countChosen' => $countChosen,
+                    'isChosen' => $isChosen,
+                    'chosen' => $chosen,
+                ];
+            }
+
+            $trajectories[] = [
+                'trajectory' => $header,
+                'completed_count' => (int) ($progress['completed_count'] ?? 0),
+                'in_progress_count' => (int) ($progress['in_progress_count'] ?? 0),
+                'total_required' => (int) ($progress['total_required'] ?? 0),
+                'required_courses' => $requiredCourses,
+                'elective_groups' => $electiveGroups,
+            ];
+        }
+
+        return new WP_REST_Response(['trajectories' => $trajectories]);
+    }
+
+    /**
+     * Build a course-id → edition-id map from the user's edition registration
+     * rows for a trajectory (first edition wins per course). Mirrors
+     * tab-voortgang.php's $editionByCourse lookup.
+     *
+     * @param array<object> $editionRegistrations
+     * @return array<int, int>
+     */
+    private function buildCourseEditionMap(array $editionRegistrations): array
+    {
+        $map = [];
+        foreach ($editionRegistrations as $edReg) {
+            $editionId = (int) ($edReg->edition_id ?? 0);
+            if ($editionId <= 0) {
+                continue;
+            }
+            $courseId = $this->editionService->getCourseId($editionId);
+            if ($courseId !== null && !isset($map[$courseId])) {
+                $map[$courseId] = $editionId;
+            }
+        }
+        return $map;
     }
 
     /**

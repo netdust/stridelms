@@ -416,6 +416,17 @@ final class AdminAPIController
             ],
         ]);
 
+        // Case-view trajectory progress (§11.4 / F8) — a SEPARATE lazy fetch
+        // from /detail (the Dossier section loads it independently).
+        register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/trajectories', [
+            'methods' => 'GET',
+            'callback' => [$this, 'getUserTrajectories'],
+            'permission_callback' => [$this, 'canViewAdmin'],
+            'args' => [
+                'id' => ['type' => 'integer', 'required' => true],
+            ],
+        ]);
+
         // Update user profile (personal + billing)
         register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/profile', [
             'methods' => 'POST',
@@ -2261,6 +2272,17 @@ final class AdminAPIController
         // Thin delegator — all $wpdb / read-model assembly lives in
         // AdminUserService (strangle §12.4 / S2, INV-3).
         return ntdst_get(\Stride\Admin\AdminUserService::class)->getUserDetail($request);
+    }
+
+    /**
+     * GET /admin/users/{id}/trajectories
+     *
+     * Thin delegator to AdminTrajectoryService::getUserTrajectories — case-view
+     * trajectory progress (§11.4 / F8). A separate lazy fetch from /detail.
+     */
+    public function getUserTrajectories(WP_REST_Request $request): WP_REST_Response
+    {
+        return ntdst_get(\Stride\Admin\AdminTrajectoryService::class)->getUserTrajectories($request);
     }
 
     /**
