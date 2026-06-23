@@ -681,3 +681,4 @@ Inventory only — left in place per user instruction:
 
 **Decisions**
 - **keep stacking, merge at slice end** — matches the original handoff plan. So:
+[2026-06-24] — session ended (no significant changes captured)
