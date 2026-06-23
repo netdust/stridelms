@@ -215,6 +215,11 @@ document.addEventListener('alpine:init', () => {
         dossierRegOpen: {},      // regId -> true (expand-one registration; collapsed by default)
         dossierStageOpen: {},    // "<regId>-<stageKey>" -> true (stages CLOSED by default)
         dossierTimelineReg: 0,   // which registration's timeline is shown (0 = whole-person)
+        // Case-view trajectory section (§11.4 / F8). Loaded by a SEPARATE lazy
+        // fetch in openDossier — independent of /detail so a trajectory fetch
+        // failure leaves the rest of the Dossier intact (F8 mid-flow edge).
+        dossierTrajectories: [],
+        dossierTrajectoriesError: '',
 
         // ── Users ────────────────────────────────────────────────
         userSearchQuery: '',
@@ -1204,6 +1209,12 @@ document.addEventListener('alpine:init', () => {
             this.dossier = null;
             this.dossierRegOpen = {};
             this.dossierStageOpen = {};
+            this.dossierTrajectories = [];
+            this.dossierTrajectoriesError = '';
+            // Trajectory section: a SEPARATE lazy fetch, fired in parallel and
+            // NOT awaited inside this try — its failure must not break /detail
+            // (F8 mid-flow edge). It sets its own error flag.
+            this.loadDossierTrajectories(userId);
             try {
                 const data = await this.api(`/admin/users/${userId}/detail`);
                 const regStatusLabels = {
@@ -1238,6 +1249,22 @@ document.addEventListener('alpine:init', () => {
             this.dossierError = '';
             this.dossierRegOpen = {};
             this.dossierStageOpen = {};
+            this.dossierTrajectories = [];
+            this.dossierTrajectoriesError = '';
+        },
+
+        // Lazy fetch of the case-view trajectory progress (§11.4 / F8), kept
+        // SEPARATE from /detail so a failure here is isolated. On error it sets
+        // dossierTrajectoriesError and leaves the rest of the Dossier intact.
+        async loadDossierTrajectories(userId) {
+            this.dossierTrajectories = [];
+            this.dossierTrajectoriesError = '';
+            try {
+                const data = await this.api(`/admin/users/${userId}/trajectories`);
+                this.dossierTrajectories = data.trajectories || [];
+            } catch (e) {
+                this.dossierTrajectoriesError = 'Kon traject-voortgang niet laden.';
+            }
         },
 
         get dossierUser() {
@@ -1339,6 +1366,50 @@ document.addEventListener('alpine:init', () => {
         // Heuristic actor-type for the timeline icon (admin vs the user).
         dossierActorIsAdmin(actor) {
             return /co[öo]rdinator|beheer|systeem|admin/i.test(actor || '');
+        },
+
+        // ── Case-view trajectory section helpers (§11.4 / F8) ───────────────
+        // Ported from docs/mockups/admin-workspace/dossier.html + data.js. The
+        // section binds these for the per-trajectory header, progress bar, and
+        // per-course state. Status/mode maps mirror data.js TRAJ_STATUS/TRAJ_MODE.
+
+        // Trajectory status → {label, cls} (badge). Falls back to the raw value.
+        trajStatus(status) {
+            const map = {
+                draft: { label: 'Concept', cls: 'completed' },
+                open: { label: 'Open', cls: 'confirmed' },
+                full: { label: 'Volzet', cls: 'waitlist' },
+                closed: { label: 'Afgesloten', cls: 'pending' },
+                archived: { label: 'Gearchiveerd', cls: 'cancelled' },
+                in_progress: { label: 'Bezig', cls: 'interest' },
+                completed: { label: 'Afgerond', cls: 'completed' },
+            };
+            return map[status] || { label: status || '—', cls: 'completed' };
+        },
+
+        // Trajectory mode → Dutch label.
+        trajMode(mode) {
+            return { cohort: 'Cohorte', self_paced: 'Zelfstandig tempo' }[mode] || mode || '';
+        },
+
+        // completed / total_required as a percentage for the progress bar.
+        trajProgressPct(t) {
+            return t.total_required ? Math.round((t.completed_count / t.total_required) * 100) : 0;
+        },
+
+        // "nog te doen" = required − afgerond − bezig (never below 0).
+        trajTodo(t) {
+            return Math.max(0, (t.total_required || 0) - (t.completed_count || 0) - (t.in_progress_count || 0));
+        },
+
+        // per-course state (server-side Dutch value) → the pill/dot modifier class.
+        courseStateClass(state) {
+            return { afgerond: 'done', bezig: 'active', 'nog te volgen': 'upcoming' }[state] || 'upcoming';
+        },
+
+        // per-course state → Dutch label (the server value is already Dutch).
+        courseStateLabel(state) {
+            return { afgerond: 'Afgerond', bezig: 'Bezig', 'nog te volgen': 'Nog te volgen' }[state] || state || '';
         },
 
         // Helper: attendance bar colour class for a grid row's attendancePct.

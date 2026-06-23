@@ -57,6 +57,119 @@ if (!defined('ABSPATH')) {
 
                 <div class="sd-dossier__main">
 
+                    <!-- ============================================================
+                         TRAJECTORY SECTION (§11.4 / F8) — a SEPARATE lazy fetch.
+                         Present only when this person is in a trajectory (one block
+                         per trajectory — a user can be in several). A non-trajectory
+                         user has dossierTrajectories.length === 0 → the whole section
+                         is absent (not an error — F8 empty edge). A fetch failure
+                         shows an inline error and leaves the rest of the Dossier
+                         intact (F8 mid-flow edge). All dynamic values are x-text
+                         (auto-escaped — no raw echo of user data).
+                         ============================================================ -->
+
+                    <!-- mid-flow fetch error (rest of the Dossier stays intact) -->
+                    <template x-if="dossierTrajectoriesError">
+                        <div class="sd-empty">
+                            <span class="sd-empty__icon">⚠</span>
+                            <p class="sd-empty__text" x-text="dossierTrajectoriesError"></p>
+                        </div>
+                    </template>
+
+                    <template x-if="!dossierTrajectoriesError && dossierTrajectories.length">
+                        <div class="sd-dossier__trajectories">
+                            <div class="sd-section-title">
+                                <span>Trajecten</span>
+                                <span class="sd-section-title__count" x-text="dossierTrajectories.length"></span>
+                            </div>
+
+                            <template x-for="t in dossierTrajectories" :key="t.trajectory.id">
+                                <div class="sd-traj-block">
+
+                                    <!-- header: title + status + mode -->
+                                    <div class="sd-traj-block__head">
+                                        <b class="sd-traj-block__title" x-text="t.trajectory.title"></b>
+                                        <div class="sd-traj-block__meta">
+                                            <span class="sd-badge"
+                                                  :class="'sd-badge--' + trajStatus(t.trajectory.status).cls"
+                                                  x-text="trajStatus(t.trajectory.status).label"></span>
+                                            <span class="sd-traj-mode" x-text="trajMode(t.trajectory.mode)"></span>
+                                        </div>
+                                    </div>
+
+                                    <!-- progress (afgerond / bezig / nog te doen) -->
+                                    <div class="sd-traj-progress">
+                                        <div class="sd-traj-progress__top">
+                                            <span><b x-text="t.completed_count"></b> van <b x-text="t.total_required"></b> afgerond</span>
+                                            <span class="sd-traj-progress__pct" x-text="trajProgressPct(t) + '%'"></span>
+                                        </div>
+                                        <div class="sd-traj-progress__bar">
+                                            <div class="sd-traj-progress__fill" :style="`width:${trajProgressPct(t)}%`"></div>
+                                        </div>
+                                        <div class="sd-traj-progress__legend">
+                                            <span><b x-text="t.completed_count"></b> afgerond</span>
+                                            <span><b x-text="t.in_progress_count"></b> bezig</span>
+                                            <span><b x-text="trajTodo(t)"></b> nog te doen</span>
+                                        </div>
+                                    </div>
+
+                                    <!-- required courses with per-course state -->
+                                    <template x-if="t.required_courses.length">
+                                        <div>
+                                            <div class="sd-traj-subhead">Verplichte cursussen</div>
+                                            <div class="sd-traj-courselist">
+                                                <template x-for="(c, ci) in t.required_courses" :key="ci">
+                                                    <div class="sd-traj-courserow">
+                                                        <span class="sd-traj-courserow__title" x-text="c.title"></span>
+                                                        <span class="sd-badge"
+                                                              :class="'sd-badge--' + courseStateClass(c.state)"
+                                                              x-text="courseStateLabel(c.state)"></span>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+
+                                    <!-- elective groups: chosen vs required -->
+                                    <template x-if="t.elective_groups.length">
+                                        <div>
+                                            <div class="sd-traj-subhead">Keuzemodules</div>
+                                            <div class="sd-traj-electives">
+                                                <template x-for="(g, gi) in t.elective_groups" :key="gi">
+                                                    <div class="sd-traj-elect" :class="g.isChosen ? 'is-complete' : 'is-open'">
+                                                        <div class="sd-traj-elect__top">
+                                                            <span class="sd-traj-elect__name">
+                                                                <span x-text="g.name"></span>
+                                                                <span class="sd-traj-elect__rule"
+                                                                      x-text="'kies ' + g.required + ' uit ' + g.total"></span>
+                                                            </span>
+                                                            <span class="sd-traj-elect__count"
+                                                                  x-text="g.countChosen + ' van ' + g.required + ' gekozen'"></span>
+                                                        </div>
+                                                        <template x-if="g.chosen.length">
+                                                            <div class="sd-traj-elect__chosen sd-pill-list">
+                                                                <template x-for="(ch, chi) in g.chosen" :key="chi">
+                                                                    <span class="sd-pill" x-text="ch.title"></span>
+                                                                </template>
+                                                                <template x-if="!g.isChosen">
+                                                                    <span class="sd-traj-elect__remaining"
+                                                                          x-text="'Nog ' + (g.required - g.countChosen) + ' te kiezen'"></span>
+                                                                </template>
+                                                            </div>
+                                                        </template>
+                                                        <template x-if="!g.chosen.length">
+                                                            <div class="sd-traj-elect__none">Nog geen keuze gemaakt</div>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                            </template>
+                        </div>
+                    </template>
+
                     <!-- Registrations (person-headed; expand-one) -->
                     <div class="sd-section-title">
                         <span>Inschrijvingen</span>
