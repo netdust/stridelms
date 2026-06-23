@@ -169,6 +169,11 @@ document.addEventListener('alpine:init', () => {
         // ── Trajectories ─────────────────────────────────────────
         trajectories: [],
         trajectoryFilters: { search: '', status: '' },
+        // Default-scope toggle (Task 3.6): 'active' lands the list scoped to
+        // running trajectories, 'all' widens it. Client-side view filter over
+        // the loaded page — the /admin/trajectories list endpoint has no scope
+        // param (status is its server-side control), so this never re-fetches.
+        trajectoryScope: 'active',
         trajectoryPagination: { page: 1, totalPages: 1, total: 0 },
         selectedTrajectory: null,
         trajectoryTab: 'details',
@@ -258,6 +263,19 @@ document.addEventListener('alpine:init', () => {
         /** quoteEditions exposed as "editionOptions" for the quote filter dropdown */
         get editionOptions() {
             return this.quoteEditions;
+        },
+
+        /**
+         * The trajectory list after the client-side active-scope filter.
+         * scope='active' hides terminal-status trajectories (closed/archived);
+         * scope='all' shows the full loaded page. The status dropdown is the
+         * server-side control; this toggle is a presentational view filter
+         * (mirrors the mockup's WS.trajIsActive).
+         */
+        get visibleTrajectories() {
+            if (this.trajectoryScope !== 'active') return this.trajectories;
+            const terminal = ['closed', 'archived'];
+            return this.trajectories.filter(t => !terminal.includes(t.status));
         },
 
         /** Courses inside the selected trajectory */
@@ -820,7 +838,28 @@ document.addEventListener('alpine:init', () => {
 
         resetTrajectoryFilters() {
             this.trajectoryFilters = { search: '', status: '' };
+            this.trajectoryScope = 'active';
             this.loadTrajectories(1);
+        },
+
+        // "Toon inschrijvingen" jump (Task 3.6): open the Inschrijvingen grid
+        // scoped to this trajectory's CHILD edition-rows. REUSES the A2 filter
+        // (gridFilters.trajectory_id — the parent→child join, serialized in
+        // loadGrid at the same `trajectory_id` param the ?trajectory= deep-link
+        // sets in initGrid). No new filter path, no bare WHERE trajectory_id.
+        // Clears the other grid filters/queue so only the Traject pill is set,
+        // then switches view (the $watch on `view` triggers initGrid → loadGrid).
+        showTrajectoryRegistrations(id) {
+            const trajId = parseInt(id, 10) || 0;
+            if (trajId <= 0) return;
+            this.closeSlideOver();
+            this.gridQueue = '';
+            this.gridArmedAction = null;
+            this.gridGroupBy = '';
+            this.gridFilters = { status: '', edition_id: 0, company_id: 0, trajectory_id: trajId, q: '' };
+            this.clearGridSelection();
+            this.switchView('inschrijvingen');
+            this.loadGrid(1);
         },
 
         // ==============================================================
