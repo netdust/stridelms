@@ -87,6 +87,60 @@ final class BulkRegistrationHandler
     }
 
     /**
+     * Task 4.1 — select-all-across-pages: expand a carried grid filter to the
+     * full matching id-set, server-side, BEFORE the per-row loop AND before the
+     * quote path's independent id read.
+     *
+     * When $params['select_all'] is set, the payload carries a structured grid
+     * `filter` (NOT a 4k-row id list — §5) which is expanded to its matching
+     * registration ids via RegistrationRepository::idsForGridFilter — the SAME
+     * buildGridFilters WHERE the grid read uses (single filter definition,
+     * structured-only M4/M5, trajectory parent→child child-rows, empty-filter
+     * bounded to the active edition-grained corpus). The expansion fetches
+     * MAX_BATCH + 1 ids so an over-cap result (count > MAX_BATCH) is rejected by
+     * runBulk's EXISTING cap guard as too_many — never truncated, never a second
+     * cap here.
+     *
+     * Called immediately after denyIfNotManager() (deny-before-expansion) in every
+     * public handler and inside setQuoteStatusForRows (so the B2 reg→quote map at
+     * the quote path also sees the expanded ids — without this, quote select-all
+     * would build $map from the un-expanded empty ids and silently no-op every
+     * row). A plain {ids:[…]} payload (select_all absent/falsey) is returned
+     * unchanged — the explicit-ids path is untouched.
+     *
+     * @param  array<string,mixed> $params registry params (full POST body).
+     * @return array<string,mixed>         $params with ['ids'] populated under select_all.
+     */
+    private function resolveBulkIds(array $params): array
+    {
+        if (empty($params['select_all'])) {
+            return $params;
+        }
+
+        $filter = is_array($params['filter'] ?? null) ? $params['filter'] : [];
+        $repo   = ntdst_get(RegistrationRepository::class);
+
+        // Fetch MAX_BATCH + 1 so runBulk's existing `count($ids) > MAX_BATCH`
+        // guard distinguishes "exactly 500, OK" from "more than 500, reject"
+        // and returns too_many rather than truncating.
+        $params['ids'] = $repo->idsForGridFilter($filter, self::MAX_BATCH + 1);
+
+        return $params;
+    }
+
+    /**
+     * Read-only accessor for the single-source batch cap (test seam — Task 4.1).
+     *
+     * Lets the integration test assert the LIMIT/cap behavior against the ONE cap
+     * constant rather than duplicating the literal 500, keeping the cap
+     * single-source.
+     */
+    public static function maxBatchForTest(): int
+    {
+        return self::MAX_BATCH;
+    }
+
+    /**
      * Shared bulk loop + per-row report (M3 + M9).
      *
      * Resolves each id via the repository (INV-3); a row that doesn't resolve
@@ -227,6 +281,7 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
+        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             // M3 / B5: a row may be approved into the pipe only if the ONE
@@ -269,6 +324,7 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
+        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             $enrollment = ntdst_get(EnrollmentService::class);
@@ -297,6 +353,10 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
+        // Task 4.1 — expand select-all HERE (post-deny) so the B2 reg→quote map
+        // below and runBulk both read the SAME expanded id set. The quote handlers
+        // delegate their authz to this method, so this is their post-deny seam.
+        $params = $this->resolveBulkIds($params);
 
         $quoteRepo = ntdst_get(QuoteRepository::class);
 
@@ -362,6 +422,7 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
+        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             $enrollment = ntdst_get(EnrollmentService::class);
@@ -384,6 +445,7 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
+        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             $completion = ntdst_get(EnrollmentCompletion::class);
@@ -410,6 +472,7 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
+        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             return new WP_Error('not_available', __('Berichten versturen volgt in een latere fase.', 'stride'));
@@ -432,6 +495,7 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
+        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             return new WP_Error('not_available', __('Documentgeneratie volgt in een latere fase.', 'stride'));
@@ -460,6 +524,7 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny; // M2 first
         }
+        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         $field = sanitize_key((string) ($params['field'] ?? ''));
 

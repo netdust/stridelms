@@ -1815,6 +1815,55 @@ final class RegistrationRepository
     }
 
     /**
+     * Expand an admin-grid filter to its matching registration-id set (Task 4.1).
+     *
+     * The id-only twin of queryForGrid: it REUSES buildGridFilters (the single
+     * WHERE source — same active_join / where_clause / params, same M4/M5
+     * structured-only validation, same trajectory parent→child child-row
+     * semantics, same `r.edition_id IS NOT NULL` base predicate) so a select-all
+     * expansion can never use a forked filter definition. It differs from
+     * queryForGrid ONLY in SELECTing r.id and dropping pagination/sort — paging
+     * is irrelevant when expanding to the full filtered id-set.
+     *
+     * Capped by $limit (the caller passes MAX_BATCH + 1) so an over-cap expansion
+     * returns MAX_BATCH+1 ids and the bulk handler's EXISTING cap guard rejects it
+     * with too_many — this method never truncates silently nor enforces a second
+     * cap. An empty $filters expands to the bounded active edition-grained corpus
+     * (base predicate + default active scope), never the whole table.
+     *
+     * Param order mirrors queryForGrid exactly: buildGridFilters unshifts the
+     * trajectory JOIN %d to the FRONT of $params, so array_merge($params, [$limit])
+     * keeps the LIMIT %d placeholder last, matching SQL placeholder order.
+     *
+     * @param  array<string,mixed> $filters Same structured key-set as queryForGrid.
+     * @param  int                 $limit   Max ids to return (caller: MAX_BATCH + 1).
+     * @return list<int>           Flat list of matching r.id, capped at $limit.
+     */
+    public function idsForGridFilter(array $filters, int $limit): array
+    {
+        global $wpdb;
+
+        $built       = $this->buildGridFilters($filters);
+        $activeJoin  = $built['active_join'];
+        $whereClause = $built['where_clause'];
+        $params      = $built['params'];
+        $regTable    = $this->table();
+
+        $sql = "SELECT r.id
+                FROM {$regTable} r
+                LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                {$activeJoin}
+                {$whereClause}
+                ORDER BY r.id ASC
+                LIMIT %d";
+
+        $allParams = array_merge($params, [max(1, $limit)]);
+        $ids = $wpdb->get_col($wpdb->prepare($sql, ...$allParams));
+
+        return array_map('intval', $ids ?: []);
+    }
+
+    /**
      * Build the shared WHERE clause, JOINs, and bound parameters for admin grid queries.
      *
      * This is the single source of filter logic shared between queryForGrid and

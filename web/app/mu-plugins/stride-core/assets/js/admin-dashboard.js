@@ -1107,15 +1107,18 @@ document.addEventListener('alpine:init', () => {
             ids.forEach(id => this.gridSelected[id] = target);
             if (!target) this.gridSelectAllFilter = false;
         },
-        // "Select all on this page" — marks every row of the LOADED page.
-        // Server-side filter→ids expansion across all pages is Task 4.1 (Phase
-        // 1F); until it ships, a bulk action only affects the loaded page, so
-        // the copy must NOT promise the full filtered total (CR-1).
+        // "Select all on this filter" — Task 4.1: arms the cross-page select-all.
+        // The bulk POST then carries the grid FILTER (not 4k row ids — §5) and the
+        // server expands it to the full matching id-set within the MAX_BATCH cap.
+        // We still tick the visible page's checkboxes for UI clarity, but the bulk
+        // path does NOT depend on those ids while the flag is armed (it sends the
+        // filter instead). gridSelectedCount already reports the honest server
+        // total (gridPagination.total) when the flag is armed.
         selectAllFiltered() {
             this.gridRows.forEach(r => this.gridSelected[r.id] = true);
             this.gridSelectAllFilter = true;
-            const n = this.gridRows.length;
-            this.showToast(`${n} inschrijving${n === 1 ? '' : 'en'} op deze pagina geselecteerd.`, 'info');
+            const n = this.gridPagination.total;
+            this.showToast(`${n} inschrijving${n === 1 ? '' : 'en'} geselecteerd (alle pagina's).`, 'info');
         },
         clearGridSelection() {
             this.gridSelected = {};
@@ -1165,23 +1168,39 @@ document.addEventListener('alpine:init', () => {
             return json.data;
         },
 
+        // Build the structured filter subset the server expands a select-all
+        // against — mirrors EXACTLY what loadGrid sends to /admin/registrations
+        // MINUS page/per_page/sort/group_by (the expansion ignores paging). No
+        // edition_scope is set, so the server applies the same default 'active'
+        // scope the grid read uses — the expansion matches the visible set.
+        gridFilterPayload() {
+            const f = this.gridFilters;
+            const filter = {};
+            if (f.status) filter.status = f.status;
+            if (f.edition_id) filter.edition_id = Number(f.edition_id);
+            if (f.company_id) filter.company_id = Number(f.company_id);
+            if (f.trajectory_id) filter.trajectory_id = Number(f.trajectory_id);
+            if (f.q) filter.q = f.q;
+            return filter;
+        },
+
         async runGridBulk(actionId) {
             const action = STRIDE_SMART_ACTIONS.find(a => a.id === actionId);
             if (!action || this.gridBulkBusy) return;
 
+            const armed = this.gridSelectAllFilter;
             const ids = this.gridSelectedIds;
-            if (ids.length === 0) return;
+            // When armed, the blast radius is the whole filtered total (server
+            // expands); otherwise it is exactly the ticked ids.
+            const count = armed ? this.gridSelectedCount : ids.length;
+            if (count === 0) return;
 
-            // Honest blast radius: the action affects exactly the ids we POST
-            // (the loaded page). Cross-page filter→ids expansion is Task 4.1
-            // (Phase 1F) — until then, warn that rows on other pages are NOT
-            // included so "select all" can't silently under-apply (CR-1).
-            if (this.gridSelectAllFilter && this.gridPagination.total > ids.length) {
-                const others = this.gridPagination.total - ids.length;
+            // Task 4.1: cross-page select-all now applies to the WHOLE filtered
+            // set server-side, so the confirm is the honest blast radius — no
+            // CR-1 "andere pagina's NIET meegenomen" caveat anymore.
+            if (armed) {
                 if (!window.confirm(
-                    `Deze actie raakt alleen de ${ids.length} inschrijvingen op deze pagina. `
-                    + `${others} inschrijving${others === 1 ? '' : 'en'} op andere pagina's `
-                    + `${others === 1 ? 'wordt' : 'worden'} NIET meegenomen. Doorgaan?`
+                    `Deze actie raakt ${count} inschrijving${count === 1 ? '' : 'en'}. Doorgaan?`
                 )) {
                     return;
                 }
@@ -1190,7 +1209,13 @@ document.addEventListener('alpine:init', () => {
             this.gridOverflowOpen = false;
             this.gridBulkBusy = actionId;
             try {
-                const report = await this.bulkApi(actionId, { ids });
+                // Armed → carry the FILTER and let the server expand (within the
+                // MAX_BATCH cap; over-cap surfaces a too_many error toast in the
+                // catch below). Not armed → the explicit-ids path, unchanged.
+                const payload = armed
+                    ? { select_all: true, filter: this.gridFilterPayload() }
+                    : { ids };
+                const report = await this.bulkApi(actionId, payload);
                 const succeeded = report.succeeded || [];
                 const failed = report.failed || [];
                 // Decorate failed rows with the person's name from the loaded page.
