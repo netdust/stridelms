@@ -48,6 +48,11 @@ class AdminEditionRosterTest extends IntegrationTestCase
     private static ?int $sessionAId = null;
     private static ?int $sessionBId = null;
 
+    // A registrant whose enrollment_data carries a known extra (dieet) plus a
+    // PII key that MUST be skipped (Task 2a.2).
+    private static ?int $extraUserId = null;
+    private static ?int $extraRegId = null;
+
     private static array $regIds = [];
 
     public static function setUpBeforeClass(): void
@@ -94,15 +99,42 @@ class AdminEditionRosterTest extends IntegrationTestCase
         self::$plainRegId = (int) $plain;
         self::$regIds[] = (int) $plain;
 
-        // --- Anonymised registrant: PII must be redacted but row present ---
+        // --- Extra registrant: enrollment_data carries a known dieet extra +
+        //     a PII key (organisation) that MUST be skipped (Task 2a.2). ---
+        self::$extraUserId = self::createUser('roster_extra');
+        update_user_meta(self::$extraUserId, 'first_name', 'Evert');
+        update_user_meta(self::$extraUserId, 'last_name', 'Extra');
+        $extra = $repo->create([
+            'user_id'         => self::$extraUserId,
+            'edition_id'      => self::$editionId,
+            'status'          => RegistrationStatus::Confirmed->value,
+            'enrollment_data' => [
+                // Stage envelope shape: { submitted_at, submitted_by, data }.
+                'intake' => RegistrationRepository::wrapStage([
+                    'dieet'        => 'vegetarisch',
+                    'organisation' => 'Should Be Skipped BV', // PII key — must NOT surface as an extra
+                ], self::$extraUserId),
+            ],
+        ]);
+        self::assertValidRegId($extra, 'extra');
+        self::$extraRegId = (int) $extra;
+        self::$regIds[] = (int) $extra;
+
+        // --- Anonymised registrant: PII must be redacted but row present.
+        //     Seed an extra too, to prove extras are suppressed for erased users. ---
         self::$anonUserId = self::createUser('roster_anon');
         update_user_meta(self::$anonUserId, 'first_name', 'Anneke');
         update_user_meta(self::$anonUserId, 'last_name', 'Anoniem');
         update_user_meta(self::$anonUserId, '_stride_anonymised_at', time());
         $anon = $repo->create([
-            'user_id'    => self::$anonUserId,
-            'edition_id' => self::$editionId,
-            'status'     => RegistrationStatus::Confirmed->value,
+            'user_id'         => self::$anonUserId,
+            'edition_id'      => self::$editionId,
+            'status'          => RegistrationStatus::Confirmed->value,
+            'enrollment_data' => [
+                'intake' => RegistrationRepository::wrapStage([
+                    'dieet' => 'halal',
+                ], self::$anonUserId),
+            ],
         ]);
         self::assertValidRegId($anon, 'anon');
         self::$anonRegId = (int) $anon;
@@ -127,7 +159,7 @@ class AdminEditionRosterTest extends IntegrationTestCase
             }
         }
 
-        foreach ([self::$selectorUserId, self::$plainUserId, self::$anonUserId] as $uid) {
+        foreach ([self::$selectorUserId, self::$plainUserId, self::$extraUserId, self::$anonUserId] as $uid) {
             if ($uid) {
                 require_once ABSPATH . 'wp-admin/includes/user.php';
                 wp_delete_user($uid);
@@ -242,6 +274,83 @@ class AdminEditionRosterTest extends IntegrationTestCase
         // A non-anonymised registrant still shows their real name (control).
         $this->assertFalse($byId[self::$selectorRegId]['is_anonymised']);
         $this->assertStringContainsString('Selena', $byId[self::$selectorRegId]['name']);
+    }
+
+    // === Task 2a.2: extras extraction (loaded-set enrollment_data) ===
+
+    public function test_roster_surfaces_extras_from_enrollment_data_for_loaded_set(): void
+    {
+        // Extras live INSIDE enrollment_data stages, read the same way the
+        // EditionRegistrationExporter::summarizeEnrollmentData precedent reads
+        // them (walk $stageEnvelope['data'], skip known-PII keys). The dieet
+        // extra the extra-registrant submitted must surface on its roster row.
+        $roster = $this->service()->getRosterForEdition(self::$editionId);
+        $byId = $this->rowsByRegId($roster);
+
+        $this->assertArrayHasKey(self::$extraRegId, $byId, 'extra registrant row present');
+        $extraRow = $byId[self::$extraRegId];
+
+        $this->assertArrayHasKey('dieet', $extraRow['extras'], 'dieet extra surfaced from enrollment_data');
+        $this->assertSame('vegetarisch', $extraRow['extras']['dieet']);
+
+        // PII keys inside the stage (organisation) must NOT surface as an extra —
+        // aligned with the exporter's skip list.
+        $this->assertArrayNotHasKey('organisation', $extraRow['extras']);
+
+        // A registrant with no enrollment_data has no extras (loaded-set only).
+        $this->assertSame([], $byId[self::$plainRegId]['extras']);
+    }
+
+    public function test_extras_keys_are_discovered_from_loaded_data_not_a_fixed_allowlist(): void
+    {
+        // The set of distinct extras keys is derived from what the edition's
+        // loaded set actually submitted — not a hard-coded allowlist. This
+        // edition's loaded set has a `dieet` key, so `dieet` is present; a key
+        // nobody submitted (e.g. `lunch`) must NOT appear.
+        $roster = $this->service()->getRosterForEdition(self::$editionId);
+
+        $this->assertArrayHasKey('extras_keys', $roster, 'roster exposes the distinct extras keys for the loaded set');
+        $this->assertContains('dieet', $roster['extras_keys'], 'dieet discovered from the loaded data');
+        $this->assertNotContains('lunch', $roster['extras_keys'], 'a key nobody submitted is not invented');
+        $this->assertNotContains('organisation', $roster['extras_keys'], 'PII keys are not extras');
+    }
+
+    public function test_no_extras_key_is_accepted_as_a_sql_filter_param(): void
+    {
+        // CM-3 / CM-5: extras filtering happens over the returned/loaded set,
+        // NEVER bound into a SQL WHERE/GROUP BY. The signature must make a
+        // JSON-column-in-WHERE impossible by construction: no scalar extras_key
+        // param exists; the only params are (int $editionId, array $filters).
+        $ref = new \ReflectionMethod(AdminEditionRosterService::class, 'getRosterForEdition');
+        $params = $ref->getParameters();
+
+        $this->assertCount(2, $params, 'getRosterForEdition takes exactly (editionId, filters) — no extras_key SQL param');
+        foreach ($params as $param) {
+            $this->assertNotSame('extras_key', $param->getName());
+        }
+
+        // And the service source must not build an enrollment_data JSON predicate
+        // (JSON_EXTRACT / JSON_UNQUOTE on enrollment_data) — extras stay loaded-set.
+        $servicePath = (new \ReflectionClass(AdminEditionRosterService::class))->getFileName();
+        $source = file_get_contents($servicePath);
+        $this->assertIsString($source);
+        $this->assertStringNotContainsString(
+            'JSON_EXTRACT',
+            $source,
+            'extras must never be bound into SQL — no JSON_EXTRACT in the roster read-model (CM-3/M5)',
+        );
+    }
+
+    public function test_anonymised_registrant_extras_are_suppressed(): void
+    {
+        // CM-3b not regressed: the anonymised registrant submitted a dieet extra,
+        // but the erased user's extras must be suppressed (empty), not surfaced.
+        $roster = $this->service()->getRosterForEdition(self::$editionId);
+        $byId = $this->rowsByRegId($roster);
+
+        $anonRow = $byId[self::$anonRegId];
+        $this->assertTrue($anonRow['is_anonymised']);
+        $this->assertSame([], $anonRow['extras'], 'anonymised registrant extras suppressed (CM-3b)');
     }
 
     // === Fixtures ===

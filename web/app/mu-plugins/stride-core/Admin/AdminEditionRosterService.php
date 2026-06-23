@@ -38,6 +38,30 @@ final class AdminEditionRosterService
     /** Tombstone shown in place of an anonymised registrant's name (CM-3b). */
     private const ANON_TOMBSTONE = '(verwijderd)';
 
+    /**
+     * enrollment_data stages walked for extras/logistics fields.
+     *
+     * Mirrors EditionRegistrationExporter::summarizeEnrollmentData (the precedent
+     * reader, D3) so the roster surface and the export surface agree on what an
+     * "extra" is. Pre-account stages (interest/waitlist) and the append-only
+     * initial_selection log are intentionally excluded.
+     */
+    private const EXTRAS_STAGES = ['enrollment_personal', 'enrollment_billing', 'intake', 'evaluation'];
+
+    /**
+     * Known-PII / already-columned keys NOT surfaced as extras.
+     *
+     * Aligned with the exporter's skip list (D3) so the two surfaces agree: a
+     * key here is shown in its own column elsewhere or is personal/billing PII,
+     * never a logistics "extra" (book/lunch/dietary).
+     */
+    private const EXTRAS_SKIP_KEYS = [
+        'name', 'email', 'phone', 'first_name', 'last_name',
+        'company', 'billing_company', 'billing_vat', 'billing_address_1',
+        'billing_postcode', 'billing_city', 'invoice_email', 'gln_number',
+        'organisation', 'department',
+    ];
+
     public function __construct(
         private readonly RegistrationRepository $registrations,
         private readonly AttendanceRepository $attendance,
@@ -68,10 +92,18 @@ final class AdminEditionRosterService
         $attendanceByUser = $this->aggregateAttendance($userIds, $editionId);
 
         $rows = [];
+        $extrasKeys = [];
         foreach ($registrations as $reg) {
             $regId = (int) $reg->id;
             $userId = (int) $reg->user_id;
             $isAnonymised = $this->isAnonymised($userId);
+
+            // Extras from enrollment_data JSON for the LOADED set only (CM-3/M5):
+            // never bound into a WHERE/GROUP BY. Suppressed for erased users (CM-3b).
+            $extras = $isAnonymised ? [] : $this->extractExtras($reg);
+            foreach (array_keys($extras) as $key) {
+                $extrasKeys[$key] = true;
+            }
 
             $rows[] = [
                 'registration_id' => $regId,
@@ -86,16 +118,61 @@ final class AdminEditionRosterService
                 'is_anonymised'   => $isAnonymised,
                 'selections'      => $selectionsByReg[$regId] ?? [],
                 'attendance'      => $attendanceByUser[$userId] ?? $this->emptyAttendance(),
-                // Extras filled by Task 2a.2 (loaded-set enrollment_data); suppressed
-                // for anonymised users now so the redaction contract holds (CM-3b).
-                'extras'          => [],
+                'extras'          => $extras,
             ];
         }
 
         return [
-            'edition_id' => $editionId,
-            'rows'       => $rows,
+            'edition_id'  => $editionId,
+            'rows'        => $rows,
+            // Distinct extras keys present across the LOADED set — discovered from
+            // the data (not a fixed allowlist), for the UI to build filter chips
+            // (2a.9). Client-side / loaded-set filtering only, never a SQL param.
+            'extras_keys' => array_keys($extrasKeys),
         ];
+    }
+
+    /**
+     * Extract the logistics "extras" ({key: value}) for one registration from
+     * its enrollment_data JSON — loaded-set only (CM-3/M5).
+     *
+     * Mirrors EditionRegistrationExporter::summarizeEnrollmentData (D3): walks the
+     * configured stages, reads each `$stageEnvelope['data']`, skips the known-PII
+     * keys. Keys are DISCOVERED from the row's data, never a fixed allowlist — an
+     * edition whose registrants submitted a `dieet` key surfaces it; one that
+     * didn't does not. NO enrollment_data key is ever bound into SQL.
+     *
+     * @param  object $reg  A raw findByEdition() row (enrollment_data is a JSON string).
+     * @return array<string, scalar>  Discovered extras for this row.
+     */
+    private function extractExtras(object $reg): array
+    {
+        $raw = $reg->enrollment_data ?? null;
+        $data = is_string($raw) && $raw !== '' ? json_decode($raw, true) : (is_array($raw) ? $raw : null);
+        if (!is_array($data)) {
+            return [];
+        }
+
+        $extras = [];
+        foreach (self::EXTRAS_STAGES as $stage) {
+            $envelope = $data[$stage] ?? null;
+            if (!is_array($envelope)) {
+                continue;
+            }
+            $stageData = is_array($envelope['data'] ?? null) ? $envelope['data'] : [];
+            foreach ($stageData as $key => $value) {
+                if (in_array($key, self::EXTRAS_SKIP_KEYS, true)) {
+                    continue;
+                }
+                // Only scalar logistics answers are extras; structured sub-objects
+                // are not chip-able filter values.
+                if (is_scalar($value)) {
+                    $extras[(string) $key] = $value;
+                }
+            }
+        }
+
+        return $extras;
     }
 
     /**
