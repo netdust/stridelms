@@ -235,6 +235,80 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
+     * Count distinct sessions for the admin AGENDA view (one row per session).
+     *
+     * Companion to findAgendaRows — owns ONLY the $wpdb execution moved out of
+     * AdminAPIController::getEditionsAgendaView (INV-3, strangle Task 2a.5),
+     * mirroring countAdminList. The caller assembles the WHERE clause + bound
+     * params + the optional course-taxonomy JOIN fragment (the taxonomy helper
+     * is shared with the list view and stays in the controller).
+     *
+     * Behavior-preserving: the session->edition->date INNER JOINs and the
+     * default 2-days-ago session-date scope are decided by the caller's
+     * $whereClause and reproduced VERBATIM here. Sessions ALWAYS carry a date
+     * (INNER JOIN on _ntdst_date) — the §10.7 NULL-permitting carve-out is a
+     * LIST-view concern (dateless editions have no sessions, so they never
+     * appear in the agenda at all); the agenda predicate is intentionally NOT
+     * NULL-permitting and must stay so.
+     * M4: every dynamic value arrives as a $wpdb->prepare placeholder param.
+     *
+     * @param string      $whereClause  Pre-built, placeholdered WHERE body.
+     * @param list<mixed> $params       Bound params matching the placeholders.
+     * @param string      $tagJoin      Optional taxonomy JOIN fragment ('' if none).
+     */
+    public function countAgendaRows(string $whereClause, array $params, string $tagJoin): int
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT s.ID)
+             FROM {$wpdb->posts} s
+             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
+             INNER JOIN {$wpdb->posts} e ON pm_edition.meta_value = e.ID
+             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
+             {$tagJoin}
+             WHERE {$whereClause}",
+            ...$params,
+        ));
+    }
+
+    /**
+     * One paged page of admin AGENDA-view session rows (session + edition + date).
+     *
+     * Companion to countAgendaRows — owns the $wpdb execution moved out of
+     * getEditionsAgendaView (INV-3). The ORDER BY (session date ASC, then
+     * edition id ASC) is reproduced VERBATIM. $limit/$offset are appended as the
+     * final two placeholders, matching the pre-extraction param order.
+     *
+     * @param string      $whereClause  Pre-built, placeholdered WHERE body.
+     * @param list<mixed> $params       Bound params matching the WHERE placeholders.
+     * @param string      $tagJoin      Optional taxonomy JOIN fragment ('' if none).
+     * @return array<int, object{session_id: int, session_title: string, edition_id: int, edition_title: string, session_date: ?string}>
+     */
+    public function findAgendaRows(string $whereClause, array $params, string $tagJoin, int $limit, int $offset): array
+    {
+        global $wpdb;
+
+        $params[] = $limit;
+        $params[] = $offset;
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT s.ID as session_id, s.post_title as session_title,
+                    e.ID as edition_id, e.post_title as edition_title,
+                    pm_date.meta_value as session_date
+             FROM {$wpdb->posts} s
+             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
+             INNER JOIN {$wpdb->posts} e ON pm_edition.meta_value = e.ID
+             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
+             {$tagJoin}
+             WHERE {$whereClause}
+             ORDER BY pm_date.meta_value ASC, pm_edition.meta_value ASC
+             LIMIT %d OFFSET %d",
+            ...$params,
+        ));
+    }
+
+    /**
      * Get upcoming editions (start date >= today).
      *
      * @return array<array<string, mixed>>

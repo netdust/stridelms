@@ -32,6 +32,35 @@ final class SessionRepository extends AbstractRepository
     }
 
     /**
+     * Find PUBLISHED session IDs for an edition, ordered by post ID ASC.
+     *
+     * Owns the $wpdb execution moved out of
+     * AdminAPIController::getEditionRegistrations (INV-3, strangle Task 2a.5).
+     * Distinct from findIdsByEdition, which is post_status=any (cascade-delete
+     * needs trashed/draft sessions too). The registrations view shows only
+     * PUBLISHED sessions ordered by ID — that predicate + ordering is
+     * reproduced VERBATIM here, so the move is behavior-preserving.
+     * M4: editionId bound via $wpdb->prepare.
+     *
+     * @return list<int>
+     */
+    public function findPublishedIdsByEdition(int $editionId): array
+    {
+        global $wpdb;
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
+             WHERE p.post_type = %s AND p.post_status = 'publish' AND pm.meta_value = %d
+             ORDER BY p.ID ASC",
+            SessionCPT::POST_TYPE,
+            $editionId,
+        ));
+
+        return array_map(static fn($r): int => (int) $r->ID, $rows);
+    }
+
+    /**
      * Find session IDs for an edition, any non-trash post_status.
      *
      * Used by cascade-delete paths that need just the IDs. Goes through

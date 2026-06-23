@@ -856,7 +856,11 @@ final class AdminAPIController
         ];
         $params = [SessionCPT::POST_TYPE, EditionCPT::POST_TYPE];
 
-        // Default: only show sessions from 2 days ago onwards
+        // Default: only show sessions from 2 days ago onwards. Sessions ALWAYS
+        // carry a date (INNER JOIN on _ntdst_date in the repo), so unlike the
+        // LIST view there is NO §10.7 NULL-permitting carve-out here — dateless
+        // editions have no session rows and never appear in the agenda. Keep
+        // this predicate non-NULL-permitting.
         if (empty($dateFrom)) {
             $where[] = "pm_date.meta_value >= %s";
             $params[] = $twoDaysAgo;
@@ -894,37 +898,13 @@ final class AdminAPIController
 
         $whereClause = implode(' AND ', $where);
 
-        // Count total sessions
-        $countParams = $params;
-        $total = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(DISTINCT s.ID)
-             FROM {$wpdb->posts} s
-             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
-             INNER JOIN {$wpdb->posts} e ON pm_edition.meta_value = e.ID
-             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
-             {$tagJoin}
-             WHERE {$whereClause}",
-            ...$countParams,
-        ));
-
-        // Get sessions ordered by date
-        $params[] = $perPage;
-        $params[] = $offset;
-
-        $sessions = $wpdb->get_results($wpdb->prepare(
-            "SELECT s.ID as session_id, s.post_title as session_title,
-                    e.ID as edition_id, e.post_title as edition_title,
-                    pm_date.meta_value as session_date
-             FROM {$wpdb->posts} s
-             INNER JOIN {$wpdb->postmeta} pm_edition ON s.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
-             INNER JOIN {$wpdb->posts} e ON pm_edition.meta_value = e.ID
-             INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
-             {$tagJoin}
-             WHERE {$whereClause}
-             ORDER BY pm_date.meta_value ASC, pm_edition.meta_value ASC
-             LIMIT %d OFFSET %d",
-            ...$params,
-        ));
+        // Read SQL extracted to EditionRepository (INV-3, strangle Task 2a.5).
+        // The session->edition->date INNER JOINs + the (date ASC, edition ASC)
+        // ordering are reproduced verbatim in the repo. The controller keeps
+        // ONLY param assembly + the taxonomy-join helper (shared with the LIST
+        // view, getEditions). Behavior-preserving move.
+        $total = $this->editionRepository->countAgendaRows($whereClause, $params, $tagJoin);
+        $sessions = $this->editionRepository->findAgendaRows($whereClause, $params, $tagJoin, $perPage, $offset);
 
         // Format items
         $items = [];
@@ -1201,8 +1181,6 @@ final class AdminAPIController
      */
     public function getEditionRegistrations(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
-        global $wpdb;
-
         $editionId = (int) $request->get_param('id');
 
         // Verify edition exists
@@ -1211,7 +1189,9 @@ final class AdminAPIController
             return new WP_Error('not_found', 'Edition not found', ['status' => 404]);
         }
 
-        // Check tables exist
+        // Check tables exist — PRESERVED guard: no registration table means no
+        // registrations/sessions payload (behavior-preserving, the 2a-A roster
+        // deliberately does NOT have this guard; getEditionRegistrations keeps it).
         if (!RegistrationTable::exists()) {
             return new WP_REST_Response([
                 'items' => [],
@@ -1219,17 +1199,10 @@ final class AdminAPIController
             ]);
         }
 
-        // Get sessions for this edition
-        $sessions = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
-             WHERE p.post_type = %s AND p.post_status = 'publish' AND pm.meta_value = %d
-             ORDER BY p.ID ASC",
-            SessionCPT::POST_TYPE,
-            $editionId,
-        ));
-
-        $sessionIds = array_map(fn($s) => (int) $s->ID, $sessions);
+        // Get PUBLISHED session ids for this edition (ordered by ID). SQL moved
+        // into SessionRepository (INV-3, strangle Task 2a.5) — verbatim
+        // predicate/ordering, behavior-preserving.
+        $sessionIds = $this->sessionRepository->findPublishedIdsByEdition($editionId);
 
         // Batch fetch session meta
         $sessionMeta = BatchQueryHelper::batchGetPostMeta($sessionIds, ['_ntdst_date', '_ntdst_start_time']);
@@ -1244,12 +1217,13 @@ final class AdminAPIController
             ];
         }
 
-        // Get registrations
-        $registrationTable = RegistrationTable::getTableName();
-        $registrations = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$registrationTable} WHERE edition_id = %d ORDER BY registered_at ASC",
-            $editionId,
-        ));
+        // Get registrations — the per-edition reg-rows query is owned by
+        // RegistrationRepository::findByEdition (its SELECT * ... WHERE
+        // edition_id ... ORDER BY registered_at ASC is identical to the prior
+        // inline query; INV-3). The anon enrollment_data name fallback below
+        // (user_id=0 interest/waitlist rows) is PRESERVED verbatim.
+        $registrationRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $registrations = $registrationRepo->findByEdition($editionId);
 
         // Collect user IDs for batch fetch
         $userIds = array_map(fn($r) => (int) $r->user_id, $registrations);
