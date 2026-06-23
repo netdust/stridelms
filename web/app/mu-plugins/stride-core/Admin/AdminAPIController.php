@@ -19,7 +19,6 @@ use Stride\Modules\Edition\SessionRepository;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
-use Stride\Modules\Trajectory\TrajectoryCPT;
 use WP_Error;
 use WP_REST_Request;
 use WP_REST_Response;
@@ -733,8 +732,6 @@ final class AdminAPIController
      */
     public function getEditionOptions(WP_REST_Request $request): WP_REST_Response
     {
-        global $wpdb;
-
         $q = sanitize_text_field((string) ($request->get_param('q') ?? ''));
 
         $scope = (string) ($request->get_param('scope') ?? 'active');
@@ -747,27 +744,7 @@ final class AdminAPIController
         $perPage = $perPage > 0 ? min($perPage, 100) : 50;
         $offset = ($page - 1) * $perPage;
 
-        $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
-
-        // Base predicate: published editions.
-        $where = ['p.post_type = %s', "p.post_status = 'publish'"];
-        $params = [EditionCPT::POST_TYPE];
-
-        // scope=active → pre-filter to NOT-yet-past, but PERMIT NULL start_date
-        // so dateless (sessionless §10.7) editions stay in scope. Mirrors the
-        // getEditions list-view default predicate (commit e2ace22b).
-        if ($scope === 'active') {
-            $where[] = '(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)';
-            $params[] = $twoDaysAgo;
-        }
-
-        // q → server-side title search, bound LIKE (never interpolated).
-        if ($q !== '') {
-            $where[] = 'p.post_title LIKE %s';
-            $params[] = '%' . $wpdb->esc_like($q) . '%';
-        }
-
-        $whereClause = implode(' AND ', $where);
+        $dateScoped = $scope === 'active';
 
         // CR-2: scope=active drops editions whose EFFECTIVE status is terminal
         // (INV-7) — a PHP-side decision that pure SQL cannot mirror, since
@@ -778,7 +755,7 @@ final class AdminAPIController
         //
         // Fix (pragmatic + correct for a typeahead over a small corpus — editions
         // number in the hundreds, not the millions): fetch the date-pre-filtered
-        // candidate id+title set (still bounded by the SQL WHERE), apply the
+        // candidate id+title set (still bounded by the repo WHERE), apply the
         // effective-status filter in PHP, then paginate the FILTERED list in PHP.
         // This guarantees total, perPage, the page slice, and items are mutually
         // consistent. NULL-last ordering is preserved.
@@ -787,27 +764,8 @@ final class AdminAPIController
         // pre-filter COUNT are already consistent — keep the cheap SQL paging
         // path for it and avoid loading the whole corpus.
         if ($scope === 'all') {
-            $countParams = $params;
-            $total = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
-                 LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
-                 WHERE {$whereClause}",
-                ...$countParams,
-            ));
-
-            $pageParams = $params;
-            $pageParams[] = $perPage;
-            $pageParams[] = $offset;
-
-            $rows = $wpdb->get_results($wpdb->prepare(
-                "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value AS start_date
-                 FROM {$wpdb->posts} p
-                 LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
-                 WHERE {$whereClause}
-                 ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC
-                 LIMIT %d OFFSET %d",
-                ...$pageParams,
-            ));
+            $total = $this->editionRepository->countEditionOptions($q, $dateScoped);
+            $rows = $this->editionRepository->findEditionOptions($q, $dateScoped, $perPage, $offset);
 
             $editionIds = array_map(static fn($r) => (int) $r->ID, $rows);
             $statuses = [];
@@ -838,14 +796,7 @@ final class AdminAPIController
         // scope=active: fetch the full date-pre-filtered candidate set (NULL-last
         // ordering), then effective-status-filter + paginate in PHP so the count
         // and the page agree.
-        $candidates = $wpdb->get_results($wpdb->prepare(
-            "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value AS start_date
-             FROM {$wpdb->posts} p
-             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
-             WHERE {$whereClause}
-             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC",
-            ...$params,
-        ));
+        $candidates = $this->editionRepository->findEditionOptions($q, $dateScoped);
 
         $candidateIds = array_map(static fn($r) => (int) $r->ID, $candidates);
         $statuses = [];
@@ -1701,8 +1652,6 @@ final class AdminAPIController
      */
     public function getTrajectoryOptions(WP_REST_Request $request): WP_REST_Response
     {
-        global $wpdb;
-
         $q = sanitize_text_field((string) ($request->get_param('q') ?? ''));
 
         $scope = (string) ($request->get_param('scope') ?? 'active');
@@ -1715,50 +1664,11 @@ final class AdminAPIController
         $perPage = $perPage > 0 ? min($perPage, 100) : 50;
         $offset = ($page - 1) * $perPage;
 
-        // Base predicate: published trajectories.
-        $where = ['p.post_type = %s', "p.post_status = 'publish'"];
-        $params = [TrajectoryCPT::POST_TYPE];
+        $activeOnly = $scope === 'active';
 
-        // q → server-side title search, bound LIKE (never interpolated, M4).
-        if ($q !== '') {
-            $where[] = 'p.post_title LIKE %s';
-            $params[] = '%' . $wpdb->esc_like($q) . '%';
-        }
-
-        // scope=active → restrict to non-terminal statuses via an EXISTS subquery.
-        // The status set is the SINGLE SOURCE OF TRUTH on TrajectoryRepository so
-        // the typeahead and the catalog (findActive) never drift. scope=all adds
-        // no status restriction. No date carve-out: trajectories have no dates.
-        if ($scope === 'active') {
-            $activeStatuses = \Stride\Modules\Trajectory\TrajectoryRepository::ACTIVE_STATUSES;
-            $statusPlaceholders = implode(',', array_fill(0, count($activeStatuses), '%s'));
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status
-                WHERE pm_status.post_id = p.ID
-                AND pm_status.meta_key = '_ntdst_status'
-                AND pm_status.meta_value IN ({$statusPlaceholders}))";
-            foreach ($activeStatuses as $st) {
-                $params[] = $st;
-            }
-        }
-
-        $whereClause = implode(' AND ', $where);
-
-        $total = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
-            ...$params,
-        ));
-
-        $pageParams = $params;
-        $pageParams[] = $perPage;
-        $pageParams[] = $offset;
-
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID, p.post_title FROM {$wpdb->posts} p
-             WHERE {$whereClause}
-             ORDER BY p.post_title ASC
-             LIMIT %d OFFSET %d",
-            ...$pageParams,
-        ));
+        $trajectoryRepo = ntdst_get(\Stride\Modules\Trajectory\TrajectoryRepository::class);
+        $total = $trajectoryRepo->countTrajectoryOptions($q, $activeOnly);
+        $rows = $trajectoryRepo->findTrajectoryOptions($q, $activeOnly, $perPage, $offset);
 
         $trajectoryIds = array_map(static fn($r) => (int) $r->ID, $rows);
 

@@ -60,6 +60,87 @@ final class TrajectoryRepository extends AbstractRepository
     }
 
     /**
+     * Build the shared WHERE clause + bound params for the trajectory typeahead
+     * picker (AdminAPIController::getTrajectoryOptions). Centralises the picker's
+     * SQL predicate in the repo (its sanctioned home). M4: every dynamic value
+     * is a $wpdb->prepare placeholder.
+     *
+     * - Base predicate: published trajectories of POST_TYPE.
+     * - $q → server-side title LIKE, bound + esc_like (never interpolated, M4).
+     * - $activeOnly (scope=active) → EXISTS subquery restricting to the
+     *   non-terminal ACTIVE_STATUSES (this class' single source of truth, so the
+     *   typeahead and findActive never drift). No date carve-out — trajectories
+     *   have no dates. The status meta key is built from getMetaPrefix() (D1).
+     *
+     * @return array{0: string, 1: list<mixed>}
+     */
+    private function buildOptionsWhere(string $q, bool $activeOnly): array
+    {
+        global $wpdb;
+
+        $where  = ['p.post_type = %s', "p.post_status = 'publish'"];
+        $params = [TrajectoryCPT::POST_TYPE];
+
+        if ($q !== '') {
+            $where[]  = 'p.post_title LIKE %s';
+            $params[] = '%' . $wpdb->esc_like($q) . '%';
+        }
+
+        if ($activeOnly) {
+            $statusKey          = $this->getMetaPrefix() . 'status';
+            $statusPlaceholders = implode(',', array_fill(0, count(self::ACTIVE_STATUSES), '%s'));
+            $where[]            = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status
+                WHERE pm_status.post_id = p.ID
+                AND pm_status.meta_key = '{$statusKey}'
+                AND pm_status.meta_value IN ({$statusPlaceholders}))";
+            foreach (self::ACTIVE_STATUSES as $st) {
+                $params[] = $st;
+            }
+        }
+
+        return [implode(' AND ', $where), $params];
+    }
+
+    /**
+     * COUNT of the trajectory typeahead picker corpus for the given predicate.
+     */
+    public function countTrajectoryOptions(string $q, bool $activeOnly): int
+    {
+        global $wpdb;
+
+        [$whereClause, $params] = $this->buildOptionsWhere($q, $activeOnly);
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
+            ...$params,
+        ));
+    }
+
+    /**
+     * Trajectory typeahead picker rows (id, title), title-ordered, paged via
+     * SQL LIMIT/OFFSET — the admin grid Traject filter / group-by source.
+     * Status is composed by the caller (batched, no N+1).
+     *
+     * @return array<int, object{ID: int, post_title: string}>
+     */
+    public function findTrajectoryOptions(string $q, bool $activeOnly, int $limit, int $offset): array
+    {
+        global $wpdb;
+
+        [$whereClause, $params] = $this->buildOptionsWhere($q, $activeOnly);
+        $params[] = $limit;
+        $params[] = $offset;
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title FROM {$wpdb->posts} p
+             WHERE {$whereClause}
+             ORDER BY p.post_title ASC
+             LIMIT %d OFFSET %d",
+            ...$params,
+        ));
+    }
+
+    /**
      * Find trajectories open for enrollment.
      *
      * @return array<array<string, mixed>>

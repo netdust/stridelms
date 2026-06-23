@@ -66,11 +66,12 @@ final class EditionRepository extends AbstractRepository
         global $wpdb;
 
         $cutoff = wp_date('Y-m-d', strtotime('-' . max(0, $graceDays) . ' days'));
+        $prefix = $this->getMetaPrefix();
 
         $ids = $wpdb->get_col($wpdb->prepare(
             "SELECT p.ID FROM {$wpdb->posts} p
              LEFT JOIN {$wpdb->postmeta} pm_start
-                    ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
+                    ON p.ID = pm_start.post_id AND pm_start.meta_key = '{$prefix}start_date'
              WHERE p.post_type = %s AND p.post_status = 'publish'
                AND (pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)",
             EditionCPT::POST_TYPE,
@@ -78,6 +79,95 @@ final class EditionRepository extends AbstractRepository
         ));
 
         return array_map('intval', $ids);
+    }
+
+    /**
+     * Build the shared WHERE clause + bound params for the edition typeahead
+     * picker (AdminAPIController::getEditionOptions). Centralises the picker's
+     * SQL predicate in the repo (its sanctioned home) instead of the
+     * controller. M4: every dynamic value is a $wpdb->prepare placeholder.
+     *
+     * - Base predicate: published editions of POST_TYPE.
+     * - $dateScoped (scope=active) → NOT-yet-past start_date OR NULL start_date,
+     *   so dateless (sessionless §10.7) editions stay in scope (mirrors
+     *   getEditions list-view default predicate, commit e2ace22b).
+     * - $q → server-side title LIKE, bound + esc_like (never interpolated, M4).
+     *
+     * Returns [whereClause, params, startKey] where startKey is the prefixed
+     * start_date meta key (e.g. '_ntdst_start_date') the JOIN must use.
+     *
+     * @return array{0: string, 1: list<mixed>, 2: string}
+     */
+    private function buildOptionsWhere(string $q, bool $dateScoped): array
+    {
+        global $wpdb;
+
+        $startKey = $this->getMetaPrefix() . 'start_date';
+
+        $where  = ['p.post_type = %s', "p.post_status = 'publish'"];
+        $params = [EditionCPT::POST_TYPE];
+
+        if ($dateScoped) {
+            $cutoff   = wp_date('Y-m-d', strtotime('-2 days'));
+            $where[]  = '(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)';
+            $params[] = $cutoff;
+        }
+
+        if ($q !== '') {
+            $where[]  = 'p.post_title LIKE %s';
+            $params[] = '%' . $wpdb->esc_like($q) . '%';
+        }
+
+        return [implode(' AND ', $where), $params, $startKey];
+    }
+
+    /**
+     * Edition typeahead picker rows (id, title, start_date), NULL-last ordered
+     * by start_date. Date-pre-filtered candidate set for the admin grid filter /
+     * group-by source. $limit === null returns the whole filtered set (used by
+     * the scope=active path, which paginates in PHP after the effective-status
+     * drop); a non-null $limit applies SQL LIMIT/OFFSET (scope=all path).
+     *
+     * @return array<int, object{ID: int, post_title: string, start_date: ?string}>
+     */
+    public function findEditionOptions(string $q, bool $dateScoped, ?int $limit = null, int $offset = 0): array
+    {
+        global $wpdb;
+
+        [$whereClause, $params, $startKey] = $this->buildOptionsWhere($q, $dateScoped);
+
+        $sql = "SELECT DISTINCT p.ID, p.post_title, pm_start.meta_value AS start_date
+                FROM {$wpdb->posts} p
+                LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '{$startKey}'
+                WHERE {$whereClause}
+                ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC";
+
+        if ($limit !== null) {
+            $sql .= ' LIMIT %d OFFSET %d';
+            $params[] = $limit;
+            $params[] = $offset;
+        }
+
+        return $wpdb->get_results($wpdb->prepare($sql, ...$params));
+    }
+
+    /**
+     * COUNT of the edition typeahead picker corpus for the given predicate —
+     * the pre-filter total for the scope=all paging path (consistent with its
+     * SQL LIMIT/OFFSET, since scope=all has no PHP effective-status drop).
+     */
+    public function countEditionOptions(string $q, bool $dateScoped): int
+    {
+        global $wpdb;
+
+        [$whereClause, $params, $startKey] = $this->buildOptionsWhere($q, $dateScoped);
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(DISTINCT p.ID) FROM {$wpdb->posts} p
+             LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '{$startKey}'
+             WHERE {$whereClause}",
+            ...$params,
+        ));
     }
 
     /**

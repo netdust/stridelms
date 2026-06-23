@@ -10,6 +10,7 @@ use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionCPT;
+use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionCPT;
 use Stride\Modules\Enrollment\RegistrationRepository;
@@ -41,6 +42,7 @@ final class AdminStatsService
         private readonly RegistrationRepository $registrations,
         private readonly AdminRegistrationQueryService $registrationQuery,
         private readonly EditionService $editions,
+        private readonly EditionRepository $editionRepository,
     ) {}
 
     // =========================================================================
@@ -555,8 +557,9 @@ final class AdminStatsService
     {
         // Canonical date-scoped active set (CR-6) — owned by the edition domain
         // (EditionRepository::findActiveDateScopedIds), including the §10.7
-        // dateless carve-out. No second copy of the predicate here.
-        return $this->editions->getActiveDateScopedIds();
+        // dateless carve-out. No second copy of the predicate here. Call the
+        // repo directly: the former EditionService pass-through was drift.
+        return $this->editionRepository->findActiveDateScopedIds();
     }
 
     // =========================================================================
