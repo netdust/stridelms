@@ -409,7 +409,7 @@ defined('ABSPATH') || exit;
                                 <a href="<?php echo esc_url($admin_url); ?>post-new.php?post_type=vad_edition" class="sd-btn sd-btn--ghost sd-btn--block">+ Nieuwe editie</a>
                                 <a href="<?php echo esc_url($admin_url); ?>post-new.php?post_type=vad_trajectory" class="sd-btn sd-btn--ghost sd-btn--block">+ Nieuw traject</a>
                                 <a href="#" @click.prevent="switchView('offertes')" class="sd-btn sd-btn--ghost sd-btn--block">Offertes beheren</a>
-                                <button class="sd-btn sd-btn--ghost sd-btn--block" @click="exportRegistrations()">Inschrijvingen exporteren</button>
+                                <!-- Worklist-export entry point removed (Task 4.2); the 5 Vandaag worklist queues replace it. CSV route /admin/export/registrations kept for back-compat. -->
                             </div>
                         </div>
                     </div>

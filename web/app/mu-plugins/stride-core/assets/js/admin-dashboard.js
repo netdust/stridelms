@@ -593,10 +593,6 @@ document.addEventListener('alpine:init', () => {
             this.$nextTick(() => this.selectUser(userId));
         },
 
-        exportRegistrations() {
-            window.location.href = this.config.apiUrl + '/admin/export/registrations?_wpnonce=' + this.config.nonce;
-        },
-
         // ==============================================================
         //  EDITIONS METHODS
         // ==============================================================
