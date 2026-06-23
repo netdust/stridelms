@@ -669,3 +669,9 @@ Inventory only — left in place per user instruction:
 - now that the root cause is fixed, the test should be **simplified back to just `seedTemplates()`** — that's the honest state (the production seed path now works). But I'll keep a lightweight safety: the reconcile guarded against cross-test pollution too. The cleanest principled choice: revert the test to minimal (just seed), since the repo fix makes it correct, and verify it passes in the fresh-DB simulation. Let me simplify the test setUp.
 [2026-06-22] — session ended (no significant changes captured)
 [2026-06-23] — session ended (no significant changes captured)
+
+---
+### 2026-06-23 — tagged capture
+
+**Decisions**
+- **Map reflects server reality.** I'll add `Pending → Cancelled` and `Waitlist → Cancelled` to the map, update the 3 tests to assert the truthful contract (RED→GREEN), and the JS bar + detector then agree. Let me apply the map change.
