@@ -141,6 +141,67 @@ final class TrajectoryRepository extends AbstractRepository
     }
 
     /**
+     * COUNT of the admin trajectory-list corpus for a caller-built predicate.
+     *
+     * The caller (AdminTrajectoryService::getTrajectories) assembles the WHERE
+     * clause + bound params (the post_type/post_status base + the optional
+     * search/status/active-scope sub-selects). This method owns ONLY the $wpdb
+     * execution — moved here from the controller-era inline query so no raw
+     * query lives in the read-model service (INV-3), mirroring
+     * EditionRepository::countAdminList / QuoteRepository::countAdminList.
+     *
+     * Behavior-preserving: the COUNT(*) over wp_posts aliased `p` and the
+     * caller's WHERE are reproduced VERBATIM from the pre-extraction query.
+     * Every dynamic value arrives as a $wpdb->prepare placeholder param.
+     *
+     * @param string      $whereClause Pre-built, placeholdered WHERE body.
+     * @param list<mixed> $params      Bound params matching the placeholders.
+     */
+    public function countAdminList(string $whereClause, array $params): int
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
+            ...$params,
+        ));
+    }
+
+    /**
+     * One paged page of admin trajectory-list rows (id, title, date, content).
+     *
+     * Companion to countAdminList — owns the $wpdb execution moved out of
+     * AdminTrajectoryService::getTrajectories (INV-3 / the self-flagged
+     * "DRIFT #2"), mirroring EditionRepository::findAdminListRows /
+     * QuoteRepository::findAdminListRows. Unlike the quote/edition list rows,
+     * the trajectory read-model derives its description from post_content, so
+     * post_content is part of the SELECT (reproduced VERBATIM).
+     *
+     * The ORDER BY p.post_date DESC and the LIMIT/OFFSET (appended as the final
+     * two placeholders, matching the pre-extraction param order) are reproduced
+     * VERBATIM.
+     *
+     * @param string      $whereClause Pre-built, placeholdered WHERE body.
+     * @param list<mixed> $params      Bound params matching the WHERE placeholders.
+     * @return array<int, object{ID: int, post_title: string, post_date: string, post_content: string}>
+     */
+    public function findAdminListRows(string $whereClause, array $params, int $limit, int $offset): array
+    {
+        global $wpdb;
+
+        $params[] = $limit;
+        $params[] = $offset;
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title, p.post_date, p.post_content FROM {$wpdb->posts} p
+             WHERE {$whereClause}
+             ORDER BY p.post_date DESC
+             LIMIT %d OFFSET %d",
+            ...$params,
+        ));
+    }
+
+    /**
      * Find trajectories open for enrollment.
      *
      * @return array<array<string, mixed>>

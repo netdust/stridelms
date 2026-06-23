@@ -12,6 +12,7 @@ use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Trajectory\TrajectoryCPT;
 use Stride\Modules\Trajectory\TrajectoryDashboardService;
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectorySelection;
 use Stride\Modules\Trajectory\TrajectoryService;
 use WP_Error;
@@ -48,6 +49,7 @@ final class AdminTrajectoryService
         private readonly EnrollmentService $enrollmentService,
         private readonly TrajectoryService $trajectoryService,
         private readonly EditionService $editionService,
+        private readonly TrajectoryRepository $trajectoryRepository,
     ) {}
 
     /**
@@ -94,23 +96,19 @@ final class AdminTrajectoryService
 
         $whereClause = implode(' AND ', $where);
 
+        // INV-3: the COUNT + list SELECT (the self-flagged "DRIFT #2") now live
+        // in TrajectoryRepository::countAdminList / findAdminListRows. The
+        // WHERE/scope/status/search assembly above stays here — it is read-model
+        // logic, not raw SQL — and the repo owns only the $wpdb->prepare
+        // execution. Behavior-preserving: same predicate, same params, same
+        // ORDER BY post_date DESC, same paging (the repo appends LIMIT/OFFSET as
+        // the final two params, matching the pre-extraction order).
+
         // Get total count
-        $total = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
-            ...$params,
-        ));
+        $total = $this->trajectoryRepository->countAdminList($whereClause, $params);
 
         // Get trajectories
-        $params[] = $perPage;
-        $params[] = $offset;
-
-        $trajectories = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID, p.post_title, p.post_date, p.post_content FROM {$wpdb->posts} p
-             WHERE {$whereClause}
-             ORDER BY p.post_date DESC
-             LIMIT %d OFFSET %d",
-            ...$params,
-        ));
+        $trajectories = $this->trajectoryRepository->findAdminListRows($whereClause, $params, $perPage, $offset);
 
         if (empty($trajectories)) {
             return new WP_REST_Response([
