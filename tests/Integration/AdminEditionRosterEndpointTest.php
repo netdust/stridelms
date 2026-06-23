@@ -181,4 +181,67 @@ final class AdminEditionRosterEndpointTest extends IntegrationTestCase
             'an id that absints to 0 must 404, never reach the service as a raw value (CM-5)',
         );
     }
+
+    // =========================================================================
+    // 5. Non-published edition -> 404 (CR-4 — trashed/draft PII rosters unreachable)
+    // =========================================================================
+
+    /**
+     * A trashed edition is a real WP_Post of the right post_type, so a post_type-only
+     * guard lets it through and leaks the FULL PII roster for an edition the admin UI
+     * no longer lists. The guard must scope post_status = 'publish' to match every
+     * sibling DATA query in this controller. 404 (not 403) — do not reveal existence.
+     *
+     * @test
+     */
+    public function trashedEditionRosterIsNotReachable(): void
+    {
+        $this->actingAs(self::$coordinatorUserId);
+
+        $editionId = (int) wp_insert_post([
+            'post_title'  => 'Trashed Roster Edition ' . uniqid(),
+            'post_type'   => 'vad_edition',
+            'post_status' => 'publish',
+        ]);
+        wp_trash_post($editionId);
+
+        try {
+            $response = $this->dispatch((string) $editionId);
+            $this->assertSame(
+                404,
+                $this->statusOf($response),
+                'a trashed edition is no longer published — its PII roster must NOT be reachable (CR-4)',
+            );
+        } finally {
+            wp_delete_post($editionId, true);
+        }
+    }
+
+    /**
+     * A draft edition was never published; its roster must be unreachable for the same
+     * reason — post_status scoping, not just post_type, gates an edition's data.
+     *
+     * @test
+     */
+    public function draftEditionRosterIsNotReachable(): void
+    {
+        $this->actingAs(self::$coordinatorUserId);
+
+        $editionId = (int) wp_insert_post([
+            'post_title'  => 'Draft Roster Edition ' . uniqid(),
+            'post_type'   => 'vad_edition',
+            'post_status' => 'draft',
+        ]);
+
+        try {
+            $response = $this->dispatch((string) $editionId);
+            $this->assertSame(
+                404,
+                $this->statusOf($response),
+                'a draft edition is not published — its PII roster must NOT be reachable (CR-4)',
+            );
+        } finally {
+            wp_delete_post($editionId, true);
+        }
+    }
 }

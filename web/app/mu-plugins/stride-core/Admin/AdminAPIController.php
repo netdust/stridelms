@@ -1349,9 +1349,14 @@ final class AdminAPIController
     {
         $editionId = (int) $request->get_param('id');
 
-        // Verify edition exists (CM-5 absint + edition-exists guard; INV-4 bubble).
+        // Verify edition exists AND is published (CM-5 absint + edition-exists guard;
+        // INV-4 bubble). CR-4: a trashed/draft edition is a real WP_Post of the right
+        // post_type, so a post_type-only guard would leak its full PII roster for an
+        // edition the admin UI no longer lists. Scope post_status = 'publish' to match
+        // every sibling DATA query in this controller (e.g. :1244). 404, not 403 — do
+        // not reveal the existence of a non-published edition.
         $edition = get_post($editionId);
-        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE) {
+        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE || $edition->post_status !== 'publish') {
             return new WP_Error('not_found', 'Edition not found', ['status' => 404]);
         }
 
