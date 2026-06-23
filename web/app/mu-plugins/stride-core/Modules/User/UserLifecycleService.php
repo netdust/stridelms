@@ -151,7 +151,19 @@ class UserLifecycleService implements \NTDST_Service_Meta
         <?php
     }
 
-    public function isAnonymised(int $userId): bool
+    /**
+     * Shared GDPR-redaction predicate (CR-6): the ONE place "is this user
+     * anonymised?" is decided, keyed on this class's own META_ANONYMISED_AT
+     * const. Static so any surface can converge here without DI plumbing —
+     * callable from a service, a metabox, an exporter, or a template.
+     *
+     * NOTE: 5 other call sites still inline the literal `_stride_anonymised_at`
+     * (EditionFilesZipExporter, AdminAPIController, EditionRegistrationMetabox,
+     * RegistrationModalController, AdminUserService). They can migrate to this
+     * predicate opportunistically — out of scope for CR-6, which establishes
+     * the convergence point + points the new roster copy at it.
+     */
+    public static function isAnonymised(int $userId): bool
     {
         return (bool) get_user_meta($userId, self::META_ANONYMISED_AT, true);
     }

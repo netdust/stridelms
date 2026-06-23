@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
-use Stride\Admin\Support\AdminBatchHelpers;
 use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Attendance\AttendanceRepository;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
+use Stride\Modules\User\UserLifecycleService;
 use Stride\Support\EnrollmentDataExtras;
 
 /**
@@ -22,8 +22,10 @@ use Stride\Support\EnrollmentDataExtras;
  * registrant appears with PII tombstoned, not omitted, not in full).
  *
  * Mirrors the Phase-1 AdminUserService shape: a sanctioned read-model in the
- * INV-3 accepted zone, `use AdminBatchHelpers;` for shared batch reads. Net-new
- * registration query *shapes* live in RegistrationRepository, not here.
+ * INV-3 accepted zone. Net-new registration query *shapes* live in
+ * RegistrationRepository, not here. The anonymise-redaction gate reads through
+ * the shared UserLifecycleService::isAnonymised predicate (CR-6 convergence
+ * point), never an inlined `_stride_anonymised_at` literal.
  *
  * SECURITY (CM-3 / M5): getRosterForEdition takes (int $editionId, array $filters)
  * and NOTHING that binds enrollment_data/selections into a SQL WHERE/GROUP BY.
@@ -36,8 +38,6 @@ use Stride\Support\EnrollmentDataExtras;
  */
 final class AdminEditionRosterService
 {
-    use AdminBatchHelpers;
-
     /** Tombstone shown in place of an anonymised registrant's name (CM-3b). */
     private const ANON_TOMBSTONE = '(verwijderd)';
 
@@ -99,7 +99,7 @@ final class AdminEditionRosterService
         foreach ($registrations as $reg) {
             $regId = (int) $reg->id;
             $userId = (int) $reg->user_id;
-            $isAnonymised = $this->isAnonymised($userId);
+            $isAnonymised = UserLifecycleService::isAnonymised($userId);
 
             // Extras from enrollment_data JSON for the LOADED set only (CM-3/M5):
             // never bound into a WHERE/GROUP BY. Suppressed for erased users (CM-3b).
@@ -195,11 +195,6 @@ final class AdminEditionRosterService
     private function emptyAttendance(): array
     {
         return ['present' => 0, 'absent' => 0, 'excused' => 0];
-    }
-
-    private function isAnonymised(int $userId): bool
-    {
-        return (int) get_user_meta($userId, '_stride_anonymised_at', true) > 0;
     }
 
     private function displayName(int $userId): string

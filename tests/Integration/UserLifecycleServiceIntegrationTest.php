@@ -154,6 +154,48 @@ class UserLifecycleServiceIntegrationTest extends IntegrationTestCase
 
     /**
      * @test
+     *
+     * CR-6: the anonymise check is a GDPR-redaction gate copy-pasted across 6
+     * surfaces. UserLifecycleService now owns the shared predicate as a STATIC
+     * method keyed on its own META_ANONYMISED_AT const, so a change to how
+     * "anonymised" is determined lives in one place. Erosion-guard: a scope/
+     * redaction predicate is Tier A — assert the DENIAL path, not only the
+     * allowed actor.
+     */
+    public function sharedStaticPredicateGatesOnTheOwnConst(): void
+    {
+        $userId = $this->createTestUser();
+
+        // Absent marker → not anonymised (denial path).
+        delete_user_meta($userId, UserLifecycleService::META_ANONYMISED_AT);
+        $this->assertFalse(
+            UserLifecycleService::isAnonymised($userId),
+            'a user with no marker is not anonymised',
+        );
+
+        // Falsy stored values → not anonymised (denial path).
+        update_user_meta($userId, UserLifecycleService::META_ANONYMISED_AT, '0');
+        $this->assertFalse(
+            UserLifecycleService::isAnonymised($userId),
+            "'0' marker must not read as anonymised",
+        );
+
+        update_user_meta($userId, UserLifecycleService::META_ANONYMISED_AT, '');
+        $this->assertFalse(
+            UserLifecycleService::isAnonymised($userId),
+            'empty marker must not read as anonymised',
+        );
+
+        // A real timestamp → anonymised (happy path).
+        update_user_meta($userId, UserLifecycleService::META_ANONYMISED_AT, time());
+        $this->assertTrue(
+            UserLifecycleService::isAnonymised($userId),
+            'a timestamp marker reads as anonymised',
+        );
+    }
+
+    /**
+     * @test
      */
     public function anonymiseIsIdempotent(): void
     {
@@ -174,7 +216,7 @@ class UserLifecycleServiceIntegrationTest extends IntegrationTestCase
         $adminId = wp_create_user(
             'admintest_' . preg_replace('/[^a-z0-9]/i', '', $unique),
             'pw',
-            'admin-test-' . $unique . '@test.local'
+            'admin-test-' . $unique . '@test.local',
         );
         $this->assertIsInt($adminId, 'wp_create_user must return an ID; got: ' . print_r($adminId, true));
         self::$testPosts[] = $adminId;
@@ -206,7 +248,7 @@ class UserLifecycleServiceIntegrationTest extends IntegrationTestCase
         $coordinatorId = wp_create_user(
             'coord_' . preg_replace('/[^a-z0-9]/i', '', $unique),
             'pw',
-            'coord-' . $unique . '@test.local'
+            'coord-' . $unique . '@test.local',
         );
         $this->assertIsInt($coordinatorId);
         self::$testPosts[] = $coordinatorId;
@@ -221,7 +263,7 @@ class UserLifecycleServiceIntegrationTest extends IntegrationTestCase
         // Existing meta must be untouched.
         $this->assertEquals(
             'coord-' . $unique . '@test.local',
-            get_userdata($coordinatorId)->user_email
+            get_userdata($coordinatorId)->user_email,
         );
     }
 
@@ -252,7 +294,7 @@ class UserLifecycleServiceIntegrationTest extends IntegrationTestCase
         global $wpdb;
         $row = $wpdb->get_row($wpdb->prepare(
             "SELECT user_id, edition_id, status FROM {$wpdb->prefix}vad_registrations WHERE id = %d",
-            $regId
+            $regId,
         ));
         $this->assertNotNull($row, 'Registration row must survive user anonymisation');
         $this->assertEquals($userId, (int) $row->user_id);
