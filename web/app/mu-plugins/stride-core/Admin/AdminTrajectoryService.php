@@ -472,11 +472,17 @@ final class AdminTrajectoryService
             return new WP_Error('not_found', 'Trajectory not found', ['status' => 404]);
         }
 
-        // Reuse the list endpoint with a filter that returns just this one
+        // Reuse the list assembly but SCOPE it to this trajectory's title so the
+        // target is guaranteed to be in the (small) result set regardless of how
+        // many trajectories exist. Previously this fetched page 1 / per_page 100
+        // and linear-scanned for the id, so any trajectory outside the first 100
+        // (ID-desc) 404'd even though it was a valid published post — broken once
+        // the DB holds >100 trajectories. The title LIKE narrows to a handful;
+        // the id-match loop below still disambiguates same-titled trajectories.
         $listRequest = new WP_REST_Request('GET', '/stride/v1/admin/trajectories');
         $listRequest->set_param('page', 1);
         $listRequest->set_param('per_page', 100);
-        $listRequest->set_param('search', '');
+        $listRequest->set_param('search', $post->post_title);
         $listRequest->set_param('status', '');
 
         $listResponse = $this->getTrajectories($listRequest);
