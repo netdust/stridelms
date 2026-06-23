@@ -153,6 +153,13 @@ final class BulkRegistrationHandler
      */
     private function runBulk(array $params, callable $perRow): array|WP_Error
     {
+        // CR-1: select-all expansion lives at the SINGLE chokepoint every public
+        // handler routes through, so a future handler cannot forget it and
+        // silently no-op a select_all request. Idempotent — a plain {ids:[…]}
+        // payload (select_all absent) is returned unchanged, and the quote path's
+        // own pre-resolve (setQuoteStatusForRows) re-resolves harmlessly here.
+        $params = $this->resolveBulkIds($params);
+
         $ids = array_values(array_unique(array_map('absint', (array) ($params['ids'] ?? []))));
 
         // B3: hard cap BEFORE the loop. Returning a WP_Error here means every
@@ -281,7 +288,6 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
-        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             // M3 / B5: a row may be approved into the pipe only if the ONE
@@ -324,7 +330,6 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
-        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             $enrollment = ntdst_get(EnrollmentService::class);
@@ -353,9 +358,11 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
-        // Task 4.1 — expand select-all HERE (post-deny) so the B2 reg→quote map
-        // below and runBulk both read the SAME expanded id set. The quote handlers
-        // delegate their authz to this method, so this is their post-deny seam.
+        // CR-1 DELIBERATE EXCEPTION: pre-resolves before the B2 reg→quote map;
+        // runBulk re-resolves idempotently. Task 4.1 — expand select-all HERE
+        // (post-deny) so the B2 reg→quote map below and runBulk both read the
+        // SAME expanded id set. The quote handlers delegate their authz to this
+        // method, so this is their post-deny seam.
         $params = $this->resolveBulkIds($params);
 
         $quoteRepo = ntdst_get(QuoteRepository::class);
@@ -422,7 +429,6 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
-        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             $enrollment = ntdst_get(EnrollmentService::class);
@@ -445,7 +451,6 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
-        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             $completion = ntdst_get(EnrollmentCompletion::class);
@@ -472,7 +477,6 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
-        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             return new WP_Error('not_available', __('Berichten versturen volgt in een latere fase.', 'stride'));
@@ -495,7 +499,6 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny;
         }
-        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
         return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
             return new WP_Error('not_available', __('Documentgeneratie volgt in een latere fase.', 'stride'));
@@ -524,8 +527,12 @@ final class BulkRegistrationHandler
         if ($deny = $this->denyIfNotManager()) {
             return $deny; // M2 first
         }
-        $params = $this->resolveBulkIds($params); // Task 4.1 — select-all expansion (post-deny)
 
+        // M7 ordering preserved: the field allowlist reads $params['field'] (NOT
+        // ids), so it still fires before runBulk's loop — field=status is rejected
+        // with a 400 BEFORE any row is touched. Select-all expansion (CR-1) now
+        // happens inside runBulk, AFTER this gate, which is correct: the
+        // allowlist guard never needed the expanded id set.
         $field = sanitize_key((string) ($params['field'] ?? ''));
 
         // M7: server-side allowlist — reject any non-safe field with a 400, BEFORE
