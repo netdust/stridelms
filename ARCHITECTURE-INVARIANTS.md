@@ -82,7 +82,8 @@ grep -rn "ntdst/api_data/" --include="*.php" web/app/mu-plugins/stride-core
 - `EditionService::deleteEditionRegistrations()` — bulk `$wpdb->delete` by edition (no bulk-delete-by-edition in the repo).
 - `Infrastructure/BatchQueryHelper.php` — N+1-prevention batch reads across `vad_registrations` / `vad_attendance` / `postmeta` / `term_relationships`.
 - `Modules/Edition/EditionFilesZipExporter.php` — export query.
-- `Admin/AdminAPIController.php` — **accepted zone** (post-launch extraction pointer: `project_unified_api_postlaunch`): the 3,5k-line legacy admin controller still carries many direct `$wpdb` reads (dashboards, stats, exports). New registration-table query *shapes* are extracted to `RegistrationRepository` as they are touched (CR-D3 `idsWithCompletionTasks`, the pending-approvals scans `findPendingWithOpenApproval`/`findConfirmedWithOpenPostApproval`, 2026-06-10) — but the remaining body is accepted until the service-layer extraction, so the INV-3 advisory listing this file is expected, not a regression.
+- `Admin/AdminAPIController.php` — **accepted zone, actively draining** (`project_unified_api_postlaunch`): the legacy admin controller still carries direct `$wpdb` reads in its un-extracted remnants (`getEditions`, `getQuotes`, `getEditionsAgendaView`, `getEditionRegistrations`). The Admin-Workspace slice (1B–1F, 2026-06-23) **strangled it 4,013 → 2,783 lines / 173 → 76 `$wpdb`** — over half drained. New registration-table query *shapes* go to `RegistrationRepository` as touched (`idsWithCompletionTasks`, `findPendingWithOpenApproval`/`findConfirmedWithOpenPostApproval`; `idsForGridFilter`/`statusBreakdown`/`findByEditionsAndStatuses`; the picker `findEditionOptions`/`countEditionOptions`; `TrajectoryRepository::findTrajectoryOptions`/`countTrajectoryOptions`; `EditionRepository::findActiveDateScopedIds`). The remaining controller body is accepted until its extraction; the INV-3 advisory listing this file is expected, not a regression.
+- **Admin read-model services** (`Admin/AdminStatsService.php`, `Admin/AdminUserService.php`, `Admin/AdminTrajectoryService.php`, `Admin/Support/AdminBatchHelpers.php`) — **sanctioned read-model layer** (the strangle's extraction targets, 1D/1E). These hold the dashboard/stats/user-detail/trajectory/action-queue read SQL **moved verbatim out of `AdminAPIController`** (behavior-preserving, `$wpdb->prepare` throughout, concentrated for auditability — the same properties that justified the controller's accepted zone). New *write* shapes and net-new registration/edition query shapes still go to the owning repository (e.g. the 1F picker SQL was relocated from the controller into `EditionRepository`/`TrajectoryRepository`, NOT left in a service). A service growing a genuinely-new raw `$wpdb` read that isn't moved-from-the-controller and isn't a repo-worthy shape is still a bypass to flag.
 
 All of the above use `$wpdb->prepare` and are concentrated for auditability. A **new** direct `$wpdb` against these tables outside their owning repository (and not one of the exceptions above) is the bypass to flag.
 
@@ -91,7 +92,8 @@ All of the above use `$wpdb->prepare` and are concentrated for auditability. A *
 # $wpdb outside repositories, *Table.php schema classes, and the justified files:
 grep -rln '\$wpdb->' --include="*.php" web/app/mu-plugins/stride-core \
   | grep -vE "Repository\.php|Table\.php" \
-  | grep -vE "EditionService|BatchQueryHelper|EditionFilesZipExporter"
+  | grep -vE "EditionService|BatchQueryHelper|EditionFilesZipExporter" \
+  | grep -vE "AdminAPIController|AdminStatsService|AdminUserService|AdminTrajectoryService|AdminBatchHelpers"
 # Wrong Data API vocabulary:
 grep -rn "'post_title'\|'post_content'\|'post_excerpt'" --include="*.php" web/app/mu-plugins/stride-core
 # Hardcoded meta prefix outside CPT/getMetaPrefix:
