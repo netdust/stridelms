@@ -257,4 +257,86 @@ final class QuoteRepository extends AbstractRepository
 
         return $result;
     }
+
+    /**
+     * Resolve user IDs whose display_name OR user_email matches a search term,
+     * for the admin quote-list search filter.
+     *
+     * Moved VERBATIM from AdminAPIController::getQuotes (INV-3 — concentrate the
+     * raw $wpdb in the repo; wp_users has no per-domain repo of its own, so the
+     * quote-list search lookup lives with its only caller, AdminQuoteService).
+     * The caller passes the pre-escaped LIKE pattern; the LIMIT 500 cap is
+     * reproduced as-is. Returns int IDs.
+     *
+     * @return array<int>
+     */
+    public function findUserIdsByNameOrEmail(string $likePattern): array
+    {
+        global $wpdb;
+
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->users}
+             WHERE display_name LIKE %s OR user_email LIKE %s
+             LIMIT 500",
+            $likePattern,
+            $likePattern,
+        ));
+
+        return array_map('intval', $ids);
+    }
+
+    /**
+     * Count quotes for the admin quote list, for a pre-built WHERE clause.
+     *
+     * The caller (AdminQuoteService::getQuoteList) assembles the WHERE clause +
+     * bound params (post_type/post_status base + the optional search/status/
+     * edition EXISTS sub-selects). This method owns ONLY the $wpdb execution —
+     * moved here from AdminAPIController::getQuotes so no raw query lives in the
+     * controller (INV-3), mirroring EditionRepository::countAdminList.
+     *
+     * Behavior-preserving: the COUNT(*) over wp_posts aliased `p` and the
+     * caller's WHERE are reproduced VERBATIM from the pre-extraction query.
+     * Every dynamic value arrives as a $wpdb->prepare placeholder param.
+     *
+     * @param string      $whereClause  Pre-built, placeholdered WHERE body.
+     * @param list<mixed> $params       Bound params matching the placeholders.
+     */
+    public function countAdminList(string $whereClause, array $params): int
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$wpdb->posts} p WHERE {$whereClause}",
+            ...$params,
+        ));
+    }
+
+    /**
+     * One paged page of admin quote-list rows (id, title, date).
+     *
+     * Companion to countAdminList — owns the $wpdb execution moved out of
+     * AdminAPIController::getQuotes (INV-3), mirroring EditionRepository::findAdminListRows.
+     * The ORDER BY p.post_date DESC and the LIMIT/OFFSET (appended as the final
+     * two placeholders, matching the pre-extraction param order) are reproduced
+     * VERBATIM.
+     *
+     * @param string      $whereClause  Pre-built, placeholdered WHERE body.
+     * @param list<mixed> $params       Bound params matching the WHERE placeholders.
+     * @return array<int, object{ID: int, post_title: string, post_date: string}>
+     */
+    public function findAdminListRows(string $whereClause, array $params, int $limit, int $offset): array
+    {
+        global $wpdb;
+
+        $params[] = $limit;
+        $params[] = $offset;
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title, p.post_date FROM {$wpdb->posts} p
+             WHERE {$whereClause}
+             ORDER BY p.post_date DESC
+             LIMIT %d OFFSET %d",
+            ...$params,
+        ));
+    }
 }
