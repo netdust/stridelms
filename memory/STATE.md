@@ -675,3 +675,9 @@ Inventory only — left in place per user instruction:
 
 **Decisions**
 - **Map reflects server reality.** I'll add `Pending → Cancelled` and `Waitlist → Cancelled` to the map, update the 3 tests to assert the truthful contract (RED→GREEN), and the JS bar + detector then agree. Let me apply the map change.
+
+---
+### 2026-06-23 — tagged capture
+
+**Decisions**
+- **keep stacking, merge at slice end** — matches the original handoff plan. So:
