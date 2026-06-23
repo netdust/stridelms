@@ -99,12 +99,35 @@ final class RosterBulkHandler
     }
 
     /**
+     * Build the per-row edition scope: M2 gate then the required edition_id.
+     * Returns the resolved edition id on success, or a WP_Error to short-circuit
+     * (denial / missing scope). Shared front door for every stride_roster_bulk_*
+     * action so the M2 gate + the CM-1 scope can't be forgotten — the mirror of
+     * resolveTrajectoryScopeLookup (which returns the child-id lookup; this returns
+     * the single edition id, since the edition scope is one value, not a set).
+     *
+     * @param array<string,mixed> $params
+     * @return int|WP_Error
+     */
+    private function resolveEditionScope(array $params): int|WP_Error
+    {
+        if ($deny = $this->denyIfNotManager()) {
+            return $deny; // M2 first
+        }
+
+        return $this->requireEditionScope($params); // CM-1: scope required
+    }
+
+    /**
      * CM-1 per-row scope predicate — the row must belong to the opened edition.
      *
      * Returns a WP_Error('out_of_scope') for a foreign-edition row (so the caller
      * routes it into failed[] without mutation), or null when the row is in scope.
-     * The comparison is loose (==) because find() returns edition_id as the raw DB
-     * value (string from $wpdb) while the scope is an int.
+     * Both sides are cast to int and compared strictly (!==): find() returns
+     * edition_id as the raw DB value (a string from $wpdb), so casting it normalises
+     * the type before the strict compare. A foreign-edition row — or a NULL/0-edition
+     * trajectory-parent row — mismatches and is rejected. Fail-closed: never loose ==
+     * juggling, which would let "10" == 10 hide a type confusion in the scope guard.
      *
      * @return WP_Error|null
      */
@@ -297,11 +320,7 @@ final class RosterBulkHandler
      */
     public function handleRosterBulkApprove(mixed $data, array $params): array|WP_Error
     {
-        if ($deny = $this->denyIfNotManager()) {
-            return $deny; // M2 first
-        }
-
-        $editionId = $this->requireEditionScope($params); // CM-1: scope required
+        $editionId = $this->resolveEditionScope($params);
         if (is_wp_error($editionId)) {
             return $editionId;
         }
@@ -348,11 +367,7 @@ final class RosterBulkHandler
      */
     public function handleRosterBulkMessage(mixed $data, array $params): array|WP_Error
     {
-        if ($deny = $this->denyIfNotManager()) {
-            return $deny;
-        }
-
-        $editionId = $this->requireEditionScope($params);
+        $editionId = $this->resolveEditionScope($params);
         if (is_wp_error($editionId)) {
             return $editionId;
         }
@@ -379,11 +394,7 @@ final class RosterBulkHandler
      */
     public function handleRosterBulkGenerateDoc(mixed $data, array $params): array|WP_Error
     {
-        if ($deny = $this->denyIfNotManager()) {
-            return $deny;
-        }
-
-        $editionId = $this->requireEditionScope($params);
+        $editionId = $this->resolveEditionScope($params);
         if (is_wp_error($editionId)) {
             return $editionId;
         }

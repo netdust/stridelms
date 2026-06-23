@@ -7,6 +7,7 @@ namespace Stride\Tests\Integration;
 use IntegrationTestCase;
 use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Attendance\AttendanceRepository;
+use Stride\Modules\Edition\SessionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 
 /**
@@ -196,6 +197,65 @@ final class MarkAttendanceScopeTest extends IntegrationTestCase
         $this->assertNull(
             $row,
             'a rejected cross-edition mark must NOT persist an attendance record (no side effects)',
+        );
+    }
+
+    /**
+     * CM-2 lookup-inconsistency guard (RED-first): the controller's session-exists
+     * check uses get_post() (WP post-object cache) while the CM-2 scope derives the
+     * edition from SessionService::getSession() (the data-layer find()). The two are
+     * DIFFERENT lookup paths — getSession() returns null when the data-layer find()
+     * yields a WP_Error (cache/lookup edge) even after get_post() resolved the post.
+     * Before the fix the controller did getSession($id)['edition_id'] on that ?array,
+     * a PHP 8 null-offset fatal/500. The guard must turn that lookup inconsistency
+     * into a clean invalid_session / 404 — never a crash.
+     *
+     * Reproduced by registering a SessionService whose getSession() returns null
+     * (the data-layer-find-failed state) while the real vad_session post still
+     * resolves via get_post(), exactly the divergence the finding names.
+     *
+     * @test
+     */
+    public function sessionThatGetPostResolvesButGetSessionNullsReturnsCleanDenialNotFatal(): void
+    {
+        $this->actingAs(self::$managerUserId);
+
+        $realSessionService = ntdst_get(SessionService::class);
+        // A SessionService double whose getSession() returns null — the exact state
+        // the data-layer find() WP_Error produces. Duck-typed: the controller calls
+        // ->getSession() on the container result, no instanceof assertion.
+        ntdst_set(SessionService::class, new class {
+            public function getSession(int $sessionId): ?array
+            {
+                return null;
+            }
+        });
+
+        try {
+            // get_post(sessionA) still resolves (real published vad_session), so the
+            // controller's session-exists check passes and execution reaches the
+            // CM-2 edition resolution — which is exactly where the null offset was.
+            $response = $this->dispatch(self::$sessionA, self::$registeredUserId, 'present');
+        } finally {
+            ntdst_set(SessionService::class, $realSessionService);
+        }
+
+        $this->assertSame(
+            404,
+            $this->statusOf($response),
+            'a session that get_post-resolves but getSession-nulls must be a clean 404, not a fatal',
+        );
+        $this->assertSame(
+            'invalid_session',
+            $this->errorCodeOf($response),
+            'a lookup inconsistency is invalid_session (honest), not session_edition_mismatch',
+        );
+
+        // No write may have happened on the crash path either.
+        $attendanceRepo = ntdst_get(AttendanceRepository::class);
+        $this->assertNull(
+            $attendanceRepo->findBySessionAndUser(self::$sessionA, self::$registeredUserId),
+            'a null-getSession denial must not persist an attendance record',
         );
     }
 

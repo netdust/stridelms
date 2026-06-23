@@ -1350,8 +1350,17 @@ final class AdminAPIController
         // mismatch never corrupts another edition's records — but it WOULD record attendance
         // and fire auto-completion side effects for a user who is not registered in that
         // edition. Reject before any write (covers both the mark and the clear branch).
-        $sessionEditionId = (int) ntdst_get(\Stride\Modules\Edition\SessionService::class)
-            ->getSession($sessionId)['edition_id'];
+        //
+        // The session-exists check above uses get_post() (WP post-object cache); the edition
+        // resolution below uses SessionService::getSession() (the data-layer find()). These are
+        // DIFFERENT lookup paths, so getSession() CAN return null even after get_post() passed
+        // (a data-layer cache/lookup edge). Guard the ?array before dereferencing it — a
+        // lookup inconsistency is an honest invalid_session 404, never a null-offset on ?array.
+        $sessionData = ntdst_get(\Stride\Modules\Edition\SessionService::class)->getSession($sessionId);
+        if ($sessionData === null || !isset($sessionData['edition_id'])) {
+            return new WP_Error('invalid_session', 'Session not found', ['status' => 404]);
+        }
+        $sessionEditionId = (int) $sessionData['edition_id'];
         if (!$this->registrationRepository->existsForEdition($userId, $sessionEditionId)) {
             return new WP_Error(
                 'session_edition_mismatch',
