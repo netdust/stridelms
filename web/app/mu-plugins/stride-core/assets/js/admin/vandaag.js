@@ -199,6 +199,10 @@
       /* init() loads EVERYTHING. Both fetches run in parallel; a panel that
          fails shows its own error, the rest still renders (AF-1 mid-flow). */
       init() {
+        // Clear any prior error banners so a successful retry (pulse) recovers
+        // cleanly — otherwise a stale error survives a now-successful load.
+        this.errors.stats = '';
+        this.errors.actions = '';
         Promise.allSettled([
           this.api('/admin/stats'),
           this.api('/admin/pending-approvals?stale_days=7&per_page=100'),
