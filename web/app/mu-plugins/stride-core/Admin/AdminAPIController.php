@@ -259,6 +259,18 @@ final class AdminAPIController
                     'type' => 'integer',
                     'default' => 0,
                 ],
+                'tag' => [
+                    'type' => 'integer',
+                    'default' => 0,
+                ],
+                'date_from' => [
+                    'type' => 'string',
+                    'default' => '',
+                ],
+                'date_to' => [
+                    'type' => 'string',
+                    'default' => '',
+                ],
             ],
         ]);
 
@@ -1548,6 +1560,9 @@ final class AdminAPIController
             'search'     => sanitize_text_field($request->get_param('search') ?? ''),
             'status'     => sanitize_text_field($request->get_param('status') ?? ''),
             'edition_id' => (int) $request->get_param('edition_id'),
+            'tag'        => (int) $request->get_param('tag'),
+            'date_from'  => sanitize_text_field($request->get_param('date_from') ?? ''),
+            'date_to'    => sanitize_text_field($request->get_param('date_to') ?? ''),
         ];
 
         $result = ntdst_get(\Stride\Admin\AdminQuoteService::class)->getQuoteList($filters);
