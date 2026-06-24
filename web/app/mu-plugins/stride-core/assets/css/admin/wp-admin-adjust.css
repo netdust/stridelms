@@ -90,16 +90,29 @@ body.stride-dashboard .ws-search {
       too low"), and the 14px font broke parity with the sibling search/date
       fields (13px). Neutralise all three here so the option text centres and
       the control matches the rest of the toolbar. height is bumped to 32px to
-      line up with the `.ws-search` pill. */
+      line up with the `.ws-search` pill.
+
+      WP's forms.css ALSO forces `border-radius: 3px` on selects + inputs and
+      wins the cascade, so the rounded corners grid.css asked for (6px) and the
+      flatpickr date field's 8px were both flattened to ~2px — leaving these two
+      controls looking square while the rest of the toolbar is rounded. Restore
+      the design radius here (specific enough to beat WP): the select to
+      --ws-radius-sm and the flatpickr date input to --ws-radius. */
 body.stride-dashboard .ws-select {
     min-height: 0;
     height: 32px;
     line-height: normal;
     font-size: var(--ws-fs-sm);
     vertical-align: middle;
+    border-radius: var(--ws-radius-sm);
 }
 body.stride-dashboard .ws-select:focus {
     /* WP adds its own focus box-shadow; keep only the design-system one
        (grid.css already supplies the primary-subtle ring). */
     outline: none;
+}
+/* The flatpickr date field is a WP <input>, so the same 3px override flattened
+   it — round it to match the toolbar's other controls. */
+body.stride-dashboard .ws-toolbar input.flatpickr-input {
+    border-radius: var(--ws-radius);
 }
