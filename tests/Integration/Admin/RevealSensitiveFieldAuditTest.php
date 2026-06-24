@@ -170,6 +170,12 @@ final class RevealSensitiveFieldAuditTest extends IntegrationTestCase
         $response = $this->dispatchReveal(self::$testUserId, 'session_tokens');
 
         $this->assertSame(400, $response->get_status());
+        // C2: the denial path now returns the WP_Error body shape
+        // ({code, message, data.status}), not the old {error: ...} envelope.
+        $data = (array) $response->get_data();
+        $this->assertArrayNotHasKey('error', $data, 'C2: old {error: ...} envelope must be gone');
+        $this->assertSame('invalid_field', $data['code'] ?? null);
+        $this->assertSame(400, (int) ($data['data']['status'] ?? 0));
         $this->assertCount(
             $before,
             $this->auditRowsFor(self::$testUserId),
@@ -247,6 +253,11 @@ final class RevealSensitiveFieldAuditTest extends IntegrationTestCase
         $response = $this->dispatchReveal($bogusId, 'national_id');
 
         $this->assertSame(404, $response->get_status());
+        // C2: the denial path now returns the WP_Error body shape.
+        $data = (array) $response->get_data();
+        $this->assertArrayNotHasKey('error', $data, 'C2: old {error: ...} envelope must be gone');
+        $this->assertSame('not_found', $data['code'] ?? null);
+        $this->assertSame(404, (int) ($data['data']['status'] ?? 0));
         $this->assertCount(
             $before,
             $this->auditRowsFor($bogusId),

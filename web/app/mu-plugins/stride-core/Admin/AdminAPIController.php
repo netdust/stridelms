@@ -2005,7 +2005,7 @@ final class AdminAPIController
      * Comprehensive user profile: personal info, registrations, quotes,
      * attendance summary, and audit trail.
      */
-    public function getUserDetail(WP_REST_Request $request): WP_REST_Response
+    public function getUserDetail(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
         // Thin delegator — all $wpdb / read-model assembly lives in
         // AdminUserService (strangle §12.4 / S2, INV-3).
@@ -2030,23 +2030,25 @@ final class AdminAPIController
      * {@see EnrollmentService::updateUserProfile()} so admin edits and
      * enrollment-form edits share one canonical mutator.
      */
-    public function updateUserProfile(WP_REST_Request $request): WP_REST_Response
+    public function updateUserProfile(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
         $userId = (int) $request->get_param('id');
 
         $userData = get_userdata($userId);
         if (!$userData) {
-            return new WP_REST_Response(['error' => 'User not found'], 404);
+            return new WP_Error('not_found', 'User not found', ['status' => 404]);
         }
 
         if (!current_user_can('edit_user', $userId)) {
-            return new WP_REST_Response(['error' => 'Forbidden'], 403);
+            return new WP_Error('forbidden', 'Forbidden', ['status' => 403]);
         }
 
         if ((int) get_user_meta($userId, '_stride_anonymised_at', true) > 0) {
-            return new WP_REST_Response([
-                'error' => __('Geanonimiseerde gebruikers kunnen niet bewerkt worden.', 'stride'),
-            ], 403);
+            return new WP_Error(
+                'anonymised',
+                __('Geanonimiseerde gebruikers kunnen niet bewerkt worden.', 'stride'),
+                ['status' => 403],
+            );
         }
 
         $body = $request->get_json_params() ?: $request->get_body_params();
@@ -2074,15 +2076,19 @@ final class AdminAPIController
         if (array_key_exists('email', $body)) {
             $email = sanitize_email((string) $body['email']);
             if ($email === '' || !is_email($email)) {
-                return new WP_REST_Response([
-                    'error' => __('Ongeldig e-mailadres.', 'stride'),
-                ], 400);
+                return new WP_Error(
+                    'invalid_email',
+                    __('Ongeldig e-mailadres.', 'stride'),
+                    ['status' => 400],
+                );
             }
             $existing = email_exists($email);
             if ($existing && (int) $existing !== $userId) {
-                return new WP_REST_Response([
-                    'error' => __('Dit e-mailadres is al in gebruik.', 'stride'),
-                ], 400);
+                return new WP_Error(
+                    'email_in_use',
+                    __('Dit e-mailadres is al in gebruik.', 'stride'),
+                    ['status' => 400],
+                );
             }
             $coreUpdate['user_email'] = $email;
             $hasCoreChange = true;
@@ -2091,9 +2097,11 @@ final class AdminAPIController
         if ($hasCoreChange) {
             $result = wp_update_user($coreUpdate);
             if (is_wp_error($result)) {
-                return new WP_REST_Response([
-                    'error' => $result->get_error_message(),
-                ], 400);
+                return new WP_Error(
+                    'invalid',
+                    $result->get_error_message(),
+                    ['status' => 400],
+                );
             }
         }
 
@@ -2141,18 +2149,18 @@ final class AdminAPIController
      * writes an audit row (threat-model M5): the access attempt is the
      * event, even when the stored value is empty.
      */
-    public function revealSensitiveField(WP_REST_Request $request): WP_REST_Response
+    public function revealSensitiveField(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
         $userId = (int) $request->get_param('id');
         $field = (string) $request->get_param('field');
 
         $allowed = ['national_id', 'date_of_birth', 'professional_license_number', 'phone'];
         if (!in_array($field, $allowed, true)) {
-            return new WP_REST_Response(['error' => 'Invalid field'], 400);
+            return new WP_Error('invalid_field', 'Invalid field', ['status' => 400]);
         }
 
         if (!get_userdata($userId)) {
-            return new WP_REST_Response(['error' => 'User not found'], 404);
+            return new WP_Error('not_found', 'User not found', ['status' => 404]);
         }
 
         $value = get_user_meta($userId, $field, true) ?: '';

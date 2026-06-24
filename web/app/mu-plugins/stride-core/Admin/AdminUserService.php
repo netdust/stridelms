@@ -16,6 +16,7 @@ use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\User\ProfileTypeService;
 use WP_REST_Request;
+use WP_Error;
 use WP_REST_Response;
 
 /**
@@ -42,7 +43,7 @@ final class AdminUserService
      *
      * Moved verbatim from AdminAPIController::getUserDetail (behavior-preserving).
      */
-    public function getUserDetail(WP_REST_Request $request): WP_REST_Response
+    public function getUserDetail(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
         global $wpdb;
 
@@ -59,7 +60,7 @@ final class AdminUserService
         // --- User data ---
         $userData = get_userdata($userId);
         if (!$userData) {
-            return new WP_REST_Response(['error' => 'User not found'], 404);
+            return new WP_Error('not_found', 'User not found', ['status' => 404]);
         }
 
         // Profile type
