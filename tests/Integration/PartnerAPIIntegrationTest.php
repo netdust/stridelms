@@ -289,6 +289,89 @@ class PartnerAPIIntegrationTest extends IntegrationTestCase
     }
 
     // =========================================================================
+    // findByParents — trajectory-child company scoping (S1, threat-model #1)
+    // =========================================================================
+
+    /**
+     * Cross-tenant trajectory-child leak (threat-model attack #1).
+     *
+     * The trajectory PARENT is correctly company-scoped at the parent fetch,
+     * but a CHILD row could carry a different company_id (data drift, a cascade
+     * bug, a shared-trajectory edge). When the partner passes their resolved
+     * company_id, the scoped findByParents must NOT return the foreign child —
+     * the read path defends itself instead of trusting the cascade-stamps-
+     * company write-path invariant.
+     *
+     * @test
+     */
+    public function findByParentsScopedToCompanyExcludesForeignChild(): void
+    {
+        global $wpdb;
+        $repo = $this->getRegistrationRepository();
+        $table = $wpdb->prefix . 'vad_registrations';
+
+        // Trajectory PARENT belongs to OUR company.
+        $parentId = $repo->create([
+            'user_id' => self::$companyUserId,
+            'trajectory_id' => 4242,
+            'company_id' => self::$companyId,
+            'status' => 'confirmed',
+            'enrollment_path' => 'individual',
+        ]);
+        $this->assertIsInt($parentId, 'parent create should succeed');
+        self::$testRegistrationIds[] = $parentId;
+
+        $ourEditionId = $this->createTestEdition();
+        $foreignEditionId = $this->createTestEdition();
+
+        // A legitimate child of OUR company under the parent.
+        $wpdb->insert($table, [
+            'user_id' => self::$companyUserId,
+            'edition_id' => $ourEditionId,
+            'company_id' => self::$companyId,
+            'parent_registration_id' => $parentId,
+            'status' => 'confirmed',
+        ]);
+        $ourChildId = (int) $wpdb->insert_id;
+        self::$testRegistrationIds[] = $ourChildId;
+
+        // A MISLABELED child under the SAME parent but stamped a DIFFERENT
+        // company — simulate the invariant-break the scoped read must defend
+        // against.
+        $foreignCompanyId = self::$companyId + 1;
+        $wpdb->insert($table, [
+            'user_id' => self::$companyUserId,
+            'edition_id' => $foreignEditionId,
+            'company_id' => $foreignCompanyId,
+            'parent_registration_id' => $parentId,
+            'status' => 'confirmed',
+        ]);
+        $foreignChildId = (int) $wpdb->insert_id;
+        self::$testRegistrationIds[] = $foreignChildId;
+
+        // Scoped fetch (partner path): pass our resolved company_id.
+        $scoped = $repo->findByParents([$parentId], self::$companyId);
+        $scopedChildIds = array_map(static fn ($c) => (int) $c->id, $scoped[$parentId] ?? []);
+
+        // Sentinel: our own child IS present so the denial below means something.
+        $this->assertContains($ourChildId, $scopedChildIds, 'own-company child should be returned');
+
+        // The whole point: the foreign child is denied at the read.
+        $this->assertNotContains(
+            $foreignChildId,
+            $scopedChildIds,
+            'company-scoped findByParents must NOT return a child stamped a different company_id',
+        );
+
+        // Null default (internal/admin caller) preserves cross-company children —
+        // no internal caller depends on scoping, so the default must not filter.
+        $unscoped = $repo->findByParents([$parentId]);
+        $unscopedChildIds = array_map(static fn ($c) => (int) $c->id, $unscoped[$parentId] ?? []);
+        $this->assertContains($foreignChildId, $unscopedChildIds, 'null-default must return ALL children (internal-caller compat)');
+        $this->assertContains($ourChildId, $unscopedChildIds);
+    }
+
+    // =========================================================================
     // REST API ENDPOINTS
     // =========================================================================
 

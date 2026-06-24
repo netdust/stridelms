@@ -215,7 +215,7 @@ final class PartnerAPIController
             fn($id) => $id > 0,
         ));
         $childrenByParent = !empty($trajectoryParentIds)
-            ? $this->registrationRepository->findByParents($trajectoryParentIds)
+            ? $this->registrationRepository->findByParents($trajectoryParentIds, $companyId)
             : [];
 
         // Collect IDs for batch fetching — include both top-level rows and any
@@ -383,7 +383,7 @@ final class PartnerAPIController
 
         // Trajectory parent → nest children with edition/course info.
         if (!empty($registration->trajectory_id) && empty($registration->edition_id)) {
-            $children = $this->registrationRepository->findByParents([(int) $registration->id])[$registration->id] ?? [];
+            $children = $this->registrationRepository->findByParents([(int) $registration->id], $companyId)[$registration->id] ?? [];
 
             $childEditionIds = array_values(array_unique(array_filter(array_map(
                 fn($c) => (int) ($c->edition_id ?? 0),

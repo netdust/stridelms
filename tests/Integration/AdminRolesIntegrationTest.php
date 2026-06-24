@@ -295,4 +295,116 @@ class AdminRolesIntegrationTest extends IntegrationTestCase
         $this->assertFalse($role->has_cap('edit_posts'));
         $this->assertFalse($role->has_cap('edit_others_posts'));
     }
+
+    // =========================================================================
+    // IMPERSONATE — entry-point authority must be manage_options (S2, threat #2)
+    // =========================================================================
+
+    /**
+     * Impersonation capability drift (threat-model attack #2).
+     *
+     * A stride_coordinator HAS stride_manage but NOT manage_options. Before the
+     * fix the route gate (canManageAdmin → stride_manage) let them THROUGH and
+     * only the body's validateTarget stopped them. The entry-point authority
+     * must match the real authority: the coordinator is now DENIED at the route
+     * permission_callback (403), not merely inside the handler.
+     *
+     * @test
+     */
+    public function coordinatorDeniedAtImpersonateRouteGate(): void
+    {
+        $this->actingAs(self::$coordinatorId);
+        $this->assertTrue(current_user_can('stride_manage'));
+        $this->assertFalse(current_user_can('manage_options'));
+
+        $request = new WP_REST_Request('POST', '/stride/v1/admin/users/' . self::$subscriberId . '/impersonate');
+        $response = rest_do_request($request);
+
+        $this->assertEquals(
+            403,
+            $response->get_status(),
+            'stride_manage-only coordinator must be denied at the impersonate route gate',
+        );
+    }
+
+    /**
+     * The admin (manage_options) must still PASS the route gate — denial at the
+     * gate proves authority; a non-403 (the handler may 4xx for other reasons)
+     * proves the gate itself let the full admin through.
+     *
+     * @test
+     */
+    public function adminPassesImpersonateRouteGate(): void
+    {
+        $this->actingAs(self::$adminId);
+        $this->assertTrue(current_user_can('manage_options'));
+
+        $request = new WP_REST_Request('POST', '/stride/v1/admin/users/' . self::$subscriberId . '/impersonate');
+        $response = rest_do_request($request);
+
+        $this->assertNotEquals(
+            403,
+            $response->get_status(),
+            'manage_options admin must pass the impersonate route gate',
+        );
+    }
+
+    // =========================================================================
+    // REVEAL — per-user PII reveal rate-limit (N1, threat #3)
+    // =========================================================================
+
+    /**
+     * PII exfil by rate (threat-model attack #3).
+     *
+     * revealSensitiveField is manage-gated + audited but, before the fix, not
+     * rate-limited. N allowed reveals within the window succeed; the (N+1)th
+     * returns a 429 WP_Error. The counter is keyed to the CURRENT user, so a
+     * different caller's window is independent (no shared throttle).
+     *
+     * @test
+     */
+    public function revealSensitiveFieldRateLimitsPerUser(): void
+    {
+        // Shrink the limit to keep the test fast and deterministic.
+        $limit = 3;
+        $filter = static fn () => $limit;
+        add_filter('stride_pii_reveal_rate_limit', $filter);
+
+        // Clean any leftover counters from a prior run within the window.
+        delete_transient('stride_pii_reveal_rl_' . self::$coordinatorId);
+        delete_transient('stride_pii_reveal_rl_' . self::$adminId);
+
+        try {
+            $this->actingAs(self::$coordinatorId);
+            update_user_meta(self::$subscriberId, 'phone', '0470000000');
+
+            // N allowed reveals succeed (200).
+            for ($i = 0; $i < $limit; $i++) {
+                $request = new WP_REST_Request('GET', '/stride/v1/admin/users/' . self::$subscriberId . '/reveal');
+                $request->set_param('field', 'phone');
+                $response = rest_do_request($request);
+                $this->assertEquals(200, $response->get_status(), "reveal #{$i} within limit should succeed");
+            }
+
+            // The (N+1)th reveal is throttled.
+            $request = new WP_REST_Request('GET', '/stride/v1/admin/users/' . self::$subscriberId . '/reveal');
+            $request->set_param('field', 'phone');
+            $overLimit = rest_do_request($request);
+            $this->assertEquals(429, $overLimit->get_status(), 'the (N+1)th reveal must be rate-limited');
+            $this->assertSame('rate_limited', $overLimit->as_error()->get_error_code());
+
+            // A DIFFERENT user's counter is independent — the admin, who has not
+            // revealed at all, is NOT throttled by the coordinator's window.
+            $this->actingAs(self::$adminId);
+            $adminRequest = new WP_REST_Request('GET', '/stride/v1/admin/users/' . self::$subscriberId . '/reveal');
+            $adminRequest->set_param('field', 'phone');
+            $adminResponse = rest_do_request($adminRequest);
+            $this->assertEquals(200, $adminResponse->get_status(), 'a different user\'s reveal counter must be independent');
+        } finally {
+            remove_filter('stride_pii_reveal_rate_limit', $filter);
+            delete_transient('stride_pii_reveal_rl_' . self::$coordinatorId);
+            delete_transient('stride_pii_reveal_rl_' . self::$adminId);
+            delete_user_meta(self::$subscriberId, 'phone');
+        }
+    }
 }

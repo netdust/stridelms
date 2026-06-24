@@ -475,10 +475,14 @@ final class AdminAPIController
         ]);
 
         // Impersonate user
+        // Impersonation's real authority is manage_options (full admin), NOT the
+        // broader stride_manage coordinator cap. The route gate must match the
+        // body's validateTarget authority so a future refactor that trusts the
+        // gate cannot silently open impersonation to coordinators (threat #2).
         register_rest_route(self::NAMESPACE, '/admin/users/(?P<id>\d+)/impersonate', [
             'methods' => 'POST',
             'callback' => [$this, 'impersonateUser'],
-            'permission_callback' => [$this, 'canManageAdmin'],
+            'permission_callback' => [$this, 'canImpersonate'],
             'args' => [
                 'id' => ['type' => 'integer', 'required' => true],
             ],
@@ -541,6 +545,19 @@ final class AdminAPIController
     public function canManageAdmin(): bool
     {
         return current_user_can('stride_manage');
+    }
+
+    /**
+     * Permission callback for the impersonate route only.
+     *
+     * Impersonation's real authority is manage_options (full admin), stricter
+     * than the stride_manage coordinator cap that gates the other mutation
+     * routes. The route gate matches the body's validateTarget authority so the
+     * entry-point authorization equals the actual authority (INV-1, threat #2).
+     */
+    public function canImpersonate(): bool
+    {
+        return current_user_can('manage_options');
     }
 
     /**
@@ -2181,9 +2198,32 @@ final class AdminAPIController
             return new WP_Error('invalid_field', 'Invalid field', ['status' => 400]);
         }
 
+        // PII exfil-by-rate guard (threat #3). The reveal is manage-gated +
+        // audited, but a compromised/curious coordinator could script it across
+        // the whole user base. A per-current-user windowed counter throttles the
+        // bulk harvest (the audit log records it, but this constrains DURING
+        // rather than after). N is generous enough for legitimate dossier
+        // browsing; a determined full-admin is only slowed, not blocked (by
+        // design — see threat-model deferrals). The transient is per-site (one
+        // DB) — fine for Stride's single-node shape.
+        $rlLimit = (int) apply_filters('stride_pii_reveal_rate_limit', 20);
+        $rlWindow = (int) apply_filters('stride_pii_reveal_rate_window', 60);
+        $rlKey = 'stride_pii_reveal_rl_' . get_current_user_id();
+        $rlCount = (int) get_transient($rlKey);
+        if ($rlCount >= $rlLimit) {
+            return new WP_Error(
+                'rate_limited',
+                __('Te veel aanvragen. Probeer het later opnieuw.', 'stride'),
+                ['status' => 429],
+            );
+        }
+
         if (!get_userdata($userId)) {
             return new WP_Error('not_found', 'User not found', ['status' => 404]);
         }
+
+        // Count this ALLOWED reveal against the window.
+        set_transient($rlKey, $rlCount + 1, $rlWindow);
 
         $value = get_user_meta($userId, $field, true) ?: '';
 

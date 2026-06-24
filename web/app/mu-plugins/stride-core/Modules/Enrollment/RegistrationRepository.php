@@ -1092,10 +1092,19 @@ final class RegistrationRepository
      * Used by listing endpoints (e.g. PartnerAPI) that need to nest
      * children under their trajectory parents without N+1 lookups.
      *
+     * When $companyId is non-null the result is additionally filtered to that
+     * company — the partner path passes its resolved company_id so a child row
+     * that somehow carries a different company_id (data drift, cascade bug,
+     * shared-trajectory edge) is NOT leaked across the tenant boundary. The
+     * null default preserves internal/admin callers that legitimately need
+     * cross-company children (verified: no internal caller depends on scoping).
+     * Threat-model attack #1 — company scoping pushed DOWN into the repository
+     * (INV-1), not done inline in the controller.
+     *
      * @param array<int> $parentIds
      * @return array<int, array<object>> Map of parent_registration_id => children[]
      */
-    public function findByParents(array $parentIds): array
+    public function findByParents(array $parentIds, ?int $companyId = null): array
     {
         if (empty($parentIds)) {
             return [];
@@ -1108,11 +1117,18 @@ final class RegistrationRepository
         }
         $placeholders = implode(',', array_fill(0, count($ids), '%d'));
 
+        $args = $ids;
+        $companyClause = '';
+        if ($companyId !== null) {
+            $companyClause = ' AND company_id = %d';
+            $args[] = $companyId;
+        }
+
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT * FROM {$this->table()}
-             WHERE parent_registration_id IN ({$placeholders})
+             WHERE parent_registration_id IN ({$placeholders}){$companyClause}
              ORDER BY parent_registration_id, registered_at ASC",
-            ...$ids,
+            ...$args,
         ));
 
         $grouped = array_fill_keys($ids, []);
