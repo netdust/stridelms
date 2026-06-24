@@ -1,6 +1,6 @@
 /**
  * Shared admin chrome for Stride tool pages.
- * Tokens come from admin-dashboard.css (--sd-*).
+ * Tokens come from tool-tokens.css (--sd-*).
  */
 
 .stride-tool-header {
