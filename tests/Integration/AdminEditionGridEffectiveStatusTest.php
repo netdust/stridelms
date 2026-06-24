@@ -167,6 +167,30 @@ final class AdminEditionGridEffectiveStatusTest extends IntegrationTestCase
     }
 
     /**
+     * The C1 second-site fix (found at gate review by the invariant-auditor):
+     * getEdition() — the single-edition detail endpoint feeding the slide-over
+     * Info-tab badge — must ALSO emit effective status + label, so opening a
+     * grid row can't show a different status than the row itself. Closes the
+     * last INV-7 edition-status-display bypass.
+     */
+    public function test_get_edition_detail_emits_effective_status_and_label(): void
+    {
+        $editionId = $this->seedStoredOpenButEffectivelyCompletedEdition();
+
+        $req = new WP_REST_Request('GET', '/stride/v1/admin/editions/' . $editionId);
+        $req->set_param('id', $editionId);
+        $data = $this->controller()->getEdition($req)->get_data();
+
+        // Stored is 'open'; effective (past end_date) is 'completed'.
+        $this->assertSame('completed', $data['status'], 'getEdition must emit EFFECTIVE status, not raw stored (INV-7)');
+        // The badge text falls back to the raw value when status_label is absent —
+        // emit the effective label so the slide-over shows the right Dutch text.
+        $this->assertArrayHasKey('status_label', $data, 'getEdition must emit status_label so the badge does not fall back to the raw value');
+        $this->assertNotSame('', $data['status_label']);
+        $this->assertNotSame('open', $data['status'], 'the stored-open edition must NOT render as open in the detail panel');
+    }
+
+    /**
      * @param array<int, array<string, mixed>> $items
      */
     private function findItem(array $items, int $editionId): ?array

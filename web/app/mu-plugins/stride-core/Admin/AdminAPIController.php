@@ -1157,7 +1157,11 @@ final class AdminAPIController
         $endDate = $this->editionRepository->getField($editionId, 'end_date', '');
         $venue = $this->editionRepository->getField($editionId, 'venue', '');
         $capacity = (int) $this->editionRepository->getField($editionId, 'capacity', 0);
-        $editionStatus = $this->editionRepository->getField($editionId, 'status', '');
+        // INV-7: emit EFFECTIVE status (stored + dates + session count), the same
+        // convergence point the grid + typeahead use — so the slide-over Info-tab
+        // badge can't disagree with the grid row it was opened from. (Was raw
+        // stored `_ntdst_status`, the C1 second-site bypass found at gate review.)
+        $effectiveStatus = ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatus($editionId);
         $courseId = (int) $this->editionRepository->getField($editionId, 'course_id', 0);
         $price = (int) $this->editionRepository->getField($editionId, 'price', 0);
         $priceNonMember = (int) $this->editionRepository->getField($editionId, 'price_non_member', 0);
@@ -1209,7 +1213,8 @@ final class AdminAPIController
             'venue' => $venue ?: null,
             'capacity' => $capacity,
             'registeredCount' => $registeredCount,
-            'status' => $editionStatus ?: 'open',
+            'status' => $effectiveStatus->value,
+            'status_label' => $effectiveStatus->label(),
             'price' => $price,
             'priceNonMember' => $priceNonMember,
             'speakers' => $speakers ?: null,
