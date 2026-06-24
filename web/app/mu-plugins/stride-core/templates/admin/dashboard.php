@@ -49,12 +49,11 @@ defined('ABSPATH') || exit;
         <?php // Trajecten — read-only overview + detail slide-over, its own factory owns its data (cluster E).
         require __DIR__ . '/dashboard/trajecten.php'; ?>
 
-        <?php // The four functional list surfaces (cluster F). Each is its own
+        <?php // The functional list surfaces (cluster F). Each is its own
               // per-surface Alpine factory that owns ALL of its own data
               // (init/load/loading/empty/error) — never a shared loader. Edit
               // actions deep-link to the existing WP edit screens.?>
         <?php require __DIR__ . '/dashboard/edities.php'; ?>
-        <?php require __DIR__ . '/dashboard/sessies.php'; ?>
         <?php require __DIR__ . '/dashboard/offertes.php'; ?>
         <?php require __DIR__ . '/dashboard/gebruikers.php'; ?>
 

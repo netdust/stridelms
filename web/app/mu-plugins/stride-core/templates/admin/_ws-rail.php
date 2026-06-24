@@ -42,9 +42,6 @@ defined('ABSPATH') || exit;
             <a class="ws-nav__item" href="#" :class="isActive('edities') && 'is-active'" @click.prevent="switchView('edities')">
                 <span x-html="icon('layers')"></span> Edities
             </a>
-            <a class="ws-nav__item" href="#" :class="isActive('sessies') && 'is-active'" @click.prevent="switchView('sessies')">
-                <span x-html="icon('calendar')"></span> Sessies
-            </a>
             <a class="ws-nav__item" href="#" :class="isActive('offertes') && 'is-active'" @click.prevent="switchView('offertes')">
                 <span x-html="icon('receipt')"></span> Offertes
             </a>

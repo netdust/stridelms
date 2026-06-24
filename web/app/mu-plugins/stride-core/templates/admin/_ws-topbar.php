@@ -29,7 +29,6 @@ $ws_crumb_labels = [
     'vandaag'        => __('Vandaag', 'stride'),
     'inschrijvingen' => __('Inschrijvingen', 'stride'),
     'edities'        => __('Edities', 'stride'),
-    'sessies'        => __('Sessies', 'stride'),
     'offertes'       => __('Offertes', 'stride'),
     'trajecten'      => __('Trajecten', 'stride'),
     'gebruikers'     => __('Gebruikers', 'stride'),

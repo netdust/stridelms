@@ -121,7 +121,7 @@
   /* The whitelisted set of surfaces the rail can switch to. Anything outside
      this set falls back to the default view (never an arbitrary string). */
   const VIEWS = [
-    'vandaag', 'inschrijvingen', 'edities', 'sessies',
+    'vandaag', 'inschrijvingen', 'edities',
     'offertes', 'trajecten', 'gebruikers', 'dossier',
   ];
 
