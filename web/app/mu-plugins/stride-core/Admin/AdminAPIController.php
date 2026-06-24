@@ -661,6 +661,14 @@ final class AdminAPIController
         $courses = BatchQueryHelper::batchGetPosts($courseIds, 'sfwd-courses');
         $courseTags = BatchQueryHelper::batchGetCourseTags($courseIds);
 
+        // INV-7 (C1): batch-resolve EFFECTIVE status for every visible edition,
+        // the same read the typeahead (getEditionOptions) uses, so the grid and
+        // the typeahead agree. Passed into the mapper $context; the mapper does
+        // NO queries.
+        $effectiveStatuses = !empty($editionIds)
+            ? ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($editionIds)
+            : [];
+
         foreach ($editions as $edition) {
             $editionId = (int) $edition->ID;
             $meta = $editionMeta[$editionId] ?? [];
@@ -693,8 +701,8 @@ final class AdminAPIController
 
             // Common edition->item shaping shared with the agenda view, deduped
             // into EditionAdminMapper (id, course{id,title}, capacity,
-            // registeredCount, status, editUrl). status stays stored-raw — C1
-            // (Cluster D) swaps it to effective in the mapper's single source.
+            // registeredCount, status, editUrl). status is the EFFECTIVE status
+            // (INV-7, C1) resolved from the batched $effectiveStatuses map.
             $base = EditionAdminMapper::toItem([
                 'editionId' => $editionId,
                 'courseId' => $courseId,
@@ -702,6 +710,7 @@ final class AdminAPIController
                 'capacity' => $capacity,
                 'registeredCount' => $registeredCount,
                 'status' => $editionStatus,
+                'effectiveStatuses' => $effectiveStatuses,
             ]);
 
             // LIST-view-specific keys merged onto the common base. course.tags,
@@ -952,6 +961,13 @@ final class AdminAPIController
         $courseIds = array_filter(array_map(fn($id) => (int) ($editionMeta[$id]['_ntdst_course_id'] ?? 0), $editionIds));
         $courses = BatchQueryHelper::batchGetPosts($courseIds, 'sfwd-courses');
 
+        // INV-7 (C1): batch-resolve EFFECTIVE status for every visible edition
+        // (same read as the typeahead) so the agenda grid and the typeahead
+        // agree. Passed into the mapper $context; the mapper does NO queries.
+        $effectiveStatuses = !empty($editionIds)
+            ? ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($editionIds)
+            : [];
+
         foreach ($sessions as $session) {
             $sessionId = (int) $session->session_id;
             $editionId = (int) $session->edition_id;
@@ -988,8 +1004,8 @@ final class AdminAPIController
 
             // Common edition->item shaping shared with the list view, deduped
             // into EditionAdminMapper (id, course{id,title}, capacity,
-            // registeredCount, status, editUrl). status stays stored-raw — C1
-            // (Cluster D) swaps it to effective in the mapper's single source.
+            // registeredCount, status, editUrl). status is the EFFECTIVE status
+            // (INV-7, C1) resolved from the batched $effectiveStatuses map.
             $base = EditionAdminMapper::toItem([
                 'editionId' => $editionId,
                 'courseId' => $courseId,
@@ -997,6 +1013,7 @@ final class AdminAPIController
                 'capacity' => $capacity,
                 'registeredCount' => $registeredCount,
                 'status' => $editionStatus,
+                'effectiveStatuses' => $effectiveStatuses,
             ]);
 
             // AGENDA-view-specific keys merged onto the common base. sessionId,

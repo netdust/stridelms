@@ -20,10 +20,14 @@ namespace Stride\Admin\Mappers;
  * sessionTitle, date, startTime/endTime, venue fallback) stay in their
  * respective controller methods, which merge them onto this common base.
  *
- * The `status` key is the cross-cutting surface centralized here: both views
- * previously emitted the STORED-RAW `$editionStatus ?: 'open'`. That raw
- * behavior is reproduced verbatim (this dedup is behavior-preserving). Cluster
- * D's C1 fix resolves effective status in THIS single place.
+ * The `status` key is the cross-cutting surface centralized here (INV-7): both
+ * views now emit the EFFECTIVE status (stored + dates + session count, derived
+ * by EditionService::getEffectiveStatuses) — the SAME read the typeahead
+ * (getEditionOptions) already uses, so grid and typeahead agree. The controller
+ * batch-resolves the effective-status map once per page and passes it in via
+ * $context['effectiveStatuses'] (a map of editionId => OfferingStatus); this
+ * mapper stays a pure shaper (no queries). The raw stored status is kept ONLY
+ * as a defensive fallback if an id is absent from the map (it should not be).
  */
 final class EditionAdminMapper
 {
@@ -36,8 +40,11 @@ final class EditionAdminMapper
      *   courseTitle:string,
      *   capacity:int,
      *   registeredCount:int,
-     *   status:string
-     * } $context Pre-fetched values (no queries inside).
+     *   status:string,
+     *   effectiveStatuses?:array<int, \Stride\Domain\OfferingStatus>
+     * } $context Pre-fetched values (no queries inside). effectiveStatuses is
+     *   the batched editionId => OfferingStatus map the controller resolves via
+     *   EditionService::getEffectiveStatuses() (INV-7).
      * @return array{
      *   id:int,
      *   course:array{id:int, title:string},
@@ -59,10 +66,34 @@ final class EditionAdminMapper
             ],
             'capacity' => (int) $context['capacity'],
             'registeredCount' => (int) $context['registeredCount'],
-            // Stored-raw status, verbatim. C1 (Cluster D) swaps this single
-            // source to the effective status; do NOT change the semantics here.
-            'status' => $context['status'] ?: 'open',
+            // INV-7: emit the EFFECTIVE status (the same read the typeahead uses)
+            // so grid and typeahead agree. Defensive fallback to the raw stored
+            // status only if the id is absent from the batched map.
+            'status' => self::resolveStatus($editionId, $context),
             'editUrl' => admin_url("post.php?post={$editionId}&action=edit"),
         ];
+    }
+
+    /**
+     * Resolve the display status: effective (INV-7) from the batched map, with
+     * the raw stored status (`?: 'open'`) as a defensive fallback.
+     *
+     * @param array<string, mixed> $context
+     */
+    private static function resolveStatus(int $editionId, array $context): string
+    {
+        $effective = $context['effectiveStatuses'][$editionId] ?? null;
+        if ($effective instanceof \Stride\Domain\OfferingStatus) {
+            return $effective->value;
+        }
+
+        // Fallback: id missing from the effective-status map (should not happen —
+        // the controller batches every visible edition id). Log so a real gap is
+        // visible, then degrade to the stored raw status.
+        ntdst_log('admin')->warning('EditionAdminMapper: effective status missing for edition; falling back to stored status', [
+            'edition_id' => $editionId,
+        ]);
+
+        return ($context['status'] ?? '') ?: 'open';
     }
 }
