@@ -328,7 +328,20 @@ class AdminDashboardService extends AbstractService
     }
 
     /**
-     * Inject CSS to hide WordPress UI
+     * Inject the admin workspace design system + WP-chrome adjust.
+     *
+     * The design system is the wireframe CSS adopted verbatim:
+     *   workspace.css (chrome/tokens) + grid.css (data grid).
+     * It was authored for a standalone file:// document that owns <body>, so
+     * wp-admin-adjust.css re-points the WP chrome-hiding rules at the new
+     * `.ws-shell` host (the only visible nav becomes the dark `.ws-rail`).
+     *
+     * Self-hosted fonts (Space Grotesk / Inter Tight / JetBrains Mono, latin
+     * subset, woff2) are emitted via @font-face with ABSOLUTE plugin URLs —
+     * the stylesheets are inlined in <head>, so relative url() would resolve
+     * against the wp-admin document URL, not the CSS file. font-display: swap +
+     * a system-stack fallback (baked into the --ws-font* tokens) keep the UI
+     * usable if a face fails. No Google Fonts <link> in wp-admin (privacy).
      */
     public function injectStyles(): void
     {
@@ -336,12 +349,50 @@ class AdminDashboardService extends AbstractService
             return;
         }
 
-        $cssPath = dirname(__DIR__) . '/assets/css/admin-dashboard.css';
-        if (file_exists($cssPath)) {
-            echo '<style id="stride-dashboard-styles">';
-            include $cssPath;
-            echo '</style>';
+        $basePath = dirname(__DIR__);
+        $fontBase = plugins_url('assets/fonts', $basePath . '/stride-core.php');
+
+        echo '<style id="stride-workspace-fonts">';
+        echo $this->fontFaceCss($fontBase);
+        echo '</style>';
+
+        foreach (['admin/workspace.css', 'admin/grid.css', 'admin/wp-admin-adjust.css'] as $rel) {
+            $cssPath = $basePath . '/assets/css/' . $rel;
+            if (file_exists($cssPath)) {
+                echo '<style id="stride-workspace-' . esc_attr(basename($rel, '.css')) . '">';
+                include $cssPath;
+                echo '</style>';
+            }
         }
+    }
+
+    /**
+     * Build the @font-face block for the self-hosted workspace fonts.
+     *
+     * Inter Tight and Space Grotesk are variable fonts (one woff2 spans the
+     * 400-700 range used by the design); JetBrains Mono likewise covers 400-500.
+     * A single @font-face per family with a `font-weight` range is therefore
+     * correct and the smallest payload.
+     *
+     * @param string $fontBase Absolute URL of the fonts directory (no trailing slash).
+     */
+    private function fontFaceCss(string $fontBase): string
+    {
+        $faces = [
+            ['Space Grotesk', 'space-grotesk-latin.woff2', '400 700'],
+            ['Inter Tight',   'inter-tight-latin.woff2',   '400 700'],
+            ['JetBrains Mono', 'jetbrains-mono-latin.woff2', '400 500'],
+        ];
+
+        $css = '';
+        foreach ($faces as [$family, $file, $weight]) {
+            $url = esc_url($fontBase . '/' . $file);
+            $css .= "@font-face{font-family:'{$family}';font-style:normal;"
+                . "font-weight:{$weight};font-display:swap;"
+                . "src:url('{$url}') format('woff2');}";
+        }
+
+        return $css;
     }
 
     /**

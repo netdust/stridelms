@@ -120,8 +120,9 @@ final class QuestionnaireSettingsPage
      * Inline CSS tokens, builder CSS, the Alpine component, and the seed
      * state into <head>. Inlining (vs enqueuing) is required so:
      *   - The --sd-* token CSS arrives even though AdminDashboardService
-     *     only injects its admin-dashboard.css on the dashboard top-level
-     *     page (isStridePage() returns false here).
+     *     only injects its workspace design system on the dashboard top-level
+     *     page (isStridePage() returns false here). The --sd-* tokens this
+     *     page relies on live in assets/css/admin/tool-tokens.css.
      *   - The component-registration script runs before Alpine's deferred
      *     CDN script fires `alpine:init`, so `questionnaireBuilder` is
      *     defined when Alpine looks it up. See

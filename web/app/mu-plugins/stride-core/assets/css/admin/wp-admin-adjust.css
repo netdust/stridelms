@@ -1,0 +1,57 @@
+/* ==========================================================================
+   WordPress-admin chrome adjust for the Stride Admin Workspace
+   ==========================================================================
+   workspace.css + grid.css were authored for a standalone file:// document
+   that OWNS <body>. In wp-admin the `.ws-shell` host lives INSIDE #wpcontent,
+   next to #adminmenu + the admin bar. This file is the ONLY bridge between the
+   two worlds: it hides the WP chrome and collapses #wpcontent so the ws-rail
+   is the only visible navigation. Body class set by addBodyClasses():
+   `stride-dashboard folded`.
+
+   Keep this file SMALL — it is the wp-admin adjust layer, not the design
+   system. The design system is workspace.css (chrome/tokens) + grid.css (grid).
+   ========================================================================== */
+
+/* 1. Hide WordPress admin chrome on the dashboard page */
+body.stride-dashboard #wpadminbar,
+body.stride-dashboard #adminmenuwrap,
+body.stride-dashboard #adminmenuback,
+body.stride-dashboard #wpfooter,
+body.stride-dashboard .notice,
+body.stride-dashboard .update-nag,
+body.stride-dashboard .updated,
+body.stride-dashboard .error,
+body.stride-dashboard #screen-meta,
+body.stride-dashboard #screen-meta-links {
+    display: none !important;
+}
+
+html.wp-toolbar:has(body.stride-dashboard) {
+    padding-top: 0 !important;
+    --wp-admin--admin-bar--height: 0px;
+}
+
+/* 2. Collapse #wpcontent so the ws-shell owns the full viewport — the WP
+      admin menu is hidden, so there is no left gutter to reserve. */
+body.stride-dashboard #wpcontent,
+body.stride-dashboard.folded #wpcontent {
+    padding: 0 !important;
+    margin-left: 0 !important;
+}
+
+body.stride-dashboard #wpbody-content {
+    padding-bottom: 0;
+    height: 100vh;
+    overflow: hidden;
+}
+
+body.stride-dashboard .wrap {
+    margin: 0;
+}
+
+/* 3. The ws-shell is the visible app surface. It owns its own min-height:100vh
+      flex layout (workspace.css §2); inside #wpbody-content's 100vh box it must
+      fill that height so the dark ws-rail runs full-bleed. */
+body.stride-dashboard .ws-shell {
+    height: 100vh;
+}

@@ -29,7 +29,7 @@ if (!function_exists('stride_load_tool_chrome')) {
         $emitted = true;
 
         $coreRoot   = dirname(__DIR__, 2); // stride-core/
-        $tokensFile = $coreRoot . '/assets/css/admin-dashboard.css';
+        $tokensFile = $coreRoot . '/assets/css/admin/tool-tokens.css';
         $chromeFile = $coreRoot . '/assets/css/admin/tool-chrome.css';
 
         if (file_exists($tokensFile)) {
