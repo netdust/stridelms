@@ -147,6 +147,62 @@ final class AdminQuoteServiceTest extends IntegrationTestCase
         $this->assertNotContains($draftId, $ids, 'draft quote excluded by status filter');
     }
 
+    /**
+     * Spec-close test-effectiveness blind-path #1: the `edition_id` EXISTS
+     * predicate was relocated verbatim but no test exercised it — a dropped or
+     * renamed `edition_id` filter would have shipped green. This drives it: a
+     * quote on a SECOND edition must be excluded when filtering by the first.
+     *
+     * @test
+     */
+    public function editionFilterReturnsOnlyQuotesForThatEdition(): void
+    {
+        $thisEditionId = $this->createTestQuote(self::$testUserId, $this->editionId, [
+            'meta' => ['status' => QuoteStatus::Sent->value, 'quote_number' => 'OFF-D1-2001'],
+        ]);
+        $otherEdition = $this->createTestEdition(['post_title' => 'D1 Other Edition']);
+        $otherEditionId = $this->createTestQuote(self::$testUserId, $otherEdition, [
+            'meta' => ['status' => QuoteStatus::Sent->value, 'quote_number' => 'OFF-D1-2002'],
+        ]);
+
+        $result = $this->service->getQuoteList($this->filters([
+            'edition_id' => $this->editionId,
+        ]));
+
+        $ids = array_map(fn($i) => $i['id'], $result['items']);
+        $this->assertContains($thisEditionId, $ids, 'quote for the filtered edition is included');
+        $this->assertNotContains($otherEditionId, $ids, 'quote for a DIFFERENT edition must be excluded (edition_id EXISTS predicate)');
+    }
+
+    /**
+     * Spec-close test-effectiveness blind-path #1 (cont.): the positive
+     * user-search branch (search resolves to >=1 user) was never run — only the
+     * zero-user short-circuit was. This drives a search that DOES match a user
+     * and asserts only that user's quotes return.
+     *
+     * @test
+     */
+    public function searchMatchingAUserReturnsOnlyThatUsersQuotes(): void
+    {
+        $token = 'qsrch' . wp_generate_password(6, false);
+        $matchUser = wp_create_user('quser_' . $token, 'testpass123', 'quser_' . $token . '@test.local');
+        wp_update_user(['ID' => $matchUser, 'display_name' => 'Zoekbaar ' . $token]);
+        $mine = $this->createTestQuote($matchUser, $this->editionId, [
+            'meta' => ['status' => QuoteStatus::Sent->value, 'quote_number' => 'OFF-D1-3001'],
+        ]);
+        $theirs = $this->createTestQuote(self::$testUserId, $this->editionId, [
+            'meta' => ['status' => QuoteStatus::Sent->value, 'quote_number' => 'OFF-D1-3002'],
+        ]);
+
+        $result = $this->service->getQuoteList($this->filters(['search' => $token]));
+
+        // Positive match → the MAIN envelope (not the zero-user short-circuit).
+        $this->assertArrayHasKey('items', $result, 'a matching search uses the main items envelope');
+        $ids = array_map(fn($i) => $i['id'], $result['items']);
+        $this->assertContains($mine, $ids, 'the matched user\'s quote is returned');
+        $this->assertNotContains($theirs, $ids, 'another user\'s quote is excluded by the user-search filter');
+    }
+
     /** @test */
     public function searchWithNoMatchingUsersShortCircuitsWithTheDataEnvelope(): void
     {
