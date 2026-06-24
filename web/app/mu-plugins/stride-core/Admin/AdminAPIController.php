@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
+use Stride\Admin\Mappers\EditionAdminMapper;
 use Stride\Domain\AttendanceStatus;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Attendance\AttendanceRepository;
@@ -690,24 +691,31 @@ final class AdminAPIController
             $isToday = $startDate === $today || ($startDate <= $today && $endDate >= $today);
             $isPast = !empty($endDate) ? $endDate < $today : $startDate < $today;
 
-            $items[] = [
-                'id' => $editionId,
-                'title' => $edition->post_title,
-                'course' => [
-                    'id' => $courseId,
-                    'title' => $courseTitle,
-                    'tags' => $courseTagList,
-                ],
-                'startDate' => $startDate ?: null,
-                'endDate' => $endDate ?: null,
-                'venue' => $venue ?: null,
+            // Common edition->item shaping shared with the agenda view, deduped
+            // into EditionAdminMapper (id, course{id,title}, capacity,
+            // registeredCount, status, editUrl). status stays stored-raw — C1
+            // (Cluster D) swaps it to effective in the mapper's single source.
+            $base = EditionAdminMapper::toItem([
+                'editionId' => $editionId,
+                'courseId' => $courseId,
+                'courseTitle' => $courseTitle,
                 'capacity' => $capacity,
                 'registeredCount' => $registeredCount,
-                'status' => $editionStatus ?: 'open',
-                'isToday' => $isToday,
-                'isPast' => $isPast,
-                'editUrl' => admin_url("post.php?post={$editionId}&action=edit"),
-            ];
+                'status' => $editionStatus,
+            ]);
+
+            // LIST-view-specific keys merged onto the common base. course.tags,
+            // the edition title source, the start/end dates and the edition-date-
+            // derived isToday/isPast are unique to this view.
+            $base['title'] = $edition->post_title;
+            $base['course']['tags'] = $courseTagList;
+            $base['startDate'] = $startDate ?: null;
+            $base['endDate'] = $endDate ?: null;
+            $base['venue'] = $venue ?: null;
+            $base['isToday'] = $isToday;
+            $base['isPast'] = $isPast;
+
+            $items[] = $base;
         }
 
         return new WP_REST_Response([
@@ -978,26 +986,33 @@ final class AdminAPIController
             $isToday = $sessionDate === $today;
             $isPast = $sessionDate < $today;
 
-            $items[] = [
-                'id' => $editionId,
-                'sessionId' => $sessionId,
-                'title' => $session->edition_title,
-                'sessionTitle' => $session->session_title,
-                'course' => [
-                    'id' => $courseId,
-                    'title' => $courseTitle,
-                ],
-                'date' => $sessionDate,
-                'startTime' => $startTime ?: null,
-                'endTime' => $endTime ?: null,
-                'venue' => $location ?: $venue ?: null,
+            // Common edition->item shaping shared with the list view, deduped
+            // into EditionAdminMapper (id, course{id,title}, capacity,
+            // registeredCount, status, editUrl). status stays stored-raw — C1
+            // (Cluster D) swaps it to effective in the mapper's single source.
+            $base = EditionAdminMapper::toItem([
+                'editionId' => $editionId,
+                'courseId' => $courseId,
+                'courseTitle' => $courseTitle,
                 'capacity' => $capacity,
                 'registeredCount' => $registeredCount,
-                'status' => $editionStatus ?: 'open',
-                'isToday' => $isToday,
-                'isPast' => $isPast,
-                'editUrl' => admin_url("post.php?post={$editionId}&action=edit"),
-            ];
+                'status' => $editionStatus,
+            ]);
+
+            // AGENDA-view-specific keys merged onto the common base. sessionId,
+            // sessionTitle, the session date + times, the venue location-fallback
+            // and the session-date-derived isToday/isPast are unique to this view.
+            $base['sessionId'] = $sessionId;
+            $base['title'] = $session->edition_title;
+            $base['sessionTitle'] = $session->session_title;
+            $base['date'] = $sessionDate;
+            $base['startTime'] = $startTime ?: null;
+            $base['endTime'] = $endTime ?: null;
+            $base['venue'] = $location ?: $venue ?: null;
+            $base['isToday'] = $isToday;
+            $base['isPast'] = $isPast;
+
+            $items[] = $base;
         }
 
         return new WP_REST_Response([
