@@ -83,8 +83,23 @@ body.stride-dashboard .ws-search {
     margin: 0;
 }
 
-/* 5. Tame the same WP `select { min-height: 40px }` bleed on the surface
-      toolbar selects so grid.css's explicit `height: 30px` is honoured. */
+/* 5. Tame the WP `select` bleed on the surface toolbar selects. WordPress's
+      forms.css forces `select { min-height: 40px; line-height: 38px;
+      font-size: 14px }`, which fought grid.css's `height: 30px`: a 38px
+      line-height inside a 30px box drops the option text below centre ("text
+      too low"), and the 14px font broke parity with the sibling search/date
+      fields (13px). Neutralise all three here so the option text centres and
+      the control matches the rest of the toolbar. height is bumped to 32px to
+      line up with the `.ws-search` pill. */
 body.stride-dashboard .ws-select {
     min-height: 0;
+    height: 32px;
+    line-height: normal;
+    font-size: var(--ws-fs-sm);
+    vertical-align: middle;
+}
+body.stride-dashboard .ws-select:focus {
+    /* WP adds its own focus box-shadow; keep only the design-system one
+       (grid.css already supplies the primary-subtle ring). */
+    outline: none;
 }
