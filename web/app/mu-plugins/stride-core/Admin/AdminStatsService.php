@@ -41,12 +41,16 @@ final class AdminStatsService
      * Transient key + TTL for the cached dashboard stats payload (S6).
      *
      * Mirrors the sibling getActionQueueItems / stride_action_queue cache in
-     * this file: a short TTL bounds staleness on a quiet system, and the SAME
-     * registration/quote/attendance write events that bust the action queue also
-     * bust this key (wired in AdminDashboardService::init), so a write reflects
-     * immediately. 120s is within the 60-120s band the plan sets — none of the
-     * ~15 stats queries are real-time critical; the worst case on a quiet system
-     * is a 120s-stale headline count that self-heals.
+     * this file: a short TTL bounds staleness on a quiet system, and a broad set
+     * of registration/quote/attendance/CPT write events busts this key (wired in
+     * AdminDashboardService::init). Because the stats payload counts MORE inputs
+     * than the action queue (interest/waitlist sign-ups, edition/session/
+     * trajectory CPT saves, any reg status transition), the bust set is wider
+     * than the action queue's — it also hooks interest_registered, waitlisted,
+     * the generic registration/updated event, and save_post_vad_{edition,session,
+     * trajectory}. With those wired, a covered write reflects on the next read;
+     * any input not in that set is bounded to ≤120s staleness on a self-healing
+     * TTL — acceptable, as none of the ~15 stats queries are real-time critical.
      */
     public const STATS_TRANSIENT_KEY = 'stride_admin_stats';
     private const STATS_TTL = 2 * MINUTE_IN_SECONDS;

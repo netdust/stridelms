@@ -104,4 +104,43 @@ final class AdminStatsCacheTest extends IntegrationTestCase
         );
         $this->assertArrayHasKey('upcomingEditions', $fresh, 'the fresh value is a real, recomputed stats payload');
     }
+
+    /**
+     * Cluster-F gate (perf-oracle F-1): the stats cache counts MORE inputs than
+     * the action queue, so the bust hooks must cover interest/waitlist sign-ups,
+     * any registration status transition, and edition/session/trajectory CPT
+     * saves — not just created/confirmed/cancelled. Fire the REAL events and
+     * assert each busts the transient (proves the hooks are wired, not just that
+     * delete_transient works).
+     *
+     * @dataProvider bustingEventProvider
+     */
+    public function testTheWiderBustSetClearsTheStatsTransient(string $hook): void
+    {
+        // Ensure AdminDashboardService::init() ran so its hooks are registered.
+        ntdst_get(\Stride\Admin\AdminDashboardService::class);
+
+        set_transient(self::TRANSIENT_KEY, ['__warm__' => true], 120);
+        $this->assertNotFalse(get_transient(self::TRANSIENT_KEY), 'precondition: transient is warm');
+
+        do_action($hook, ['registration_id' => 0]);
+
+        $this->assertFalse(
+            get_transient(self::TRANSIENT_KEY),
+            "the '{$hook}' event must bust the stats transient (perf-oracle F-1 stale-headline-count gap)",
+        );
+    }
+
+    /** @return array<string, array{string}> */
+    public static function bustingEventProvider(): array
+    {
+        return [
+            'interest sign-up'   => ['stride/registration/interest_registered'],
+            'waitlist sign-up'   => ['stride/registration/waitlisted'],
+            'status transition'  => ['stride/registration/updated'],
+            'edition CPT save'   => ['save_post_vad_edition'],
+            'session CPT save'   => ['save_post_vad_session'],
+            'trajectory CPT save' => ['save_post_vad_trajectory'],
+        ];
+    }
 }

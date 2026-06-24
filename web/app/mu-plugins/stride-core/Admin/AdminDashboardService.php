@@ -96,6 +96,21 @@ class AdminDashboardService extends AbstractService
         // the repo (which never touch save_post_vad_quote) must recount the queue.
         add_action('stride/registration/bulk_completed', $invalidateQueue);
         add_action('stride/registration/quote_status_changed', $invalidateQueue);
+        // Cluster-F gate (perf-oracle F-1): the stats key counts more inputs than
+        // the action-queue did, so it needs a wider bust set or it shows stale
+        // headline counts for up to STATS_TTL.
+        //  - interest/waitlist public sign-ups feed worklistQueues.oldinterest /
+        //    .waitlist_open (not covered by created/confirmed/cancelled).
+        add_action('stride/registration/interest_registered', $invalidateQueue);
+        add_action('stride/registration/waitlisted', $invalidateQueue);
+        //  - any other status transition (e.g. a single reg → completed feeding
+        //    .nocert) fires the repo's generic updated event — the catch-all.
+        add_action('stride/registration/updated', $invalidateQueue);
+        //  - edition / session / trajectory CPT writes feed upcomingEditions,
+        //    todaySessions, openTrajectories, upcomingEditionDetails, alerts.
+        add_action('save_post_vad_edition', $invalidateQueue);
+        add_action('save_post_vad_session', $invalidateQueue);
+        add_action('save_post_vad_trajectory', $invalidateQueue);
 
         add_action('admin_menu', [$this, 'registerAdminPage']);
         add_action('admin_menu', [$this, 'reorderSubmenus'], 999);
