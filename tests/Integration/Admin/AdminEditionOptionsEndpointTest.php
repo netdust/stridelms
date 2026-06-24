@@ -251,8 +251,14 @@ final class AdminEditionOptionsEndpointTest extends IntegrationTestCase
      */
     public function scopeActiveExcludesPastButKeepsFutureAndDateless(): void
     {
-        // Default (no scope param) == active
-        $active = $this->dispatch('GET', '/stride/v1/admin/editions/options');
+        // Default (no scope param) == active. per_page=100 (the endpoint cap) so
+        // this assertion is robust against a polluted shared integration DB: the
+        // dateless edition sorts NULL-LAST, so with >50 (the default page size)
+        // active editions accumulated by sibling fixtures it would fall onto page
+        // 2 and be a false negative. The PRODUCT keeps it in active scope (proven:
+        // SQL NULL-permitting predicate + non-terminal effective status); this
+        // page-size only stops fixture accumulation from hiding it on page 1.
+        $active = $this->dispatch('GET', '/stride/v1/admin/editions/options', ['per_page' => 100]);
         $this->assertEquals(200, $active->get_status());
         $activeItems = $active->get_data()['items'];
 
@@ -269,8 +275,9 @@ final class AdminEditionOptionsEndpointTest extends IntegrationTestCase
             'Dateless edition must REMAIN in active scope (sessionless §10.7)',
         );
 
-        // scope=all includes the past one
-        $all = $this->dispatch('GET', '/stride/v1/admin/editions/options', ['scope' => 'all']);
+        // scope=all includes the past one (per_page=100 for the same shared-DB
+        // isolation reason — the past edition must not be hidden on page 2).
+        $all = $this->dispatch('GET', '/stride/v1/admin/editions/options', ['scope' => 'all', 'per_page' => 100]);
         $this->assertEquals(200, $all->get_status());
         $allItems = $all->get_data()['items'];
 
