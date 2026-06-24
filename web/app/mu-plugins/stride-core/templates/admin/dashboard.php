@@ -40,7 +40,8 @@ $ws_surfaces = [
     'edities'        => __('Edities', 'stride'),
     'sessies'        => __('Sessies', 'stride'),
     'offertes'       => __('Offertes', 'stride'),
-    'trajecten'      => __('Trajecten', 'stride'),
+    // 'trajecten' is built (cluster E) — it owns its own section partial below,
+    // so it is intentionally excluded from the generic stub loop.
     'gebruikers'     => __('Gebruikers', 'stride'),
 ];
 ?>
@@ -60,6 +61,9 @@ $ws_surfaces = [
 
         <?php // Dossier — the per-person case view, its own factory owns its data (cluster D).
         require __DIR__ . '/dashboard/dossier.php'; ?>
+
+        <?php // Trajecten — read-only overview + detail slide-over, its own factory owns its data (cluster E).
+        require __DIR__ . '/dashboard/trajecten.php'; ?>
 
         <?php foreach ($ws_surfaces as $ws_view => $ws_label) : ?>
             <section class="ws-content" x-show="view === '<?php echo esc_attr($ws_view); ?>'" x-cloak>

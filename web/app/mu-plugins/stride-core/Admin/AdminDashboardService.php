@@ -430,6 +430,7 @@ class AdminDashboardService extends AbstractService
             'admin/vandaag.js',
             'admin/grid.js',
             'admin/dossier.js',
+            'admin/trajecten.js',
         ];
     }
 
