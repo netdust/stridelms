@@ -2224,22 +2224,6 @@ final class AdminAPIController
     // =========================================================================
 
     /**
-     * Count registrations for a given user.
-     */
-    private function countUserRegistrations(int $userId): int
-    {
-        global $wpdb;
-        $table = RegistrationTable::getTableName();
-        if (!RegistrationTable::exists()) {
-            return 0;
-        }
-        return (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE user_id = %d",
-            $userId,
-        ));
-    }
-
-    /**
      * Batch-count registrations for a list of users in a single query.
      *
      * @param int[] $userIds

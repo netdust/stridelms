@@ -259,7 +259,7 @@ final class AdminUserService
         $quoteIds = array_map(static fn($q) => (int) $q->ID, $quotePosts);
         $quoteMeta = BatchQueryHelper::batchGetPostMeta($quoteIds, [
             'quote_number', 'status', 'total', 'edition_id',
-            'sent_at', 'paid_at', 'valid_until',
+            'sent_at', 'valid_until',
         ]);
 
         $quoteEditionIds = array_values(array_unique(array_filter(array_map(
@@ -308,7 +308,6 @@ final class AdminUserService
                 'total' => Money::cents((int) ($meta['total'] ?? 0))->amount(),
                 'created_at' => $quotePost->post_date,
                 'sent_at' => ($meta['sent_at'] ?? '') ?: null,
-                'paid_at' => ($meta['paid_at'] ?? '') ?: null,
                 'valid_until' => ($meta['valid_until'] ?? '') ?: null,
             ];
         }

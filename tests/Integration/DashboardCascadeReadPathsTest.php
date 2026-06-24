@@ -25,8 +25,9 @@ use Stride\Modules\User\UserDashboardService;
  *  - RegistrationRepository::findEditionsByTrajectory() returns cascade
  *    children (joined via parent_registration_id), so
  *    TrajectoryDashboardService can read child rows as source of truth.
- *  - RegistrationRepository::hasActiveRegistrations() returns false for
- *    trajectory-only users — the "Opleidingen" nav tab shouldn't light up.
+ *  - UserDashboardService::getEnrollmentData()['active_editions'] is empty for
+ *    trajectory-only users — the "Opleidingen" nav tab shouldn't light up
+ *    (the cascade child/trajectory rows are filtered out of the flat list).
  *
  * Run: ddev exec vendor/bin/phpunit --testsuite Integration --filter DashboardCascadeReadPaths
  */
@@ -204,12 +205,17 @@ final class DashboardCascadeReadPathsTest extends IntegrationTestCase
         $parentId = $this->selection->enroll(self::$testUserId, $trajectoryId);
         $this->createdRegistrationIds[] = $parentId;
 
-        $this->assertFalse(
-            $this->repo->hasActiveRegistrations(self::$testUserId),
-            'trajectory-only user should not have "active regular registrations"',
+        // Re-pointed off the deleted hasActiveRegistrations()/hasTrajectoryEnrollments()
+        // (zero prod callers) onto the LIVE reads production actually uses for the nav
+        // signal: the flat active_editions list (Opleidingen tab) and findByTrajectory
+        // (Trajecten tab). active_editions filters out cascade children + trajectory
+        // rows, so a trajectory-only user leaves it empty — preserving the real invariant.
+        $this->assertEmpty(
+            $this->dashboard->getEnrollmentData(self::$testUserId)['active_editions'],
+            'trajectory-only user should not light up the Opleidingen tab (empty active_editions)',
         );
-        $this->assertTrue(
-            $this->repo->hasTrajectoryEnrollments(self::$testUserId),
+        $this->assertNotEmpty(
+            $this->repo->findByTrajectory($trajectoryId),
             'trajectory enrollment still surfaces under the Trajecten tab',
         );
     }
@@ -228,8 +234,10 @@ final class DashboardCascadeReadPathsTest extends IntegrationTestCase
         $parentId = $this->selection->enroll(self::$testUserId, $trajectoryId);
         $this->createdRegistrationIds[] = $parentId;
 
-        $this->assertTrue($this->repo->hasActiveRegistrations(self::$testUserId));
-        $this->assertTrue($this->repo->hasTrajectoryEnrollments(self::$testUserId));
+        // A direct edition reg lights up Opleidingen (non-empty active_editions);
+        // the trajectory enrollment lights up Trajecten (non-empty findByTrajectory).
+        $this->assertNotEmpty($this->dashboard->getEnrollmentData(self::$testUserId)['active_editions']);
+        $this->assertNotEmpty($this->repo->findByTrajectory($trajectoryId));
     }
 
     // === Helpers ===

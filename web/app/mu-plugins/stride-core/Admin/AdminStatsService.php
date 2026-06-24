@@ -181,11 +181,10 @@ final class AdminStatsService
         $upcomingEditionDetails = [];
         $upcomingList = $wpdb->get_results($wpdb->prepare(
             "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
-                    pm_capacity.meta_value as capacity, pm_status.meta_value as status
+                    pm_capacity.meta_value as capacity
              FROM {$wpdb->posts} p
              INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
              LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = '_ntdst_capacity'
-             LEFT JOIN {$wpdb->postmeta} pm_status ON p.ID = pm_status.post_id AND pm_status.meta_key = '_ntdst_status'
              WHERE p.post_type = %s AND p.post_status = 'publish'
              AND pm_date.meta_value >= %s
              ORDER BY pm_date.meta_value ASC
@@ -212,7 +211,6 @@ final class AdminStatsService
                     'id' => $editionId,
                     'title' => $ed->post_title,
                     'startDate' => $ed->start_date,
-                    'status' => $ed->status ?: 'open',
                     'capacity' => $capacity,
                     'registeredCount' => $registeredCount,
                     'spotsLeft' => $capacity > 0 ? max(0, $capacity - $registeredCount) : null,
