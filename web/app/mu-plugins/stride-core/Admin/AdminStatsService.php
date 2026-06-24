@@ -37,6 +37,20 @@ final class AdminStatsService
      */
     private const OLD_INTEREST_DAYS = 90;
 
+    /**
+     * Transient key + TTL for the cached dashboard stats payload (S6).
+     *
+     * Mirrors the sibling getActionQueueItems / stride_action_queue cache in
+     * this file: a short TTL bounds staleness on a quiet system, and the SAME
+     * registration/quote/attendance write events that bust the action queue also
+     * bust this key (wired in AdminDashboardService::init), so a write reflects
+     * immediately. 120s is within the 60-120s band the plan sets — none of the
+     * ~15 stats queries are real-time critical; the worst case on a quiet system
+     * is a 120s-stale headline count that self-heals.
+     */
+    public const STATS_TRANSIENT_KEY = 'stride_admin_stats';
+    private const STATS_TTL = 2 * MINUTE_IN_SECONDS;
+
     public function __construct(
         private readonly ActionQueueService $actionQueue,
         private readonly RegistrationRepository $registrations,
@@ -59,6 +73,15 @@ final class AdminStatsService
     public function getStats(): array
     {
         global $wpdb;
+
+        // Serve from the transient within the TTL (S6). Busted on every
+        // registration/quote/attendance write (AdminDashboardService::init), so
+        // a cache hit can only return data no staler than the last such write or
+        // the TTL — whichever is sooner.
+        $cached = get_transient(self::STATS_TRANSIENT_KEY);
+        if (is_array($cached)) {
+            return $cached;
+        }
 
         $today = current_time('Y-m-d');
         $registrationTable = RegistrationTable::getTableName();
@@ -345,7 +368,7 @@ final class AdminStatsService
             }
         }
 
-        return [
+        $stats = [
             'upcomingEditions' => $upcomingEditions,
             'totalRegistrations' => $totalRegistrations,
             'pendingQuotes' => $pendingQuotes,
@@ -364,6 +387,10 @@ final class AdminStatsService
             // above are UNCHANGED — other UI consumes them.
             'worklistQueues' => $this->getWorklistQueueCounts($this->activeEditionIds()),
         ];
+
+        set_transient(self::STATS_TRANSIENT_KEY, $stats, self::STATS_TTL);
+
+        return $stats;
     }
 
     // =========================================================================

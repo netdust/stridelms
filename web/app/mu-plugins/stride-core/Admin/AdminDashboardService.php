@@ -77,11 +77,15 @@ class AdminDashboardService extends AbstractService
             }, 999);
         }
 
-        // Cache invalidation for action queue transient.
-        // Void closure: do not surface delete_transient()'s bool to the action
-        // dispatcher (an action callback must return nothing).
+        // Cache invalidation for the action-queue AND dashboard-stats transients
+        // (S6). Both are derived from the registration/quote/attendance corpus,
+        // so the same write events bust both — keeping the dashboard stats no
+        // staler than the last such write (within their TTL). Void closure: do
+        // not surface delete_transient()'s bool to the action dispatcher (an
+        // action callback must return nothing).
         $invalidateQueue = static function (): void {
             delete_transient('stride_action_queue');
+            delete_transient(\Stride\Admin\AdminStatsService::STATS_TRANSIENT_KEY);
         };
         add_action('stride/registration/created', $invalidateQueue);
         add_action('stride/registration/confirmed', $invalidateQueue);

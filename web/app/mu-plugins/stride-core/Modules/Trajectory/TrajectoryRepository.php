@@ -202,6 +202,35 @@ final class TrajectoryRepository extends AbstractRepository
     }
 
     /**
+     * Fetch a SINGLE admin trajectory-list row by id (id, title, date, content).
+     *
+     * Companion to findAdminListRows for the single-item detail path (S5): the
+     * GET /admin/trajectories/{id} endpoint needs the SAME row shape one list
+     * row carries, for ONE trajectory — so the per-item formatter that shapes a
+     * list row can shape the detail row identically (single + list parity).
+     *
+     * Returns the row only for a PUBLISHED post of this CPT (the same predicate
+     * the list SELECT enforces), or null when no such trajectory exists — so the
+     * caller's 404 path is driven by null, not by a linear scan of a paged list.
+     * The SELECT column set is VERBATIM the findAdminListRows column set.
+     *
+     * @return object{ID: int, post_title: string, post_date: string, post_content: string}|null
+     */
+    public function findById(int $id): ?object
+    {
+        global $wpdb;
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT p.ID, p.post_title, p.post_date, p.post_content FROM {$wpdb->posts} p
+             WHERE p.ID = %d AND p.post_type = %s AND p.post_status = 'publish'",
+            $id,
+            TrajectoryCPT::POST_TYPE,
+        ));
+
+        return $row ?: null;
+    }
+
+    /**
      * Find trajectories open for enrollment.
      *
      * @return array<array<string, mixed>>

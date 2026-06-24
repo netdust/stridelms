@@ -181,111 +181,13 @@ final class AdminTrajectoryService
 
         $items = [];
         foreach ($trajectories as $trajectory) {
-            $trajectoryId = (int) $trajectory->ID;
-            $meta = $trajectoryMeta[$trajectoryId] ?? [];
-
-            // Get meta values from batch
-            $trajectoryStatus = $meta['_ntdst_status'] ?? '';
-            $mode = $meta['_ntdst_mode'] ?? '';
-            $capacity = (int) ($meta['_ntdst_capacity'] ?? 0);
-            $enrollmentDeadline = $meta['_ntdst_enrollment_deadline'] ?? '';
-            $choiceDeadline = $meta['_ntdst_choice_deadline'] ?? '';
-            $price = (int) ($meta['_ntdst_price'] ?? 0);
-            $priceNonMember = (float) ($meta['_ntdst_price_non_member'] ?? 0);
-            $choiceAvailableDate = $meta['_ntdst_choice_available_date'] ?? '';
-
-            // Parse courses
-            $courses = $meta['_ntdst_courses'] ?? null;
-            $courseList = [];
-            if (is_array($courses)) {
-                $courseList = $courses;
-            } elseif (is_string($courses) && !empty($courses)) {
-                $decoded = json_decode($courses, true);
-                if (is_array($decoded)) {
-                    $courseList = $decoded;
-                }
-            }
-            $courseCount = count($courseList);
-
-            // Enrich courses with edition titles (using batch-fetched data)
-            $coursesWithDetails = [];
-            foreach ($courseList as $course) {
-                $editionId = (int) ($course['edition_id'] ?? 0);
-                $courseData = [
-                    'editionId' => $editionId,
-                    'type' => $course['type'] ?? 'required',
-                    'title' => '',
-                ];
-                if ($editionId > 0) {
-                    $edition = $editionsMap[$editionId] ?? null;
-                    if ($edition) {
-                        $courseData['title'] = $edition->post_title;
-                    }
-                }
-                $coursesWithDetails[] = $courseData;
-            }
-
-            // Get enrolled users (using batch-fetched data)
-            $enrolledCount = $enrollmentCounts[$trajectoryId] ?? 0;
-            $enrolledUsers = [];
-            $trajectoryEnrollments = $allEnrollments[$trajectoryId] ?? [];
-
-            foreach ($trajectoryEnrollments as $enrollment) {
-                $userId = (int) $enrollment->user_id;
-                $user = $usersMap[$userId] ?? null;
-                if ($user) {
-                    $enrolledUsers[] = [
-                        'id' => $userId,
-                        'name' => $user->display_name,
-                        'email' => $user->user_email,
-                        'status' => $enrollment->status,
-                        'enrolledAt' => $enrollment->registered_at,
-                    ];
-                }
-            }
-
-            // Get description from already fetched post_content
-            $description = $trajectory->post_content;
-
-            // Get status label
-            $statusLabel = match ($trajectoryStatus) {
-                'open' => 'Open',
-                'closed' => 'Gesloten',
-                'full' => 'Volzet',
-                'archived' => 'Gearchiveerd',
-                'draft' => 'Concept',
-                default => ucfirst($trajectoryStatus ?: 'draft'),
-            };
-
-            // Get mode label
-            $modeLabel = match ($mode) {
-                'cohort' => 'Cohort',
-                'open' => 'Open inschrijving',
-                default => ucfirst($mode ?: 'cohort'),
-            };
-
-            $items[] = [
-                'id' => $trajectoryId,
-                'title' => $trajectory->post_title,
-                'description' => wp_trim_words(wp_strip_all_tags($description), 30, '...'),
-                'status' => $trajectoryStatus ?: 'draft',
-                'statusLabel' => $statusLabel,
-                'mode' => $mode ?: 'cohort',
-                'modeLabel' => $modeLabel,
-                'capacity' => $capacity,
-                'enrolledCount' => $enrolledCount,
-                'courseCount' => $courseCount,
-                'courses' => $coursesWithDetails,
-                'enrolledUsers' => $enrolledUsers,
-                'price' => $price,
-                'priceFormatted' => number_format($price, 2, ',', '.'),
-                'priceNonMember' => $priceNonMember,
-                'priceNonMemberFormatted' => number_format($priceNonMember, 2, ',', '.'),
-                'enrollmentDeadline' => $enrollmentDeadline ?: null,
-                'choiceAvailableDate' => $choiceAvailableDate ?: null,
-                'choiceDeadline' => $choiceDeadline ?: null,
-                'editUrl' => admin_url("post.php?post={$trajectoryId}&action=edit"),
-            ];
+            $items[] = $this->formatTrajectoryItem($trajectory, [
+                'meta'             => $trajectoryMeta,
+                'editions'         => $editionsMap,
+                'enrollmentCounts' => $enrollmentCounts,
+                'enrollments'      => $allEnrollments,
+                'users'            => $usersMap,
+            ]);
         }
 
         return new WP_REST_Response([
@@ -295,6 +197,136 @@ final class AdminTrajectoryService
             'perPage' => $perPage,
             'totalPages' => (int) ceil($total / $perPage),
         ]);
+    }
+
+    /**
+     * Shape ONE admin trajectory-list row into the grid/slide-over read-model.
+     *
+     * Extracted VERBATIM from the getTrajectories format loop (S5) so the list
+     * path AND the single-fetch detail path (getTrajectory) produce a
+     * byte-identical item for the same trajectory — single + list parity
+     * (pattern_trajectory_edition_parity). Pure shaper: it does NO queries, only
+     * reads from the pre-batched $context maps the caller assembled, so it is
+     * N+1-safe whether driven by a 20-row list or a single detail fetch.
+     *
+     * @param object $trajectory  A findAdminListRows/findById row
+     *                            (ID, post_title, post_date, post_content).
+     * @param array{
+     *     meta: array<int, array<string, mixed>>,
+     *     editions: array<int, \WP_Post>,
+     *     enrollmentCounts: array<int, int>,
+     *     enrollments: array<int, array<int, object>>,
+     *     users: array<int, \WP_User>
+     * } $context  Pre-batched lookups keyed by id.
+     * @return array<string, mixed>
+     */
+    private function formatTrajectoryItem(object $trajectory, array $context): array
+    {
+        $trajectoryId = (int) $trajectory->ID;
+        $meta = $context['meta'][$trajectoryId] ?? [];
+
+        // Get meta values from batch
+        $trajectoryStatus = $meta['_ntdst_status'] ?? '';
+        $mode = $meta['_ntdst_mode'] ?? '';
+        $capacity = (int) ($meta['_ntdst_capacity'] ?? 0);
+        $enrollmentDeadline = $meta['_ntdst_enrollment_deadline'] ?? '';
+        $choiceDeadline = $meta['_ntdst_choice_deadline'] ?? '';
+        $price = (int) ($meta['_ntdst_price'] ?? 0);
+        $priceNonMember = (float) ($meta['_ntdst_price_non_member'] ?? 0);
+        $choiceAvailableDate = $meta['_ntdst_choice_available_date'] ?? '';
+
+        // Parse courses
+        $courses = $meta['_ntdst_courses'] ?? null;
+        $courseList = [];
+        if (is_array($courses)) {
+            $courseList = $courses;
+        } elseif (is_string($courses) && !empty($courses)) {
+            $decoded = json_decode($courses, true);
+            if (is_array($decoded)) {
+                $courseList = $decoded;
+            }
+        }
+        $courseCount = count($courseList);
+
+        // Enrich courses with edition titles (using batch-fetched data)
+        $coursesWithDetails = [];
+        foreach ($courseList as $course) {
+            $editionId = (int) ($course['edition_id'] ?? 0);
+            $courseData = [
+                'editionId' => $editionId,
+                'type' => $course['type'] ?? 'required',
+                'title' => '',
+            ];
+            if ($editionId > 0) {
+                $edition = $context['editions'][$editionId] ?? null;
+                if ($edition) {
+                    $courseData['title'] = $edition->post_title;
+                }
+            }
+            $coursesWithDetails[] = $courseData;
+        }
+
+        // Get enrolled users (using batch-fetched data)
+        $enrolledCount = $context['enrollmentCounts'][$trajectoryId] ?? 0;
+        $enrolledUsers = [];
+        $trajectoryEnrollments = $context['enrollments'][$trajectoryId] ?? [];
+
+        foreach ($trajectoryEnrollments as $enrollment) {
+            $userId = (int) $enrollment->user_id;
+            $user = $context['users'][$userId] ?? null;
+            if ($user) {
+                $enrolledUsers[] = [
+                    'id' => $userId,
+                    'name' => $user->display_name,
+                    'email' => $user->user_email,
+                    'status' => $enrollment->status,
+                    'enrolledAt' => $enrollment->registered_at,
+                ];
+            }
+        }
+
+        // Get description from already fetched post_content
+        $description = $trajectory->post_content;
+
+        // Get status label
+        $statusLabel = match ($trajectoryStatus) {
+            'open' => 'Open',
+            'closed' => 'Gesloten',
+            'full' => 'Volzet',
+            'archived' => 'Gearchiveerd',
+            'draft' => 'Concept',
+            default => ucfirst($trajectoryStatus ?: 'draft'),
+        };
+
+        // Get mode label
+        $modeLabel = match ($mode) {
+            'cohort' => 'Cohort',
+            'open' => 'Open inschrijving',
+            default => ucfirst($mode ?: 'cohort'),
+        };
+
+        return [
+            'id' => $trajectoryId,
+            'title' => $trajectory->post_title,
+            'description' => wp_trim_words(wp_strip_all_tags($description), 30, '...'),
+            'status' => $trajectoryStatus ?: 'draft',
+            'statusLabel' => $statusLabel,
+            'mode' => $mode ?: 'cohort',
+            'modeLabel' => $modeLabel,
+            'capacity' => $capacity,
+            'enrolledCount' => $enrolledCount,
+            'courseCount' => $courseCount,
+            'courses' => $coursesWithDetails,
+            'enrolledUsers' => $enrolledUsers,
+            'price' => $price,
+            'priceFormatted' => number_format($price, 2, ',', '.'),
+            'priceNonMember' => $priceNonMember,
+            'priceNonMemberFormatted' => number_format($priceNonMember, 2, ',', '.'),
+            'enrollmentDeadline' => $enrollmentDeadline ?: null,
+            'choiceAvailableDate' => $choiceAvailableDate ?: null,
+            'choiceDeadline' => $choiceDeadline ?: null,
+            'editUrl' => admin_url("post.php?post={$trajectoryId}&action=edit"),
+        ];
     }
 
     /**
@@ -457,58 +489,94 @@ final class AdminTrajectoryService
     /**
      * GET /admin/trajectories/{id}
      *
-     * Moved verbatim from AdminAPIController::getTrajectory (behavior-preserving).
-     * Reuses the same logic as the list endpoint but returns a single item by
-     * fetching the list for that ID. The internal call is now intra-service.
+     * Single-trajectory detail for the admin slide-over (S5: O(1) fetch).
+     *
+     * Fetches the ONE row via TrajectoryRepository::findById and assembles its
+     * batch-context for that single trajectory, then shapes it through the SAME
+     * formatTrajectoryItem the list path uses — so the output is byte-identical
+     * to the matching list item (single + list parity). Previously this re-ran
+     * the entire getTrajectories list pipeline (count + paged list-rows + the
+     * 50-enrollment-per-trajectory fetch + edition/user batch) scoped to the
+     * target's title and linear-scanned the result for the id — O(100)-shaped
+     * work to return one item. findById drives the 404 path off a null row, not
+     * off a missed scan, so the F1 regression (a trajectory beyond the first 100)
+     * stays fixed structurally.
      */
     public function getTrajectory(WP_REST_Request $request): WP_REST_Response|WP_Error
     {
         $trajectoryId = (int) $request->get_param('id');
 
-        $post = get_post($trajectoryId);
-        if (!$post || $post->post_type !== TrajectoryCPT::POST_TYPE) {
+        $trajectory = $this->trajectoryRepository->findById($trajectoryId);
+        if ($trajectory === null) {
             return new WP_Error('not_found', 'Trajectory not found', ['status' => 404]);
         }
 
-        // Reuse the list assembly but SCOPE it to this trajectory's title so the
-        // target is guaranteed to be in the (small) result set regardless of how
-        // many trajectories exist. Previously this fetched page 1 / per_page 100
-        // and linear-scanned for the id, so any trajectory outside the first 100
-        // (ID-desc) 404'd even though it was a valid published post — broken once
-        // the DB holds >100 trajectories. The title LIKE narrows to a handful;
-        // the id-match loop below still disambiguates same-titled trajectories.
-        $listRequest = new WP_REST_Request('GET', '/stride/v1/admin/trajectories');
-        $listRequest->set_param('page', 1);
-        $listRequest->set_param('per_page', 100);
-        $listRequest->set_param('search', $post->post_title);
-        $listRequest->set_param('status', '');
+        // === BATCH-CONTEXT FOR THIS ONE TRAJECTORY ===
+        // Same shapes getTrajectories assembles, scoped to a single id so the
+        // shared formatter produces an identical item.
+        $trajectoryIds = [$trajectoryId];
 
-        $listResponse = $this->getTrajectories($listRequest);
-        $items = $listResponse->get_data()['items'] ?? [];
+        $trajectoryMeta = BatchQueryHelper::batchGetPostMeta($trajectoryIds, [
+            '_ntdst_status', '_ntdst_mode', '_ntdst_capacity', '_ntdst_enrollment_deadline', '_ntdst_choice_deadline',
+            '_ntdst_courses', '_ntdst_price', '_ntdst_price_non_member', '_ntdst_choice_available_date',
+        ]);
 
-        foreach ($items as $item) {
-            if ($item['id'] === $trajectoryId) {
-                // Remap enrolledUsers to registrations for slide-over template
-                $regStatusLabels = [
-                    'active' => 'Actief', 'completed' => 'Afgerond',
-                    'cancelled' => 'Geannuleerd', 'pending' => 'In afwachting',
-                ];
-                $registrations = array_map(function (array $u) use ($regStatusLabels) {
-                    return [
-                        'id' => $u['id'],
-                        'name' => $u['name'],
-                        'email' => $u['email'],
-                        'status' => $u['status'],
-                        'status_label' => $regStatusLabels[$u['status']] ?? ucfirst($u['status'] ?? ''),
-                    ];
-                }, $item['enrolledUsers'] ?? []);
-
-                return new WP_REST_Response(array_merge($item, [
-                    'registrations' => $registrations,
-                ]));
+        // Collect edition IDs from this trajectory's courses meta.
+        $meta = $trajectoryMeta[$trajectoryId] ?? [];
+        $courses = $meta['_ntdst_courses'] ?? null;
+        $courseList = [];
+        if (is_array($courses)) {
+            $courseList = $courses;
+        } elseif (is_string($courses) && !empty($courses)) {
+            $decoded = json_decode($courses, true);
+            if (is_array($decoded)) {
+                $courseList = $decoded;
+            }
+        }
+        $editionIds = [];
+        foreach ($courseList as $course) {
+            $editionId = (int) ($course['edition_id'] ?? 0);
+            if ($editionId > 0) {
+                $editionIds[] = $editionId;
             }
         }
 
-        return new WP_Error('not_found', 'Trajectory not found', ['status' => 404]);
+        $enrollmentCounts = $this->registrationRepo->countByTrajectoryIds($trajectoryIds);
+        $allEnrollments = $this->registrationRepo->findByTrajectoryIds($trajectoryIds, 50);
+
+        $enrollmentUserIds = [];
+        foreach (($allEnrollments[$trajectoryId] ?? []) as $row) {
+            $enrollmentUserIds[] = (int) $row->user_id;
+        }
+
+        $editionsMap = BatchQueryHelper::batchGetPosts($editionIds, EditionCPT::POST_TYPE);
+        $usersMap = BatchQueryHelper::batchGetUsers($enrollmentUserIds);
+
+        $item = $this->formatTrajectoryItem($trajectory, [
+            'meta'             => $trajectoryMeta,
+            'editions'         => $editionsMap,
+            'enrollmentCounts' => $enrollmentCounts,
+            'enrollments'      => $allEnrollments,
+            'users'            => $usersMap,
+        ]);
+
+        // Remap enrolledUsers to registrations for the slide-over template.
+        $regStatusLabels = [
+            'active' => 'Actief', 'completed' => 'Afgerond',
+            'cancelled' => 'Geannuleerd', 'pending' => 'In afwachting',
+        ];
+        $registrations = array_map(function (array $u) use ($regStatusLabels) {
+            return [
+                'id' => $u['id'],
+                'name' => $u['name'],
+                'email' => $u['email'],
+                'status' => $u['status'],
+                'status_label' => $regStatusLabels[$u['status']] ?? ucfirst($u['status'] ?? ''),
+            ];
+        }, $item['enrolledUsers'] ?? []);
+
+        return new WP_REST_Response(array_merge($item, [
+            'registrations' => $registrations,
+        ]));
     }
 }

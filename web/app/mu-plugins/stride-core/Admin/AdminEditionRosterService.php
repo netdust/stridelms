@@ -88,6 +88,16 @@ final class AdminEditionRosterService
             array_map(static fn($r) => (int) $r->user_id, $registrations),
         )));
 
+        // Prime the user + user-meta caches ONCE before the row loop so the
+        // per-row reads below — displayName()'s get_userdata() (S4 :userdata) and
+        // the inline get_user_meta($userId, 'organisation') — are cache hits.
+        // Without this, each is a query on first touch: O(2N) on a cohort of N.
+        // Same precedent as searchUsers / exportRegistrations in AdminAPIController.
+        if (!empty($userIds)) {
+            cache_users($userIds);
+            update_meta_cache('user', $userIds);
+        }
+
         // Selections through the convergence point (batched — no raw decode here).
         $selectionsByReg = $this->registrations->getSelectionsForRegistrations($regIds);
 
