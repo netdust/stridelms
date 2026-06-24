@@ -396,7 +396,9 @@ class AdminDashboardService extends AbstractService
     }
 
     /**
-     * Render the dashboard page
+     * Render the dashboard page (the ws-shell host).
+     *
+     * @var string $admin_url, \WP_User $user, string $user_name — consumed by the template.
      */
     public function renderDashboard(): void
     {
@@ -412,7 +414,29 @@ class AdminDashboardService extends AbstractService
     }
 
     /**
-     * Inject Alpine.js app logic
+     * The admin workspace JS, loaded in order.
+     *
+     * The shell (per-surface architecture's spine — active view, nav, the shared
+     * api() helper, the constant icon map) loads first. Each later cluster (B–G)
+     * appends its own small per-surface factory file here; surfaces are separate
+     * components, NOT methods on the shell.
+     *
+     * @return list<string> Plugin-relative paths under assets/js/.
+     */
+    private function workspaceScripts(): array
+    {
+        return [
+            'admin/shell.js',
+        ];
+    }
+
+    /**
+     * Inject the admin workspace JS.
+     *
+     * Inlined in <script> (mirrors injectStyles()'s inline-include idiom) so the
+     * files share the StrideConfig localize block already printed on `alpinejs`
+     * and need no separate handle registration. Each file is an IIFE that
+     * registers its Alpine factory on `window` before Alpine boots (deferred).
      */
     public function injectScripts(): void
     {
@@ -420,11 +444,14 @@ class AdminDashboardService extends AbstractService
             return;
         }
 
-        $jsPath = dirname(__DIR__) . '/assets/js/admin-dashboard.js';
-        if (file_exists($jsPath)) {
-            echo '<script>';
-            include $jsPath;
-            echo '</script>';
+        $basePath = dirname(__DIR__) . '/assets/js/';
+        foreach ($this->workspaceScripts() as $rel) {
+            $jsPath = $basePath . $rel;
+            if (file_exists($jsPath)) {
+                echo '<script>';
+                include $jsPath;
+                echo '</script>';
+            }
         }
     }
 }
