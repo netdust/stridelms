@@ -79,53 +79,20 @@
     return {
       statusOptions: STATUS_OPTIONS,
 
-      // Taxonomy filter options, populated ONCE from GET /admin/course-tags
-      // (loadFilterOptions). Stay empty when that fetch fails — the dropdowns
-      // then show only their "Alle…" option and the edition grid is unaffected.
-      themeOptions: [],
-      formatOptions: [],
-      tagOptions: [],
-
       rows: [],
       total: 0,
       page: 1,
       perPage: 25,
       pageCount: 1,
 
-      // status/q map to the endpoint's `status`/`search`; theme/format/tag map
-      // to `theme`/`format`/`tag` (course taxonomy term_ids); dateFrom/dateTo map
-      // to `date_from`/`date_to`. NOTE on date scope: an EMPTY dateFrom = the
-      // default scope (only editions whose start_date >= 2 days ago, OR are
-      // dateless) — i.e. the live/upcoming ones. Setting dateFrom to a PAST date
-      // overrides that cutoff and surfaces past editions (server: getEditions
-      // drops the 2-days-ago predicate whenever date_from is present).
-      filters: { status: '', q: '', theme: '', format: '', tag: '', dateFrom: '', dateTo: '' },
+      filters: { status: '', q: '' },
 
       loading: false,
       error: '',
 
       init() {
-        // Filter options load independently of the lazy edition load so a
-        // course-tags failure can NEVER zero the grid (it has its own guard).
-        this.loadFilterOptions();
         // I-1: load the FIRST time edities becomes active, not on mount.
         window.WS.lazyLoad(this, 'edities', () => this.load(1));
-      },
-
-      /* Populate the thema/formaat/tag dropdowns once. Failure leaves the three
-         option arrays empty — the grid load is a SEPARATE call (load()), so a
-         course-tags error never blocks or zeroes the editions. */
-      async loadFilterOptions() {
-        try {
-          const data = await this.api('/admin/course-tags');
-          this.themeOptions = (data && data.theme) || [];
-          this.formatOptions = (data && data.format) || [];
-          this.tagOptions = (data && data.tag) || [];
-        } catch (e) {
-          this.themeOptions = [];
-          this.formatOptions = [];
-          this.tagOptions = [];
-        }
       },
 
       async load(page) {
@@ -140,13 +107,6 @@
         const f = this.filters;
         if (f.status) params.set('status', f.status);
         if (f.q) params.set('search', f.q);
-        if (f.theme) params.set('theme', f.theme);
-        if (f.format) params.set('format', f.format);
-        if (f.tag) params.set('tag', f.tag);
-        // Empty dateFrom = default scope (live/upcoming); a past dateFrom
-        // surfaces past editions (server drops its 2-days-ago cutoff).
-        if (f.dateFrom) params.set('date_from', f.dateFrom);
-        if (f.dateTo) params.set('date_to', f.dateTo);
 
         try {
           const data = await this.api(`/admin/editions?${params.toString()}`);
@@ -170,14 +130,8 @@
       goPage(p) { if (p >= 1 && p <= this.pageCount && p !== this.page) this.load(p); },
       onPerPageChange() { this.load(1); },
 
-      get hasFilters() {
-        const f = this.filters;
-        return !!(f.status || f.q || f.theme || f.format || f.tag || f.dateFrom || f.dateTo);
-      },
-      clearAllFilters() {
-        this.filters = { status: '', q: '', theme: '', format: '', tag: '', dateFrom: '', dateTo: '' };
-        this.load(1);
-      },
+      get hasFilters() { return !!(this.filters.status || this.filters.q); },
+      clearAllFilters() { this.filters = { status: '', q: '' }; this.load(1); },
 
       get rangeFrom() { return this.total === 0 ? 0 : (this.page - 1) * this.perPage + 1; },
       get rangeTo() { return Math.min(this.page * this.perPage, this.total); },

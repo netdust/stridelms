@@ -47,46 +47,6 @@ defined('ABSPATH') || exit;
                 </select>
             </div>
 
-            <div class="ws-select-wrap">
-                <?php echo esc_html__('Thema', 'stride'); ?>
-                <select class="ws-select" x-model="filters.theme" @change="onFilterChange()">
-                    <option value=""><?php echo esc_html__('Alle thema\'s', 'stride'); ?></option>
-                    <template x-for="o in themeOptions" :key="o.id"><option :value="o.id" x-text="o.name"></option></template>
-                </select>
-            </div>
-
-            <div class="ws-select-wrap">
-                <?php echo esc_html__('Formaat', 'stride'); ?>
-                <select class="ws-select" x-model="filters.format" @change="onFilterChange()">
-                    <option value=""><?php echo esc_html__('Alle formaten', 'stride'); ?></option>
-                    <template x-for="o in formatOptions" :key="o.id"><option :value="o.id" x-text="o.name"></option></template>
-                </select>
-            </div>
-
-            <div class="ws-select-wrap">
-                <?php echo esc_html__('Tag', 'stride'); ?>
-                <select class="ws-select" x-model="filters.tag" @change="onFilterChange()">
-                    <option value=""><?php echo esc_html__('Alle tags', 'stride'); ?></option>
-                    <template x-for="o in tagOptions" :key="o.id"><option :value="o.id" x-text="o.name"></option></template>
-                </select>
-            </div>
-
-            <!--
-              Date range. An EMPTY "Van" = the default scope: only live/upcoming
-              editions (start_date >= 2 days ago, plus dateless interest-list
-              editions). Picking a "Van" date in the PAST overrides that cutoff
-              server-side and surfaces past editions. "Tot" caps the upper bound.
-            -->
-            <div class="ws-select-wrap" title="<?php echo esc_attr__('Kies een startdatum in het verleden om afgelopen edities te tonen', 'stride'); ?>">
-                <span x-html="icon('calendar')" style="width:14px;height:14px"></span>
-                <?php echo esc_html__('Van', 'stride'); ?>
-                <input type="date" class="ws-select" x-model="filters.dateFrom" @change="onFilterChange()">
-            </div>
-            <div class="ws-select-wrap">
-                <?php echo esc_html__('Tot', 'stride'); ?>
-                <input type="date" class="ws-select" x-model="filters.dateTo" @change="onFilterChange()">
-            </div>
-
             <button class="ws-btn ws-btn--subtle ws-btn--sm" x-show="hasFilters" @click="clearAllFilters()">
                 <span x-html="icon('x')"></span> <?php echo esc_html__('Filters wissen', 'stride'); ?>
             </button>
