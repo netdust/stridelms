@@ -237,8 +237,15 @@
           this.filters.status = directStatus;
         }
 
-        this.loadEditionOptions();
-        this.load(1);
+        // I-1: load the grid the FIRST time inschrijvingen becomes active (lazy),
+        // not on mount. Deep-links from Vandaag land with view already =
+        // inschrijvingen, so the ?queue=/?status= filters set above are honored on
+        // the first activation load. The expensive grid query never fires for a
+        // user who never opens this surface.
+        window.WS.lazyLoad(this, 'inschrijvingen', () => {
+          this.loadEditionOptions();
+          this.load(1);
+        });
       },
 
       /* Fetch ONE server page (or grouped aggregates). The single place a

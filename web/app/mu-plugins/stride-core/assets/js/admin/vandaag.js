@@ -196,9 +196,19 @@
         return this.queues.reduce((n, q) => n + (q.count || 0), 0);
       },
 
-      /* init() loads EVERYTHING. Both fetches run in parallel; a panel that
-         fails shows its own error, the rest still renders (AF-1 mid-flow). */
+      /* init() loads on mount because Vandaag is StrideConfig.defaultView — the
+         cold-landing surface. The guard fires immediately (view === 'vandaag' on
+         mount) so the dashboard lands populated; on a deep-link to another view
+         it instead loads the first time the user navigates BACK to Vandaag. */
       init() {
+        window.WS.lazyLoad(this, 'vandaag', () => this.load());
+      },
+
+      /* load() does the actual work. Called once via the first-activation guard,
+         and again (bypassing the latch) by pulse() for an explicit refresh.
+         Both fetches run in parallel; a panel that fails shows its own error,
+         the rest still renders (AF-1 mid-flow). */
+      load() {
         // Clear any prior error banners so a successful retry (pulse) recovers
         // cleanly — otherwise a stale error survives a now-successful load.
         this.errors.stats = '';
@@ -259,10 +269,11 @@
       },
 
       pulse() {
-        // Re-run the full load, then toast the result.
+        // Re-run the full load (bypassing the first-activation latch), then
+        // toast the result.
         this.loading.stats = true;
         this.loading.actions = true;
-        this.init();
+        this.load();
         window.dispatchEvent(new CustomEvent('ws-toast'));
       },
 

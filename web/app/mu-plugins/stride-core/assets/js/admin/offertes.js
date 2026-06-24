@@ -95,7 +95,8 @@
       error: '',
 
       init() {
-        this.load(1);
+        // I-1: load the FIRST time offertes becomes active, not on mount.
+        window.WS.lazyLoad(this, 'offertes', () => this.load(1));
       },
 
       async load(page) {

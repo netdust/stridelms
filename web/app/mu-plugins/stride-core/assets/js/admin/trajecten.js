@@ -155,12 +155,17 @@
       detailError: '',
 
       init() {
-        this.loadList();
-        // deep-link: ?open=<id> opens that trajectory's detail directly.
-        const id = new URLSearchParams(window.location.search).get('open');
-        if (id) {
-          this.openDetail(Number(id));
-        }
+        // I-1: load the list the FIRST time trajecten becomes active, not on
+        // mount. The ?open=<id> detail deep-link is gated together so it only
+        // fires when this surface is actually shown (detail load stays
+        // click-driven via openDetail() thereafter).
+        window.WS.lazyLoad(this, 'trajecten', () => {
+          this.loadList();
+          const id = new URLSearchParams(window.location.search).get('open');
+          if (id) {
+            this.openDetail(Number(id));
+          }
+        });
       },
 
       /* Load the list. Server owns scope/status/search filtering. Error reset

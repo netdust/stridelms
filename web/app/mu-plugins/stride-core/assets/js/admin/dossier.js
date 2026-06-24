@@ -274,8 +274,15 @@
 
       get hasRegs() { return this.regs.length > 0; },
 
-      /* init() reads ?user= then loads BOTH endpoints in parallel. */
+      /* init() reads ?user= then loads BOTH endpoints in parallel. I-1: gated so
+         it loads the FIRST time dossier becomes active (it is reached via a
+         ?user= deep-link, so view === 'dossier' on arrival → the guard fires on
+         mount; the guard also prevents a spurious reload if the view toggles). */
       init() {
+        window.WS.lazyLoad(this, 'dossier', () => this.load());
+      },
+
+      load() {
         // Reset error banners at the top so a successful retry recovers cleanly
         // (cluster-B lesson — a stale error must not survive a now-good load).
         this.errors.detail = '';

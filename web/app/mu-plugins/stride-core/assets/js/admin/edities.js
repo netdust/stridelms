@@ -91,7 +91,8 @@
       error: '',
 
       init() {
-        this.load(1);
+        // I-1: load the FIRST time edities becomes active, not on mount.
+        window.WS.lazyLoad(this, 'edities', () => this.load(1));
       },
 
       async load(page) {

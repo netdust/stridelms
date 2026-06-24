@@ -72,6 +72,43 @@
     slash:      '<circle cx="12" cy="12" r="10"/><path d="m4.9 4.9 14.2 14.2"/>',
   };
 
+  /* wsLazyLoad(self, myView, run) — the per-surface first-activation guard
+     (I-1). Each per-surface factory is a NESTED Alpine x-data inside wsShell.
+     Two Alpine-scope facts shape this:
+       (a) `self.view` resolves up the scope chain to the shell's active view at
+           READ time (prototype inheritance), so the on-mount check is correct;
+       (b) a child's $watch('view') does NOT observe the PARENT's mutation of
+           `view`, so we listen for the `ws-view-changed` window event the shell
+           dispatches from its single view chokepoint instead.
+     The load-once latch is a CLOSURE-LOCAL boolean — NOT a property on `self`.
+     Writing `self._wsLoaded` would land on the shared parent scope object (every
+     surface inherits the same shell proto), so the first surface to load would
+     latch ALL of them. A closure var is per-call and immune to that sharing.
+     The active-on-mount surface (deep-link / the default `vandaag`) still
+     cold-loads because `self.view === myView` is already true at init. An
+     optional `bus` (defaults to window) is injectable for the unit spec. */
+  function wsLazyLoad(self, myView, run, bus) {
+    const target = bus || (typeof window !== 'undefined' ? window : null);
+    let loaded = false;
+    const fire = () => {
+      if (loaded) {
+        return;
+      }
+      loaded = true;
+      run();
+    };
+    if (self.view === myView) {
+      fire();
+    }
+    if (target && target.addEventListener) {
+      target.addEventListener('ws-view-changed', (e) => {
+        if (e && e.detail && e.detail.view === myView) {
+          fire();
+        }
+      });
+    }
+  }
+
   /* icon(name, cls) — INV-5 safe: `name` is a literal key from the markup,
      resolved to a CONSTANT SVG path. An unknown name renders an empty SVG. */
   function icon(name, cls) {
@@ -88,10 +125,16 @@
     'offertes', 'trajecten', 'gebruikers', 'dossier',
   ];
 
-  /* ---- shared WS surface for the rail/topbar markup (icon lookup only) ---- */
-  window.WS = window.WS || {};
-  window.WS.icon = icon;
-  window.WS.ICONS = ICONS;
+  /* ---- shared WS surface for the rail/topbar markup (icon lookup only) ----
+     Guarded so the module is requirable under Node (the spec imports the pure
+     wsLazyLoad guard); in the browser this populates window.WS as before. */
+  if (typeof window !== 'undefined') {
+    window.WS = window.WS || {};
+    window.WS.icon = icon;
+    window.WS.ICONS = ICONS;
+    window.WS.lazyLoad = wsLazyLoad;
+    window.wsShell = wsShell;
+  }
 
   /* ---- the shell Alpine component ----
      Owns the cross-surface concerns only. Per-surface factories are separate. */
@@ -105,8 +148,16 @@
       init() {
         this.view = this.resolveView();
         // Keep the URL in sync when the active surface changes (bookmarkable
-        // ?view= per the dashboard-tabs convention).
-        this.$watch('view', (v) => this.writeViewToUrl(v));
+        // ?view= per the dashboard-tabs convention) AND broadcast the change so
+        // each nested per-surface factory can lazily load on its first
+        // activation (I-1). A child x-data's $watch('view') does NOT observe the
+        // parent's reactive `view` (Alpine inherits parent props read-only via
+        // the scope chain — mutations are not tracked across the boundary), so
+        // the surfaces listen for this event instead of $watch-ing `view`.
+        this.$watch('view', (v) => {
+          this.writeViewToUrl(v);
+          window.dispatchEvent(new CustomEvent('ws-view-changed', { detail: { view: v } }));
+        });
         // Respond to browser back/forward.
         window.addEventListener('popstate', () => { this.view = this.resolveView(); });
       },
@@ -188,5 +239,10 @@
     };
   }
 
-  window.wsShell = wsShell;
+  /* Node export for the unit spec (shell-lazyload.spec.ts) — exposes the
+     PURE first-activation guard. The window block above is guarded, so requiring
+     this module under Node runs cleanly without a browser global. */
+  if (typeof module !== 'undefined' && module.exports) {
+    module.exports = { wsLazyLoad: wsLazyLoad };
+  }
 })();
