@@ -28,22 +28,6 @@
  */
 
 defined('ABSPATH') || exit;
-
-/**
- * The per-surface stub containers cluster A ships. Each later cluster replaces
- * one stub with the real surface partial. Key = view slug (matches the rail +
- * wsShell VIEWS whitelist); value = the placeholder heading.
- *
- * @var array<string,string> $ws_surfaces
- */
-$ws_surfaces = [
-    'edities'        => __('Edities', 'stride'),
-    'sessies'        => __('Sessies', 'stride'),
-    'offertes'       => __('Offertes', 'stride'),
-    // 'trajecten' is built (cluster E) — it owns its own section partial below,
-    // so it is intentionally excluded from the generic stub loop.
-    'gebruikers'     => __('Gebruikers', 'stride'),
-];
 ?>
 <div class="ws-shell" x-data="wsShell()" x-init="init()" x-cloak>
 
@@ -65,19 +49,14 @@ $ws_surfaces = [
         <?php // Trajecten — read-only overview + detail slide-over, its own factory owns its data (cluster E).
         require __DIR__ . '/dashboard/trajecten.php'; ?>
 
-        <?php foreach ($ws_surfaces as $ws_view => $ws_label) : ?>
-            <section class="ws-content" x-show="view === '<?php echo esc_attr($ws_view); ?>'" x-cloak>
-                <div class="ws-stagger">
-                    <div class="ws-page-head">
-                        <div>
-                            <span class="ws-eyebrow"><?php echo esc_html__('Werkbank', 'stride'); ?></span>
-                            <h1><?php echo esc_html($ws_label); ?></h1>
-                            <p><?php echo esc_html__('Deze werkbank wordt opgebouwd.', 'stride'); ?></p>
-                        </div>
-                    </div>
-                </div>
-            </section>
-        <?php endforeach; ?>
+        <?php // The four functional list surfaces (cluster F). Each is its own
+              // per-surface Alpine factory that owns ALL of its own data
+              // (init/load/loading/empty/error) — never a shared loader. Edit
+              // actions deep-link to the existing WP edit screens.?>
+        <?php require __DIR__ . '/dashboard/edities.php'; ?>
+        <?php require __DIR__ . '/dashboard/sessies.php'; ?>
+        <?php require __DIR__ . '/dashboard/offertes.php'; ?>
+        <?php require __DIR__ . '/dashboard/gebruikers.php'; ?>
 
     </main>
 </div>
