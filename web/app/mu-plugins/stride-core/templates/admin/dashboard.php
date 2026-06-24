@@ -42,7 +42,6 @@ $ws_surfaces = [
     'offertes'       => __('Offertes', 'stride'),
     'trajecten'      => __('Trajecten', 'stride'),
     'gebruikers'     => __('Gebruikers', 'stride'),
-    'dossier'        => __('Dossier', 'stride'),
 ];
 ?>
 <div class="ws-shell" x-data="wsShell()" x-init="init()" x-cloak>
@@ -58,6 +57,9 @@ $ws_surfaces = [
 
         <?php // Inschrijvingen — the registration grid, its own factory owns its data (cluster C).
         require __DIR__ . '/dashboard/inschrijvingen.php'; ?>
+
+        <?php // Dossier — the per-person case view, its own factory owns its data (cluster D).
+        require __DIR__ . '/dashboard/dossier.php'; ?>
 
         <?php foreach ($ws_surfaces as $ws_view => $ws_label) : ?>
             <section class="ws-content" x-show="view === '<?php echo esc_attr($ws_view); ?>'" x-cloak>

@@ -630,6 +630,20 @@
 .ws-tl-item__meta svg { width: 12px; height: 12px; opacity: 0.7; }
 .ws-tl-item__actor { font-weight: 500; color: var(--ws-text-2); }
 
+/* timeline-card helper rows (cluster D) */
+.ws-timeline-card__note { display: flex; align-items: center; gap: 6px; font-size: var(--ws-fs-sm); color: var(--ws-text-3); margin-bottom: var(--ws-4); }
+.ws-timeline-card__switch { margin-top: var(--ws-4); padding-top: var(--ws-4); border-top: 1px solid var(--ws-border); }
+
+/* attendance summary chips (cluster D — the /detail attendance is a summary,
+   not a per-session list, so the dossier renders aggregate counts) */
+.ws-att-summary { display: flex; flex-wrap: wrap; gap: var(--ws-4); font-size: var(--ws-fs-sm); color: var(--ws-text-2); }
+.ws-att-summary__item { display: inline-flex; align-items: center; gap: 6px; }
+.ws-att-summary__item b { color: var(--ws-text); font-weight: 700; }
+
+/* selections + completion side-by-side (collapses on narrow widths) */
+.ws-dossier-two-col { display: grid; grid-template-columns: 1fr 1fr; gap: var(--ws-6); }
+@media (max-width: 720px) { .ws-dossier-two-col { grid-template-columns: 1fr; } }
+
 /* --------------------------------------------------------------------------
    DOSSIER — trajectory progress section (§11.4 / F8)
    -------------------------------------------------------------------------- */
