@@ -394,7 +394,7 @@ defined('ABSPATH') || exit;
         <template x-for="t in toasts" :key="t.id">
             <div class="ws-toast">
                 <div class="ws-toast__icon" :class="t.kind==='ok' ? 'ws-toast__icon--ok' : 'ws-toast__icon--mixed'" x-html="icon(t.kind==='ok' ? 'check' : 'info')"></div>
-                <div class="ws-toast__msg" x-html="t.msg"></div>
+                <div class="ws-toast__msg"><strong x-text="t.lead" x-show="t.lead"></strong> <span x-text="t.body"></span></div>
             </div>
         </template>
     </div>

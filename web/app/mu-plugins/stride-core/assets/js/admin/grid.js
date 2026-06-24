@@ -408,7 +408,7 @@
       selectAllFiltered() {
         this.selectAllFilter = true;
         this.rows.forEach((r) => { this.selected[r.id] = true; });
-        this.toast('mixed', `<b>${this.total}</b> inschrijvingen geselecteerd over alle pagina's. De bulkactie draagt het filter, niet ${this.total} rijen.`);
+        this.toast('mixed', String(this.total), `inschrijvingen geselecteerd over alle pagina's. De bulkactie draagt het filter, niet ${this.total} rijen.`);
       },
       clearSelection() { this.selected = {}; this.selectAllFilter = false; },
 
@@ -486,14 +486,14 @@
           };
 
           if (failRows.length === 0) {
-            this.toast('ok', `<b>${action.label}</b>: ${this.result.ok} geslaagd.`);
+            this.toast('ok', action.label, `: ${this.result.ok} geslaagd.`);
             this.clearSelection();
           } else {
             this.showResult = true;  // partial-failure report modal
           }
           await this.load(this.page);
         } catch (e) {
-          this.toast('mixed', (e && e.message) || 'Bulkactie mislukt.');
+          this.toast('mixed', '', (e && e.message) || 'Bulkactie mislukt.');
         } finally {
           this.busyAction = null;
         }
@@ -535,9 +535,12 @@
         return 'Geen inschrijvingen gevonden';
       },
 
-      toast(kind, msg) {
+      /* INV-5: the toast renders `lead` (emphasized) + `body` via x-text — both
+         plain strings, never x-html — so a server error string in `body` can
+         never be an HTML sink. `lead` is optional (an empty string hides it). */
+      toast(kind, lead, body) {
         const id = ++this.toastSeq;
-        this.toasts.push({ id, kind, msg });
+        this.toasts.push({ id, kind, lead: lead || '', body: body || '' });
         setTimeout(() => { this.toasts = this.toasts.filter((t) => t.id !== id); }, 4200);
       },
     };
