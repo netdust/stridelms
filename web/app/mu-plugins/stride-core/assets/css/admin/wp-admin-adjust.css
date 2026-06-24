@@ -4,18 +4,17 @@
    workspace.css + grid.css were authored for a standalone file:// document
    that OWNS <body>. In wp-admin the `.ws-shell` host lives INSIDE #wpcontent,
    next to #adminmenu + the admin bar. This file is the ONLY bridge between the
-   two worlds: it hides the WP chrome and collapses #wpcontent so the ws-rail
-   is the only visible navigation. Body class set by addBodyClasses():
-   `stride-dashboard folded`.
+   two worlds: it keeps the WP frame (admin bar + FOLDED admin menu) and fits
+   the ws-shell into the remaining content area — NOT a full-viewport takeover.
+   Body class set by addBodyClasses(): `stride-dashboard folded`.
 
    Keep this file SMALL — it is the wp-admin adjust layer, not the design
    system. The design system is workspace.css (chrome/tokens) + grid.css (grid).
    ========================================================================== */
 
-/* 1. Hide WordPress admin chrome on the dashboard page */
-body.stride-dashboard #wpadminbar,
-body.stride-dashboard #adminmenuwrap,
-body.stride-dashboard #adminmenuback,
+/* 1. Hide WP noise that doesn't belong over the app. We KEEP #wpadminbar
+      (top bar) and #adminmenuwrap (the WP menu, which the `folded` body class
+      collapses to its icon rail) — the app sits to the right of and below them. */
 body.stride-dashboard #wpfooter,
 body.stride-dashboard .notice,
 body.stride-dashboard .update-nag,
@@ -26,22 +25,20 @@ body.stride-dashboard #screen-meta-links {
     display: none !important;
 }
 
-html.wp-toolbar:has(body.stride-dashboard) {
-    padding-top: 0 !important;
-    --wp-admin--admin-bar--height: 0px;
-}
-
-/* 2. Collapse #wpcontent so the ws-shell owns the full viewport — the WP
-      admin menu is hidden, so there is no left gutter to reserve. */
+/* 2. Fit the app into the WP content area. Do NOT zero #wpcontent's margin —
+      WordPress reserves `margin-left: 36px` for `.folded #wpcontent` so the
+      content clears the folded WP menu; we keep that. We only flatten the
+      content padding so the ws-shell sits flush against the WP chrome. The
+      app height is the viewport MINUS the admin-bar height so the dark ws-rail
+      neither runs under the admin bar nor causes a double scrollbar. */
 body.stride-dashboard #wpcontent,
 body.stride-dashboard.folded #wpcontent {
-    padding: 0 !important;
-    margin-left: 0 !important;
+    padding-left: 0;
 }
 
 body.stride-dashboard #wpbody-content {
     padding-bottom: 0;
-    height: 100vh;
+    height: calc(100vh - var(--wp-admin--admin-bar--height, 32px));
     overflow: hidden;
 }
 
@@ -49,9 +46,45 @@ body.stride-dashboard .wrap {
     margin: 0;
 }
 
-/* 3. The ws-shell is the visible app surface. It owns its own min-height:100vh
-      flex layout (workspace.css §2); inside #wpbody-content's 100vh box it must
-      fill that height so the dark ws-rail runs full-bleed. */
+/* 3. The ws-shell is the visible app surface. It owns its own min-height flex
+      layout (workspace.css §2); inside #wpbody-content's box it fills that
+      height (viewport minus admin bar) so the dark ws-rail runs full-bleed
+      without overflowing past the WP admin bar. */
 body.stride-dashboard .ws-shell {
-    height: 100vh;
+    height: calc(100vh - var(--wp-admin--admin-bar--height, 32px));
+}
+
+/* 4. WP form bleed reset — wp-admin/css/forms.css applies a global
+      `input { min-height: 40px }` + focus box-shadow that inflate the compact
+      ws-search pill (measured 56px tall, input 40px) far past the mockup's
+      ~32px. The design system (workspace.css) gives `.ws-search` only
+      `padding: 7px var(--ws-4)` and no explicit height, so once the input
+      min-height is neutralised the pill collapses to ~32px and centres itself
+      in the 60px topbar via the topbar's `align-items: center`. This bleed
+      correction belongs HERE, not in workspace.css. Covers the topbar pill
+      and the inline `.ws-search--inline` variant used in surface toolbars. */
+body.stride-dashboard .ws-search input,
+body.stride-dashboard .ws-search--inline input {
+    min-height: 0;
+    height: auto;
+    line-height: normal;
+    margin: 0;
+    box-shadow: none;
+}
+body.stride-dashboard .ws-search input:focus,
+body.stride-dashboard .ws-search--inline input:focus {
+    box-shadow: none;
+}
+
+/* Keep the pill itself compact (~32px) and give it breathing room in the
+      topbar regardless of WP's default form metrics. */
+body.stride-dashboard .ws-search {
+    min-height: 32px;
+    margin: 0;
+}
+
+/* 5. Tame the same WP `select { min-height: 40px }` bleed on the surface
+      toolbar selects so grid.css's explicit `height: 30px` is honoured. */
+body.stride-dashboard .ws-select {
+    min-height: 0;
 }
