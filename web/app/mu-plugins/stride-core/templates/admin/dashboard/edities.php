@@ -1,14 +1,19 @@
 <?php
 /**
- * Admin Workspace — Edities surface (cluster F).
+ * Admin Workspace — Edities AGENDA surface (cluster F).
  *
- * In-shell list of scheduled offerings. Its own per-surface Alpine factory
- * (assets/js/admin/edities.js) owns ALL its data: fetches
- * GET /admin/editions?view=list server-side (paging/filter server-owned),
- * owns its loading/empty/error state, re-loads on every filter/page change.
+ * In-shell agenda of scheduled offerings — ONE ROW PER SESSION DATE. Its own
+ * per-surface Alpine factory (assets/js/admin/edities.js) owns ALL its data:
+ * fetches GET /admin/editions?view=agenda server-side (paging/filter
+ * server-owned), owns its loading/empty/error state, re-loads on every
+ * filter/page change.
  *
  * Mounted with x-data="edities()" INSIDE the shell's wsShell() scope, so it
  * inherits api(), switchView(), icon() (Alpine v3 nested-scope).
+ *
+ * FILTERS: exactly three — Search (edition title) + Tag (one dropdown from
+ * /admin/course-tags `.tag`) + a single flatpickr field (single date OR range,
+ * with a clear ✕). Status / Thema / Formaat removed.
  *
  * INV-5: every x-html binds a CONSTANT icon name via icon('<literal>'); never a
  * data field. Titles/dates/labels render via x-text (auto-escaped).
@@ -40,11 +45,27 @@ defined('ABSPATH') || exit;
 
             <div class="ws-select-wrap">
                 <span x-html="icon('filter')" style="width:14px;height:14px"></span>
-                <?php echo esc_html__('Status', 'stride'); ?>
-                <select class="ws-select" x-model="filters.status" @change="onFilterChange()">
-                    <option value=""><?php echo esc_html__('Alle statussen', 'stride'); ?></option>
-                    <template x-for="o in statusOptions" :key="o.value"><option :value="o.value" x-text="o.label"></option></template>
+                <?php echo esc_html__('Tag', 'stride'); ?>
+                <select class="ws-select" x-model="filters.tag" @change="onFilterChange()">
+                    <option value=""><?php echo esc_html__('Alle tags', 'stride'); ?></option>
+                    <template x-for="o in tagOptions" :key="o.id"><option :value="o.id" x-text="o.name"></option></template>
                 </select>
+            </div>
+
+            <div class="ws-select-wrap">
+                <span x-html="icon('calendar')" style="width:14px;height:14px"></span>
+                <input type="text"
+                       class="ws-select"
+                       x-ref="dateInput"
+                       readonly
+                       placeholder="<?php echo esc_attr__('Datum of periode…', 'stride'); ?>">
+                <button type="button"
+                        class="ws-btn ws-btn--ghost ws-btn--sm"
+                        x-show="filters.dateFrom || filters.dateTo"
+                        @click="$refs.dateInput && _fp && _fp.clear()"
+                        title="<?php echo esc_attr__('Datum wissen', 'stride'); ?>">
+                    <span x-html="icon('x')"></span>
+                </button>
             </div>
 
             <button class="ws-btn ws-btn--subtle ws-btn--sm" x-show="hasFilters" @click="clearAllFilters()">
@@ -81,7 +102,7 @@ defined('ABSPATH') || exit;
             <thead>
                 <tr>
                     <th><?php echo esc_html__('Editie', 'stride'); ?></th>
-                    <th><?php echo esc_html__('Data', 'stride'); ?></th>
+                    <th><?php echo esc_html__('Datum', 'stride'); ?></th>
                     <th class="ws-col-status"><?php echo esc_html__('Status', 'stride'); ?></th>
                     <th><?php echo esc_html__('Inschrijvingen', 'stride'); ?></th>
                     <th><?php echo esc_html__('Locatie', 'stride'); ?></th>
@@ -89,7 +110,7 @@ defined('ABSPATH') || exit;
                 </tr>
             </thead>
             <tbody>
-                <template x-for="r in rows" :key="r.id">
+                <template x-for="r in rows" :key="r.sessionId">
                     <tr @click="openRow(r)">
                         <td>
                             <div class="ws-namecell">
@@ -103,7 +124,10 @@ defined('ABSPATH') || exit;
                         <td>
                             <span class="ws-org-cell">
                                 <span x-html="icon('calendar')"></span>
-                                <span x-text="r.startDate ? (r.endDate && r.endDate !== r.startDate ? r.startDate + ' – ' + r.endDate : r.startDate) : '<?php echo esc_js(__('Geen data', 'stride')); ?>'"></span>
+                                <span>
+                                    <span x-text="r.date || '<?php echo esc_js(__('Geen datum', 'stride')); ?>'"></span>
+                                    <span class="ws-muted" x-show="timeLabel(r)" x-text="' · ' + timeLabel(r)"></span>
+                                </span>
                             </span>
                         </td>
                         <td>
