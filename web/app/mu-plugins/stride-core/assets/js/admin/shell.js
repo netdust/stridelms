@@ -120,10 +120,34 @@
         return requested && this.views.includes(requested) ? requested : fallback;
       },
 
-      switchView(view) {
-        if (this.views.includes(view)) {
-          this.view = view;
+      /* Switch the active surface, optionally seeding cross-surface deep-link
+         params on the URL FIRST so the target surface reads them on its own
+         init(). This is the cross-surface contract for cluster B's deep-links:
+           switchView('inschrijvingen', { queue: 'pending' })  → ?queue=pending
+           switchView('dossier',        { user: 1234 })        → ?user=1234
+         Cluster C's grid() consumes ?queue= and cluster D's dossier() consumes
+         ?user= from the URL on mount. Only a small whitelist of param keys is
+         written (queue, user); anything else is ignored. Stale deep-link params
+         for surfaces OTHER than the target are cleared so a later plain
+         switchView() doesn't carry a previous surface's filter. */
+      switchView(view, params) {
+        if (!this.views.includes(view)) {
+          return;
         }
+        const url = new URL(window.location.href);
+        // Clear any previous deep-link params before seeding the new ones.
+        url.searchParams.delete('queue');
+        url.searchParams.delete('user');
+        if (params && typeof params === 'object') {
+          if (params.queue != null && params.queue !== '') {
+            url.searchParams.set('queue', String(params.queue));
+          }
+          if (params.user != null && params.user !== '') {
+            url.searchParams.set('user', String(params.user));
+          }
+        }
+        window.history.replaceState(null, '', url.toString());
+        this.view = view;
       },
 
       isActive(view) {

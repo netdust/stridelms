@@ -1,0 +1,114 @@
+/**
+ * Unit: Vandaag Acties-nodig bucketing (mapActionBuckets).
+ *
+ * Tier A — this is the branching data-mapping helper that buckets
+ * /admin/pending-approvals items into the "Wacht op mij" (mij) and
+ * "Wacht op gebruiker" (gebruiker) sub-queues by `type`, and derives the
+ * default-active tab from the counts. It has a real, falsifiable contract:
+ *   - type ∈ {approval, post_approval} → mij
+ *   - type === 'stale_user'            → gebruiker
+ *   - default tab priority: (approval+post_approval) > stale_user > meldingen
+ *   - the EMPTY-input branch (no items / no payload) must not crash and must
+ *     fall through to 'meldingen'.
+ * A wrong filter or wrong priority ships the exact bug the abandoned attempt
+ * shipped: a populated panel rendering the wrong / empty bucket.
+ *
+ * No browser, no DDEV — the mappers are imported directly (UMD tail on
+ * vandaag.js exposes module.exports under Node).
+ */
+
+import { test, expect } from '@playwright/test';
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const mappers = require('../../../web/app/mu-plugins/stride-core/assets/js/admin/vandaag.js');
+
+const sample = {
+  items: [
+    { id: 101, type: 'approval', user_id: 11, user_name: 'Lotte', edition_title: 'MI', registered_at: '2026-06-09 10:00:00' },
+    { id: 102, type: 'post_approval', user_id: 12, user_name: 'Sander', edition_title: 'MI', registered_at: '2026-06-11 10:00:00' },
+    { id: 103, type: 'stale_user', user_id: 13, user_name: 'Imane', edition_title: 'Cannabis', open_task_label: 'Intake', days_idle: 9, registered_at: '2026-06-01 10:00:00' },
+  ],
+  counts: { approval: 1, post_approval: 1, stale_user: 1 },
+};
+
+test.describe('mapActionBuckets', () => {
+  test('buckets approval + post_approval into "mij" (per-person rows)', () => {
+    const { mij } = mappers.mapActionBuckets(sample, 0);
+    expect(mij.map((r: any) => r.regId)).toEqual([101, 102]);
+    expect(mij[0].name).toBe('Lotte');
+    // edition title is carried into the meta line
+    expect(mij[0].meta).toContain('MI');
+    // post_approval gets its own microcopy, NOT the plain approval one
+    expect(mij[1].meta).toContain('na cursus');
+  });
+
+  test('buckets stale_user into "gebruiker" with the open-task label + idle age', () => {
+    const { gebruiker } = mappers.mapActionBuckets(sample, 0);
+    expect(gebruiker).toHaveLength(1);
+    expect(gebruiker[0].regId).toBe(103);
+    expect(gebruiker[0].meta).toContain('Intake');
+    expect(gebruiker[0].age).toBe('sinds 9d');
+  });
+
+  test('does NOT leak a stale_user into "mij" or an approval into "gebruiker" (denial path)', () => {
+    const { mij, gebruiker } = mappers.mapActionBuckets(sample, 0);
+    expect(mij.some((r: any) => r.regId === 103)).toBe(false);
+    expect(gebruiker.some((r: any) => r.regId === 101 || r.regId === 102)).toBe(false);
+  });
+
+  test('default tab priority: admin-action present → "mij"', () => {
+    expect(mappers.mapActionBuckets(sample, 5).defaultTab).toBe('mij');
+  });
+
+  test('default tab priority: only stale_user present → "gebruiker"', () => {
+    const onlyStale = {
+      items: [{ id: 9, type: 'stale_user', user_id: 1, user_name: 'X', days_idle: 3 }],
+      counts: { approval: 0, post_approval: 0, stale_user: 1 },
+    };
+    expect(mappers.mapActionBuckets(onlyStale, 2).defaultTab).toBe('gebruiker');
+  });
+
+  test('empty-input branch: no payload → empty buckets, default "meldingen", no crash', () => {
+    const empty = mappers.mapActionBuckets(undefined, 0);
+    expect(empty.mij).toEqual([]);
+    expect(empty.gebruiker).toEqual([]);
+    expect(empty.defaultTab).toBe('meldingen');
+  });
+
+  test('empty items but counts all zero → default "meldingen"', () => {
+    const zero = { items: [], counts: { approval: 0, post_approval: 0, stale_user: 0 } };
+    expect(mappers.mapActionBuckets(zero, 0).defaultTab).toBe('meldingen');
+  });
+});
+
+test.describe('mapQueues', () => {
+  test('maps the 5 mockup queue keys to the real worklistQueues keys', () => {
+    const wq = { pending: 7, waitlist_open: 3, offerte_opvolging: 12, nocert: 2, oldinterest: 0 };
+    const queues = mappers.mapQueues(wq);
+    expect(queues.map((q: any) => q.key)).toEqual(['pending', 'waitlist', 'offerte', 'nocert', 'oldinterest']);
+    expect(queues.find((q: any) => q.key === 'waitlist').count).toBe(3);
+    expect(queues.find((q: any) => q.key === 'offerte').count).toBe(12);
+  });
+
+  test('missing worklistQueues → all counts 0, no crash (empty branch)', () => {
+    const queues = mappers.mapQueues(undefined);
+    expect(queues).toHaveLength(5);
+    expect(queues.every((q: any) => q.count === 0)).toBe(true);
+  });
+});
+
+test.describe('mapStats', () => {
+  test('derives a +N delta only for active registrations when this week > last week', () => {
+    const cards = mappers.mapStats({ totalRegistrations: 247, registrationsThisWeek: 18, registrationsLastWeek: 0 });
+    const active = cards.find((c: any) => c.label === 'Actieve inschrijvingen');
+    expect(active.num).toBe(247);
+    expect(active.delta).toBe('+18 deze week');
+    expect(active.kind).toBe('up');
+  });
+
+  test('does NOT fabricate a delta for the other three cards', () => {
+    const cards = mappers.mapStats({ upcomingEditions: 7, pendingQuotes: 12, todaySessions: 3 });
+    for (const label of ['Komende edities', 'Openstaande offertes', 'Sessies vandaag']) {
+      expect(cards.find((c: any) => c.label === label).delta).toBe('');
+    }
+  });
+});
