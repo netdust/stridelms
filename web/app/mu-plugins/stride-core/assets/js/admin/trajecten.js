@@ -69,11 +69,19 @@
      value to a CSS hue class. An unknown status falls back to the neutral
      slate ('completed') class — never a crash, never raw passthrough. */
   const STATUS_BADGE = {
+    // trajectory statuses (the list + detail header badge)
     draft: 'completed',
     open: 'confirmed',
     full: 'waitlist',
     closed: 'pending',
     archived: 'cancelled',
+    // registration statuses (the roster row badge — I-1: these were missing, so
+    // every roster badge fell through to the neutral slate hue regardless of
+    // the actual enrolment state). Distinct keys, so the two domains coexist.
+    active: 'confirmed',
+    completed: 'completed',
+    cancelled: 'cancelled',
+    pending: 'pending',
   };
   function badgeClass(status) {
     return STATUS_BADGE[status] || 'completed';
