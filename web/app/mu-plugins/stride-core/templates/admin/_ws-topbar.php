@@ -37,7 +37,7 @@ $ws_crumb_labels = [
 ];
 ?>
 <header class="ws-topbar"
-        x-data="{ crumbs: <?php echo wp_json_encode($ws_crumb_labels); ?> }">
+        x-data="<?php echo esc_attr('{ crumbs: ' . wp_json_encode($ws_crumb_labels) . ' }'); ?>">
     <div class="ws-topbar__crumbs">
         <b x-text="crumbs[view] || view"></b>
     </div>
