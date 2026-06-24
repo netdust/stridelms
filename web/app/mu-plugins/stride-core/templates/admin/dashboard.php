@@ -37,7 +37,6 @@ defined('ABSPATH') || exit;
  * @var array<string,string> $ws_surfaces
  */
 $ws_surfaces = [
-    'inschrijvingen' => __('Inschrijvingen', 'stride'),
     'edities'        => __('Edities', 'stride'),
     'sessies'        => __('Sessies', 'stride'),
     'offertes'       => __('Offertes', 'stride'),
@@ -56,6 +55,9 @@ $ws_surfaces = [
 
         <?php // Vandaag — its own per-surface Alpine factory owns ALL its data (cluster B).
         require __DIR__ . '/dashboard/vandaag.php'; ?>
+
+        <?php // Inschrijvingen — the registration grid, its own factory owns its data (cluster C).
+        require __DIR__ . '/dashboard/inschrijvingen.php'; ?>
 
         <?php foreach ($ws_surfaces as $ws_view => $ws_label) : ?>
             <section class="ws-content" x-show="view === '<?php echo esc_attr($ws_view); ?>'" x-cloak>

@@ -428,6 +428,7 @@ class AdminDashboardService extends AbstractService
         return [
             'admin/shell.js',
             'admin/vandaag.js',
+            'admin/grid.js',
         ];
     }
 
