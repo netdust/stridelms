@@ -407,18 +407,35 @@ final class AdminUserService
         if (AuditTable::exists()) {
             $auditTable = AuditTable::getTableName();
 
+            // Three match patterns for "this person's timeline":
+            //   1. actor_id = U                          — things U did
+            //   2. entity_type='user' AND entity_id = U  — user.* events about U
+            //   3. entity_type='registration' AND subject_user_id = U
+            //      — registration-scoped lifecycle events (created/confirmed/
+            //        cancelled/waitlisted, attendance.marked_*) whose
+            //        context.user_id is U. subject_user_id is the STORED
+            //        generated column over context.user_id (ntdst-audit schema
+            //        v2) — indexable AND an EXACT per-user match, so a
+            //        registration event for a DIFFERENT user can never leak
+            //        onto U's timeline (the cross-user-leak guard).
             $auditTrailTotal = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$auditTable}
-                 WHERE actor_id = %d OR (entity_type = 'user' AND entity_id = %d)",
+                 WHERE actor_id = %d
+                    OR (entity_type = 'user' AND entity_id = %d)
+                    OR (entity_type = 'registration' AND subject_user_id = %d)",
+                $userId,
                 $userId,
                 $userId,
             ));
 
             $auditEntries = $wpdb->get_results($wpdb->prepare(
                 "SELECT * FROM {$auditTable}
-                 WHERE actor_id = %d OR (entity_type = 'user' AND entity_id = %d)
+                 WHERE actor_id = %d
+                    OR (entity_type = 'user' AND entity_id = %d)
+                    OR (entity_type = 'registration' AND subject_user_id = %d)
                  ORDER BY created_at DESC
                  LIMIT 50",
+                $userId,
                 $userId,
                 $userId,
             ));
