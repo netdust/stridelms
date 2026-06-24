@@ -85,6 +85,7 @@ defined('ABSPATH') || exit;
                     <th class="ws-col-status"><?php echo esc_html__('Status', 'stride'); ?></th>
                     <th><?php echo esc_html__('Inschrijvingen', 'stride'); ?></th>
                     <th><?php echo esc_html__('Locatie', 'stride'); ?></th>
+                    <th style="text-align:right;white-space:nowrap"></th>
                 </tr>
             </thead>
             <tbody>
@@ -120,6 +121,11 @@ defined('ABSPATH') || exit;
                                 <span class="ws-org-cell"><span x-html="icon('mapPin')"></span><span x-text="r.venue"></span></span>
                             </template>
                             <template x-if="!r.venue"><span class="ws-muted">—</span></template>
+                        </td>
+                        <td style="text-align:right;white-space:nowrap">
+                            <button class="ws-btn ws-btn--ghost ws-btn--sm" @click="openCohort(r, $event)" title="<?php echo esc_attr__('Rooster bekijken', 'stride'); ?>">
+                                <span x-html="icon('users')"></span> <?php echo esc_html__('Rooster', 'stride'); ?>
+                            </button>
                         </td>
                     </tr>
                 </template>

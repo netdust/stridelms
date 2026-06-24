@@ -162,6 +162,18 @@
       /* row → existing edition edit screen (server-supplied editUrl). */
       openRow(r) { if (r && r.editUrl) window.location.href = r.editUrl; },
 
+      /* "Rooster" action → open the cohort-lens slideover (cluster G) for this
+         edition. The cohort lens is a SIBLING x-data scope on the shell, so we
+         relay through a window event it listens for (`ws-cohort-open`) rather
+         than calling into it directly. stopPropagation so the row's openRow()
+         navigation doesn't also fire. */
+      openCohort(r, ev) {
+        if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+        const id = r && Number(r.id);
+        if (!id) return;
+        window.dispatchEvent(new CustomEvent('ws-cohort-open', { detail: { editionId: id } }));
+      },
+
       emptyTitle() {
         if (this.filters.q) return `Geen edities voor "${this.filters.q}"`;
         if (this.filters.status) return 'Geen edities met deze status';

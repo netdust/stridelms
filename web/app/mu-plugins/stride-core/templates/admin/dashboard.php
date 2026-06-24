@@ -58,5 +58,11 @@ defined('ABSPATH') || exit;
         <?php require __DIR__ . '/dashboard/offertes.php'; ?>
         <?php require __DIR__ . '/dashboard/gebruikers.php'; ?>
 
+        <?php // Cohort lens (cluster G) — a right-anchored slideover that OVERLAYS
+              // the current surface (not a view switch). Its own per-surface Alpine
+              // factory owns the roster; it opens via the `ws-cohort-open` window
+              // event the Edities row dispatches. Rendered last so it layers above.?>
+        <?php require __DIR__ . '/dashboard/_cohort-lens.php'; ?>
+
     </main>
 </div>

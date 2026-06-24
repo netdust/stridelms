@@ -437,6 +437,10 @@ class AdminDashboardService extends AbstractService
             'admin/sessies.js',
             'admin/offertes.js',
             'admin/gebruikers.js',
+            // The cohort-lens slideover (cluster G) — a per-surface factory mounted
+            // on the shell, opened over any surface via the `ws-cohort-open` event
+            // the Edities row dispatches. Reads /admin/editions/{id}/roster (frozen).
+            'admin/cohort.js',
         ];
     }
 
