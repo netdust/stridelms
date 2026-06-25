@@ -200,3 +200,18 @@ test.describe('showsFulfillment', () => {
     expect(['waitlist', 'interest', 'cancelled'].map(dossier.showsFulfillment)).toEqual([false, false, false]);
   });
 });
+
+test.describe('actionsForState — approve is not valid for interest', () => {
+  const ids = (state: string) => dossier.actionsForState(state).map((a: any) => a.id);
+
+  test('interest has NO approve action (no Interest→Confirmed transition); only message + cancel', () => {
+    const got = ids('interest');
+    expect(got).not.toContain('stride_approve');
+    expect(got).toContain('stride_message');
+    expect(got).toContain('stride_cancel');
+  });
+
+  test('pending KEEPS approve (the real approvable state)', () => {
+    expect(ids('pending')).toContain('stride_approve');
+  });
+});

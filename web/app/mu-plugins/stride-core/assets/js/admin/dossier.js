@@ -108,9 +108,16 @@
     return STATUS_META[status] || { label: String(status || ''), cls: 'pending' };
   }
 
-  /* ---- state-appropriate actions for a single registration status -------- */
+  /* ---- state-appropriate actions for a single registration status --------
+     States MUST match the server transition map (RegistrationTransitions):
+     Interest → Pending | Cancelled only — there is NO Interest → Confirmed, so
+     "Goedkeuren" (approve→confirmed) is NOT a valid action on an interest row.
+     An interest registration is for a course with no planned edition yet; there
+     is nothing to approve until it becomes a real (pending) enrollment. Its only
+     actions are messaging + cancelling. (grid.js + vandaag.js already scope
+     approve to 'pending' — this aligns the dossier panel with them.) */
   const SMART_ACTIONS = [
-    { id: 'stride_approve',           label: 'Goedkeuren',               icon: 'checkCircle', states: ['pending', 'interest'] },
+    { id: 'stride_approve',           label: 'Goedkeuren',               icon: 'checkCircle', states: ['pending'] },
     { id: 'stride_promote_waitlist',  label: 'Promoveer van wachtlijst', icon: 'arrowUp',     states: ['waitlist'] },
     { id: 'stride_quote_sent',        label: 'Offerte verzonden',        icon: 'send',        states: ['confirmed'] },
     { id: 'stride_quote_exported',    label: 'Offerte verwerkt',         icon: 'checkCircle', states: ['confirmed'] },
