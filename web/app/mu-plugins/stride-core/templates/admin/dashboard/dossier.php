@@ -246,22 +246,20 @@ defined('ABSPATH') || exit;
                             <!-- reg body -->
                             <div class="ws-reg__body" x-show="r.open" x-collapse>
 
-                                <!-- detail grid -->
+                                <!-- detail grid (status lives in the reg header badge — not duplicated here) -->
                                 <div class="ws-detail-grid">
-                                    <div class="ws-field ws-field--wide">
-                                        <div class="ws-field__label"><?php echo esc_html__('Inschrijvingsstatus', 'stride'); ?></div>
-                                        <div class="ws-field__val ws-field__val--status">
-                                            <span class="ws-badge" :class="'ws-badge--'+statusMeta(r.status).cls" x-text="statusMeta(r.status).label"></span>
-                                            <span class="ws-status-hint" x-show="r.status === 'pending'">
-                                                <span x-html="icon('info')"></span>
-                                                <span><?php echo esc_html__('Wacht op gebruiker (intake, sessiekeuze, documenten) of op goedkeuring zodra die taken klaar zijn.', 'stride'); ?></span>
-                                            </span>
-                                        </div>
-                                    </div>
                                     <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Inschrijvingspad', 'stride'); ?></div><div class="ws-field__val" x-text="r.enrollment_path"></div></div>
                                     <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Ingeschreven op', 'stride'); ?></div><div class="ws-field__val" x-text="r.registered_at"></div></div>
                                     <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Afgerond op', 'stride'); ?></div><div class="ws-field__val" x-text="r.completed_at || '—'"></div></div>
                                 </div>
+
+                                <!-- pending hint (preserved from the removed status field; only for pending rows) -->
+                                <template x-if="r.status === 'pending'">
+                                    <p class="ws-status-hint">
+                                        <span x-html="icon('info')"></span>
+                                        <span><?php echo esc_html__('Wacht op gebruiker (intake, sessiekeuze, documenten) of op goedkeuring zodra die taken klaar zijn.', 'stride'); ?></span>
+                                    </p>
+                                </template>
 
                                 <!-- enrollment_data STAGES (only stages WITH data render; closed by default) -->
                                 <div class="ws-section-title"><span x-html="icon('fileText')"></span> <?php echo esc_html__('Ingediende gegevens', 'stride'); ?> <span class="ws-section-title__line"></span></div>
@@ -299,47 +297,56 @@ defined('ABSPATH') || exit;
                                     <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0"><?php echo esc_html__('Nog geen gegevens ingediend.', 'stride'); ?></p>
                                 </template>
 
-                                <!-- attendance per session -->
-                                <div class="ws-section-title"><span x-html="icon('calendar')"></span> <?php echo esc_html__('Aanwezigheid', 'stride'); ?> <span class="ws-section-title__line"></span></div>
-                                <template x-if="r.attendance">
-                                    <div class="ws-att-summary">
-                                        <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--present"></span> <b x-text="r.attendance.present"></b> <?php echo esc_html__('aanwezig', 'stride'); ?></span>
-                                        <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--absent"></span> <b x-text="r.attendance.absent"></b> <?php echo esc_html__('afwezig', 'stride'); ?></span>
-                                        <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--excused"></span> <b x-text="r.attendance.excused"></b> <?php echo esc_html__('verontschuldigd', 'stride'); ?></span>
-                                        <span class="ws-att-summary__item"><?php echo esc_html__('van', 'stride'); ?> <b x-text="r.attendance.total_sessions"></b> <?php echo esc_html__('sessies', 'stride'); ?> · <b x-text="r.attendance.hours"></b><?php echo esc_html__('u', 'stride'); ?></span>
-                                    </div>
-                                </template>
-                                <template x-if="!r.attendance">
-                                    <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0"><?php echo esc_html__('Geen sessies / aanwezigheid voor deze inschrijving.', 'stride'); ?></p>
-                                </template>
-
-                                <!-- selections + completion tasks -->
-                                <div class="ws-dossier-two-col">
+                                <!-- FULFILLMENT region (attendance + sessions + completion) — only meaningful
+                                     for pending/confirmed/completed. waitlist/interest/cancelled show a muted hint. -->
+                                <template x-if="showsFulfillment(r.status)">
                                     <div>
-                                        <div class="ws-section-title"><span x-html="icon('route')"></span> <?php echo esc_html__('Gekozen sessies', 'stride'); ?> <span class="ws-section-title__line"></span></div>
-                                        <template x-if="r.selections && r.selections.length">
-                                            <div class="ws-pill-list">
-                                                <!-- INV-5 FIX: icon via x-html (constant), label via x-text (data) — never concatenated into x-html. INV-6b: server-resolved label, never parsed. -->
-                                                <template x-for="(sel, si) in r.selections" :key="si">
-                                                    <span class="ws-pill"><span x-html="icon('check')"></span><span x-text="sel"></span></span>
-                                                </template>
+                                        <!-- attendance per session -->
+                                        <div class="ws-section-title"><span x-html="icon('calendar')"></span> <?php echo esc_html__('Aanwezigheid', 'stride'); ?> <span class="ws-section-title__line"></span></div>
+                                        <template x-if="r.attendance">
+                                            <div class="ws-att-summary">
+                                                <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--present"></span> <b x-text="r.attendance.present"></b> <?php echo esc_html__('aanwezig', 'stride'); ?></span>
+                                                <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--absent"></span> <b x-text="r.attendance.absent"></b> <?php echo esc_html__('afwezig', 'stride'); ?></span>
+                                                <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--excused"></span> <b x-text="r.attendance.excused"></b> <?php echo esc_html__('verontschuldigd', 'stride'); ?></span>
+                                                <span class="ws-att-summary__item"><?php echo esc_html__('van', 'stride'); ?> <b x-text="r.attendance.total_sessions"></b> <?php echo esc_html__('sessies', 'stride'); ?> · <b x-text="r.attendance.hours"></b><?php echo esc_html__('u', 'stride'); ?></span>
                                             </div>
                                         </template>
-                                        <template x-if="!r.selections || !r.selections.length">
-                                            <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0"><?php echo esc_html__('Geen sessiekeuze.', 'stride'); ?></p>
+                                        <template x-if="!r.attendance">
+                                            <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0"><?php echo esc_html__('Geen sessies / aanwezigheid voor deze inschrijving.', 'stride'); ?></p>
                                         </template>
-                                    </div>
-                                    <div>
-                                        <div class="ws-section-title"><span x-html="icon('checkCircle')"></span> <?php echo esc_html__('Voltooiingstaken', 'stride'); ?> <span class="ws-section-title__line"></span></div>
-                                        <div class="ws-pill-list">
-                                            <template x-for="(task, ti) in completionFor(r)" :key="ti">
-                                                <span class="ws-pill" :class="task.done ? 'ws-pill--done' : 'ws-pill--todo'">
-                                                    <span x-html="icon(task.done ? 'check' : 'clock')"></span><span x-text="task.label"></span>
-                                                </span>
-                                            </template>
+
+                                        <!-- selections + completion tasks -->
+                                        <div class="ws-dossier-two-col">
+                                            <div>
+                                                <div class="ws-section-title"><span x-html="icon('route')"></span> <?php echo esc_html__('Gekozen sessies', 'stride'); ?> <span class="ws-section-title__line"></span></div>
+                                                <template x-if="r.selections && r.selections.length">
+                                                    <div class="ws-pill-list">
+                                                        <!-- INV-5 FIX: icon via x-html (constant), label via x-text (data) — never concatenated into x-html. INV-6b: server-resolved label, never parsed. -->
+                                                        <template x-for="(sel, si) in r.selections" :key="si">
+                                                            <span class="ws-pill"><span x-html="icon('check')"></span><span x-text="sel"></span></span>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <template x-if="!r.selections || !r.selections.length">
+                                                    <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0"><?php echo esc_html__('Geen sessiekeuze.', 'stride'); ?></p>
+                                                </template>
+                                            </div>
+                                            <div>
+                                                <div class="ws-section-title"><span x-html="icon('checkCircle')"></span> <?php echo esc_html__('Voltooiingstaken', 'stride'); ?> <span class="ws-section-title__line"></span></div>
+                                                <div class="ws-pill-list">
+                                                    <template x-for="(task, ti) in completionFor(r)" :key="ti">
+                                                        <span class="ws-pill" :class="task.done ? 'ws-pill--done' : 'ws-pill--todo'">
+                                                            <span x-html="icon(task.done ? 'check' : 'clock')"></span><span x-text="task.label"></span>
+                                                        </span>
+                                                    </template>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
+                                </template>
+                                <template x-if="!showsFulfillment(r.status)">
+                                    <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0" x-text="fulfillmentEmptyHint(r.status)"></p>
+                                </template>
 
                                 <!-- notes -->
                                 <div class="ws-section-title"><span x-html="icon('edit')"></span> <?php echo esc_html__('Notities', 'stride'); ?> <span class="ws-section-title__line"></span></div>

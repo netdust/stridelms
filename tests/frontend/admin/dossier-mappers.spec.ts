@@ -168,6 +168,13 @@ test.describe('completionChecklist', () => {
     expect(items.find((i: any) => i.label.includes('Goedkeuring')).done).toBe(false);
   });
 
+  test('waitlist/interest/cancelled → approval NOT done (cannot be approved)', () => {
+    for (const status of ['waitlist', 'interest', 'cancelled']) {
+      const items = dossier.completionChecklist({ status, stages: {}, attendance: null });
+      expect(items.find((i: any) => i.label.includes('Goedkeuring')).done).toBe(false);
+    }
+  });
+
   test('EMPTY branch: no stages, no attendance → only approval can be true, rest false', () => {
     const reg = { status: 'confirmed', stages: {}, attendance: null };
     const items = dossier.completionChecklist(reg);
@@ -184,5 +191,12 @@ test.describe('completionChecklist', () => {
     const items = dossier.completionChecklist({});
     expect(items).toHaveLength(4);
     expect(items.every((i: any) => typeof i.done === 'boolean' && typeof i.label === 'string')).toBe(true);
+  });
+});
+
+test.describe('showsFulfillment', () => {
+  test('showsFulfillment: only pending/confirmed/completed', () => {
+    expect(['pending', 'confirmed', 'completed'].map(dossier.showsFulfillment)).toEqual([true, true, true]);
+    expect(['waitlist', 'interest', 'cancelled'].map(dossier.showsFulfillment)).toEqual([false, false, false]);
   });
 });
