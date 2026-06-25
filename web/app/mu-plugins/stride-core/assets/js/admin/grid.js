@@ -95,6 +95,7 @@
     offerte:     'confirmed',   // offerte-opvolging ≈ confirmed (no offerte param on the endpoint)
     nocert:      'completed',   // afgerond zonder certificaat ≈ completed
     oldinterest: 'interest',    // oude interesse ≈ interest
+    interest_to_invite: 'interest', // interesse — editie nu gepland ≈ interest (view the list; mail send deferred)
   };
   function queueToParams(queueKey) {
     const status = QUEUE_STATUS[queueKey];
@@ -538,6 +539,7 @@
         if (this.queue === 'offerte') return 'Geen openstaande offerte-opvolging';
         if (this.queue === 'nocert') return 'Niemand afgerond zonder certificaat';
         if (this.queue === 'oldinterest') return 'Geen oude interesse meer';
+        if (this.queue === 'interest_to_invite') return 'Geen interesse om uit te nodigen';
         if (this.filters.q) return `Geen resultaten voor "${this.filters.q}"`;
         return 'Geen inschrijvingen gevonden';
       },

@@ -386,9 +386,10 @@ final class AdminStatsService
             'registrationsThisWeek' => $registrationsThisWeek,
             'registrationsLastWeek' => $registrationsLastWeek,
             'alerts' => $alerts,
-            // ADDITIVE (Phase-1D Task 3.3 / drift #4): the 5 Vandaag worklist
-            // queue counts, scoped to the active-edition subset. Existing keys
-            // above are UNCHANGED — other UI consumes them.
+            // ADDITIVE (Phase-1D Task 3.3 / drift #4): the Vandaag worklist queue
+            // counts, scoped to the active-edition subset. Existing keys above are
+            // UNCHANGED — other UI consumes them. Adding a 6th queue key
+            // (interest_to_invite) flows through here without a whitelist.
             'worklistQueues' => $this->getWorklistQueueCounts($this->activeEditionIds()),
         ];
 
@@ -402,11 +403,11 @@ final class AdminStatsService
     // =========================================================================
 
     /**
-     * Compute the 5 Vandaag worklist queue counts, scoped to the supplied
+     * Compute the Vandaag worklist queue counts, scoped to the supplied
      * active-edition subset (§10 — the caller feeds the active-edition ID set;
      * this NEVER scans the full registration corpus).
      *
-     * The 5 queues (§1 of the spec):
+     * The queues (§1 of the spec):
      *  - pending           — registrations in 'pending' status.
      *  - waitlist_open     — 'waitlist' rows whose edition has open capacity
      *                        (per-edition capacity check, read through
@@ -423,18 +424,30 @@ final class AdminStatsService
      *                        too, because the active subset includes dateless
      *                        editions (§10.7 carve-out — the active-set predicate
      *                        is NULL-permitting, not a start_date >= X filter).
+     *  - interest_to_invite — 'interest' rows whose edition now has a PLANNED
+     *                        date (non-empty _ntdst_start_date). The interest
+     *                        anchor was dateless; once a session/date is added,
+     *                        these people can be invited. DISTINCT from
+     *                        oldinterest (age-based) — a row may count toward
+     *                        both. The actual bulk-mail SEND is DEFERRED to the
+     *                        netdust-mail broadcast; this queue only surfaces
+     *                        the list. Freshness depends on the stats transient
+     *                        being busted on save_post_vad_session /
+     *                        save_post_vad_edition (AdminDashboardService) —
+     *                        adding a date already refreshes this count.
      *
      * @param  array<int> $activeEditionIds
-     * @return array{pending:int,waitlist_open:int,offerte_opvolging:int,nocert:int,oldinterest:int}
+     * @return array{pending:int,waitlist_open:int,offerte_opvolging:int,nocert:int,oldinterest:int,interest_to_invite:int}
      */
     public function getWorklistQueueCounts(array $activeEditionIds): array
     {
         $empty = [
-            'pending'           => 0,
-            'waitlist_open'     => 0,
-            'offerte_opvolging' => 0,
-            'nocert'            => 0,
-            'oldinterest'       => 0,
+            'pending'            => 0,
+            'waitlist_open'      => 0,
+            'offerte_opvolging'  => 0,
+            'nocert'             => 0,
+            'oldinterest'        => 0,
+            'interest_to_invite' => 0,
         ];
 
         $activeEditionIds = array_values(array_unique(array_filter(array_map('intval', $activeEditionIds))));
@@ -482,12 +495,15 @@ final class AdminStatsService
         // rows share an edition. Build the distinct-edition maps up front.
         $waitlistEditionIds = [];
         $completedEditionIds = [];
+        $interestEditionIds = [];
         foreach ($rows as $row) {
             $editionId = (int) $row->edition_id;
             if ($row->status === RegistrationStatus::Waitlist->value) {
                 $waitlistEditionIds[$editionId] = true;
             } elseif ($row->status === RegistrationStatus::Completed->value && !empty($row->completed_at)) {
                 $completedEditionIds[$editionId] = true;
+            } elseif ($row->status === RegistrationStatus::Interest->value) {
+                $interestEditionIds[$editionId] = true;
             }
         }
         $hasSpotsByEdition = [];
@@ -499,12 +515,29 @@ final class AdminStatsService
             $courseIdByEdition[$editionId] = $this->editions->getCourseId($editionId) ?? 0;
         }
 
+        // interest_to_invite: a per-distinct-edition start_date presence map for
+        // the interest rows' editions (one batched meta read, mirroring the
+        // prefetch-per-distinct-edition style above). A non-empty start_date means
+        // the formerly-dateless interest anchor now has a PLANNED date → invite.
+        $datedByEdition = [];
+        if (!empty($interestEditionIds)) {
+            $startMeta = BatchQueryHelper::batchGetPostMeta(
+                array_keys($interestEditionIds),
+                ['_ntdst_start_date'],
+            );
+            foreach (array_keys($interestEditionIds) as $editionId) {
+                $startDate = $startMeta[$editionId]['_ntdst_start_date'] ?? null;
+                $datedByEdition[$editionId] = is_string($startDate) && trim($startDate) !== '';
+            }
+        }
+
         $oldInterestCutoff = strtotime('-' . self::OLD_INTEREST_DAYS . ' days');
 
         $waitlistOpen     = 0;
         $offerteOpvolging = 0;
         $nocert           = 0;
         $oldinterest      = 0;
+        $interestToInvite = 0;
 
         foreach ($rows as $row) {
             $regId     = (int) $row->id;
@@ -557,16 +590,23 @@ final class AdminStatsService
                     if ($registeredTs !== false && $registeredTs < $oldInterestCutoff) {
                         $oldinterest++;
                     }
+                    // interest_to_invite: edition now has a planned date. Counted
+                    // INDEPENDENTLY of the age check — a row may belong to both
+                    // queues (they answer different questions).
+                    if ($datedByEdition[$editionId] ?? false) {
+                        $interestToInvite++;
+                    }
                     break;
             }
         }
 
         return [
-            'pending'           => $pending,
-            'waitlist_open'     => $waitlistOpen,
-            'offerte_opvolging' => $offerteOpvolging,
-            'nocert'            => $nocert,
-            'oldinterest'       => $oldinterest,
+            'pending'            => $pending,
+            'waitlist_open'      => $waitlistOpen,
+            'offerte_opvolging'  => $offerteOpvolging,
+            'nocert'             => $nocert,
+            'oldinterest'        => $oldinterest,
+            'interest_to_invite' => $interestToInvite,
         ];
     }
 

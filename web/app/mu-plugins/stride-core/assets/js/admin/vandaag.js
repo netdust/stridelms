@@ -94,6 +94,11 @@
     { key: 'offerte', countKey: 'offerte_opvolging', label: 'Offerte-opvolging', def: 'bevestigd + offerte nog niet verwerkt', accent: '#2563eb', icon: 'receipt', action: 'Markeer verzonden / verwerkt', actionIcon: 'send' },
     { key: 'nocert', countKey: 'nocert', label: 'Afgerond zonder certificaat', def: 'afgerond + voltooid + geen LD-certificaat', accent: '#16a34a', icon: 'award', action: 'Bericht sturen', actionIcon: 'mail' },
     { key: 'oldinterest', countKey: 'oldinterest', label: 'Oude interesse', def: 'interesse + ouder dan 90 dagen', accent: '#64748b', icon: 'clock', action: 'Bericht sturen / archiveren', actionIcon: 'archive' },
+    // interest_to_invite: interest on an edition that NOW has a planned date.
+    // The action deep-links to the interest list (switchView via the card's
+    // generic queue wiring); the actual bulk-mail SEND is DEFERRED to the
+    // netdust-mail broadcast (not built yet).
+    { key: 'interest_to_invite', countKey: 'interest_to_invite', label: 'Interesse — editie nu gepland', def: 'interesse op een editie die nu een datum heeft', accent: '#0ea5e9', icon: 'sparkle', action: 'Bekijk & uitnodigen', actionIcon: 'users' },
   ];
   function mapQueues(worklistQueues) {
     const w = worklistQueues || {};
