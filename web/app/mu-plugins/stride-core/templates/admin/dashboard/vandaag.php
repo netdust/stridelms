@@ -43,7 +43,9 @@ defined('ABSPATH') || exit;
                 <p>
                     <?php echo esc_html__('Je hebt', 'stride'); ?>
                     <b x-text="totalActions"></b>
-                    <?php echo esc_html__('openstaande acties verdeeld over vijf wachtrijen.', 'stride'); ?>
+                    <?php echo esc_html__('openstaande acties verdeeld over', 'stride'); ?>
+                    <b x-text="queues.length"></b>
+                    <?php echo esc_html__('wachtrijen.', 'stride'); ?>
                 </p>
             </div>
             <a class="ws-btn ws-btn--ghost" href="#" @click.prevent="switchView('inschrijvingen')">
