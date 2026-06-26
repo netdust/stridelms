@@ -13,7 +13,7 @@
 defined('ABSPATH') || exit;
 
 // Fix Tin Canny module URLs for Bedrock
-add_filter('tincanny_module_url', function($url, $item, $module) {
+add_filter('tincanny_module_url', function ($url, $item, $module) {
     $home = home_url();
 
     // Fix double domain (Tin Canny sometimes stores full URLs in database)

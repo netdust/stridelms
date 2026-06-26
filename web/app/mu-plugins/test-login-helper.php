@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Test Login Helper
  *
@@ -25,9 +26,9 @@ if (defined('WP_ENV') && WP_ENV === 'production') {
 
 // Only in a recognised test environment.
 $isTestEnv = (
-    getenv('CODECEPTION_TEST') === 'true' ||
-    defined('CODECEPTION_TEST') ||
-    getenv('DDEV_PROJECT') === 'stride'
+    getenv('CODECEPTION_TEST') === 'true'
+    || defined('CODECEPTION_TEST')
+    || getenv('DDEV_PROJECT') === 'stride'
 );
 if (!$isTestEnv) {
     return;
@@ -44,9 +45,9 @@ define('STRIDE_TEST_LOGIN_SECRET', $strideTestLoginSecret);
 add_action('init', function () {
     // Handle test login request
     if (
-        isset($_GET['stride_test_login']) &&
-        isset($_GET['user_id']) &&
-        isset($_GET['test_key'])
+        isset($_GET['stride_test_login'])
+        && isset($_GET['user_id'])
+        && isset($_GET['test_key'])
     ) {
         $userId = absint($_GET['user_id']);
         $testKey = sanitize_text_field($_GET['test_key']);
@@ -79,9 +80,9 @@ add_action('init', function () {
 
     // Handle test activation request (activates user without email verification)
     if (
-        isset($_GET['stride_test_activate']) &&
-        isset($_GET['user_id']) &&
-        isset($_GET['test_key'])
+        isset($_GET['stride_test_activate'])
+        && isset($_GET['user_id'])
+        && isset($_GET['test_key'])
     ) {
         $userId = absint($_GET['user_id']);
         $testKey = sanitize_text_field($_GET['test_key']);

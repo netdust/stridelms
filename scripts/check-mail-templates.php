@@ -1,4 +1,5 @@
 <?php
+
 $templates = get_posts([
     'post_type' => 'ndmail_template',
     'posts_per_page' => 20,

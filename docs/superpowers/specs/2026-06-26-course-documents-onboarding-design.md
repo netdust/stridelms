@@ -90,9 +90,9 @@ Most of this section is **surfacing existing LearnDash data + the new download e
 - Migrating `edition.documents` onto `vad_document` for a single model
 - `public` document visibility (lead-facing brochures)
 
-## Open item for plan time
+## Housing (decided 2026-06-26)
 
-- **Launch timing / housing:** Stride is in ship-mode until launch. Decide whether this is launch-blocking (lands in core) or post-launch client work (a `stride-client-*` mu-plugin over core hooks). Does not change the design; changes where code lands.
+- **Launch-blocking, in Stride core.** This is needed for launch; `vad_document` + admin + frontend + secure download + tracking + dossier surfacing all land in `stride-core` as a first-class capability (overrides ship-mode for this client need). Not a client mu-plugin.
 
 ## Security surfaces (triggers threat-modeling at plan time)
 

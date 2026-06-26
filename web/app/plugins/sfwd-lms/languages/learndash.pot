@@ -2,14 +2,14 @@
 # This file is distributed under the same license as the LearnDash LMS plugin.
 msgid ""
 msgstr ""
-"Project-Id-Version: LearnDash LMS 5.1.2\n"
+"Project-Id-Version: LearnDash LMS 5.1.5\n"
 "Report-Msgid-Bugs-To: https://wordpress.org/support/plugin/learndash-core\n"
 "Last-Translator: FULL NAME <EMAIL@ADDRESS>\n"
 "Language-Team: LANGUAGE <LL@li.org>\n"
 "MIME-Version: 1.0\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
-"POT-Creation-Date: 2026-05-14T15:46:17+00:00\n"
+"POT-Creation-Date: 2026-06-09T18:00:18+00:00\n"
 "PO-Revision-Date: YEAR-MO-DA HO:MI+ZONE\n"
 "X-Generator: WP-CLI 2.12.0\n"
 "X-Domain: learndash\n"
@@ -2371,13 +2371,13 @@ msgstr ""
 msgid "course_completed_on"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:717
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:748
 msgctxt "Course Complete Report label: NO"
 msgid "NO"
 msgstr ""
 
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:722
-#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:727
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:753
+#: includes/admin/classes-data-reports-actions/class-learndash-admin-data-reports-user-courses.php:758
 msgctxt "Course Complete Report label: YES"
 msgid "YES"
 msgstr ""
@@ -4688,7 +4688,7 @@ msgid "Amount: %s"
 msgstr ""
 
 #: includes/admin/classes-posts-listings/class-learndash-admin-transactions-listing.php:825
-#: includes/course/ld-course-steps-functions.php:1002
+#: includes/course/ld-course-steps-functions.php:1003
 #: includes/payments/gateways/class-learndash-unknown-gateway.php:82
 #: src/Core/Models/Commerce/One_Time_Payment.php:71
 msgid "Unknown"
@@ -5823,7 +5823,7 @@ msgid "Skip Event"
 msgstr ""
 
 #: includes/class-ld-custom-label.php:199
-#: themes/ld30/includes/helpers.php:2620
+#: themes/ld30/includes/helpers.php:2624
 msgid "Continue"
 msgstr ""
 
@@ -10059,23 +10059,23 @@ msgstr ""
 msgid "Mark Incomplete"
 msgstr ""
 
-#: includes/course/ld-course-steps-functions.php:939
+#: includes/course/ld-course-steps-functions.php:940
 msgctxt "Password Protected post_status label"
 msgid "Password"
 msgstr ""
 
 #. translators: placeholder: post title, post status.
-#: includes/course/ld-course-steps-functions.php:1008
+#: includes/course/ld-course-steps-functions.php:1009
 #, php-format
 msgctxt "placeholder: post title, post status"
 msgid "%1$s %2$s"
 msgstr ""
 
-#: includes/course/ld-course-steps-functions.php:1394
+#: includes/course/ld-course-steps-functions.php:1379
 msgid "Virtual"
 msgstr ""
 
-#: includes/course/ld-course-steps-functions.php:1396
+#: includes/course/ld-course-steps-functions.php:1381
 msgid "In-Person"
 msgstr ""
 
@@ -17098,17 +17098,17 @@ msgid "Extend %1$s Access"
 msgstr ""
 
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-access-extending.php:61
-#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:62
+#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:85
 msgid "New Expiration Date"
 msgstr ""
 
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-access-extending.php:68
-#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:100
+#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:123
 msgid "Extend Access For Users"
 msgstr ""
 
 #: includes/settings/settings-metaboxes/class-ld-settings-metabox-course-access-extending.php:78
-#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:107
+#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:130
 msgid "No enrolled users found."
 msgstr ""
 
@@ -18009,15 +18009,37 @@ msgctxt "placeholder: Group, Courses"
 msgid "Extend %1$s %2$s Access"
 msgstr ""
 
+#. translators: placeholders: %1$s: courses, %2$s: group.
+#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:51
+#, php-format
+msgctxt "placeholders: courses, group"
+msgid "This is a one-time tool used to manually update the access expiration date for the selected %1$s and users in this %2$s."
+msgstr ""
+
+#. translators: placeholders: %1$s: courses, %2$s: group.
+#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:57
+#, php-format
+msgctxt "placeholders: courses, group"
+msgid "Set the new expiration date, choose the %1$s and users it should apply to, then save the %2$s to apply the change."
+msgstr ""
+
+#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:61
+msgid "It does not automatically extend access going forward."
+msgstr ""
+
+#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:62
+msgid "Learn more about extending access."
+msgstr ""
+
 #. translators: placeholder: Course.
-#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:71
+#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:94
 #, php-format
 msgctxt "Extend Access To Courses"
 msgid "Extend Access To %s"
 msgstr ""
 
 #. translators: placeholder: courses.
-#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:82
+#: includes/settings/settings-metaboxes/class-ld-settings-metabox-group-access-extending.php:105
 #, php-format
 msgctxt "No enrolled courses found"
 msgid "No enrolled %s found."
@@ -36514,37 +36536,37 @@ msgid "verify failed"
 msgstr ""
 
 #: themes/ld30/includes/helpers.php:1635
-#: themes/ld30/includes/helpers.php:2044
+#: themes/ld30/includes/helpers.php:2048
 msgid "No attributes passed in"
 msgstr ""
 
-#: themes/ld30/includes/helpers.php:1684
-#: themes/ld30/includes/helpers.php:2231
+#: themes/ld30/includes/helpers.php:1686
+#: themes/ld30/includes/helpers.php:2235
 msgid "No Pagination Match"
 msgstr ""
 
 #. translators: placeholder: course.
-#: themes/ld30/includes/helpers.php:1737
+#: themes/ld30/includes/helpers.php:1741
 #, php-format
 msgctxt "placeholder: course"
 msgid "No %s ID supplied"
 msgstr ""
 
 #. translators: No topics for this lesson.
-#: themes/ld30/includes/helpers.php:1807
+#: themes/ld30/includes/helpers.php:1811
 #, php-format
 msgctxt "placeholder: topics, lesson"
 msgid "No %1$s for this $2$s"
 msgstr ""
 
 #. translators: placeholder: Course title.
-#: themes/ld30/includes/helpers.php:2623
+#: themes/ld30/includes/helpers.php:2627
 #, php-format
 msgid "Congratulations! You just completed %s."
 msgstr ""
 
 #. translators: placeholder: Lesson label.
-#: themes/ld30/includes/helpers.php:2632
+#: themes/ld30/includes/helpers.php:2636
 #, php-format
 msgid "Great Job! You've completed this %s - Keep it going!"
 msgstr ""

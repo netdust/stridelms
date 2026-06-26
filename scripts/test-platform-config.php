@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Test Platform Configuration
  * Usage: ddev exec wp eval-file scripts/test-platform-config.php

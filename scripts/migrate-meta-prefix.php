@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Stride Meta Key Prefix Migration
  *
@@ -115,7 +116,7 @@ function runMigration(\wpdb $wpdb, bool $execute): void
                  WHERE p.post_type IN ({$postTypes})
                  AND pm.meta_key = %s",
                 $newKey,
-                $meta->meta_key
+                $meta->meta_key,
             ));
 
             if ($result === false) {
@@ -157,7 +158,7 @@ function runRollback(\wpdb $wpdb): void
          AND pm.meta_key LIKE %s
          GROUP BY pm.meta_key
          ORDER BY pm.meta_key",
-        META_PREFIX . '%'
+        META_PREFIX . '%',
     );
 
     $metaKeys = $wpdb->get_results($query);
@@ -197,7 +198,7 @@ function runRollback(\wpdb $wpdb): void
                  WHERE p.post_type IN ({$postTypes})
                  AND pm.meta_key = %s",
                 $originalKey,
-                $meta->meta_key
+                $meta->meta_key,
             ));
 
             if ($result === false) {

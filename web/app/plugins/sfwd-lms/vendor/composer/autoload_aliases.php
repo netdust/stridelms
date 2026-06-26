@@ -3765,6 +3765,30 @@ namespace StellarWP\Learndash {
     array (
     ),
   ),
+  'LiquidWeb\\Harbor\\Portal\\Herald_Legacy_Url_Builder' => 
+  array (
+    'type' => 'class',
+    'classname' => 'Herald_Legacy_Url_Builder',
+    'isabstract' => false,
+    'namespace' => 'LiquidWeb\\Harbor\\Portal',
+    'extends' => 'StellarWP\\Learndash\\LiquidWeb\\Harbor\\Portal\\Herald_Legacy_Url_Builder',
+    'implements' => 
+    array (
+      0 => 'LiquidWeb\\Harbor\\Portal\\Contracts\\Download_Url_Builder',
+    ),
+  ),
+  'LiquidWeb\\Harbor\\Portal\\Herald_Routing_Url_Builder' => 
+  array (
+    'type' => 'class',
+    'classname' => 'Herald_Routing_Url_Builder',
+    'isabstract' => false,
+    'namespace' => 'LiquidWeb\\Harbor\\Portal',
+    'extends' => 'StellarWP\\Learndash\\LiquidWeb\\Harbor\\Portal\\Herald_Routing_Url_Builder',
+    'implements' => 
+    array (
+      0 => 'LiquidWeb\\Harbor\\Portal\\Contracts\\Download_Url_Builder',
+    ),
+  ),
   'LiquidWeb\\Harbor\\Portal\\Herald_Url_Builder' => 
   array (
     'type' => 'class',

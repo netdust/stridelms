@@ -53,7 +53,7 @@ $courses = get_posts([
                 style="font-size: clamp(48px, 7vw, 88px); letter-spacing: -0.03em;">
                 <?php echo wp_kses(
                     __('Compassionate <em class="italic font-normal" style="color: rgb(var(--color-primary));">Care</em> for Every Journey.', 'stridence'),
-                    ['em' => ['class' => [], 'style' => []]]
+                    ['em' => ['class' => [], 'style' => []]],
                 ); ?>
             </h1>
 
@@ -89,10 +89,10 @@ $courses = get_posts([
                  style="background: rgb(var(--color-surface-container));">
                 <?php
                 $hero_image = get_the_post_thumbnail_url(get_option('page_on_front'), 'large');
-                if (!$hero_image) {
-                    $hero_image = get_theme_file_uri('assets/images/hero-inpatient.jpg');
-                }
-                ?>
+if (!$hero_image) {
+    $hero_image = get_theme_file_uri('assets/images/hero-inpatient.jpg');
+}
+?>
                     <img class="absolute inset-0 w-full h-full object-cover transition-transform group-hover:scale-105"
                          style="transition-duration: 700ms;"
                          src="<?php echo esc_url($hero_image); ?>"
@@ -201,12 +201,12 @@ $courses = get_posts([
                 $terms = wp_get_post_terms($course->ID, 'ld_course_category', ['fields' => 'names']);
                 $format_terms = wp_get_post_terms($course->ID, 'stride_format', ['fields' => 'slugs']);
                 $format_slug = !empty($format_terms) ? $format_terms[0] : 'klassikaal';
-                $format_label = match($format_slug) {
+                $format_label = match ($format_slug) {
                     'online', 'e-learning' => 'E-learning',
                     'webinar' => 'Webinar',
                     default => 'In-person',
                 };
-            ?>
+                ?>
                 <a href="<?php echo esc_url(get_permalink($course)); ?>"
                    class="bg-surface-card p-8 rounded-xl block transition-transform"
                    style="transition-duration: 500ms;"
@@ -329,7 +329,7 @@ $courses = get_posts([
             style="font-size: clamp(38px, 5.5vw, 64px); letter-spacing: -0.03em; line-height: 1.05;">
             <?php echo wp_kses(
                 __('Ready to make<br>a difference?', 'stridence'),
-                ['br' => []]
+                ['br' => []],
             ); ?>
         </h2>
         <p class="text-base max-w-md mx-auto mb-10 leading-relaxed" style="color: rgb(255 255 255 / 0.45);">

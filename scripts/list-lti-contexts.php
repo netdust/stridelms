@@ -1,4 +1,5 @@
 <?php
+
 /**
  * List LTI contexts with their URLs
  */

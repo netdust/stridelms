@@ -19,9 +19,9 @@ use LearnDash\Core\Utilities\Cast;
  * @since 5.1.0
  *
  * @phpstan-type AddonEntry array{
- *   name: string,
  *   harbor_slug: string,
  *   status_slug: string,
+ *   subscription_slug: string,
  * }
  */
 class Addon_Legacy_Licenses {
@@ -30,9 +30,9 @@ class Addon_Legacy_Licenses {
 	 *
 	 * Each entry should be:
 	 *   'CONSTANT_NAME' => [
-	 *     'name'        => 'Plugin Name',   // human-readable name
-	 *     'harbor_slug' => 'harbor-slug',   // slug used in the lw-harbor/legacy_licenses filter
-	 *     'status_slug' => 'status-slug',   // slug used for Status_Checker::get_status()
+	 *     'harbor_slug'       => 'harbor-slug',       // slug used in the lw-harbor/legacy_licenses filter
+	 *     'status_slug'       => 'status-slug',       // slug used for Status_Checker::get_status()
+	 *     'subscription_slug' => 'subscription-slug', // product_slug used by Status_Checker::get_legacy_license_keys()
 	 *   ]
 	 *
 	 * @since 5.1.0
@@ -53,7 +53,15 @@ class Addon_Legacy_Licenses {
 	}
 
 	/**
-	 * Registers legacy license keys for each installed addon.
+	 * Registers legacy license keys for each addon.
+	 *
+	 * For each addon, the license key is sourced from the licensing server's
+	 * /subscriptions/keys endpoint. If no remote key is available and the
+	 * plugin is installed locally, the addon's own auth-token.php file is
+	 * used as a fallback.
+	 *
+	 * When the plugin is not installed locally, the addon is registered only
+	 * when the user has access AND a remote key is available.
 	 *
 	 * Hooked into `lw-harbor/legacy_licenses`.
 	 *
@@ -64,35 +72,65 @@ class Addon_Legacy_Licenses {
 	 * @return array<int,array<string,mixed>> The legacy licenses with addon entries appended.
 	 */
 	public function register( array $licenses ): array {
+		$remote_keys = Status_Checker::get_legacy_license_keys();
+
 		foreach ( $this->addon_map as $constant => $entry ) {
-			if ( ! defined( $constant ) ) {
-				continue;
-			}
+			$auth_token_file = defined( $constant )
+				? trailingslashit( Cast::to_string( constant( $constant ) ) ) . 'auth-token.php'
+				: '';
 
-			$auth_token_file = trailingslashit( Cast::to_string( constant( $constant ) ) ) . 'auth-token.php';
+			$is_installed = (
+				$auth_token_file !== ''
+				&& file_exists( $auth_token_file )
+			);
 
-			if ( ! file_exists( $auth_token_file ) ) {
-				continue;
-			}
+			$remote_key  = $remote_keys[ $entry['subscription_slug'] ] ?? '';
+			$status_data = Status_Checker::get_status( $entry['status_slug'] );
+			$is_active   = (
+				isset( $status_data['status'] )
+				&& Status_Checker::does_status_allow_access( $status_data['status'] )
+			);
 
-			$license_key = require $auth_token_file;
-
+			// When the plugin is not installed, only register if the user has access and a remote key exists.
 			if (
-				empty( $license_key )
-				|| ! is_string( $license_key )
+				! $is_installed
+				&& (
+					! $is_active
+					|| $remote_key === ''
+				)
 			) {
 				continue;
 			}
 
-			$status_data = Status_Checker::get_status( $entry['status_slug'], $license_key );
+			// Prefer the remote key; fall back to the auth-token.php when the plugin is installed.
+			$license_key = $remote_key;
 
+			if (
+				$license_key === ''
+				&& $is_installed
+			) {
+				$auth_token_key = require $auth_token_file;
+
+				if (
+					is_string( $auth_token_key )
+					&& $auth_token_key !== ''
+				) {
+					$license_key = $auth_token_key;
+				}
+			}
+
+			if ( $license_key === '' ) {
+				continue;
+			}
+
+			// The 'name' is intentionally omitted; Harbor resolves the human-readable name from the slug.
 			$licenses[] = [
-				'key'        => $license_key,
-				'slug'       => $entry['harbor_slug'],
-				'name'       => $entry['name'],
-				'is_active'  => isset( $status_data['status'] ) && Status_Checker::does_status_allow_access( $status_data['status'] ),
-				'product'    => 'learndash',
-				'expires_at' => $status_data['expiry'] ?? '',
+				'key'             => $license_key,
+				'slug'            => $entry['harbor_slug'],
+				'is_active'       => $is_active,
+				'product'         => 'learndash',
+				'use_for_updates' => true,
+				'expires_at'      => $status_data['expiry'] ?? '',
 			];
 		}
 

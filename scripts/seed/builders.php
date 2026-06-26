@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Stride seed builders — the only file that talks to repositories/services.
  * Each build*() consumes one matrix entry; behavior ported from the previous
@@ -333,14 +334,26 @@ final class StrideSeedBuilders
         // Content fields go through the repository (schema-registered), not update_post_meta
         foreach (($data['content'] ?? []) as $key => $value) {
             $createData[$key] = $value;   // target_audience, required_experience, included, price_includes,
-                                          // cancellation_policy, cta_benefits, enrollment_info
+            // cancellation_policy, cta_benefits, enrollment_info
         }
-        if (!empty($data['enrollment_form']))    { $createData['enrollment_form'] = $data['enrollment_form']; }
-        foreach (($data['requires'] ?? []) as $r)      { $createData['requires_' . $r] = true; }       // boolean schema fields
-        foreach (($data['post_requires'] ?? []) as $r) { $createData['post_requires_' . $r] = true; }
-        if (!empty($data['selection_open']))     { $createData['selection_open'] = true; }
-        if (!empty($data['selection_deadline'])) { $createData['selection_deadline'] = $data['selection_deadline']; }
-        if (!empty($data['session_slots']))      { $createData['session_slots'] = $data['session_slots']; }  // json field
+        if (!empty($data['enrollment_form'])) {
+            $createData['enrollment_form'] = $data['enrollment_form'];
+        }
+        foreach (($data['requires'] ?? []) as $r) {
+            $createData['requires_' . $r] = true;
+        }       // boolean schema fields
+        foreach (($data['post_requires'] ?? []) as $r) {
+            $createData['post_requires_' . $r] = true;
+        }
+        if (!empty($data['selection_open'])) {
+            $createData['selection_open'] = true;
+        }
+        if (!empty($data['selection_deadline'])) {
+            $createData['selection_deadline'] = $data['selection_deadline'];
+        }
+        if (!empty($data['session_slots'])) {
+            $createData['session_slots'] = $data['session_slots'];
+        }  // json field
 
         $result = $repo->create($createData);
         if (is_wp_error($result)) {
@@ -374,7 +387,7 @@ final class StrideSeedBuilders
                         'enrollment_path' => 'individual',
                         'notes' => 'Seed placeholder',
                         'registered_at' => current_time('mysql'),
-                    ]
+                    ],
                 );
                 if ($insert === false) {
                     echo "    ! Fake registration insert failed: {$wpdb->last_error}\n";
@@ -405,7 +418,9 @@ final class StrideSeedBuilders
                 $lessonIndex++;
             }
             $sessionId = $this->buildSession($editionId, $data, $sessionData, $sessionLessonIds);
-            if ($sessionId) { $out['created']['sessions'][] = $sessionId; }
+            if ($sessionId) {
+                $out['created']['sessions'][] = $sessionId;
+            }
         }
 
         return $this->buildEditionRegistrations($editionId, $data, $userMap, $out);
@@ -431,7 +446,9 @@ final class StrideSeedBuilders
                 $userId = (int) ($userMap[$reg['user']] ?? 0);
                 if ($userId) {
                     $quoteId = $this->buildQuote($editionId, $userId, $regId, $reg['quote']);
-                    if ($quoteId) { $out['created']['quotes'][] = $quoteId; }
+                    if ($quoteId) {
+                        $out['created']['quotes'][] = $quoteId;
+                    }
                 }
             }
         }
@@ -513,8 +530,12 @@ final class StrideSeedBuilders
         }
 
         $payload = ['edition_id' => $editionId, 'status' => $status, 'enrollment_path' => $path, 'notes' => 'Seed: feature matrix'];
-        if ($userId) { $payload['user_id'] = $userId; }
-        if ($path === RegistrationRepository::PATH_PARTNER) { $payload['company_id'] = 1; }  // Partner API scoping
+        if ($userId) {
+            $payload['user_id'] = $userId;
+        }
+        if ($path === RegistrationRepository::PATH_PARTNER) {
+            $payload['company_id'] = 1;
+        }  // Partner API scoping
 
         $regId = $repo->create($payload);
         if (is_wp_error($regId)) {
@@ -541,7 +562,7 @@ final class StrideSeedBuilders
             $wpdb->update(
                 $wpdb->prefix . 'vad_registrations',
                 ['registered_at' => date('Y-m-d', strtotime('-21 days', $startTs)) . ' 10:00:00'],
-                ['id' => $regId]
+                ['id' => $regId],
             );
         }
 
@@ -573,7 +594,7 @@ final class StrideSeedBuilders
                 $wpdb->update(
                     $wpdb->prefix . 'vad_registrations',
                     ['completion_tasks' => wp_json_encode($tasks)],
-                    ['id' => $regId]
+                    ['id' => $regId],
                 );
                 echo "        + Completion tasks: " . implode(', ', array_keys($tasks)) . "\n";
             }
@@ -831,7 +852,7 @@ final class StrideSeedBuilders
                 "SELECT DISTINCT p.ID
                  FROM {$wpdb->postmeta} pm
                  JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_edition'
-                 WHERE pm.meta_key = '_ntdst_post_requires_evaluation' AND pm.meta_value = '1'"
+                 WHERE pm.meta_key = '_ntdst_post_requires_evaluation' AND pm.meta_value = '1'",
             );
             return array_map('intval', $editionIds);
         }
@@ -894,7 +915,9 @@ final class StrideSeedBuilders
             }
             $entry = ['course_id' => $courseId, 'required' => (bool) $c['required']];
             foreach (['order', 'group', 'min_choices'] as $key) {
-                if (isset($c[$key])) { $entry[$key] = $c[$key]; }
+                if (isset($c[$key])) {
+                    $entry[$key] = $c[$key];
+                }
             }
             // Author the admin-UI shape (TrajectoryAdminController::parseCourseItemValue):
             // a course with a seeded edition is an edition-typed entry carrying its
@@ -925,16 +948,22 @@ final class StrideSeedBuilders
         ];
         // Only write keys the entry actually declares — keeps the slug-pinned
         // fixture's stored meta identical to the old wp_insert_post path.
-        if (isset($t['choice_available_date'])) { $payload['choice_available_date'] = $t['choice_available_date']; }
-        if (isset($t['choice_deadline']))       { $payload['choice_deadline'] = $t['choice_deadline']; }
-        if (isset($t['courses']))               { $payload['courses'] = wp_json_encode($courses); }
+        if (isset($t['choice_available_date'])) {
+            $payload['choice_available_date'] = $t['choice_available_date'];
+        }
+        if (isset($t['choice_deadline'])) {
+            $payload['choice_deadline'] = $t['choice_deadline'];
+        }
+        if (isset($t['courses'])) {
+            $payload['courses'] = wp_json_encode($courses);
+        }
         // Descriptive fields (shared with editions) — schema-registered, so
         // they go through the repository payload, not update_post_meta. The
         // matrix key is 'descriptive' (the trajectory's 'content' is the post
         // body, unlike editions where 'content' IS the descriptive block).
         foreach (($t['descriptive'] ?? []) as $key => $value) {
             $payload[$key] = $value;   // target_audience, required_experience, included, price_includes,
-                                       // cancellation_policy, cta_benefits, enrollment_info, duration
+            // cancellation_policy, cta_benefits, enrollment_info, duration
         }
 
         $id = ntdst_get(TrajectoryService::class)->createTrajectory($payload);
@@ -1016,8 +1045,12 @@ final class StrideSeedBuilders
         $scope = $v['scope'] ?? 'all';   // 'all' | 'only' | 'except'
         $repo = ntdst_get(VoucherRepository::class);
         $update = ['scope_mode' => $scope];
-        if ($scope === 'only')   { $update['edition_id'] = $editionIds[0] ?? 0; }
-        if ($scope === 'except') { $update['excluded_edition_ids'] = array_slice($editionIds, 0, 2); }  // json field
+        if ($scope === 'only') {
+            $update['edition_id'] = $editionIds[0] ?? 0;
+        }
+        if ($scope === 'except') {
+            $update['excluded_edition_ids'] = array_slice($editionIds, 0, 2);
+        }  // json field
         $repo->update($id, $update);
 
         echo "  + Voucher: {$v['code']} [{$v['discount_type']}/{$scope}] (ID: {$id})\n";

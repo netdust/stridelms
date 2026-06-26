@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Apply VAD client patterns to the seeded pages.
  *
@@ -56,7 +57,7 @@ foreach ($plan as $targetSlug => [$patternFile, $sourceSlug]) {
         $patternMarkup = str_replace(
             '<!-- VAD_BODY_PLACEHOLDER -->',
             $bodyBlock,
-            $patternMarkup
+            $patternMarkup,
         );
     } else {
         // No source body — strip the placeholder if it exists (most stubs don't have one)

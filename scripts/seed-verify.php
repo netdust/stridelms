@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Stride seed coverage verifier.
  *
@@ -24,7 +25,9 @@ if (!defined('ABSPATH')) {
 $failures = [];
 $check = function (string $label, bool $ok) use (&$failures) {
     echo ($ok ? "  OK   " : "  FAIL ") . $label . "\n";
-    if (!$ok) { $failures[] = $label; }
+    if (!$ok) {
+        $failures[] = $label;
+    }
 };
 
 global $wpdb;
@@ -69,7 +72,9 @@ $required = [
     // can be exercised end-to-end on /klassikaal and /online.
     'date:dateless_klassikaal','date:dateless_online',
 ];
-foreach ($required as $tag) { $check("tag claimed: {$tag}", in_array($tag, $allTags, true)); }
+foreach ($required as $tag) {
+    $check("tag claimed: {$tag}", in_array($tag, $allTags, true));
+}
 
 // ---------------------------------------------------------------------------
 // 2. DB truth (claims are not enough — verify against actual rows)
@@ -128,8 +133,10 @@ $findEditionByTag = function (string $tag) use ($covers): ?int {
 // into reads, so the `!== ''` checks below genuinely bite.
 $featured = $findEditionByTag('content:speakers_repeater');
 $speakers = $featured ? $editionRepo->getField($featured, 'speakers') : null;
-$check('featured edition speakers is non-empty {name,role} array',
-    is_array($speakers) && !empty($speakers) && isset($speakers[0]['name'], $speakers[0]['role']));
+$check(
+    'featured edition speakers is non-empty {name,role} array',
+    is_array($speakers) && !empty($speakers) && isset($speakers[0]['name'], $speakers[0]['role']),
+);
 foreach (['target_audience','required_experience','included','price_includes','cancellation_policy','cta_benefits','enrollment_info'] as $f) {
     $check("featured edition content field set: {$f}", $featured && (string) $editionRepo->getField($featured, $f) !== '');
 }
@@ -144,11 +151,11 @@ if ($fullEdition) {
     $confirmed = (int) $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM {$regTable} WHERE edition_id = %d
          AND status IN ('confirmed','completed','pending') AND user_id < 900000",
-        $fullEdition
+        $fullEdition,
     ));
     $waitlist = (int) $wpdb->get_var($wpdb->prepare(
         "SELECT COUNT(*) FROM {$regTable} WHERE edition_id = %d AND status = 'waitlist'",
-        $fullEdition
+        $fullEdition,
     ));
     $check("full-real edition confirmed count ({$confirmed}) == capacity ({$capacity})", $capacity > 0 && $confirmed === $capacity);
     $check('full-real edition has >=1 waitlist registration behind it', $waitlist >= 1);
@@ -223,7 +230,7 @@ $check('qg_enrollment_seed has >=1 vad_edition assignment id', $enrollHasEdition
 
 // 3f. Partner data: >=1 registration with enrollment_path='partner' AND company_id=1
 $partnerCount = (int) $wpdb->get_var(
-    "SELECT COUNT(*) FROM {$regTable} WHERE enrollment_path = 'partner' AND company_id = 1"
+    "SELECT COUNT(*) FROM {$regTable} WHERE enrollment_path = 'partner' AND company_id = 1",
 );
 $check("partner-path registration with company_id=1 exists", $partnerCount >= 1);
 
@@ -236,7 +243,7 @@ if (!empty($seedUserIds) && !empty($seedEditionIds)) {
     $ein = implode(',', $seedEditionIds);
     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- int-cast IDs
     $attCount = (int) $wpdb->get_var(
-        "SELECT COUNT(*) FROM {$attTable} WHERE user_id IN ({$uin}) AND edition_id IN ({$ein})"
+        "SELECT COUNT(*) FROM {$attTable} WHERE user_id IN ({$uin}) AND edition_id IN ({$ein})",
     );
 } else {
     $attCount = 0;
@@ -250,19 +257,19 @@ if (!empty($regIds)) {
     $in = implode(',', $regIds);
     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- int-cast IDs
     $cancelledMissing = (int) $wpdb->get_var(
-        "SELECT COUNT(*) FROM {$regTable} WHERE id IN ({$in}) AND status = 'cancelled' AND cancelled_at IS NULL"
+        "SELECT COUNT(*) FROM {$regTable} WHERE id IN ({$in}) AND status = 'cancelled' AND cancelled_at IS NULL",
     );
     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- int-cast IDs
     $cancelledTotal = (int) $wpdb->get_var(
-        "SELECT COUNT(*) FROM {$regTable} WHERE id IN ({$in}) AND status = 'cancelled'"
+        "SELECT COUNT(*) FROM {$regTable} WHERE id IN ({$in}) AND status = 'cancelled'",
     );
     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- int-cast IDs
     $completedMissing = (int) $wpdb->get_var(
-        "SELECT COUNT(*) FROM {$regTable} WHERE id IN ({$in}) AND status = 'completed' AND completed_at IS NULL"
+        "SELECT COUNT(*) FROM {$regTable} WHERE id IN ({$in}) AND status = 'completed' AND completed_at IS NULL",
     );
     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- int-cast IDs
     $completedTotal = (int) $wpdb->get_var(
-        "SELECT COUNT(*) FROM {$regTable} WHERE id IN ({$in}) AND status = 'completed'"
+        "SELECT COUNT(*) FROM {$regTable} WHERE id IN ({$in}) AND status = 'completed'",
     );
     $check('cancelled seed registration exists with cancelled_at set', $cancelledTotal >= 1 && $cancelledMissing === 0);
     $check('completed seed registration exists with completed_at set', $completedTotal >= 1 && $completedMissing === 0);
@@ -279,7 +286,7 @@ if (!empty($regIds)) {
     // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared -- int-cast IDs
     $pendingRows = $wpdb->get_results(
         "SELECT id, completion_tasks FROM {$regTable}
-         WHERE id IN ({$in}) AND status = 'pending' AND completion_tasks IS NOT NULL"
+         WHERE id IN ({$in}) AND status = 'pending' AND completion_tasks IS NOT NULL",
     );
     foreach ($pendingRows as $row) {
         $tasks = json_decode((string) $row->completion_tasks, true) ?: [];

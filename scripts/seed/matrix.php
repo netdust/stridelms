@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Stride seed feature matrix.
  *
@@ -148,11 +149,11 @@ return [
                     'enrollment_form' => 'default',
                     'post_requires' => ['evaluation', 'documents'],
                     'covers' => ['status:completed', 'reg:completed', 'quote:exported',
-                                 'flow:attendance_marked', 'flow:post_course_ready',
-                                 'req:post_evaluation', 'req:post_documents'],
+                        'flow:attendance_marked', 'flow:post_course_ready',
+                        'req:post_evaluation', 'req:post_documents'],
                     'registrations' => [
                         ['user' => 'seed_student1', 'status' => 'completed', 'path' => 'individual',
-                         'attendance' => 'present', 'init_post_tasks' => true, 'quote' => 'exported'],
+                            'attendance' => 'present', 'init_post_tasks' => true, 'quote' => 'exported'],
                     ],
                     'sessions' => [
                         ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => 'in_person', 'title' => 'Motiverende gespreksvoering rond voeding'],
@@ -280,10 +281,10 @@ return [
                     'speakers' => [['name' => 'Prof. dr. Jan Janssen', 'role' => 'Sportwetenschapper']],
                     'post_requires' => ['evaluation', 'documents', 'approval'],
                     'covers' => ['status:completed', 'req:post_evaluation', 'req:post_documents', 'req:post_approval',
-                                 'flow:attendance_marked', 'flow:post_course_ready'],
+                        'flow:attendance_marked', 'flow:post_course_ready'],
                     'registrations' => [
                         ['user' => 'seed_student1', 'status' => 'confirmed', 'path' => 'individual',
-                         'attendance' => 'present', 'init_post_tasks' => true],
+                            'attendance' => 'present', 'init_post_tasks' => true],
                     ],
                     'sessions' => $blessureSessions,
                 ],
@@ -374,7 +375,7 @@ return [
                         ['slot' => 'Verdieping (kies 1)', 'label' => 'Verdieping (kies 1)', 'required' => true, 'max_selections' => 1],
                     ],
                     'covers' => ['status:open', 'sessions:slots_choose_n', 'sessions:selection_deadline',
-                                 'req:pre_session_selection', 'reg:pending', 'form:default'],
+                        'req:pre_session_selection', 'reg:pending', 'form:default'],
                     'registrations' => [
                         ['user' => 'seed_student2', 'status' => 'pending', 'path' => 'individual', 'init_tasks' => true],
                     ],
@@ -510,10 +511,10 @@ return [
                     'enrollment_form' => 'default',
                     'requires' => ['questionnaire', 'documents', 'approval'],
                     'covers' => ['status:open', 'req:pre_questionnaire', 'req:pre_documents', 'req:pre_approval',
-                                 'reg:pending', 'quote:draft'],
+                        'reg:pending', 'quote:draft'],
                     'registrations' => [
                         ['user' => 'seed_student3', 'status' => 'pending', 'path' => 'individual',
-                         'init_tasks' => true, 'quote' => 'draft'],
+                            'init_tasks' => true, 'quote' => 'draft'],
                         [   // Approval-ready: user tasks done, only admin approval open
                             // → fills the dashboard "Wacht op mij" bucket (shakeout F3)
                             'user' => 'seed_student5', 'status' => 'pending', 'path' => 'individual',
@@ -573,7 +574,7 @@ return [
                     'status' => OfferingStatus::Open->value,
                     'speakers' => [['name' => 'Dr. Katrien Maes', 'role' => 'Onderwijspedagoge']],
                     'covers' => ['status:open', 'edition_type:hybrid', 'sessions:type_assignment',
-                                 'sessions:type_webinar', 'sessions:type_online', 'sessions:lesson_linked'],
+                        'sessions:type_webinar', 'sessions:type_online', 'sessions:lesson_linked'],
                     'registrations' => [
                         ['user' => 'admin', 'status' => 'confirmed', 'path' => 'individual'],
                     ],
@@ -608,7 +609,7 @@ return [
                     'speakers' => [['name' => 'Diverse experts', 'role' => 'Gastsprekers']],
                     'enrollment_form' => 'minimal',
                     'covers' => ['status:open', 'edition_type:webinar', 'sessions:type_webinar',
-                                 'reg:cancelled', 'quote:cancelled', 'form:minimal'],
+                        'reg:cancelled', 'quote:cancelled', 'form:minimal'],
                     'registrations' => [
                         ['user' => 'seed_student5', 'status' => 'cancelled', 'path' => 'individual', 'quote' => 'cancelled'],
                     ],
@@ -903,17 +904,17 @@ return [
         // SEEDVOUCHER10 code preserved (legacy fixture). discount_value: cents
         // for fixed, 0-100 for percentage. scope: all | only | except.
         ['code' => 'WELKOM2026', 'discount_type' => 'percentage', 'discount_value' => 10, 'usage_limit' => 50, 'scope' => 'all',
-         'covers' => ['voucher:percentage', 'voucher:scope_all']],
+            'covers' => ['voucher:percentage', 'voucher:scope_all']],
         ['code' => 'KORTING50', 'discount_type' => 'fixed', 'discount_value' => 5000, 'usage_limit' => 20, 'scope' => 'all',
-         'covers' => ['voucher:fixed']],
+            'covers' => ['voucher:fixed']],
         ['code' => 'GRATIS-INTRO', 'discount_type' => 'full', 'discount_value' => 0, 'usage_limit' => 5, 'scope' => 'all',
-         'covers' => ['voucher:full']],
+            'covers' => ['voucher:full']],
         ['code' => 'SEEDVOUCHER10', 'discount_type' => 'percentage', 'discount_value' => 10, 'usage_limit' => 100, 'scope' => 'all',
-         'covers' => []],   // legacy fixture, preserved
+            'covers' => []],   // legacy fixture, preserved
         ['code' => 'EDITIE-ONLY', 'discount_type' => 'percentage', 'discount_value' => 20, 'usage_limit' => 10, 'scope' => 'only',
-         'covers' => ['voucher:scope_only']],
+            'covers' => ['voucher:scope_only']],
         ['code' => 'NIET-HIER', 'discount_type' => 'fixed', 'discount_value' => 2500, 'usage_limit' => 10, 'scope' => 'except',
-         'covers' => ['voucher:scope_except']],
+            'covers' => ['voucher:scope_except']],
     ],
     'questionnaire_groups' => [
         // NOTE: field 'options' are comma-separated STRINGS — verified against
@@ -926,18 +927,18 @@ return [
             'assign_to_course' => 'Erkenningstraject Jeugdsportcoach',   // resolved to that course's seed EDITION ids by builder
             'fields' => [
                 ['label' => 'Toelichting', 'name' => 'intro_desc', 'type' => 'description',
-                 'description' => 'Deze gegevens gebruiken we om de opleiding af te stemmen op de groep.'],
+                    'description' => 'Deze gegevens gebruiken we om de opleiding af te stemmen op de groep.'],
                 ['label' => 'Telefoonnummer', 'name' => 'phone', 'type' => 'text', 'required' => true],          // reserved → wp_usermeta
                 ['label' => 'Organisatie', 'name' => 'organisation', 'type' => 'text', 'required' => true],      // reserved → wp_usermeta
                 ['label' => 'Motivatie', 'name' => 'motivatie', 'type' => 'textarea', 'required' => true],
                 ['label' => 'Functie', 'name' => 'functie', 'type' => 'select', 'required' => true,
-                 'options' => 'Leerkracht, CLB-medewerker, Jeugdwerker, Sportcoach, Andere'],
+                    'options' => 'Leerkracht, CLB-medewerker, Jeugdwerker, Sportcoach, Andere'],
                 ['label' => 'Ervaring met jeugdsport', 'name' => 'ervaring', 'type' => 'radio', 'required' => true,
-                 'options' => 'Geen, 1-3 jaar, Meer dan 3 jaar'],
+                    'options' => 'Geen, 1-3 jaar, Meer dan 3 jaar'],
                 ['label' => 'Ik wil de nieuwsbrief ontvangen', 'name' => 'nieuwsbrief', 'type' => 'checkbox', 'required' => false,
-                 'description' => 'Maximaal één mail per maand.'],
+                    'description' => 'Maximaal één mail per maand.'],
                 ['label' => 'Hoe schat je je voorkennis in?', 'name' => 'voorkennis_schaal', 'type' => 'scale',
-                 'required' => true, 'min' => 1, 'max' => 5],
+                    'required' => true, 'min' => 1, 'max' => 5],
             ],
             'covers' => ['form:custom_all_types', 'form:reserved_fields'],
         ],

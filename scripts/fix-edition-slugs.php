@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Fix edition slugs - convert numeric slugs to course-name-based slugs.
  *
@@ -43,7 +44,7 @@ foreach ($editions as $edition) {
             "SELECT ID FROM {$wpdb->posts} WHERE post_name = %s AND post_type = %s AND ID != %d LIMIT 1",
             $slug,
             'vad_edition',
-            $edition->ID
+            $edition->ID,
         ));
 
         if (!$exists) {

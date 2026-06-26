@@ -1,4 +1,5 @@
 <?php
+
 // Check if we know the password for user 1
 $user = get_user_by('ID', 1);
 echo "User 1 login: " . $user->user_login . "\n";

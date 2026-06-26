@@ -4,7 +4,7 @@
 
 namespace Composer\Autoload;
 
-class ComposerStaticInit0092cc9b60c9bf7d31d9b375fb985444
+class ComposerStaticInit6eca088d3c04f8c0579eb96da342abfb
 {
     public static $prefixLengthsPsr4 = array (
         'L' =>
@@ -93,6 +93,7 @@ class ComposerStaticInit0092cc9b60c9bf7d31d9b375fb985444
         'LearnDash\\Core\\Models\\Product' => __DIR__ . '/../..' . '/src/Core/Models/Product.php',
         'LearnDash\\Core\\Models\\Quiz' => __DIR__ . '/../..' . '/src/Core/Models/Quiz.php',
         'LearnDash\\Core\\Models\\Step' => __DIR__ . '/../..' . '/src/Core/Models/Step.php',
+        'LearnDash\\Core\\Models\\Steps\\Step_Visibility' => __DIR__ . '/../..' . '/src/Core/Models/Steps/Step_Visibility.php',
         'LearnDash\\Core\\Models\\Topic' => __DIR__ . '/../..' . '/src/Core/Models/Topic.php',
         'LearnDash\\Core\\Models\\Traits\\Has_Assignments' => __DIR__ . '/../..' . '/src/Core/Models/Traits/Has_Assignments.php',
         'LearnDash\\Core\\Models\\Traits\\Has_Materials' => __DIR__ . '/../..' . '/src/Core/Models/Traits/Has_Materials.php',
@@ -504,9 +505,9 @@ class ComposerStaticInit0092cc9b60c9bf7d31d9b375fb985444
     public static function getInitializer(ClassLoader $loader)
     {
         return \Closure::bind(function () use ($loader) {
-            $loader->prefixLengthsPsr4 = ComposerStaticInit0092cc9b60c9bf7d31d9b375fb985444::$prefixLengthsPsr4;
-            $loader->prefixDirsPsr4 = ComposerStaticInit0092cc9b60c9bf7d31d9b375fb985444::$prefixDirsPsr4;
-            $loader->classMap = ComposerStaticInit0092cc9b60c9bf7d31d9b375fb985444::$classMap;
+            $loader->prefixLengthsPsr4 = ComposerStaticInit6eca088d3c04f8c0579eb96da342abfb::$prefixLengthsPsr4;
+            $loader->prefixDirsPsr4 = ComposerStaticInit6eca088d3c04f8c0579eb96da342abfb::$prefixDirsPsr4;
+            $loader->classMap = ComposerStaticInit6eca088d3c04f8c0579eb96da342abfb::$classMap;
 
         }, null, ClassLoader::class);
     }

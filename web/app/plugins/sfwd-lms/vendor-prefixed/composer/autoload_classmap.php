@@ -81,6 +81,8 @@ return array(
     'StellarWP\\Learndash\\LiquidWeb\\Harbor\\Portal\\Clients\\Portal_Client' => $vendorDir . '/stellarwp/harbor/src/Harbor/Portal/Clients/Portal_Client.php',
     'StellarWP\\Learndash\\LiquidWeb\\Harbor\\Portal\\Contracts\\Download_Url_Builder' => $vendorDir . '/stellarwp/harbor/src/Harbor/Portal/Contracts/Download_Url_Builder.php',
     'StellarWP\\Learndash\\LiquidWeb\\Harbor\\Portal\\Error_Code' => $vendorDir . '/stellarwp/harbor/src/Harbor/Portal/Error_Code.php',
+    'StellarWP\\Learndash\\LiquidWeb\\Harbor\\Portal\\Herald_Legacy_Url_Builder' => $vendorDir . '/stellarwp/harbor/src/Harbor/Portal/Herald_Legacy_Url_Builder.php',
+    'StellarWP\\Learndash\\LiquidWeb\\Harbor\\Portal\\Herald_Routing_Url_Builder' => $vendorDir . '/stellarwp/harbor/src/Harbor/Portal/Herald_Routing_Url_Builder.php',
     'StellarWP\\Learndash\\LiquidWeb\\Harbor\\Portal\\Herald_Url_Builder' => $vendorDir . '/stellarwp/harbor/src/Harbor/Portal/Herald_Url_Builder.php',
     'StellarWP\\Learndash\\LiquidWeb\\Harbor\\Portal\\Provider' => $vendorDir . '/stellarwp/harbor/src/Harbor/Portal/Provider.php',
     'StellarWP\\Learndash\\LiquidWeb\\Harbor\\Portal\\Results\\Catalog_Feature' => $vendorDir . '/stellarwp/harbor/src/Harbor/Portal/Results/Catalog_Feature.php',

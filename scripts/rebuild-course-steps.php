@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Rebuild LearnDash course steps for SCORM test course
  */
@@ -11,21 +12,21 @@ $steps = [
     'steps' => [
         'h' => [
             'sfwd-lessons' => [],
-            'sfwd-quiz' => []
-        ]
+            'sfwd-quiz' => [],
+        ],
     ],
     'course_id' => $course_id,
     'version' => defined('LEARNDASH_VERSION') ? LEARNDASH_VERSION : '5.0.1.1',
     'empty' => false,
     'course_builder_enabled' => true,
     'course_shared_steps_enabled' => true,
-    'steps_count' => count($lessons)
+    'steps_count' => count($lessons),
 ];
 
 foreach ($lessons as $lesson_id) {
     $steps['steps']['h']['sfwd-lessons'][$lesson_id] = [
         'sfwd-topic' => [],
-        'sfwd-quiz' => []
+        'sfwd-quiz' => [],
     ];
 }
 

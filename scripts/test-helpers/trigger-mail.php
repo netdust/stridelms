@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Trigger a WordPress action with JSON context for email testing.
  *

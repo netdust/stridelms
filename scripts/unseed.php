@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Stride LMS - Development Seed Cleanup Script
  *
@@ -29,8 +30,8 @@ use Stride\Modules\Enrollment\RegistrationRepository;
 /**
  * Seed Data Cleaner
  */
-class StrideSeedCleaner {
-
+class StrideSeedCleaner
+{
     private const SEED_META_KEY = '_stride_seed_data';
 
     private array $removed = [
@@ -50,7 +51,8 @@ class StrideSeedCleaner {
 
     private ?RegistrationRepository $regRepo = null;
 
-    public function run(bool $force = false): void {
+    public function run(bool $force = false): void
+    {
         echo "\n=== Stride LMS Seed Data Cleanup ===\n\n";
 
         // Initialize services
@@ -109,7 +111,8 @@ class StrideSeedCleaner {
     /**
      * Remove seed quotes
      */
-    private function removeQuotes(): void {
+    private function removeQuotes(): void
+    {
         echo "Removing quotes...\n";
 
         $quotes = get_posts([
@@ -132,7 +135,8 @@ class StrideSeedCleaner {
     /**
      * Remove seed vouchers
      */
-    private function removeVouchers(): void {
+    private function removeVouchers(): void
+    {
         echo "Removing vouchers...\n";
 
         // Remove vouchers marked with seed meta key
@@ -179,7 +183,8 @@ class StrideSeedCleaner {
      * Scoped via the manifest (edition ids + user ids) — NOT via a join on
      * the registrations table, so it must run BEFORE removeRegistrations().
      */
-    private function removeAttendance(): void {
+    private function removeAttendance(): void
+    {
         echo "Removing attendance...\n";
         global $wpdb;
         $table = $wpdb->prefix . 'vad_attendance';
@@ -206,7 +211,7 @@ class StrideSeedCleaner {
             // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             $count = $wpdb->query($wpdb->prepare(
                 "DELETE FROM {$table} WHERE edition_id IN ({$placeholders})",
-                $editionIds
+                $editionIds,
             ));
             if ($count > 0) {
                 $this->removed['attendance'] += $count;
@@ -218,7 +223,7 @@ class StrideSeedCleaner {
             // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             $count = $wpdb->query($wpdb->prepare(
                 "DELETE FROM {$table} WHERE user_id IN ({$placeholders})",
-                $userIds
+                $userIds,
             ));
             if ($count > 0) {
                 $this->removed['attendance'] += $count;
@@ -231,7 +236,8 @@ class StrideSeedCleaner {
     /**
      * Remove registrations from wp_vad_registrations table
      */
-    private function removeRegistrations(): void {
+    private function removeRegistrations(): void
+    {
         echo "Removing registrations...\n";
         global $wpdb;
         $table = $wpdb->prefix . 'vad_registrations';
@@ -245,7 +251,7 @@ class StrideSeedCleaner {
             // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             $count = $wpdb->query($wpdb->prepare(
                 "DELETE FROM {$table} WHERE id IN ({$placeholders})",
-                $registrationIds
+                $registrationIds,
             ));
             if ($count > 0) {
                 $this->removed['registrations'] += $count;
@@ -268,7 +274,7 @@ class StrideSeedCleaner {
             // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
             $additionalCount = $wpdb->query($wpdb->prepare(
                 "DELETE FROM {$table} WHERE edition_id IN ({$placeholders})",
-                $seedEditions
+                $seedEditions,
             ));
 
             if ($additionalCount > 0) {
@@ -282,7 +288,8 @@ class StrideSeedCleaner {
     /**
      * Remove LearnDash enrollments for seed users
      */
-    private function removeEnrollments(): void {
+    private function removeEnrollments(): void
+    {
         echo "Removing LearnDash enrollments...\n";
 
         if (!defined('LEARNDASH_VERSION')) {
@@ -323,7 +330,8 @@ class StrideSeedCleaner {
     /**
      * Remove seed trajectories
      */
-    private function removeTrajectories(): void {
+    private function removeTrajectories(): void
+    {
         echo "Removing trajectories...\n";
 
         $trajectories = get_posts([
@@ -346,7 +354,8 @@ class StrideSeedCleaner {
     /**
      * Remove seed sessions
      */
-    private function removeSessions(): void {
+    private function removeSessions(): void
+    {
         echo "Removing sessions...\n";
 
         $sessions = get_posts([
@@ -369,7 +378,8 @@ class StrideSeedCleaner {
     /**
      * Remove seed editions
      */
-    private function removeEditions(): void {
+    private function removeEditions(): void
+    {
         echo "Removing editions...\n";
 
         $editions = get_posts([
@@ -392,7 +402,8 @@ class StrideSeedCleaner {
     /**
      * Remove seed lessons
      */
-    private function removeLessons(): void {
+    private function removeLessons(): void
+    {
         echo "Removing lessons...\n";
 
         $lessons = get_posts([
@@ -415,7 +426,8 @@ class StrideSeedCleaner {
     /**
      * Remove seed courses
      */
-    private function removeCourses(): void {
+    private function removeCourses(): void
+    {
         echo "Removing courses...\n";
 
         $courses = get_posts([
@@ -438,7 +450,8 @@ class StrideSeedCleaner {
     /**
      * Remove seed groups
      */
-    private function removeGroups(): void {
+    private function removeGroups(): void
+    {
         echo "Removing groups...\n";
 
         $groups = get_posts([
@@ -463,7 +476,8 @@ class StrideSeedCleaner {
      * stride_questionnaire_field_groups option. Non-seed groups are kept;
      * the option is deleted entirely if it ends up empty.
      */
-    private function removeQuestionnaireGroups(): void {
+    private function removeQuestionnaireGroups(): void
+    {
         echo "Removing questionnaire groups...\n";
 
         $optionKey = 'stride_questionnaire_field_groups';
@@ -504,7 +518,8 @@ class StrideSeedCleaner {
     /**
      * Remove seed users
      */
-    private function removeUsers(): void {
+    private function removeUsers(): void
+    {
         echo "Removing users...\n";
 
         $users = get_users([
@@ -525,7 +540,8 @@ class StrideSeedCleaner {
     /**
      * Clean up seed options
      */
-    private function cleanupOptions(): void {
+    private function cleanupOptions(): void
+    {
         echo "Cleaning up options...\n";
 
         delete_option('stride_seed_manifest');
@@ -538,7 +554,8 @@ class StrideSeedCleaner {
     /**
      * Print summary
      */
-    private function printSummary(): void {
+    private function printSummary(): void
+    {
         $total = array_sum($this->removed);
 
         echo "\n=== Cleanup Complete ===\n\n";
