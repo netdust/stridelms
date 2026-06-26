@@ -197,56 +197,344 @@ A flow with no edges is incomplete — none here are. At shake-out, `feature-acc
 - `tasks/` admin JS asset enqueue for the metabox.
 - `site.yml` — add the `stride-documents` nginx deny rule note.
 
----
 
 ## Phase 0 — Shared storage extraction (prerequisite, behavior-preserving)
 
-TBD
+> Extract the storage primitive from `CompletionProofStorage` into `Infrastructure/ProtectedUploadStorage` so the new document storage and the existing proof storage share one audited implementation (DRY; the proof pattern already passed `/security-review`). Behavior-preserving: the proof suite stays green.
+
+### Task 0.1 — Add the INV-1 convergence-point name for gated-file access (doc-only)
+
+**Files:**
+- Modify: `ARCHITECTURE-INVARIANTS.md` (INV-1 table + a short note)
+
+This is a documentation task (no code) — it names the new authorization surface so `/code-review`/`/shakeout` can flag bypasses. There is no existing convergence point for "enrollment-gated file access"; proofs and now documents are two instances, so it earns a named row: *"Gated file download → the handler's `resolve*Download()` method decides logged-in + (owner/enrolled OR `stride_manage`); the served path comes only from `get_attached_file()` of a server-resolved row and must pass `ProtectedUploadStorage::isProtectedPath()`."*
+
+- [ ] **Step 1:** Add the row to INV-1's surface table and one sentence under "The rule". `[Tier B]` no unit test: Tier B, documentation only.
+- [ ] **Step 2:** Commit.
+
+```bash
+git add ARCHITECTURE-INVARIANTS.md
+git commit -m "docs(invariants): name the gated-file-download authorization convergence point"
+```
+
+### Task 0.2 — Extract `ProtectedUploadStorage` base; reparent `CompletionProofStorage`  `[Tier A]`
+
+**Files:**
+- Create: `web/app/mu-plugins/stride-core/Infrastructure/ProtectedUploadStorage.php`
+- Modify: `web/app/mu-plugins/stride-core/Modules/Enrollment/CompletionProofStorage.php`
+- Test: `tests/Unit/Infrastructure/ProtectedUploadStorageTest.php`
+
+**Interfaces:**
+- Produces: `abstract class ProtectedUploadStorage` with `abstract protected static function dirName(): string;`, and concrete static `getProtectedDir(): string`, `ensureProtectedDir(): true|WP_Error`, `uploadDirFilter(array): array`, `isProtectedPath(string): bool`, `markProtected(int $attachmentId, array $meta = []): void` (sets `post_status=private` + caller-supplied meta).
+- Consumes (by `CompletionProofStorage`): the base methods; it keeps `META_REGISTRATION`/`META_PROTECTED`, its `migrate()`, and overrides `dirName()` → `'stride-proofs'`.
+
+**Unit test:** the base's `isProtectedPath()` returns true only for a path under its `dirName()` dir and false for `..`/symlink/outside; `markProtected()` sets `private` status. The denial path (path outside the dir) MUST assert false. RED-first.
+
+- [ ] **Step 1:** Write `ProtectedUploadStorageTest` asserting `isProtectedPath` false for `/etc/passwd` and a `../` escape, true for an in-dir file (use a tmp dir double). Run → FAIL.
+- [ ] **Step 2:** Create the base by lifting `getProtectedDir`/`ensureProtectedDir`/`uploadDirFilter`/`isProtectedPath`/`markProtected` from `CompletionProofStorage`, parameterised on `dirName()`.
+- [ ] **Step 3:** Reparent `CompletionProofStorage extends ProtectedUploadStorage`; `dirName()` returns `self::DIR_NAME`; keep `markProtected($id,$regId)` as a thin wrapper calling `parent::markProtected($id, [self::META_REGISTRATION=>$regId, self::META_PROTECTED=>1])`; keep `migrate()`/`protectAttachment()` proof-specific.
+- [ ] **Step 4:** Run the FULL existing proof suite (`tests/Unit/...Proof*`, `tests/Integration/...Proof*`) → all PASS (behavior-preserving).
+- [ ] **Step 5:** `/drift-reviewer` on both files clean. Commit.
+
+**Integration gate (Phase 0):** the existing completion-proof upload→protect→download integration test passes unchanged against the reparented class. `── REVIEW GATE ── (tier: FULL — refactors a security-critical storage primitive that gates PII proof files; a regression re-opens M1–M3)`
 
 ---
 
 ## Phase 1 — `vad_document` CPT + repository (the data spine)
 
-TBD
+### Task 1.1 — `DocumentCPT` registration + `getFields()`  `[Tier A]`
+
+**Files:**
+- Create: `web/app/mu-plugins/stride-core/Modules/Document/DocumentCPT.php`
+- Modify: `web/app/mu-plugins/stride-core/plugin-config.php` (register CPT on init)
+- Test: `tests/Integration/DocumentCPTTest.php`
+
+**Interfaces:**
+- Produces: `DocumentCPT::POST_TYPE = 'vad_document'`; `getFields()` returning the A2 schema: `description`(textarea), `category`(text), `attachment_id`(int), `owner_type`(text enum course|edition|trajectory), `owner_id`(int), `order`(int), `visibility`(text, default `enrolled`). `title` is the WP post title (not a meta field). Registered `public=false`, `show_ui=false` (managed via owner metaboxes, no standalone admin list needed for v1), `supports=['title']`, `auto_metabox=false`, `meta_prefix='_ntdst_'`.
+
+**Unit/Integration test:** after register, creating a `vad_document` via `DocumentRepository::create(['title'=>..,'owner_type'=>'course','owner_id'=>5,'attachment_id'=>9])` round-trips through `getField()` with the bare keys (Data API vocabulary). Assert `owner_type` reads back exactly (enum integrity). RED-first.
+
+- [ ] **Step 1:** Write the integration test (register + create + read-back). Run → FAIL (class missing).
+- [ ] **Step 2:** Create `DocumentCPT` mirroring `EditionCPT`'s shape; `getFields()` as above.
+- [ ] **Step 3:** Register it in `plugin-config.php` init path. Run → PASS.
+- [ ] **Step 4:** `/drift-reviewer` clean (vocabulary, no hardcoded prefix). Commit.
+
+### Task 1.2 — `DocumentRepository` (findByOwner / findByOwners / ordering)  `[Tier A]`
+
+**Files:**
+- Create: `web/app/mu-plugins/stride-core/Modules/Document/DocumentRepository.php`
+- Test: `tests/Integration/DocumentRepositoryTest.php`
+
+**Interfaces:**
+- Consumes: `AbstractRepository` (`find/create/update/delete/getField/all`), `DocumentCPT::POST_TYPE`.
+- Produces: `findByOwner(string $ownerType, int $ownerId): array` (ordered by `order` then title); `findByOwners(array $pairs): array` where `$pairs = [['type'=>'course','id'=>5],['type'=>'edition','id'=>9]]` — the multi-owner read the edition-page merge needs; `findByAttachment(int $attachmentId): ?array` (dedup/lookup).
+
+**Unit test:** `findByOwner('course',5)` returns only that course's docs, ordered by `order`; a doc owned by edition 9 is excluded. `findByOwners` returns the union for the merge. Boundary: empty owner → `[]`. RED-first.
+
+- [ ] **Step 1:** Test seeding 3 course docs + 1 edition doc; assert `findByOwner` scoping + order, `findByOwners` union, empty → `[]`. Run → FAIL.
+- [ ] **Step 2:** Implement using `$this->model()->where('owner_type',..)->where('owner_id',..)->withMeta()->get()` (the VoucherRepository pattern). Implement ordering in PHP or via the data layer's order.
+- [ ] **Step 3:** Run → PASS. `/drift-reviewer` clean (repository-only, no `$wpdb`). Commit.
+
+**Integration gate (Phase 1):** a `vad_document` can be created, scoped-read by owner, and merged across owners through the repository only — zero `$wpdb`/`ntdst_data()` outside it. `── REVIEW GATE ── (tier: FULL — new CPT + data-access path; the owner-scoping read is the substrate every later authorization decision trusts)`
 
 ---
 
 ## Phase 2 — Protected storage + gated download endpoint + tracking
 
-TBD
+> The security core. Two review clusters: storage+endpoint, then the event-log write. Both FULL tier (1a surfaces).
+
+### Task 2.1 — `DocumentStorage extends ProtectedUploadStorage`  `[Tier A]`
+
+**Files:**
+- Create: `web/app/mu-plugins/stride-core/Modules/Document/DocumentStorage.php`
+- Modify: `plugin-config.php` (init-time `ensureProtectedDir()` + migrate hook), `site.yml` (nginx deny note)
+- Test: `tests/Unit/Modules/Document/DocumentStorageTest.php`
+
+**Interfaces:**
+- Produces: `DocumentStorage::DIR_NAME='stride-documents'`; `markProtected(int $attachmentId): void` → `parent::markProtected($id, ['_stride_protected_document'=>1])`; `isProtectedPath()` inherited.
+
+**Unit test:** `getProtectedDir()` ends in `/stride-documents`; `isProtectedPath` denies an out-of-dir path (Mitigation 4). Denial path asserted. RED-first.
+
+- [ ] Steps: RED test → implement subclass → ensure dir created at init → add nginx deny line to `site.yml` (Mitigation 1) → PASS → commit.
+
+### Task 2.2 — `DocumentService::attachDocument()` validate + protect (MIME allow-list)  `[Tier A]`
+
+**Files:**
+- Create: `web/app/mu-plugins/stride-core/Modules/Document/DocumentService.php`
+- Test: `tests/Unit/Modules/Document/DocumentServiceTest.php`
+
+**Interfaces:**
+- Produces: `attachDocument(array $input): WP_Post|WP_Error` — validates `owner_type` enum, `owner_id` is an editable post, `attachment_id` is a real attachment whose MIME is in the allow-list (reject `image/svg+xml`,`text/html`,`application/x-php`, anything not pdf/office/image) → on pass: stamps `DocumentStorage::markProtected()`, routes the file into the protected dir, `create()`s the `vad_document`. Also `mimeAllowList(): array` (shared with the picker JS list).
+
+**Unit test:** an SVG/`text/html`/php attachment → `WP_Error` (Mitigation 8, the DENIAL path); a valid PDF → created + marked protected. Bad `owner_type` → `WP_Error`. RED-first; the rejection assertions are the contract.
+
+- [ ] Steps: RED tests (reject svg/html/php + accept pdf + bad owner_type) → implement with MIME allow-list + `markProtected` → PASS → `/drift-reviewer` clean → commit.
+
+### Task 2.3 — `DocumentService::userMayAccess()` — the enrollment predicate per owner_type  `[Tier A]`
+
+**Files:**
+- Modify: `web/app/mu-plugins/stride-core/Modules/Document/DocumentService.php`
+- Test: `tests/Unit/Modules/Document/DocumentAccessTest.php`
+
+**Interfaces:**
+- Produces: `userMayAccess(int $userId, array $document): array{allowed: bool, registration_id: ?int}` — the SINGLE place that decides enrollment access AND derives the registration to log against (Mitigation 12). Per owner_type:
+  - `course`: find the user's active registration on any edition of that course via `RegistrationRepository` (+ `EditionService::getEditionsForCourse`/`getCourseId`); fallback to `LearnDashHelper::isEnrolled($courseId,$userId)` for pure-LD courses (registration_id null → log against null, allowed true).
+  - `edition`: `RegistrationRepository` active registration for (user, edition_id) — the existing `hasActiveRegistration`-equivalent finder (confirm exact method at impl; `findByUser`+status filter exists).
+  - `trajectory`: `RegistrationRepository::existsForTrajectory($userId,$trajectoryId)` (the method `pattern_trajectory_edition_parity` added).
+- `stride_manage` short-circuits allowed=true (registration_id null) — handled in the handler, not here, so this method is the pure enrollment question.
+
+**Unit test:** enrolled-in-edition-9 user → allowed for a doc owned by edition 9, denied for one owned by edition 12 (cross-enrollment, Mitigation 3 + attack 3). Course-owned doc resolves through the user's edition registration. Both the allow AND the cross-enrollment DENY asserted. RED-first.
+
+- [ ] Steps: RED (allow own-owner, deny cross-owner for each owner_type) → implement using the repository finders → PASS → commit.
+
+**`── REVIEW GATE ── (tier: FULL — Tasks 2.1–2.3: protected storage + the enrollment authorization predicate; a wrong predicate is the cross-enrollment download attack 3, the core boundary the spec names)`**
+
+### Task 2.4 — `DocumentDownloadHandler` — gated download endpoint  `[Tier A]`
+
+**Files:**
+- Create: `web/app/mu-plugins/stride-core/Handlers/DocumentDownloadHandler.php`
+- Modify: `plugin-config.php` (register handler)
+- Test: `tests/Integration/DocumentDownloadHandlerTest.php`
+
+**Interfaces:**
+- Consumes: `DocumentRepository`, `DocumentService::userMayAccess()`, `DocumentStorage::isProtectedPath()`, `DocumentDownloadLogRepository::recordDownload()` (Task 2.5), `ntdst_response()->download()`.
+- Produces: `add_filter('ntdst/api_data/stride_download_document', [$this,'handleDownload'], 10, 2)`; `resolveDownload(int $documentId): array{path,filename,mime,registration_id}|WP_Error` (authz + path guard, testable, mirrors `resolveProofDownload`); `handleDownload()` calls resolve, records the event (Task 2.5), then `download()` (exits).
+
+**Integration test:** the convergence of Mitigations 3,4,5,9,12 — (a) anonymous → `not_logged_in`; (b) enrolled user, own doc → served + one event row; (c) cross-enrollment user → `forbidden` (same detail-free shape); (d) non-existent/`owner gone` document_id → `forbidden`; (e) attachment path outside protected dir → `forbidden`; (f) `stride_manage` → served regardless of enrollment. RED-first; (c)+(e) are the load-bearing denials.
+
+- [ ] **Step 1:** Write the 6-case integration test. Run → FAIL.
+- [ ] **Step 2:** Implement `resolveDownload` (load doc → `userMayAccess` or `stride_manage` → `get_attached_file` → `isProtectedPath` → detail-free `forbidden` on every failure, logged via `ntdst_log('documents')`).
+- [ ] **Step 3:** Implement `handleDownload` (resolve → record event → `ntdst_response()->download()`).
+- [ ] **Step 4:** Register in `plugin-config.php`. Run → PASS.
+- [ ] **Step 5:** `/drift-reviewer` clean (api_data filter not raw wp_ajax; no re-verified nonce). Commit.
+
+### Task 2.5 — Download event log: table + repository + bounded write  `[Tier A]`
+
+**Files:**
+- Create: `web/app/mu-plugins/stride-core/Modules/Document/DocumentDownloadLogTable.php`, `DocumentDownloadLogRepository.php`
+- Modify: `plugin-config.php` (migrate hook)
+- Test: `tests/Integration/DocumentDownloadLogRepositoryTest.php`
+
+**Interfaces:**
+- Produces: table `wp_vad_document_downloads` (id, user_id, document_id, registration_id NULL, first_at, last_at, count, UNIQUE(user_id,document_id,registration_id)); `DocumentDownloadLogRepository::recordDownload(int $userId,int $documentId,?int $registrationId): void` (upsert: insert or bump count+last_at — Mitigation 11); `findForRegistration(int $registrationId): array`; `findForUser(int $userId): array` (the learner's own view). Sole `$wpdb` owner of the table, `$wpdb->prepare` throughout; versioned `migrate()` mirroring `RegistrationTable`.
+
+**Unit/Integration test:** two `recordDownload` for the same (user,doc,reg) → ONE row, count=2, last_at advanced (Mitigation 11, the concurrent/double edge). `findForRegistration` returns only that registration's rows (Mitigation 10 scoping). RED-first.
+
+- [ ] **Step 1:** Test: double record → one row count=2; cross-registration isolation. Run → FAIL.
+- [ ] **Step 2:** Implement table (dbDelta) + repository upsert via `$wpdb->prepare` (`ON DUPLICATE KEY UPDATE`). Wire migrate.
+- [ ] **Step 3:** Run → PASS. `/drift-reviewer` clean (table owned 1:1). Commit.
+
+**Integration gate (Phase 2):** an enrolled user downloads → bytes stream + exactly one collapsed event row; a cross-enrollment user is denied detail-free + no row; anonymous denied. `── REVIEW GATE ── (tier: FULL — Tasks 2.4–2.5: the download endpoint is the new authorization surface AND the tracking choke point + a new custom table; promote on any 1a finding)`
 
 ---
 
 ## Phase 3 — Admin documents metabox (course + trajectory)
 
-TBD
+### Task 3.1 — Confirm caps + render the scaling metabox (flat ≤5 / grouped >5)  `[Tier B]`
+
+**Files:**
+- Create: `web/app/mu-plugins/stride-core/Modules/Document/Admin/DocumentsMetabox.php`
+- Modify: `plugin-config.php` (register; `add_meta_box` on `sfwd-courses` + `vad_trajectory`)
+- Test: covered by acceptance flow A/E (browser) — `[Tier B]` no unit test: Tier B, presentational metabox render; the persistence contract is Task 3.2.
+
+**Interfaces:**
+- Consumes: `DocumentRepository::findByOwner()`, `DocumentService::mimeAllowList()`.
+- Produces: `render(WP_Post $post)` — resolves owner_type from `$post->post_type` (`sfwd-courses`→course, `vad_trajectory`→trajectory); renders flat list when ≤5 docs else grouped-by-category with collapse (the one UI, boundary at 5 per spec). Each row: title/description/category inputs, type·size, drag handle, remove. Picker button + hidden field (mirrors `renderDocumentenTab`). Renders only when `current_user_can('edit_post',$post->ID)` (Mitigation 6).
+
+- [ ] Steps: implement render (reuse `renderDocumentenTab` markup, add metadata inputs + category grouping) → register metabox on both post types → manual/browser check both screens render → commit.
+
+### Task 3.2 — Metabox save handler (cap + nonce + sanitize + MIME)  `[Tier A]`
+
+**Files:**
+- Modify: `web/app/mu-plugins/stride-core/Modules/Document/Admin/DocumentsMetabox.php`
+- Test: `tests/Integration/DocumentsMetaboxSaveTest.php`
+
+**Interfaces:**
+- Produces: `save(int $postId)` on `save_post` — guards `wp_verify_nonce`/`check_admin_referer` + `current_user_can('edit_post',$postId)` (Mitigation 6); for each posted row sanitizes (`sanitize_text_field` title/category, `sanitize_textarea_field` description, `absint`), delegates to `DocumentService::attachDocument()` (which enforces the MIME allow-list), updates metadata/order on existing docs, and removes deleted ones. Diff-based: reconcile posted set vs `findByOwner`.
+
+**Unit/Integration test:** a save without a valid nonce → no writes (Mitigation 6 DENY); a save with an svg attachment id → that row rejected, others persist (Mitigation 8 via the service); metadata + order round-trip. RED-first; the nonce-fail and svg-reject denials are the contract.
+
+- [ ] Steps: RED (no-nonce → no write; svg → rejected; happy path persists+orders) → implement save with cap+nonce+sanitize+delegate+reconcile → PASS → `/drift-reviewer` clean → commit.
+
+### Task 3.3 — Metabox JS (picker + drag-reorder)  `[Tier B]`
+
+**Files:**
+- Create: `web/app/mu-plugins/stride-core/assets/js/admin/documents-metabox.js`
+- Modify: metabox enqueue
+- Test: acceptance flow A (browser drag-reorder + >5 grouping) — `[Tier B]` no unit test: Tier B, admin JS glue over `wp.media`; verified in the browser at shake-out.
+
+**Interfaces:**
+- Consumes: `wp.media` with the type-filtered `library` (the exact list from `edition-admin.js:935`, sourced from `DocumentService::mimeAllowList()` echoed to JS); the hidden-field sync pattern (`edition-admin.js:916-979`).
+- Produces: add/remove rows, drag-reorder writing `order`, the ≤5↔>5 grouping toggle.
+
+- [ ] Steps: factor the document logic out of `edition-admin.js` into the new file generalised over a container selector → add drag-reorder (sortable) + category grouping → enqueue on the metabox screens → browser check → commit.
+
+**Integration gate (Phase 3):** an admin adds/orders/removes docs on a course AND a trajectory, crossing the 5-doc boundary into grouped view; a non-editor cannot save. `── REVIEW GATE ── (tier: STANDARD — admin UI + save; the security-bearing save guard rides Task 3.2's FULL-reviewed service, so the cluster itself is STANDARD unless review finds a cap/nonce gap, which promotes it to FULL)`
 
 ---
 
 ## Phase 4 — Frontend Materialen section (course + edition merge + trajectory)
 
-TBD
+### Task 4.1 — Shared plugin-owned documents-section partial  `[Tier B]`
+
+**Files:**
+- Create: `web/app/mu-plugins/stride-core/templates/documents/documents-section.php`
+- Test: acceptance flows B/C/E (browser) — `[Tier B]` no unit test: Tier B, presentational partial; the gate logic it calls is unit-tested in 4.2.
+
+**Interfaces:**
+- Consumes: an array of document view-models (passed in by the caller) + a `can_download` flag per the gate; renders grouped-by-category cards (icon, `esc_html` title/description, type·size, download button → `esc_url` of the `stride_download_document` endpoint URL). Lives in stride-core (INV-5: plugin never calls the theme); rendered via `ntdst_response()->html()`.
+- Produces: one coherent grouped list; empty state when no docs.
+
+- [ ] Steps: build the partial with escaping at every sink (Mitigation 7) → register the template path → render-smoke in browser → commit.
+
+### Task 4.2 — Document view-model + merge/dedup + download-URL builder  `[Tier A]`
+
+**Files:**
+- Modify: `web/app/mu-plugins/stride-core/Modules/Document/DocumentService.php`
+- Test: `tests/Unit/Modules/Document/DocumentViewModelTest.php`
+
+**Interfaces:**
+- Produces: `getDocumentsForOwners(array $pairs, ?int $userId): array` — calls `DocumentRepository::findByOwners`, builds per-doc view-models (title, description, category, filesize/type from `get_attached_file`, `download_url` = the gated endpoint URL with `document_id`, NOT `wp_get_attachment_url` — Mitigation 1), **dedups by attachment_id** (the edition page's course-vs-edition overlap, flow C boundary), groups by category. The edition-page merge passes `[['course',$courseId],['edition',$editionId]]`; legacy `edition.documents` ids are folded in as a separate group with their public URLs (per Q1 default — flagged).
+
+**Unit test:** merge of a course doc + edition doc → both present, grouped; a doc on BOTH owners appears once (dedup by attachment_id — flow C boundary); `download_url` points at the gated endpoint, never the public attachment URL (Mitigation 1 assertion). RED-first.
+
+- [ ] Steps: RED (merge union + dedup + url-is-gated) → implement → PASS → `/drift-reviewer` clean → commit.
+
+### Task 4.3 — Wire the section into course / edition / trajectory templates  `[Tier B]`
+
+**Files:**
+- Modify: `web/app/themes/stridence/single-vad_edition.php`, the course template, `web/app/themes/stridence/templates/trajectory/tab-materialen.php`
+- Test: acceptance flows B/C/E (browser)
+
+**Interfaces:**
+- Consumes: `DocumentService::getDocumentsForOwners()` + the shared partial via the loader. The enrolled-gate (`hasActiveRegistration`/`existsForTrajectory`) decides `can_download` for link rendering (the storage layer is the real gate).
+
+- [ ] Steps: edition template passes course+edition pair (the merge); course template passes course pair; trajectory tab passes trajectory pair (additive to existing LD materials) → browser-verify the merge shows one list, no double-render → commit.
+
+**Integration gate (Phase 4):** an enrolled learner sees a grouped Materialen list on course + edition (merged, deduped) + trajectory pages; a non-enrolled user's links are gated and the bytes are denied. `── REVIEW GATE ── (tier: STANDARD — frontend render; no 1a surface here, the byte-gate is Phase 2; STANDARD = 2 finders + feature-acceptance browser pass)`
 
 ---
 
 ## Phase 5 — Dossier progress section (downloads + LD lessons + quiz)
 
-TBD
+### Task 5.1 — `LearnDashHelper::getQuizAttempts()` (the confirmed gap)  `[Tier A]`
+
+**Files:**
+- Modify: `web/app/mu-plugins/stride-core/Integrations/LearnDash/LearnDashHelper.php`
+- Test: `tests/Unit/Integrations/LearnDash/LearnDashQuizTest.php` (or integration if the activity table is needed)
+
+> **Ground-truth note:** `LearnDashHelper` today has NO quiz-score read (only `getLessons`/`getProgress`/`isComplete`). The spec's "quiz results … exists in LD, needs reading + display" is a real gap. Quiz data lives in `wp_learndash_user_activity` (`activity_type='quiz'`, score in `activity_meta` / `_sfwd-quizzes` user meta) — confirmed by the existing `getLastActivityDate` and `PartnerAPIController` reads of that table. This task adds the read at the sanctioned LD boundary (INV-6), not in a service.
+
+**Interfaces:**
+- Produces: `getQuizAttempts(int $courseId, ?int $userId = null): array<array{quiz_id:int,title:string,score:?int,percentage:?int,passed:?bool,completed_at:?int}>` — reads `learndash_user_activity` joined to its `_activity_meta` (or `learndash_get_user_quiz_attempts`/`get_user_meta($u,'_sfwd-quizzes')` whichever the live LD version exposes — confirm at impl via context7/LD source). Returns `[]` when LD inactive (guard like every other method).
+
+**Unit test:** falsy-zero NOT dropped — a 0% / 0-score attempt still appears (flow D boundary, the classic "missing-denial/falsy-zero" trap); LD-inactive → `[]`. RED-first.
+
+- [ ] **Step 1:** Confirm the exact LD read path (context7 `learndash` docs or grep the LD plugin for `get_user_quiz` / `activity_meta` quiz score). Write the RED test (0-score appears; inactive → []).
+- [ ] **Step 2:** Implement reading the activity table (mirror `getLastActivityDate`'s prepared query) + meta for score/percentage/passed.
+- [ ] **Step 3:** Run → PASS. `/drift-reviewer` clean (LD read stays in the helper). Commit.
+
+### Task 5.2 — Dossier progress block in `getUserDetail`  `[Tier A]`
+
+**Files:**
+- Modify: `web/app/mu-plugins/stride-core/Admin/AdminUserService.php`
+- Test: `tests/Integration/DossierProgressTest.php`
+
+**Interfaces:**
+- Consumes: `DocumentDownloadLogRepository::findForRegistration()`, `LearnDashHelper::getLessons()/getProgress()/getQuizAttempts()`, `EditionService::getCourseId()`.
+- Produces: each registration in the `getUserDetail` response gains `progress => {downloads:[{document,first_at,last_at,count}], lessons:[{title,completed}], lesson_pct:int, quiz:[...]}` — downloads read by the resolved registration id (Mitigation 10, NOT a free param); lessons/quiz read for the registration's course.
+
+**Integration test:** dossier for user U shows U's downloads for registration R, and does NOT include another user's downloads even if their rows share a document (Mitigation 10 cross-employee DENY); a 0% quiz renders (flow D boundary); LD-inactive degrades to empty lessons/quiz without fatal (flow D mid-flow). RED-first; the cross-employee isolation is the load-bearing denial.
+
+- [ ] **Step 1:** RED test (U sees only U's rows; cross-user isolation; 0-score renders; LD-off degrades). Run → FAIL.
+- [ ] **Step 2:** Implement the per-registration progress assembly in `getUserDetail`.
+- [ ] **Step 3:** Run → PASS. `/drift-reviewer` clean (read-model service, scoped reads). Commit.
+
+### Task 5.3 — Dossier client render of the progress block  `[Tier B]`
+
+**Files:**
+- Modify: the admin user-detail template/JS that renders `getUserDetail` registrations
+- Test: acceptance flow D (browser)
+
+`[Tier B]` no unit test: Tier B, presentational; escaping (`esc_html`/Alpine `x-text`) at the sink, verified in the browser at shake-out.
+
+- [ ] Steps: add the onboarding/progress section to the dossier registration rows (downloads list + lesson bar + quiz results), escaped → browser-verify against a seeded enrolled user with downloads + LD progress → commit.
+
+**Integration gate (Phase 5):** a dossier shows enrolled · downloaded-doc · lesson-completion · quiz-score for the right employee only; another employee's data never leaks; 0-scores and LD-off degrade gracefully. `── REVIEW GATE ── (tier: FULL — the dossier surfaces per-employee behavioural PII + a cross-employee read boundary (Mitigation 10) + a new LD-table read; cross-tenant leak risk = FULL)`
 
 ---
 
 ## Sibling-site audits
 
-TBD
+Cross-cutting concerns where a change must be swept across every site that shares the pattern (1e):
+
+### Audit S-1 — The `owner_type` enum (`course | edition | trajectory`)
+A TS-union-style value used in `DocumentCPT::getFields()`, `DocumentRepository::findByOwner/findByOwners`, `DocumentService::userMayAccess` (the per-type predicate), `DocumentsMetabox::render` (post-type→owner_type), and the view-model merge. **Sweep:** every `switch`/match on `owner_type` must handle all three arms; adding a 4th owner later (or `public` visibility) must update every site. Grep `owner_type` across `Modules/Document/` — each read site must be exhaustive or explicitly default-deny (an unknown owner_type → deny access, not allow).
+
+### Audit S-2 — The MIME allow-list (`DocumentService::mimeAllowList()`)
+One source of truth consumed by (a) the save-handler validation (Mitigation 8), (b) the `wp.media` picker `library.type` JS (echoed from PHP, not hardcoded a second time). **Sweep:** the picker list and the server reject-list must be the SAME list — a file the picker offers but the server rejects (or vice-versa) is the drift. Do NOT copy `edition-admin.js:935`'s literal array; source it from `mimeAllowList()`.
+
+### Audit S-3 — The enrollment access-gate, reused across surfaces
+`DocumentService::userMayAccess()` is THE convergence point for "may this user get this doc." It is called by the download handler (byte gate) AND informs the frontend `can_download` flag (link gate). **Sweep:** no surface decides doc access by re-deriving enrollment itself (the INV-6b-style trap). Frontend link-gating may use a cheaper enrolled-check for *display*, but the byte gate MUST go through `userMayAccess` — grep for any `hasActiveRegistration`/`existsForTrajectory` call that gates *document bytes* outside the handler.
+
+### Audit S-4 — The gated download-URL (never the public attachment URL)
+The `download_url` for a `vad_document` is always the `stride_download_document` endpoint, never `wp_get_attachment_url()`. **Sweep:** grep `wp_get_attachment_url` / `wp_get_attachment_image` across the new code + the templates that render docs — none may point at a `vad_document`'s attachment (Mitigation 1). The legacy `edition.documents` public URLs are the one allowed exception (Q1), and only until adopted.
 
 ---
 
 ## Deferred (not this iteration)
 
-TBD
+Per the spec "Deferred" — do NOT build:
+- Trajectory → child-edition document mirroring (display rule).
+- "Turn a document into e-learning with a quiz" (doc-paired knowledge check).
+- Migrating `edition.documents` onto `vad_document` for a single model (additive later; Q1 decides interim).
+- `public` document visibility (lead-facing brochures) — the enum reserves the value; no `public` byte-path is built (extending the threat model is required when it is).
+- A standalone `vad_document` admin list/CPT UI (`show_ui=false` for v1; managed via owner metaboxes only).
 
 ---
 
-## Open questions for Stefan
+## Open questions for Stefan (resolve before/at dispatch)
 
-TBD
+1. **Legacy `edition.documents` download path.** The new gated endpoint applies to `vad_document` only. Today's `edition.documents` attachments are rendered via PUBLIC `wp_get_attachment_url()` in the metabox + dashboard — i.e. they are NOT gated. Options: (a) **default (this plan):** leave legacy edition docs on public URLs, surface them in the frontend merge as-is, gate only `vad_document`; (b) route legacy edition-doc downloads through the gated endpoint too (a small adapter — they have no `vad_document` row, so the handler would need an edition-attachment branch). The spec defers full migration but the *security* exposure of public edition docs may not be acceptable for an onboarding client. **Recommend (b)-lite if any edition doc is sensitive; (a) if edition docs are non-sensitive slides.** Blocks Task 4.2's legacy-fold + Mitigation 1's exception.
+2. **Quiz score storage in the live LD version.** Task 5.1 must confirm the exact read path (`learndash_user_activity.activity_meta` vs `_sfwd-quizzes` user meta vs `learndash_get_user_quiz_attempts()`) against the LD version on the site. Not blocking the plan, but the implementer must verify via context7/LD source at Task 5.1 Step 1 — flagged so it isn't assumed.
+3. **`stride_view`-only admins and the download audit (privacy).** The dossier download log is per-employee behavioural data. Confirm `stride_view` (supervisor) seeing every employee's download timestamps is intended, or whether the audit block should require `stride_manage`. Default: follows the existing dossier gate (`stride_view`). Affects Mitigation 10's cap choice.
