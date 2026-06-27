@@ -59,13 +59,6 @@ defined('ABSPATH') || exit;
                        x-ref="dateInput"
                        readonly
                        placeholder="<?php echo esc_attr__('Datum of periode…', 'stride'); ?>">
-                <button type="button"
-                        class="ws-btn ws-btn--ghost ws-btn--sm"
-                        x-show="filters.dateFrom || filters.dateTo"
-                        @click="$refs.dateInput && _fp && _fp.clear()"
-                        title="<?php echo esc_attr__('Datum wissen', 'stride'); ?>">
-                    <span x-html="icon('x')"></span>
-                </button>
             </div>
 
             <button class="ws-btn ws-btn--subtle ws-btn--sm" x-show="hasFilters" @click="clearAllFilters()">
