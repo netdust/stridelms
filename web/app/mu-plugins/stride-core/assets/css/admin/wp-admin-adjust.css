@@ -13,8 +13,8 @@
    ========================================================================== */
 
 /* 1. Hide WP noise that doesn't belong over the app. We KEEP #wpadminbar
-      (top bar) and #adminmenuwrap (the WP menu, which the `folded` body class
-      collapses to its icon rail) — the app sits to the right of and below them. */
+      (top bar) and #adminmenuwrap (WP's own admin menu — the frame that lets
+      you navigate OUT of the workspace to the rest of WordPress). */
 body.stride-dashboard #wpfooter,
 body.stride-dashboard .notice,
 body.stride-dashboard .update-nag,
@@ -25,12 +25,10 @@ body.stride-dashboard #screen-meta-links {
     display: none !important;
 }
 
-/* 2. Fit the app into the WP content area. Do NOT zero #wpcontent's margin —
-      WordPress reserves `margin-left: 36px` for `.folded #wpcontent` so the
-      content clears the folded WP menu; we keep that. We only flatten the
-      content padding so the ws-shell sits flush against the WP chrome. The
-      app height is the viewport MINUS the admin-bar height so the dark ws-rail
-      neither runs under the admin bar nor causes a double scrollbar. */
+/* 2. Fit the app into the WP content area. Keep WP's reserved left margin so
+      the content clears the folded WP menu; only flatten the content padding so
+      the ws-shell sits flush against the WP chrome. App height is the viewport
+      MINUS the admin-bar height to avoid a double scrollbar. */
 body.stride-dashboard #wpcontent,
 body.stride-dashboard.folded #wpcontent {
     padding-left: 0;

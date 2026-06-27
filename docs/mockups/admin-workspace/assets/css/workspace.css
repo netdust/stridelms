@@ -27,13 +27,19 @@
     --ws-surface-alt:    #f8fafc;   /* slate-50 */
     --ws-surface-sunken: #f1f5f9;   /* slate-100 */
 
-    /* The command-center rail — dark slate, the signature move */
-    --ws-rail:           #0f172a;   /* slate-900 */
-    --ws-rail-2:         #1e293b;   /* slate-800 */
-    --ws-rail-line:      #334155;   /* slate-700 */
-    --ws-rail-text:      #cbd5e1;   /* slate-300 */
-    --ws-rail-text-dim:  #64748b;   /* slate-500 */
+    /* The nav rail — a light, WP-native left column (was a dark "command
+       center"; that read as a foreign app bolted onto wp-admin). White
+       surface, slate text, blue active — mirrors WordPress's own admin menu. */
+    --ws-rail:           #ffffff;
+    --ws-rail-2:         #f8fafc;   /* slate-50  — hover/raised */
+    --ws-rail-line:      #e2e8f0;   /* slate-200 — hairline divider */
+    --ws-rail-text:      #475569;   /* slate-600 — nav label */
+    --ws-rail-text-dim:  #94a3b8;   /* slate-400 — group caption */
     --ws-rail-active:    #2563eb;
+    /* dark slate retained for the few surfaces that are still intentionally
+       dark (bulk bar, toast) so they don't depend on --ws-rail */
+    --ws-ink:            #0f172a;   /* slate-900 */
+    --ws-ink-line:       #334155;   /* slate-700 */
 
     /* Text */
     --ws-text:           #0f172a;   /* slate-900 */
@@ -121,20 +127,18 @@ button { font-family: inherit; cursor: pointer; }
    -------------------------------------------------------------------------- */
 .ws-shell { display: flex; min-height: 100vh; }
 
-/* ---- Command-center rail ---- */
+/* ---- Nav rail (light, WP-native) ---- */
 .ws-rail {
     width: var(--ws-rail-w);
     flex-shrink: 0;
-    background:
-        radial-gradient(120% 60% at 0% 0%, rgba(37,99,235,0.18), transparent 60%),
-        linear-gradient(180deg, var(--ws-rail) 0%, #0b1120 100%);
+    background: var(--ws-rail);
     color: var(--ws-rail-text);
     display: flex;
     flex-direction: column;
     position: sticky;
     top: 0;
     height: 100vh;
-    box-shadow: var(--ws-shadow-rail);
+    border-right: 1px solid var(--ws-rail-line);
     z-index: 20;
 }
 
@@ -148,16 +152,15 @@ button { font-family: inherit; cursor: pointer; }
 .ws-brand__mark {
     width: 34px; height: 34px; flex-shrink: 0;
     border-radius: 9px;
-    background: linear-gradient(135deg, #3b82f6, #1d4ed8);
+    background: var(--ws-primary);
     display: grid; place-items: center;
-    box-shadow: 0 4px 12px rgba(37,99,235,0.4), inset 0 1px 0 rgba(255,255,255,0.25);
 }
 .ws-brand__mark svg { width: 19px; height: 19px; }
 .ws-brand__name {
     font-family: var(--ws-font-disp);
     font-weight: 600;
     font-size: 16px;
-    color: #fff;
+    color: var(--ws-text);
     letter-spacing: -0.02em;
     line-height: 1;
 }
@@ -192,23 +195,24 @@ button { font-family: inherit; cursor: pointer; }
     transition: background var(--ws-ease), color var(--ws-ease);
     position: relative;
 }
-.ws-nav__item svg { width: 17px; height: 17px; flex-shrink: 0; opacity: 0.85; }
-.ws-nav__item:hover { background: rgba(255,255,255,0.05); color: #fff; }
+.ws-nav__item svg { width: 17px; height: 17px; flex-shrink: 0; opacity: 0.7; }
+.ws-nav__item:hover { background: var(--ws-rail-2); color: var(--ws-text); }
 .ws-nav__item.is-active {
-    background: linear-gradient(90deg, rgba(37,99,235,0.22), rgba(37,99,235,0.06));
-    color: #fff;
+    background: var(--ws-primary-subtle);
+    color: var(--ws-primary-active);
+    font-weight: 600;
 }
+.ws-nav__item.is-active svg { opacity: 1; color: var(--ws-primary); }
 .ws-nav__item.is-active::before {
-    content: ''; position: absolute; left: -1px; top: 7px; bottom: 7px;
-    width: 3px; border-radius: 999px; background: var(--ws-rail-active);
-    box-shadow: 0 0 12px rgba(37,99,235,0.8);
+    content: ''; position: absolute; left: -1px; top: 6px; bottom: 6px;
+    width: 3px; border-radius: 0 999px 999px 0; background: var(--ws-rail-active);
 }
 .ws-nav__item .ws-nav__count {
     margin-left: auto;
     font-size: 11px;
     font-weight: 600;
-    background: rgba(255,255,255,0.1);
-    color: var(--ws-rail-text);
+    background: var(--ws-surface-sunken);
+    color: var(--ws-text-2);
     padding: 1px 7px;
     border-radius: 999px;
     min-width: 20px;
@@ -226,13 +230,13 @@ button { font-family: inherit; cursor: pointer; }
     padding: var(--ws-2);
     border-radius: var(--ws-radius-sm);
 }
-.ws-user:hover { background: rgba(255,255,255,0.05); }
+.ws-user:hover { background: var(--ws-rail-2); }
 .ws-user__avatar {
     width: 32px; height: 32px; border-radius: 999px; flex-shrink: 0;
-    background: linear-gradient(135deg, #64748b, #475569);
+    background: var(--ws-primary);
     display: grid; place-items: center; color: #fff; font-weight: 600; font-size: 12px;
 }
-.ws-user__name { color: #fff; font-weight: 500; font-size: var(--ws-fs); line-height: 1.2; }
+.ws-user__name { color: var(--ws-text); font-weight: 600; font-size: var(--ws-fs); line-height: 1.2; }
 .ws-user__role { color: var(--ws-rail-text-dim); font-size: var(--ws-fs-xs); }
 
 /* ---- Main column ---- */
