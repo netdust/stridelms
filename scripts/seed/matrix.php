@@ -471,17 +471,36 @@ return [
                         ['date_offset' => 0, 'start' => '09:30', 'end' => '12:30', 'type' => 'in_person', 'title' => 'Introductie en rondleiding BWEEG (najaar)'],
                     ],
                 ],
+            ],
+            'lessons' => [
+                ['title' => 'Introductie BWEEG', 'content' => 'Kennismaking met BWEEG als organisatie.'],
+            ],
+        ],
+        // === Row 9b: dateless klassikaal — a course whose dates aren't set yet.
+        // Stands ALONE (its own course, no dated siblings) because a real
+        // "binnenkort, toon interesse" offering is the only edition of a course
+        // not yet scheduled — a course with a dateless edition next to fully
+        // scheduled ones is contradictory (Stefan, 2026-06-27). This is the
+        // catalog interest anchor: lists on /klassikaal with the interest card
+        // variant; the detail page collapses to intro + "nog geen sessies". ===
+        [
+            'title' => 'Train de Trainer: Bewegingscoach (nieuwe editie in voorbereiding)',
+            'description' => 'Intensieve train-de-trainer voor toekomstige bewegingscoaches. De data voor de volgende editie worden binnenkort vastgelegd — meld je interesse om als eerste op de hoogte te zijn.',
+            'type' => 'in-person', 'format' => ['klassikaal'], 'themes' => ['beweging'],
+            'covers' => ['model:closed_single'],
+            'editions' => [
                 [   // DATELESS KLASSIKAAL: no sessions → no start_date/end_date
                     // meta → effective status resolves to Announcement
-                    // (allowsInterest). Lists on /klassikaal under the
-                    // "Binnenkort — toon interesse" band with the interest
+                    // (allowsInterest). Lists on /klassikaal under the interest
                     // card variant. The catalog interest anchor that was
                     // stranded before the dateless-editions fix.
                     'dateless' => true,
                     'price' => 0.00, 'price_non_member' => 0.00, 'capacity' => 0,
                     'venue' => 'BWEEG Hoofdkantoor Gent',
                     'status' => OfferingStatus::Announcement->value,
-                    'speakers' => [['name' => 'Diverse BWEEG medewerkers', 'role' => 'Gastsprekers']],
+                    // No speakers: nothing about this edition is confirmed yet
+                    // (the whole point of "toon interesse"). Exercises the
+                    // detail page's collapsed Lesgever path (Stefan, 2026-06-27).
                     'covers' => ['status:announcement', 'date:dateless_klassikaal', 'reg:interest'],
                     'registrations' => [
                         ['status' => 'interest', 'path' => 'individual'],   // anonymous interest
@@ -489,7 +508,7 @@ return [
                 ],
             ],
             'lessons' => [
-                ['title' => 'Introductie BWEEG', 'content' => 'Kennismaking met BWEEG als organisatie.'],
+                ['title' => 'Module 1: Didactiek van bewegingscoaching', 'content' => 'De basis van effectief bewegingsonderwijs aan groepen.'],
             ],
         ],
         // === Row 10: full pre-enrollment requirement flow + custom form group (Task 7) ===
