@@ -236,7 +236,10 @@ defined('ABSPATH') || exit;
                                     <small><?php echo esc_html__('ingeschreven', 'stride'); ?> <span x-text="r.registered_at"></span></small>
                                 </div>
                                 <div class="ws-reg__badges">
-                                    <span class="ws-offerte" :class="'ws-offerte--'+offerteClass(r.offerte_status_label || r.offerte_status)" style="margin-right:8px" x-show="r.offerte_status_label || r.offerte_status">
+                                    <!-- offerte (quote-workflow) badge — hidden for cancelled regs: the
+                                         status badge already reads "Geannuleerd" and a cancelled quote on the
+                                         same edition would render the identical word, reading as a duplicate. -->
+                                    <span class="ws-offerte" :class="'ws-offerte--'+offerteClass(r.offerte_status_label || r.offerte_status)" style="margin-right:8px" x-show="r.status !== 'cancelled' && (r.offerte_status_label || r.offerte_status)">
                                         <span class="ws-offerte__dot"></span><span x-text="r.offerte_status_label || r.offerte_status"></span>
                                     </span>
                                     <span class="ws-badge" :class="'ws-badge--'+statusMeta(r.status).cls" x-text="statusMeta(r.status).label"></span>
@@ -253,11 +256,11 @@ defined('ABSPATH') || exit;
                                     <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Afgerond op', 'stride'); ?></div><div class="ws-field__val" x-text="r.completed_at || '—'"></div></div>
                                 </div>
 
-                                <!-- pending hint (preserved from the removed status field; only for pending rows) -->
-                                <template x-if="r.status === 'pending'">
+                                <!-- pending hint: server-computed per-row reason (waiting on user vs admin) -->
+                                <template x-if="r.pending_reason">
                                     <p class="ws-status-hint">
                                         <span x-html="icon('info')"></span>
-                                        <span><?php echo esc_html__('Wacht op gebruiker (intake, sessiekeuze, documenten) of op goedkeuring zodra die taken klaar zijn.', 'stride'); ?></span>
+                                        <span x-text="r.pending_reason.label"></span>
                                     </p>
                                 </template>
 

@@ -461,6 +461,39 @@ final class EnrollmentCompletion
     }
 
     /**
+     * Resolve who a still-pending registration is waiting on, for the admin
+     * dossier hint. Mirrors the approvals-queue bucketing (AdminAPIController):
+     * if a user task is still open → waiting on the user (named by the first
+     * open task); otherwise all user tasks are done → waiting on admin approval.
+     * An empty task set means nothing is known outstanding on the user side, so
+     * it reads as a neutral "waiting on approval".
+     *
+     * @param  array<string, array> $tasks  The registration's completion_tasks.
+     * @return array{actor: string, label: string}  actor is 'user' or 'admin'.
+     */
+    public function pendingReason(array $tasks): array
+    {
+        if (empty($tasks)) {
+            return ['actor' => 'admin', 'label' => __('Wacht op goedkeuring.', 'stride')];
+        }
+
+        if (!$this->areUserTasksComplete($tasks)) {
+            return [
+                'actor' => 'user',
+                'label' => sprintf(
+                    __('Wacht op gebruiker: %s', 'stride'),
+                    self::taskTypeLabel($this->getFirstOpenUserTask($tasks) ?? ''),
+                ),
+            ];
+        }
+
+        return [
+            'actor' => 'admin',
+            'label' => __('Wacht op jouw goedkeuring — de gebruiker heeft alle taken afgerond.', 'stride'),
+        ];
+    }
+
+    /**
      * Human label for a task type (Dutch, admin-facing).
      */
     public static function taskTypeLabel(string $type): string

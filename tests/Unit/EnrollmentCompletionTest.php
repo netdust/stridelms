@@ -420,6 +420,49 @@ class EnrollmentCompletionTest extends TestCase
         $this->assertTrue($this->service->hasPostCourseRequirements(200, 'vad_edition'));
     }
 
+    // === pendingReason() — dossier hint (waiting on user vs waiting on admin) ===
+
+    /** @test */
+    public function testPendingReasonWaitsOnAdminWhenUserTasksDone(): void
+    {
+        // Wout Claes' real case (#158512): user tasks done, only approval pending.
+        $tasks = [
+            'questionnaire' => ['status' => 'completed'],
+            'documents' => ['status' => 'completed'],
+            'approval' => ['status' => 'pending'],
+        ];
+
+        $reason = $this->service->pendingReason($tasks);
+
+        $this->assertEquals('admin', $reason['actor']);
+        $this->assertStringContainsString('goedkeuring', strtolower($reason['label']));
+    }
+
+    /** @test */
+    public function testPendingReasonWaitsOnUserWhenUserTaskOpen(): void
+    {
+        $tasks = [
+            'questionnaire' => ['status' => 'completed'],
+            'documents' => ['status' => 'pending'],
+            'approval' => ['status' => 'pending'],
+        ];
+
+        $reason = $this->service->pendingReason($tasks);
+
+        $this->assertEquals('user', $reason['actor']);
+        // First open user task is `documents` → label carries its Dutch label.
+        $this->assertStringContainsString('Documenten uploaden', $reason['label']);
+    }
+
+    /** @test */
+    public function testPendingReasonNeutralAdminWhenNoTasks(): void
+    {
+        $reason = $this->service->pendingReason([]);
+
+        $this->assertEquals('admin', $reason['actor']);
+        $this->assertStringContainsString('goedkeuring', strtolower($reason['label']));
+    }
+
     /** @test */
     public function testCompleteTaskAcceptsPostCourseTypes(): void
     {
@@ -439,7 +482,7 @@ class EnrollmentCompletionTest extends TestCase
             function (int $id, array $tasks) use (&$updatedTasks) {
                 $updatedTasks = $tasks;
                 return true;
-            }
+            },
         );
 
         $service = new EnrollmentCompletion(

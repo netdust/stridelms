@@ -144,7 +144,7 @@ final class AdminUserService
             $regRows = $wpdb->get_results($wpdb->prepare(
                 "SELECT r.id, r.edition_id, r.status, r.enrollment_path, r.registered_at,
                         r.completed_at, r.cancelled_at, r.selections, r.enrollment_data,
-                        r.notes, r.quote_id, p.post_title AS edition_title
+                        r.completion_tasks, r.notes, r.quote_id, p.post_title AS edition_title
                  FROM {$registrationTable} r
                  LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
                  WHERE r.user_id = %d
@@ -176,6 +176,11 @@ final class AdminUserService
             // status in a second pass once $quoteMeta exists.
             $regQuoteIdByReg = [];
             $regEditionByReg = [];
+
+            // Per-row "waiting on user vs admin" reason for pending registrations.
+            // INV-6b: the SERVER owns the completion_tasks read — the client never
+            // parses the raw JSON column; it just renders pending_reason.label.
+            $completion = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
 
             foreach ($regRows as $row) {
                 $editionId = (int) $row->edition_id;
@@ -212,6 +217,17 @@ final class AdminUserService
                     $sessionTitlesById,
                 );
 
+                // pending_reason: only meaningful for pending rows. The Data layer
+                // may hand us completion_tasks already-decoded (array) or as the raw
+                // JSON column (string) — handle both.
+                $pendingReason = null;
+                if ($row->status === 'pending') {
+                    $tasks = is_array($row->completion_tasks ?? null)
+                        ? $row->completion_tasks
+                        : (json_decode((string) ($row->completion_tasks ?? ''), true) ?: []);
+                    $pendingReason = $completion->pendingReason($tasks);
+                }
+
                 $registrations[] = [
                     'id' => (int) $row->id,
                     'edition_id' => $editionId,
@@ -226,6 +242,7 @@ final class AdminUserService
                     'stages' => $stages,
                     'selections' => $selectionLabels,
                     'notes' => (string) ($row->notes ?? ''),
+                    'pending_reason' => $pendingReason,
                     // offerte stamped in the second pass below (needs $quoteMeta).
                     'offerte_status' => '',
                     'offerte_status_label' => '',
