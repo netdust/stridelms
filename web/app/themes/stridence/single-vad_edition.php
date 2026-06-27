@@ -177,19 +177,30 @@ if (!$price->isZero()) {
     $meta_segments[] = ['text' => $price->format(), 'strong' => true];
 }
 
-// Content tabs (Helder Tij) — ids double as URL hash deep-links (#praktisch)
-$content_tabs = [
-    'omschrijving' => __('Omschrijving', 'stridence'),
-    'programma'    => __('Programma', 'stridence'),
-    'praktisch'    => __('Praktisch', 'stridence'),
-    'lesgever'     => __('Lesgever', 'stridence'),
-];
-
-// Lesgever cards: one per speaker (name + role), i18n'd placeholder card
-// when none are set. Initials are only derived from a REAL speaker name —
-// the placeholder text would yield a fake monogram ("LN"); it gets a
-// generic user icon instead.
+// Lesgever cards: one per speaker (name + role). Initials are only derived
+// from a REAL speaker name.
 $has_speaker = !empty($speakers_list);
+
+// Section visibility — an interest/announcement edition (no sessions, often no
+// teacher, no price) would otherwise render a scaffold of empty holes. Drop the
+// sections that have nothing real to say; keep Omschrijving (the intro is the
+// point) and Programma (the "nog geen sessies" note is meaningful context that
+// the edition isn't scheduled yet — Stefan). Praktisch keeps its always-present
+// Locatie card. Lesgever is hidden when there's only the placeholder.
+$show_omschrijving = true;
+$show_programma    = true; // empty-state stays — it tells the visitor it's unscheduled
+$show_praktisch    = true; // always has at least the Locatie card
+$show_lesgever     = $has_speaker;
+
+// Content tabs (Helder Tij) — ids double as URL hash deep-links (#praktisch).
+// Built only from the sections that actually render, so an interest edition's
+// nav doesn't point at a hidden Lesgever section.
+$content_tabs = array_filter([
+    'omschrijving' => $show_omschrijving ? __('Omschrijving', 'stridence') : null,
+    'programma'    => $show_programma ? __('Programma', 'stridence') : null,
+    'praktisch'    => $show_praktisch ? __('Praktisch', 'stridence') : null,
+    'lesgever'     => $show_lesgever ? __('Lesgever', 'stridence') : null,
+]);
 $speaker_initials = static function (string $name): string {
     $initials = '';
     foreach (preg_split('/[\s,]+/u', $name, -1, PREG_SPLIT_NO_EMPTY) as $name_part) {
@@ -362,13 +373,17 @@ get_header();
                 <section id="programma" class="scroll-mt-32 pt-10">
                     <h2 class="text-[18px] font-bold text-text mb-4"><?php esc_html_e('Programma', 'stridence'); ?></h2>
                     <?php if (!$has_sessions) : ?>
-                        <?php
-                        stridence_template_part('partials/empty-state', null, [
-                            'icon'    => 'calendar',
-                            'title'   => __('Nog geen sessies gepland', 'stridence'),
-                            'message' => __('Het programma van deze editie wordt binnenkort bekendgemaakt.', 'stridence'),
-                        ]);
-                        ?>
+                        <?php /* Compact inline note — an interest edition has no
+                                 sessions yet; keep the "unscheduled" signal but
+                                 don't blow it up into a full centered empty-state
+                                 hole (Stefan). */ ?>
+                        <div class="flex items-start gap-3 bg-surface-alt rounded-[14px] p-4 text-[14px] text-text-muted leading-relaxed">
+                            <?php echo stridence_icon('calendar', 'w-5 h-5 shrink-0 text-text-faint mt-0.5'); ?>
+                            <span>
+                                <strong class="text-text font-semibold"><?php esc_html_e('Nog geen sessies gepland.', 'stridence'); ?></strong>
+                                <?php esc_html_e('Het programma wordt bekendgemaakt zodra de data vastliggen. Meld je interesse om als eerste op de hoogte te zijn.', 'stridence'); ?>
+                            </span>
+                        </div>
                     <?php else : ?>
                         <?php $hasSelections = !empty($selected_session_ids); ?>
                         <?php if (!empty($scheduled_sessions)) :
@@ -558,32 +573,27 @@ get_header();
                     <?php endif; ?>
                 </section>
 
-                <!-- Section: Lesgever -->
+                <!-- Section: Lesgever — hidden entirely when there's no confirmed
+                     speaker (an interest edition would otherwise show only a
+                     "nog te bevestigen" placeholder; the nav drops its tab too). -->
+                <?php if ($show_lesgever) : ?>
                 <section id="lesgever" class="scroll-mt-32 pt-10">
                     <h2 class="text-[18px] font-bold text-text mb-4"><?php esc_html_e('Lesgever', 'stridence'); ?></h2>
-                    <?php if ($has_speaker) : ?>
-                        <div class="flex flex-col gap-3.5">
-                            <?php foreach ($speakers_list as $speaker) : ?>
-                                <div class="bg-surface-card rounded-[14px] shadow-card p-6 flex gap-5 items-center flex-wrap">
-                                    <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo esc_html($speaker_initials($speaker['name'])); ?></span>
-                                    <div class="flex-1 min-w-[240px]">
-                                        <div class="text-[17px] font-bold text-text"><?php echo esc_html($speaker['name']); ?></div>
-                                        <div class="text-[13px] text-accent font-semibold mt-0.5">
-                                            <?php echo $speaker['role'] !== '' ? esc_html($speaker['role']) : esc_html__('Lesgever', 'stridence'); ?>
-                                        </div>
+                    <div class="flex flex-col gap-3.5">
+                        <?php foreach ($speakers_list as $speaker) : ?>
+                            <div class="bg-surface-card rounded-[14px] shadow-card p-6 flex gap-5 items-center flex-wrap">
+                                <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo esc_html($speaker_initials($speaker['name'])); ?></span>
+                                <div class="flex-1 min-w-[240px]">
+                                    <div class="text-[17px] font-bold text-text"><?php echo esc_html($speaker['name']); ?></div>
+                                    <div class="text-[13px] text-accent font-semibold mt-0.5">
+                                        <?php echo $speaker['role'] !== '' ? esc_html($speaker['role']) : esc_html__('Lesgever', 'stridence'); ?>
                                     </div>
                                 </div>
-                            <?php endforeach; ?>
-                        </div>
-                    <?php else : ?>
-                        <div class="bg-surface-card rounded-[14px] shadow-card p-6 flex gap-5 items-center flex-wrap">
-                            <span class="w-14 h-14 rounded-full bg-accent-subtle text-accent-hover font-bold text-[18px] grid place-items-center shrink-0" aria-hidden="true"><?php echo stridence_icon('user', 'w-6 h-6'); ?></span>
-                            <div class="flex-1 min-w-[240px]">
-                                <div class="text-[17px] font-bold text-text"><?php esc_html_e('Lesgever nog te bevestigen', 'stridence'); ?></div>
                             </div>
-                        </div>
-                    <?php endif; ?>
+                        <?php endforeach; ?>
+                    </div>
                 </section>
+                <?php endif; ?>
             </div>
 
             <!-- Sidebar: sticky CTA panel (desktop only — mobile gets the sticky bottom bar) -->
