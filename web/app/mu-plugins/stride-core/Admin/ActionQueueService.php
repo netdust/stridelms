@@ -17,7 +17,6 @@ final class ActionQueueService
         'capacity_threshold'  => ['enabled' => true, 'value' => 80],
         'session_approaching' => ['enabled' => true, 'value' => 1],
         'stale_quote'         => ['enabled' => true, 'value' => 7],
-        'pending_approval'    => ['enabled' => true],
         'edition_starting'    => ['enabled' => true, 'value' => 3],
         'incomplete_tasks'    => ['enabled' => true, 'value' => 7],
     ];
@@ -50,10 +49,6 @@ final class ActionQueueService
 
         if ($this->isEnabled($rules, 'stale_quote')) {
             $items = array_merge($items, $this->evaluateStaleQuotes($data['stale_quotes'] ?? []));
-        }
-
-        if ($this->isEnabled($rules, 'pending_approval')) {
-            $items = array_merge($items, $this->evaluatePendingApprovals($data['pending_approvals'] ?? []));
         }
 
         if ($this->isEnabled($rules, 'edition_starting')) {
@@ -160,28 +155,6 @@ final class ActionQueueService
             'text'       => sprintf('%d offertes wachten op actie', $count),
             'subject_id' => null,
             'url'        => '/wp/wp-admin/edit.php?post_type=vad_quote',
-        ]];
-    }
-
-    /**
-     * Registrations awaiting approval.
-     * @return list<array>
-     */
-    private function evaluatePendingApprovals(array $approvals): array
-    {
-        $count = count($approvals);
-        if ($count === 0) {
-            return [];
-        }
-
-        return [[
-            'rule'       => 'pending_approval',
-            'priority'   => 'red',
-            'text'       => sprintf('%d inschrijving%s wacht%s op goedkeuring', $count, $count > 1 ? 'en' : '', $count > 1 ? 'en' : ''),
-            'subject_id' => null,
-            // Deep-link into the "Inschrijvingen — actie vereist" card on the
-            // dashboard, "Wacht op mij" tab (see admin-dashboard.js hash handler).
-            'url'        => '/wp/wp-admin/admin.php?page=stride-dashboard#action-required-approval',
         ]];
     }
 

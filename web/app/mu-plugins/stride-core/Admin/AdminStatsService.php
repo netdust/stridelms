@@ -685,15 +685,6 @@ final class AdminStatsService
             $data['editions'] = $editions ?: [];
         }
 
-        // Pending approvals
-        if (!empty($rules['pending_approval']['enabled']) && $registrationTableExists) {
-            $pending = $wpdb->get_results(
-                "SELECT id FROM {$registrationTable} WHERE status = 'pending'",
-                ARRAY_A,
-            );
-            $data['pending_approvals'] = $pending ?: [];
-        }
-
         // Stale quotes
         if (!empty($rules['stale_quote']['enabled'])) {
             $staleDays = (int) ($rules['stale_quote']['value'] ?? 7);

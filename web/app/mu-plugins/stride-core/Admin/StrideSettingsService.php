@@ -393,7 +393,7 @@ class StrideSettingsService
      */
     private function saveNotificationSettings(array $params): array
     {
-        $ruleKeys = ['capacity_threshold', 'session_approaching', 'stale_quote', 'pending_approval', 'edition_starting', 'incomplete_tasks'];
+        $ruleKeys = ['capacity_threshold', 'session_approaching', 'stale_quote', 'edition_starting', 'incomplete_tasks'];
         $rules = [];
 
         foreach ($ruleKeys as $key) {
@@ -406,13 +406,11 @@ class StrideSettingsService
             $rules[$key] = [
                 'enabled' => $enabled,
             ];
-            if ($key !== 'pending_approval') {
-                $valueKey = $key . '_value';
-                $rawValue = array_key_exists($valueKey, $params) ? absint($params[$valueKey]) : 0;
-                $rules[$key]['value'] = $rawValue > 0
-                    ? max(1, min(365, $rawValue))
-                    : (ActionQueueService::DEFAULTS[$key]['value'] ?? 7);
-            }
+            $valueKey = $key . '_value';
+            $rawValue = array_key_exists($valueKey, $params) ? absint($params[$valueKey]) : 0;
+            $rules[$key]['value'] = $rawValue > 0
+                ? max(1, min(365, $rawValue))
+                : (ActionQueueService::DEFAULTS[$key]['value'] ?? 7);
         }
 
         update_option(self::OPTION_NOTIFICATIONS, $rules);

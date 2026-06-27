@@ -1,4 +1,5 @@
 <?php
+
 declare(strict_types=1);
 
 namespace Tests\Unit;
@@ -15,7 +16,6 @@ class ActionQueueServiceTest extends TestCase
             'capacity_threshold' => ['enabled' => false, 'value' => 80],
             'session_approaching' => ['enabled' => false, 'value' => 1],
             'stale_quote' => ['enabled' => false, 'value' => 7],
-            'pending_approval' => ['enabled' => false],
             'edition_starting' => ['enabled' => false, 'value' => 3],
             'incomplete_tasks' => ['enabled' => false, 'value' => 7],
         ], []);
@@ -57,20 +57,6 @@ class ActionQueueServiceTest extends TestCase
         $this->assertCount(0, $result);
     }
 
-    public function test_pending_approval_rule_always_red_priority(): void
-    {
-        $service = new ActionQueueService();
-        $rules = $this->defaultRules(['pending_approval' => ['enabled' => true]]);
-        $data = ['pending_approvals' => [
-            ['id' => 101, 'user_name' => 'Jan', 'edition_title' => 'Excel'],
-            ['id' => 102, 'user_name' => 'Marie', 'edition_title' => 'EHBO'],
-        ]];
-        $result = $service->evaluate($rules, $data);
-        $this->assertCount(1, $result);
-        $this->assertSame('red', $result[0]['priority']);
-        $this->assertStringContainsString('2', $result[0]['text']);
-    }
-
     public function test_stale_quote_rule(): void
     {
         $service = new ActionQueueService();
@@ -100,12 +86,16 @@ class ActionQueueServiceTest extends TestCase
         $service = new ActionQueueService();
         $rules = $this->defaultRules([
             'capacity_threshold' => ['enabled' => true, 'value' => 80],
-            'pending_approval' => ['enabled' => true],
+            'stale_quote' => ['enabled' => true, 'value' => 7],
             'edition_starting' => ['enabled' => true, 'value' => 3],
         ]);
         $data = [
-            'editions' => [['id' => 1, 'title' => 'Excel', 'registered' => 18, 'capacity' => 20]],
-            'pending_approvals' => [['id' => 101, 'user_name' => 'Jan', 'edition_title' => 'Excel']],
+            // Full edition → red; under-full-but-above-threshold edition → amber.
+            'editions' => [
+                ['id' => 1, 'title' => 'Excel', 'registered' => 20, 'capacity' => 20],
+                ['id' => 3, 'title' => 'Word', 'registered' => 18, 'capacity' => 20],
+            ],
+            'stale_quotes' => [['id' => 201, 'number' => 'Q-2026-042']],
             'starting_soon' => [['id' => 2, 'title' => 'EHBO', 'start_date' => date('Y-m-d', strtotime('+2 days'))]],
         ];
         $result = $service->evaluate($rules, $data);
@@ -123,7 +113,6 @@ class ActionQueueServiceTest extends TestCase
             'capacity_threshold' => ['enabled' => false, 'value' => 80],
             'session_approaching' => ['enabled' => false, 'value' => 1],
             'stale_quote' => ['enabled' => false, 'value' => 7],
-            'pending_approval' => ['enabled' => false],
             'edition_starting' => ['enabled' => false, 'value' => 3],
             'incomplete_tasks' => ['enabled' => false, 'value' => 7],
         ];

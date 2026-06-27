@@ -36,7 +36,6 @@ function strideSettingsApp() {
             capacity_threshold:  { enabled: true, value: 80 },
             session_approaching: { enabled: true, value: 1 },
             stale_quote:         { enabled: true, value: 7 },
-            pending_approval:    { enabled: true },
             edition_starting:    { enabled: true, value: 3 },
             incomplete_tasks:    { enabled: true, value: 7 },
         },

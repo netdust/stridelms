@@ -55,18 +55,6 @@ defined('ABSPATH') || exit;
                        :disabled="!notifications.stale_quote.enabled"> dag(en) als concept
             </td>
         </tr>
-        <!-- Goedkeuring nodig -->
-        <tr>
-            <th scope="row">
-                <label>
-                    <input type="checkbox" x-model="notifications.pending_approval.enabled">
-                    Goedkeuring nodig
-                </label>
-            </th>
-            <td>
-                <span class="description">Altijd actief wanneer ingeschakeld</span>
-            </td>
-        </tr>
         <!-- Editie start binnenkort -->
         <tr>
             <th scope="row">
