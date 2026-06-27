@@ -37,9 +37,11 @@ const STRIDENCE_CATALOG_PER_PAGE = 24;
 const STRIDENCE_CATALOG_MAX_ITEMS = 500;
 
 /**
- * Number of dated-soon editions shown ahead of the dateless "Binnenkort —
- * toon interesse" band (one grid row). Keeps the interest anchors high on
- * page 1 instead of dead-last behind the whole dated list.
+ * Number of dated-soon editions shown ahead of the dateless interest
+ * editions (one grid row). Keeps the interest anchors high on page 1 instead
+ * of dead-last behind the whole dated list. The interest cards set themselves
+ * apart visually (tinted surface — partials/card-edition.php), so no band
+ * header/divider is rendered.
  */
 const STRIDENCE_CATALOG_BAND_LEAD = 3;
 
@@ -355,11 +357,11 @@ function stridence_catalog_edition_items_from_ids(array $edition_ids): array
 
 /**
  * Re-order KLASSIKAAL catalog items into three placement bands, guaranteeing
- * the dateless ("Binnenkort — toon interesse") band falls inside page 1.
+ * the dateless interest editions fall inside page 1.
  *
  * KLASSIKAAL ONLY. The /online builder does NOT call this — online courses
  * are always-on, so dateless online editions are normal enrollables in a
- * flat grid with no interest band (Stefan, 2026-06-14).
+ * flat grid (Stefan, 2026-06-14).
  *
  * Band A: dated editions with start_date >= today, ASC (soonest first) —
  *         plus any course items (evergreen enrollables) at the tail.
@@ -367,9 +369,10 @@ function stridence_catalog_edition_items_from_ids(array $edition_ids): array
  * Band C: dated editions already started but inside the -2-day grace, ASC.
  *
  * Placement: Band B sits after the first STRIDENCE_CATALOG_BAND_LEAD dated-soon
- * editions (one grid row), NOT after the whole dated list — so the "Binnenkort
- * — toon interesse" anchors surface high on page 1 instead of dead-last. Output
- * is head(A) ++ B ++ tail(A) ++ C. Because the lead row is far smaller than
+ * editions (one grid row), NOT after the whole dated list — so the interest
+ * anchors surface high on page 1 instead of dead-last. They set themselves
+ * apart with a tinted card surface (no band header). Output is
+ * head(A) ++ B ++ tail(A) ++ C. Because the lead row is far smaller than
  * STRIDENCE_CATALOG_PER_PAGE, B always lands on page 1; the only special case
  * left is B alone overflowing a page (degenerate, handled first). PHP ordering
  * is cheap — the list is capped at STRIDENCE_CATALOG_MAX_ITEMS and fully
