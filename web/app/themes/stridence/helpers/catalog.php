@@ -37,6 +37,15 @@ const STRIDENCE_CATALOG_PER_PAGE = 24;
 const STRIDENCE_CATALOG_MAX_ITEMS = 500;
 
 /**
+ * Number of dated-soon editions shown ahead of the dateless interest
+ * editions (one grid row). Keeps the interest anchors high on page 1 instead
+ * of dead-last behind the whole dated list. The interest cards set themselves
+ * apart visually (tinted surface — partials/card-edition.php), so no band
+ * header/divider is rendered.
+ */
+const STRIDENCE_CATALOG_BAND_LEAD = 3;
+
+/**
  * Eligible catalog items for a catalog key.
  *
  * @param string $catalog 'klassikaal' or 'online'
@@ -348,21 +357,26 @@ function stridence_catalog_edition_items_from_ids(array $edition_ids): array
 
 /**
  * Re-order KLASSIKAAL catalog items into three placement bands, guaranteeing
- * the dateless ("Binnenkort — toon interesse") band falls inside page 1.
+ * the dateless interest editions fall inside page 1.
  *
  * KLASSIKAAL ONLY. The /online builder does NOT call this — online courses
  * are always-on, so dateless online editions are normal enrollables in a
- * flat grid with no interest band (Stefan, 2026-06-14).
+ * flat grid (Stefan, 2026-06-14).
  *
  * Band A: dated editions with start_date >= today, ASC (soonest first) —
  *         plus any course items (evergreen enrollables) at the tail.
  * Band B: dateless editions (no start_date), stable enumeration order.
  * Band C: dated editions already started but inside the -2-day grace, ASC.
  *
- * Page-1 guard: when Band A alone fills STRIDENCE_CATALOG_PER_PAGE, the last
- * count(B) slots of page 1 are reserved for Band B so dateless editions are
- * never paged off page 1. PHP ordering is cheap — the list is capped at
- * STRIDENCE_CATALOG_MAX_ITEMS and fully enumerated before slicing.
+ * Placement: Band B sits after the first STRIDENCE_CATALOG_BAND_LEAD dated-soon
+ * editions (one grid row), NOT after the whole dated list — so the interest
+ * anchors surface high on page 1 instead of dead-last. They set themselves
+ * apart with a tinted card surface (no band header). Output is
+ * head(A) ++ B ++ tail(A) ++ C. Because the lead row is far smaller than
+ * STRIDENCE_CATALOG_PER_PAGE, B always lands on page 1; the only special case
+ * left is B alone overflowing a page (degenerate, handled first). PHP ordering
+ * is cheap — the list is capped at STRIDENCE_CATALOG_MAX_ITEMS and fully
+ * enumerated before slicing.
  *
  * Pure: data-in, no service calls. Status/CTA still come from the INV-7
  * pre-pass at render time; this only decides ORDER.
@@ -409,16 +423,15 @@ function stridence_catalog_order_into_bands(array $items): array
         return [...$a, ...$c];
     }
     if ($countB >= $p) {
-        // Page 1 is all dateless; rest follows.
+        // Degenerate: B alone overflows page 1 — lead it, dated follows.
         return [...$b, ...$a, ...$c];
     }
-    if (count($a) + $countB <= $p) {
-        // B already lands on page 1 with A.
-        return [...$a, ...$b, ...$c];
-    }
-    // Reserve the last count(B) slots of page 1 for B.
-    $headA = array_slice($a, 0, $p - $countB);
-    $tailA = array_slice($a, $p - $countB);
+    // Surface B after one lead row of dated-soon editions (or all of A when A
+    // is shorter than a row), then the rest of A, then grace. Lead < page size,
+    // so B is always on page 1.
+    $lead   = STRIDENCE_CATALOG_BAND_LEAD;
+    $headA  = array_slice($a, 0, $lead);
+    $tailA  = array_slice($a, $lead);
     return [...$headA, ...$b, ...$tailA, ...$c];
 }
 

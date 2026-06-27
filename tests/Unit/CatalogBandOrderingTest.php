@@ -56,6 +56,28 @@ final class CatalogBandOrderingTest extends TestCase
         $this->assertSame([1, 2, 3], $out, 'A(soon) ++ B(dateless) ++ C(grace)');
     }
 
+    public function test_dateless_band_sits_after_first_row_of_dated_soon(): void
+    {
+        // The "Binnenkort — toon interesse" band must surface high on page 1:
+        // after the first row of dated-soon editions (STRIDENCE_CATALOG_BAND_LEAD),
+        // not dead-last behind the whole dated list. With 6 dated-soon + 1
+        // dateless, the dateless lands at index 3 (after the soonest 3), then
+        // the remaining dated-soon, then grace.
+        $items = [];
+        for ($i = 1; $i <= 6; $i++) {
+            $items[] = $this->ed($i, date('Y-m-d', strtotime("+{$i} days")));
+        }
+        $items[] = $this->ed(999, null); // one dateless
+        $out = $this->ids(stridence_catalog_order_into_bands($items));
+        $lead = STRIDENCE_CATALOG_BAND_LEAD;
+        $this->assertSame(
+            [1, 2, 3, 999, 4, 5, 6],
+            $out,
+            'dateless band sits after the first ' . $lead . ' dated-soon editions',
+        );
+        $this->assertSame(999, $out[$lead], 'dateless lands immediately after the lead row');
+    }
+
     public function test_dateless_is_hoisted_onto_page_one_when_band_a_overflows(): void
     {
         $soon = date('Y-m-d', strtotime('+1 day'));

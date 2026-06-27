@@ -113,8 +113,17 @@ if ($is_cancelled) {
 }
 
 ?>
+<?php
+// Interest (dateless announcement) cards get a quietly distinct surface: the
+// normal white card kept, with a thin accent ring (NOT a one-sided border —
+// see the no-side-borders rule) so they read as "upcoming, register interest"
+// without shouting. Replaces the removed band divider.
+$wrapper_surface = $is_interest
+    ? 'bg-surface-card shadow-card ring-1 ring-accent-light'
+    : 'bg-surface-card shadow-card';
+?>
 <a href="<?php echo esc_url($edition_link); ?>"
-   class="bg-surface-card rounded-[14px] shadow-card p-6 flex flex-col gap-3.5 h-full text-text transition-all duration-normal ease-out hover:shadow-elevated hover:-translate-y-0.5<?php echo $is_cancelled ? ' opacity-85' : ''; ?>">
+   class="<?php echo $wrapper_surface; ?> rounded-[14px] p-6 flex flex-col gap-3.5 h-full text-text transition-all duration-normal ease-out hover:shadow-elevated hover:-translate-y-0.5<?php echo $is_cancelled ? ' opacity-85' : ''; ?>">
 
     <!-- Status row: dot + text on the left, enrolled state on the right -->
     <div class="flex items-center justify-between gap-2">
@@ -207,7 +216,12 @@ if ($is_cancelled) {
     </div>
 
     <!-- Footer row (divider above) -->
-    <?php $show_price = !$is_cancelled && !$is_enrolled && $price !== null; ?>
+    <?php
+    // Interest cards never show a price (no booking yet) and use the accent
+    // divider/CTA to match their tinted surface.
+    $show_price = !$is_cancelled && !$is_enrolled && !$is_interest && $price !== null;
+    $cta_colour = $is_interest ? 'text-accent' : 'text-primary';
+    ?>
     <div class="mt-auto pt-4 border-t border-border flex items-center gap-3 <?php echo $show_price ? 'justify-between' : 'justify-end'; ?>">
         <?php if ($show_price) : ?>
             <?php if ($is_free) : ?>
@@ -216,6 +230,6 @@ if ($is_cancelled) {
                 <span class="text-[16px] font-extrabold"><?php echo esc_html(stride_format_money((int) ($price * 100))); ?></span>
             <?php endif; ?>
         <?php endif; ?>
-        <span class="text-sm font-bold text-primary"><?php echo esc_html($cta_label); ?> &rarr;</span>
+        <span class="text-sm font-bold <?php echo $cta_colour; ?>"><?php echo esc_html($cta_label); ?> &rarr;</span>
     </div>
 </a>
