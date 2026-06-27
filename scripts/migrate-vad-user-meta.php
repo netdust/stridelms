@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Migrate VAD user data → Stride usermeta keys.
  *
@@ -70,7 +71,7 @@ $fcrmRows = $wpdb->get_results(
     "SELECT id, user_id, first_name, last_name, email, phone, postal_code, city
        FROM ckqp_fc_subscribers
       WHERE user_id IS NOT NULL AND user_id > 0",
-    OBJECT_K
+    OBJECT_K,
 );
 $fcrmByUser = [];
 foreach ($fcrmRows as $row) {
@@ -84,7 +85,7 @@ echo "Loading FluentCRM custom_values…\n";
 $customRows = $wpdb->get_results(
     "SELECT subscriber_id, value
        FROM ckqp_fc_subscriber_meta
-      WHERE `key` = 'custom_values' AND subscriber_id IN (" . implode(',', $subscriberIds ?: [0]) . ")"
+      WHERE `key` = 'custom_values' AND subscriber_id IN (" . implode(',', $subscriberIds ?: [0]) . ")",
 );
 $customByUser = [];
 foreach ($customRows as $cr) {
@@ -97,7 +98,9 @@ foreach ($customRows as $cr) {
             break;
         }
     }
-    if (!$uid) continue;
+    if (!$uid) {
+        continue;
+    }
     $unser = @unserialize($cr->value);
     if (is_array($unser)) {
         $customByUser[$uid] = $unser;
@@ -115,7 +118,7 @@ echo "Loading XProfile data…\n";
 $xpRows = $wpdb->get_results(
     "SELECT user_id, field_id, value
        FROM ckqp_bp_xprofile_data
-      WHERE value <> '' AND value IS NOT NULL"
+      WHERE value <> '' AND value IS NOT NULL",
 );
 $xpByUser = [];
 foreach ($xpRows as $r) {
@@ -170,9 +173,12 @@ $stats = ['users_seen' => 0, 'writes' => 0, 'skipped_already_set' => 0, 'no_valu
 while (true) {
     $userIds = $wpdb->get_col($wpdb->prepare(
         "SELECT ID FROM ckqp_users ORDER BY ID ASC LIMIT %d OFFSET %d",
-        $batch, $offset
+        $batch,
+        $offset,
     ));
-    if (empty($userIds)) break;
+    if (empty($userIds)) {
+        break;
+    }
 
     foreach ($userIds as $uid) {
         $uid = (int) $uid;

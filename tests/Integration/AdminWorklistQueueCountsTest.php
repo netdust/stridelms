@@ -50,6 +50,7 @@ final class AdminWorklistQueueCountsTest extends IntegrationTestCase
     private static ?int $uNoCert = null;        // completed, no LD cert          → counted
     private static ?int $uOldInterest = null;   // interest on dateless, >90d old → counted
     private static ?int $uPastExcluded = null;  // pending on a PAST edition      → excluded
+    private static ?int $uInterestDated = null; // interest on a DATED edition    → interest_to_invite
 
     // Editions
     private static ?int $activeFullCapEdition = null;  // capacity=1, 1 confirmed → no open spots
@@ -81,7 +82,7 @@ final class AdminWorklistQueueCountsTest extends IntegrationTestCase
         // --- Users (distinct so create()'s user+edition dedup never collides) ---
         foreach ([
             'uPending', 'uWaitOpen', 'uWaitFull', 'uOfferteOpen', 'uOfferteDone',
-            'uOfferteNone', 'uNoCert', 'uOldInterest', 'uPastExcluded',
+            'uOfferteNone', 'uNoCert', 'uOldInterest', 'uPastExcluded', 'uInterestDated',
         ] as $prop) {
             self::$$prop = (int) wp_create_user(
                 'wq_' . $prop . '_' . uniqid(),
@@ -129,6 +130,12 @@ final class AdminWorklistQueueCountsTest extends IntegrationTestCase
         $rOld = self::reg($repo, self::$uOldInterest, self::$datelessEdition, RegistrationStatus::Interest);
         self::backdateRegistration($rOld, date('Y-m-d H:i:s', strtotime('-200 days')));
 
+        // interest_to_invite: interest on a DATED (future start_date) edition → its
+        // formerly-dateless anchor now has a planned date, so it surfaces for invite.
+        // Registered "today" so it does NOT also land in oldinterest (keeps the two
+        // queues' fixtures independent — though overlap would be allowed).
+        self::reg($repo, self::$uInterestDated, self::$activeOpenCapEdition, RegistrationStatus::Interest);
+
         // EXCLUDED: pending on a PAST (non-active) edition — not in the active ID set.
         self::reg($repo, self::$uPastExcluded, self::$pastEdition, RegistrationStatus::Pending);
 
@@ -146,7 +153,7 @@ final class AdminWorklistQueueCountsTest extends IntegrationTestCase
         foreach ([
             self::$coordinatorUserId, self::$uPending, self::$uWaitOpen, self::$uWaitFull,
             self::$uOfferteOpen, self::$uOfferteDone, self::$uOfferteNone, self::$uNoCert,
-            self::$uOldInterest, self::$uPastExcluded,
+            self::$uOldInterest, self::$uPastExcluded, self::$uInterestDated,
         ] as $uid) {
             if ($uid) {
                 require_once ABSPATH . 'wp-admin/includes/user.php';
@@ -250,7 +257,7 @@ final class AdminWorklistQueueCountsTest extends IntegrationTestCase
     {
         $c = $this->counts();
 
-        foreach (['pending', 'waitlist_open', 'offerte_opvolging', 'nocert', 'oldinterest'] as $key) {
+        foreach (['pending', 'waitlist_open', 'offerte_opvolging', 'nocert', 'oldinterest', 'interest_to_invite'] as $key) {
             $this->assertArrayHasKey($key, $c, "Missing queue count key: {$key}");
             $this->assertIsInt($c[$key], "Queue count {$key} must be an int");
         }
@@ -331,6 +338,34 @@ final class AdminWorklistQueueCountsTest extends IntegrationTestCase
     }
 
     // =========================================================================
+    // Assertion 4b: interest_to_invite — DATED edition counts, DATELESS does NOT
+    // =========================================================================
+
+    /** @test */
+    public function interestOnDatedEditionIncrementsInviteQueueAndDatelessDoesNot(): void
+    {
+        // uInterestDated: interest on activeOpenCapEdition (future start_date) → counted.
+        // uOldInterest:   interest on datelessEdition (NULL start_date)         → NOT counted.
+        $c = $this->counts();
+        $this->assertSame(
+            1,
+            $c['interest_to_invite'],
+            'Only the interest row on a DATED edition surfaces for invite',
+        );
+
+        // Denial proof: dropping the DATED edition from the active set drives the
+        // count to 0 — the dateless interest row (still in the set) never counts.
+        $datelessOnly = ntdst_get(AdminStatsService::class)->getWorklistQueueCounts([
+            self::$datelessEdition,
+        ]);
+        $this->assertSame(
+            0,
+            $datelessOnly['interest_to_invite'],
+            'A dateless-edition interest row must NOT count toward interest_to_invite',
+        );
+    }
+
+    // =========================================================================
     // Assertion 5: waitlist_open excludes a full-capacity edition (INV-7)
     // =========================================================================
 
@@ -373,7 +408,7 @@ final class AdminWorklistQueueCountsTest extends IntegrationTestCase
 
         // New worklist queue counts present under a stable container key.
         $this->assertArrayHasKey('worklistQueues', $data, '/admin/stats must expose worklistQueues');
-        foreach (['pending', 'waitlist_open', 'offerte_opvolging', 'nocert', 'oldinterest'] as $key) {
+        foreach (['pending', 'waitlist_open', 'offerte_opvolging', 'nocert', 'oldinterest', 'interest_to_invite'] as $key) {
             $this->assertArrayHasKey($key, $data['worklistQueues'], "Missing worklist queue: {$key}");
             $this->assertIsInt($data['worklistQueues'][$key]);
         }

@@ -91,26 +91,70 @@ class Provider extends ServiceProvider {
 
 		$status_data = Status_Checker::get_status( Status_Checker::$licensing_slug_learndash_core );
 
-		$licenses[] = [
-			'key'        => $license_key,
-			'slug'       => 'sfwd-lms',
-			'name'       => 'LearnDash LMS',
-			'product'    => 'learndash',
-			'is_active'  => isset( $status_data['status'] ) && Status_Checker::does_status_allow_access( $status_data['status'] ),
-			'page_url'   => admin_url( 'admin.php?page=learndash_hub_licensing' ),
-			'expires_at' => $status_data['expiry'] ?? '',
-		];
+		$is_active  = isset( $status_data['status'] ) && Status_Checker::does_status_allow_access( $status_data['status'] );
+		$expires_at = $status_data['expiry'] ?? '';
+
+		$plugin_slugs = array_merge(
+			[ 'sfwd-lms' ],
+			$this->get_free_plugins()
+		);
+
+		// The 'name' is intentionally omitted; Harbor resolves the human-readable name from the slug.
+		foreach ( $plugin_slugs as $slug ) {
+			$licenses[] = [
+				'key'             => $license_key,
+				'slug'            => $slug,
+				'product'         => 'learndash',
+				'use_for_updates' => true,
+				'is_active'       => $is_active,
+				'page_url'        => admin_url( 'admin.php?page=learndash_hub_licensing' ),
+				'expires_at'      => $expires_at,
+			];
+		}
 
 		return $licenses;
+	}
+
+	/**
+	 * Returns the slugs of free LearnDash plugins that share the LearnDash LMS license.
+	 *
+	 * Harbor resolves the human-readable name from each slug.
+	 *
+	 * @since 5.1.3
+	 *
+	 * @return array<string>
+	 */
+	private function get_free_plugins(): array {
+		return [
+			'learndash-integrity',
+			'learndash-certificate-builder',
+			'learndash-notifications',
+			'learndash-achievements',
+			'learndash-migration',
+			'learndash-elementor',
+			'learndash-woocommerce',
+			'ld-tec',
+			'learndash-zapier',
+			'learndash-paidmemberships',
+			'learndash-memberpress',
+			'learndash-gravity-forms',
+			'learndash-bbpress',
+			'learndash-thrivecart',
+			'learndash-samcart',
+			'ld-multilingual',
+			'learndash-restrict-content-pro',
+		];
 	}
 
 	/**
 	 * Builds the Addon_Legacy_Licenses instance with the full addon map.
 	 *
 	 * Each entry maps an ABSPATH constant (signals the plugin is installed) to:
-	 *   - name:        human-readable plugin name
-	 *   - harbor_slug: the slug used in the lw-harbor/legacy_licenses filter
-	 *   - status_slug: the slug used for Status_Checker::get_status()
+	 *   - harbor_slug:       the slug used in the lw-harbor/legacy_licenses filter
+	 *   - status_slug:       the slug used for Status_Checker::get_status()
+	 *   - subscription_slug: the product_slug returned by Status_Checker::get_legacy_license_keys()
+	 *
+	 * The human-readable plugin name is intentionally omitted; Harbor resolves it from the slug.
 	 *
 	 * @since 5.1.0
 	 *
@@ -120,39 +164,39 @@ class Provider extends ServiceProvider {
 		return new Addon_Legacy_Licenses(
 			[
 				'LEARNDASH_GRADEBOOK_DIR'   => [
-					'name'        => 'Gradebook',
-					'harbor_slug' => 'learndash-gradebook',
-					'status_slug' => Status_Checker::$licensing_slug_gradebook,
+					'harbor_slug'       => 'learndash-gradebook',
+					'status_slug'       => Status_Checker::$licensing_slug_gradebook,
+					'subscription_slug' => 'learndash-gradebook',
 				],
 				'LEARNDASH_GROUPS_PLUS_DIR' => [
-					'name'        => 'Groups Plus',
-					'harbor_slug' => 'learndash-groups-plus',
-					'status_slug' => Status_Checker::$licensing_slug_groups_plus,
+					'harbor_slug'       => 'learndash-groups-plus',
+					'status_slug'       => Status_Checker::$licensing_slug_groups_plus,
+					'subscription_slug' => 'groups-management',
 				],
 				'INSTRUCTOR_ROLE_ABSPATH'   => [
-					'name'        => 'Instructor Role',
-					'harbor_slug' => 'instructor-role',
-					'status_slug' => Status_Checker::$licensing_slug_instructor_role,
+					'harbor_slug'       => 'instructor-role',
+					'status_slug'       => Status_Checker::$licensing_slug_instructor_role,
+					'subscription_slug' => 'instructor-role',
 				],
 				'LEARNDASH_NOTES_DIR'       => [
-					'name'        => 'Notes',
-					'harbor_slug' => 'learndash-notes',
-					'status_slug' => Status_Checker::$licensing_slug_notes,
+					'harbor_slug'       => 'learndash-notes',
+					'status_slug'       => Status_Checker::$licensing_slug_notes,
+					'subscription_slug' => 'learndash-notes',
 				],
 				'LDRP_PLUGIN_DIR'           => [
-					'name'        => 'ProPanel',
-					'harbor_slug' => 'learndash-propanel',
-					'status_slug' => Status_Checker::$licensing_slug_learndash_propanel_addon,
+					'harbor_slug'       => 'learndash-propanel',
+					'status_slug'       => Status_Checker::$licensing_slug_learndash_propanel_addon,
+					'subscription_slug' => 'learndash-propanel',
 				],
 				'RRF_PLUGIN_PATH'           => [
-					'name'        => 'Ratings, Reviews & Feedback',
-					'harbor_slug' => 'wdm-course-review',
-					'status_slug' => Status_Checker::$licensing_slug_reviews_plus,
+					'harbor_slug'       => 'wdm-course-review',
+					'status_slug'       => Status_Checker::$licensing_slug_reviews_plus,
+					'subscription_slug' => 'wdm-ld-rating-review-and-feedback',
 				],
 				'WDM_LDGR_PLUGIN_DIR'       => [
-					'name'        => 'Groups Registration',
-					'harbor_slug' => 'ld-group-registration',
-					'status_slug' => Status_Checker::$licensing_slug_group_registration,
+					'harbor_slug'       => 'ld-group-registration',
+					'status_slug'       => Status_Checker::$licensing_slug_group_registration,
+					'subscription_slug' => 'groups-management',
 				],
 			]
 		);

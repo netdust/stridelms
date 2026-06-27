@@ -54,6 +54,8 @@ $course_id       = $edition['course_id'] ?? null;
 // stored array value — degraded but never fatal, never a per-card query.
 $status          = isset($args['status']) ? (string) $args['status'] : (string) ($edition['status'] ?? 'open');
 $spots_remaining = isset($args['spots_remaining']) ? (int) $args['spots_remaining'] : null;
+$session_count   = isset($args['session_count']) ? (int) $args['session_count'] : 0;
+$end_date        = $edition['end_date'] ?? null;
 
 // Defensive mirror of the eligible-items builder filter (shake-out F2):
 // an edition whose course is no longer published must not render a card
@@ -114,35 +116,33 @@ if ($is_cancelled) {
 <a href="<?php echo esc_url($edition_link); ?>"
    class="bg-surface-card rounded-[14px] shadow-card p-6 flex flex-col gap-3.5 h-full text-text transition-all duration-normal ease-out hover:shadow-elevated hover:-translate-y-0.5<?php echo $is_cancelled ? ' opacity-85' : ''; ?>">
 
-    <!-- Badge row -->
-    <div class="flex gap-1.5 flex-wrap">
+    <!-- Status row: dot + text on the left, enrolled state on the right -->
+    <div class="flex items-center justify-between gap-2">
         <?php stridence_template_part('partials/badge-status', null, [
             'status' => $status,
             'spots'  => $spots_remaining,
-            'size'   => 'sm',
+            'style'  => 'dot',
         ]); ?>
-
-        <?php if ($is_free && !$is_cancelled) : ?>
-            <?php stridence_template_part('partials/badge-status', null, [
-                'status' => 'free',
-                'size'   => 'sm',
-            ]); ?>
-        <?php endif; ?>
 
         <?php if ($is_enrolled && !$is_cancelled) : ?>
             <?php if ($progress !== null && $progress >= 100) : ?>
-                <span class="<?php echo esc_attr($pill_sm); ?> bg-badge-free-bg text-badge-free-text"><?php esc_html_e('Afgerond', 'stridence'); ?></span>
+                <span class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-badge-online-text">
+                    <?php esc_html_e('✓ Afgerond', 'stridence'); ?>
+                </span>
             <?php elseif ($progress !== null && $progress > 0) : ?>
-                <span class="<?php echo esc_attr($pill_sm); ?> bg-badge-free-bg text-badge-free-text"><?php
+                <span class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-badge-online-text"><?php
                     /* translators: %d: completion percentage */
                     echo esc_html(sprintf(__('%d%% voltooid', 'stridence'), $progress));
                 ?></span>
             <?php else : ?>
-                <?php stridence_template_part('partials/badge-status', null, [
-                    'status' => 'enrolled',
-                    'size'   => 'sm',
-                ]); ?>
+                <span class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-badge-online-text">
+                    <?php esc_html_e('✓ Ingeschreven', 'stridence'); ?>
+                </span>
             <?php endif; ?>
+        <?php elseif ($is_free && !$is_cancelled) : ?>
+            <span class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-badge-free-text">
+                <?php esc_html_e('Gratis', 'stridence'); ?>
+            </span>
         <?php endif; ?>
     </div>
 
@@ -168,13 +168,34 @@ if ($is_cancelled) {
               // date to show — surface the interest framing instead.?>
             <div class="font-semibold text-text"><?php esc_html_e('Geen datum — toon interesse', 'stridence'); ?></div>
         <?php else : ?>
-            <?php if ($start_date) : ?>
+            <?php if ($start_date) :
+                // Date label: a range (start … end) when the edition spans
+                // multiple session dates, otherwise the single start date.
+                if ($end_date && $end_date !== $start_date && $session_count > 1) {
+                    $date_label = sprintf(
+                        /* translators: 1: first session date, 2: last session date */
+                        __('%1$s en %2$s', 'stridence'),
+                        stride_format_date($start_date, 'j M'),
+                        stride_format_date($end_date),
+                    );
+                } else {
+                    $date_label = stride_format_date($start_date);
+                }
+            ?>
                 <div>
                     <?php if ($is_enrolled) : ?>
                         <strong class="text-text font-semibold"><?php esc_html_e('Volgende sessie:', 'stridence'); ?></strong>
                         <?php echo esc_html(stride_format_date($start_date)); ?>
                     <?php else : ?>
-                        <strong class="text-text font-semibold"><?php echo esc_html(stride_format_date($start_date)); ?></strong>
+                        <strong class="text-text font-semibold"><?php echo esc_html($date_label); ?></strong>
+                        <?php if ($session_count > 0) : ?>
+                            <span class="mx-1 opacity-40">&middot;</span><?php
+                        echo esc_html(sprintf(
+                            _n('%d sessie', '%d sessies', $session_count, 'stridence'),
+                            $session_count,
+                        ));
+                            ?>
+                        <?php endif; ?>
                     <?php endif; ?>
                 </div>
             <?php endif; ?>
@@ -185,9 +206,9 @@ if ($is_cancelled) {
         <?php endif; ?>
     </div>
 
-    <!-- Footer row -->
+    <!-- Footer row (divider above) -->
     <?php $show_price = !$is_cancelled && !$is_enrolled && $price !== null; ?>
-    <div class="mt-auto pt-1 flex items-center gap-3 <?php echo $show_price ? 'justify-between' : 'justify-end'; ?>">
+    <div class="mt-auto pt-4 border-t border-border flex items-center gap-3 <?php echo $show_price ? 'justify-between' : 'justify-end'; ?>">
         <?php if ($show_price) : ?>
             <?php if ($is_free) : ?>
                 <span class="text-[16px] font-extrabold text-badge-free-text"><?php esc_html_e('Gratis', 'stridence'); ?></span>

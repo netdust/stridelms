@@ -1,4 +1,5 @@
 <?php
+
 /**
  * One-shot cleanup: remove test-artefact posts left by past Playwright/
  * Codeception runs. Safe to re-run — only matches specific test-naming
@@ -35,7 +36,7 @@ $editionIds = $wpdb->get_col(
          OR post_title LIKE 'Test Edition %'
          OR post_title = 'No Course Edition'
        )
-       AND ID NOT IN (SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_stride_seed_data')"
+       AND ID NOT IN (SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_stride_seed_data')",
 );
 
 // 2) Test vouchers — VAD-XXXX-XXXX pattern matches randomly-generated codes
@@ -48,21 +49,21 @@ $voucherIds = $wpdb->get_col(
          OR post_title LIKE 'PERCENT1%'
          OR post_title REGEXP '^VAD-[A-Z0-9]{4}-[A-Z0-9]{4}$'
        )
-       AND ID NOT IN (SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_stride_seed_data')"
+       AND ID NOT IN (SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_stride_seed_data')",
 );
 
 // 3) Empty-title vad_session rows (historical canAddSession residue)
 $sessionIds = $wpdb->get_col(
     "SELECT ID FROM {$wpdb->posts}
      WHERE post_type = 'vad_session'
-       AND post_title = ''"
+       AND post_title = ''",
 );
 
 // 4) Non-seed vad_quote rows (test-run residue, accumulates per registration).
 $quoteIds = $wpdb->get_col(
     "SELECT ID FROM {$wpdb->posts}
      WHERE post_type = 'vad_quote'
-       AND ID NOT IN (SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_stride_seed_data')"
+       AND ID NOT IN (SELECT post_id FROM {$wpdb->postmeta} WHERE meta_key = '_stride_seed_data')",
 );
 
 WP_CLI::log(sprintf(
@@ -71,7 +72,7 @@ WP_CLI::log(sprintf(
     count($editionIds),
     count($voucherIds),
     count($sessionIds),
-    count($quoteIds)
+    count($quoteIds),
 ));
 
 if ($dryRun) {

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Test grade passback for user 1221 (has real LTI context)
  */

@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Detailed debug test for grade passback
  */
@@ -10,7 +11,6 @@ use ceLTIc\LTI\Outcome;
 use ceLTIc\LTI\User;
 use ceLTIc\LTI\AccessToken;
 use ceLTIc\LTI\Service\Score;
-use ceLTIc\LTI\Http\HttpMessage;
 
 echo "=== Grade Passback Debug Test ===\n\n";
 

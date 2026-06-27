@@ -63,13 +63,15 @@ if (!$enrolled) {
 ?>
 <?php echo $card_open; // phpcs:ignore — pre-escaped above?>
 
-    <!-- Badge row -->
-    <div class="flex gap-1.5 flex-wrap items-center">
-        <?php stridence_template_part('partials/badge-status', null, ['status' => 'trajectory', 'size' => 'sm']); ?>
-        <?php // badge-status owns the OfferingStatus → Dutch-label mapping; pass the raw status.?>
-        <?php stridence_template_part('partials/badge-status', null, ['status' => $status, 'size' => 'sm']); ?>
+    <!-- Status row: trajectory tag + status dot on the left, % on the right -->
+    <div class="flex items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+            <?php stridence_template_part('partials/badge-status', null, ['status' => 'trajectory', 'size' => 'sm']); ?>
+            <?php // badge-status owns the OfferingStatus → Dutch-label mapping; pass the raw status.?>
+            <?php stridence_template_part('partials/badge-status', null, ['status' => $status, 'style' => 'dot']); ?>
+        </div>
         <?php if ($enrolled) : ?>
-            <span class="text-[12px] font-bold px-[11px] py-1 rounded-full inline-flex items-center gap-1 bg-badge-online-bg text-badge-online-text">
+            <span class="inline-flex items-center gap-1.5 text-[13px] font-semibold text-badge-online-text">
                 <?php
                 /* translators: %d: completion percentage */
                 echo esc_html(sprintf(__('%d%% voltooid', 'stridence'), (int) $progress));
@@ -118,13 +120,11 @@ if (!$enrolled) {
         <?php endif; ?>
     </div>
 
-    <!-- Price -->
-    <div class="text-[18px] font-extrabold <?php echo $price > 0 ? 'text-text' : 'text-badge-free-text'; ?>">
-        <?php echo $price > 0 ? esc_html(stride_format_money((int) round($price * 100))) : esc_html__('Gratis', 'stridence'); ?>
-    </div>
-
-    <!-- Footer -->
-    <div class="mt-auto pt-1 flex items-center justify-end gap-3">
+    <!-- Footer (divider above): price left, CTA right -->
+    <div class="mt-auto pt-4 border-t border-border flex items-center justify-between gap-3">
+        <span class="text-[18px] font-extrabold <?php echo $price > 0 ? 'text-text' : 'text-badge-free-text'; ?>">
+            <?php echo $price > 0 ? esc_html(stride_format_money((int) round($price * 100))) : esc_html__('Gratis', 'stridence'); ?>
+        </span>
         <?php if ($enrolled) : ?>
             <a href="<?php echo esc_url($target_url); ?>" class="btn-primary btn-sm">
                 <?php esc_html_e('Open traject', 'stridence'); ?>

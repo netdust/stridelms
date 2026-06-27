@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Test grade passback using GradePassbackService
  */
@@ -23,7 +24,7 @@ $courseId = (int) $matches[1];
 // Get user ID
 $userId = (int) $wpdb->get_var($wpdb->prepare(
     "SELECT user_id FROM {$wpdb->usermeta} WHERE meta_key = %s LIMIT 1",
-    $meta_key
+    $meta_key,
 ));
 
 echo "Found LTI context:\n";

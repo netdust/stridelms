@@ -1,4 +1,5 @@
 <?php
+
 /**
  * One-shot: remove scheduled actions for hooks that no longer have a
  * listener in stride-core. After a hook is removed from the codebase,
@@ -28,7 +29,7 @@ foreach (ORPHAN_HOOKS as $hook) {
     // complete — we don't need the history for hooks that no longer exist).
     $deleted = (int) $wpdb->query($wpdb->prepare(
         "DELETE FROM {$wpdb->prefix}actionscheduler_actions WHERE hook = %s",
-        $hook
+        $hook,
     ));
 
     // Drop dangling log rows for the deleted actions.

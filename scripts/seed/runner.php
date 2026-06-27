@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Orchestrates the matrix: taxonomy terms → users →
  * courses (lessons → editions → sessions → registrations → quotes) →
@@ -32,7 +33,10 @@ final class StrideSeedRunner
         $this->builders->ensureTaxonomyTerms();
         foreach ($this->matrix['users'] as $u) {
             $id = $this->builders->buildUser($u);
-            if ($id) { $this->userMap[$u['login']] = $id; $this->created['users'][] = $id; }
+            if ($id) {
+                $this->userMap[$u['login']] = $id;
+                $this->created['users'][] = $id;
+            }
         }
         foreach ($this->matrix['courses'] as $course) {
             $result = $this->builders->buildCourse($course, $this->userMap);
@@ -40,18 +44,24 @@ final class StrideSeedRunner
         }
         // After courses: group assignments reference courses by title.
         $this->created['questionnaire_groups'] = $this->builders->buildQuestionnaireGroups(
-            $this->matrix['questionnaire_groups']
+            $this->matrix['questionnaire_groups'],
         );
         foreach ($this->matrix['questionnaire_groups'] as $g) {
             $this->covers["qgroup:{$g['id']}"] = $g['covers'] ?? [];
         }
         foreach ($this->matrix['trajectories'] as $t) {
             $id = $this->builders->buildTrajectory($t);
-            if ($id) { $this->created['trajectories'][] = $id; $this->covers["trajectory:$id"] = $t['covers'] ?? []; }
+            if ($id) {
+                $this->created['trajectories'][] = $id;
+                $this->covers["trajectory:$id"] = $t['covers'] ?? [];
+            }
         }
         foreach ($this->matrix['vouchers'] as $v) {
             $id = $this->builders->buildVoucher($v, $this->created['editions']);
-            if ($id) { $this->created['vouchers'][] = $id; $this->covers["voucher:$id"] = $v['covers'] ?? []; }
+            if ($id) {
+                $this->created['vouchers'][] = $id;
+                $this->covers["voucher:$id"] = $v['covers'] ?? [];
+            }
         }
         update_option('stride_company_details', $this->matrix['company_details']);
         update_option('stride_seed_manifest', $this->created);

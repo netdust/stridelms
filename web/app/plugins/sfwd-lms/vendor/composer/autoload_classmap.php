@@ -78,6 +78,7 @@ return array(
     'LearnDash\\Core\\Models\\Product' => $baseDir . '/src/Core/Models/Product.php',
     'LearnDash\\Core\\Models\\Quiz' => $baseDir . '/src/Core/Models/Quiz.php',
     'LearnDash\\Core\\Models\\Step' => $baseDir . '/src/Core/Models/Step.php',
+    'LearnDash\\Core\\Models\\Steps\\Step_Visibility' => $baseDir . '/src/Core/Models/Steps/Step_Visibility.php',
     'LearnDash\\Core\\Models\\Topic' => $baseDir . '/src/Core/Models/Topic.php',
     'LearnDash\\Core\\Models\\Traits\\Has_Assignments' => $baseDir . '/src/Core/Models/Traits/Has_Assignments.php',
     'LearnDash\\Core\\Models\\Traits\\Has_Materials' => $baseDir . '/src/Core/Models/Traits/Has_Materials.php',

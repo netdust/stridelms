@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Debug user enrollments and sessions
  */
@@ -43,7 +44,9 @@ foreach ($ldCourses as $courseId) {
     $title = get_the_title($courseId);
     $status = $inEdition ? "(in edition)" : "(ONLINE ONLY)";
     echo "  Course #$courseId: $title $status\n";
-    if (!$inEdition) $onlineOnly++;
+    if (!$inEdition) {
+        $onlineOnly++;
+    }
 }
 
 echo "\nOnline-only courses: $onlineOnly\n";

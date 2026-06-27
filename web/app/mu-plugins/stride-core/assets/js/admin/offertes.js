@@ -66,20 +66,9 @@
     return QUOTE_BADGE[String(status || '')] || 'cancelled';
   }
 
-  /* ---- the closed workflow-status filter options (value + Dutch label) ----
-     Mirrors QuoteStatus — label is the same Dutch microcopy the server emits. */
-  const STATUS_OPTIONS = [
-    { value: 'draft',     label: 'In behandeling' },
-    { value: 'sent',      label: 'Verzonden' },
-    { value: 'exported',  label: 'Verwerkt' },
-    { value: 'cancelled', label: 'Geannuleerd' },
-  ];
-
   /* ---- the Alpine factory ------------------------------------------------ */
   function offertes() {
     return {
-      statusOptions: STATUS_OPTIONS,
-
       /* server-driven page state */
       rows: [],
       total: 0,
@@ -87,16 +76,72 @@
       perPage: 25,
       pageCount: 1,
 
-      /* filter state — every change re-fetches */
-      filters: { status: '', q: '' },
+      /* The Tag dropdown options — fetched ONCE from /admin/course-tags `.tag`
+         (same vocabulary the Edities surface uses). */
+      tagOptions: [],
+
+      /* filter state — every change re-fetches. Search + Tag + Date only
+         (Status removed — mirrors the Edities filter set). */
+      filters: { q: '', tag: '', dateFrom: '', dateTo: '' },
 
       /* per-surface load state */
       loading: false,
       error: '',
 
+      /* flatpickr instance (set in init, used by clearAllFilters). */
+      _fp: null,
+
       init() {
+        // The Tag vocabulary is independent of the quote load — fetch it once,
+        // regardless of lazy-load, so the dropdown is populated on first paint.
+        this.loadFilterOptions();
+
+        // The single date field is a flatpickr range picker (single date OR
+        // range). Instantiate on the x-ref input AFTER it exists. Same pattern
+        // as the Edities surface.
+        if (window.flatpickr && this.$refs && this.$refs.dateInput) {
+          this._fp = window.flatpickr(this.$refs.dateInput, {
+            mode: 'range',
+            dateFormat: 'Y-m-d',
+            locale: 'nl',
+            onChange: (dates) => this.onDateChange(dates),
+          });
+        }
+
         // I-1: load the FIRST time offertes becomes active, not on mount.
         window.WS.lazyLoad(this, 'offertes', () => this.load(1));
+      },
+
+      /* Fetch the Tag vocabulary ONCE. Only the `.tag` array (free-form admin
+         tags). On failure leave [] — the dropdown just shows "Alle tags". */
+      async loadFilterOptions() {
+        try {
+          const data = await this.api('/admin/course-tags');
+          this.tagOptions = (data && data.tag) || [];
+        } catch (e) {
+          this.tagOptions = [];
+        }
+      },
+
+      /* flatpickr range onChange:
+         - 1 date  → single day: date_from == date_to
+         - 2 dates → a range:    date_from = dates[0], date_to = dates[1]
+         - 0 dates → cleared:    both empty
+         Formatted to YYYY-MM-DD via the picker to match date_from/date_to
+         (sanitize_text_field server-side, validated as Y-m-d). */
+      onDateChange(dates) {
+        const fmt = (d) => (this._fp ? this._fp.formatDate(d, 'Y-m-d') : '');
+        if (dates && dates.length === 1) {
+          this.filters.dateFrom = fmt(dates[0]);
+          this.filters.dateTo = fmt(dates[0]);
+        } else if (dates && dates.length >= 2) {
+          this.filters.dateFrom = fmt(dates[0]);
+          this.filters.dateTo = fmt(dates[1]);
+        } else {
+          this.filters.dateFrom = '';
+          this.filters.dateTo = '';
+        }
+        this.load(1);
       },
 
       async load(page) {
@@ -108,8 +153,10 @@
         params.set('page', String(this.page));
         params.set('per_page', String(this.perPage));
         const f = this.filters;
-        if (f.status) params.set('status', f.status);
         if (f.q) params.set('search', f.q);
+        if (f.tag) params.set('tag', String(f.tag));
+        if (f.dateFrom) params.set('date_from', f.dateFrom);
+        if (f.dateTo) params.set('date_to', f.dateTo);
 
         try {
           const data = await this.api(`/admin/quotes?${params.toString()}`);
@@ -133,8 +180,17 @@
       goPage(p) { if (p >= 1 && p <= this.pageCount && p !== this.page) this.load(p); },
       onPerPageChange() { this.load(1); },
 
-      get hasFilters() { return !!(this.filters.status || this.filters.q); },
-      clearAllFilters() { this.filters = { status: '', q: '' }; this.load(1); },
+      get hasFilters() {
+        const f = this.filters;
+        return !!(f.q || f.tag || f.dateFrom || f.dateTo);
+      },
+      clearAllFilters() {
+        this.filters = { q: '', tag: '', dateFrom: '', dateTo: '' };
+        // clear() fires onChange([]) → guarded to both-empty; clear the picker
+        // first, then load once below to avoid a double load.
+        if (this._fp) this._fp.clear();
+        this.load(1);
+      },
 
       get rangeFrom() { return this.total === 0 ? 0 : (this.page - 1) * this.perPage + 1; },
       get rangeTo() { return Math.min(this.page * this.perPage, this.total); },
@@ -157,7 +213,6 @@
 
       emptyTitle() {
         if (this.filters.q) return `Geen offertes voor "${this.filters.q}"`;
-        if (this.filters.status) return 'Geen offertes met deze status';
         return 'Geen offertes gevonden';
       },
     };

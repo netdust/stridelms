@@ -1,4 +1,5 @@
 <?php
+
 $p = get_post(5913);
 if ($p) {
     echo "Post 5913: type={$p->post_type} title={$p->post_title} status={$p->post_status}\n";

@@ -15,10 +15,8 @@
       <sourceFolder url="file://$MODULE_DIR$/tests/Unit" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/mu-plugins/stride-core" isTestSource="false" packagePrefix="Stride\" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/netdust-mail/src" isTestSource="false" packagePrefix="Netdust\Mail\" />
-      <sourceFolder url="file://$MODULE_DIR$/web/app/themes/stride" isTestSource="false" packagePrefix="stride\" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/netdust-lti/src" isTestSource="false" packagePrefix="NetdustLTI\" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/ntdst-audit/src/Bridges" isTestSource="true" packagePrefix="NTDST\Audit\Bridges\" />
-      <sourceFolder url="file://$MODULE_DIR$/spec" isTestSource="true" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/ntdst-assistant/src" isTestSource="false" packagePrefix="NtdstAssistant\" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluentform/app" isTestSource="false" packagePrefix="FluentForm\App\" />
       <sourceFolder url="file://$MODULE_DIR$/web/app/plugins/fluentform/vendor/wpfluent/framework/src/WPFluent" isTestSource="false" packagePrefix="FluentForm\Framework\" />
@@ -140,6 +138,9 @@
       <excludeFolder url="file://$MODULE_DIR$/vendor/phpoffice/math" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/phpoffice/phpword" />
       <excludeFolder url="file://$MODULE_DIR$/vendor/erusev/parsedown" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/php-stubs/wordpress-stubs" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/phpstan/phpstan" />
+      <excludeFolder url="file://$MODULE_DIR$/vendor/szepeviktor/phpstan-wordpress" />
     </content>
     <orderEntry type="inheritedJdk" />
     <orderEntry type="sourceFolder" forTests="false" />

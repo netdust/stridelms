@@ -40,11 +40,27 @@ defined('ABSPATH') || exit;
 
             <div class="ws-select-wrap">
                 <span x-html="icon('filter')" style="width:14px;height:14px"></span>
-                <?php echo esc_html__('Status', 'stride'); ?>
-                <select class="ws-select" x-model="filters.status" @change="onFilterChange()">
-                    <option value=""><?php echo esc_html__('Alle statussen', 'stride'); ?></option>
-                    <template x-for="o in statusOptions" :key="o.value"><option :value="o.value" x-text="o.label"></option></template>
+                <?php echo esc_html__('Tag', 'stride'); ?>
+                <select class="ws-select" x-model="filters.tag" @change="onFilterChange()">
+                    <option value=""><?php echo esc_html__('Alle tags', 'stride'); ?></option>
+                    <template x-for="o in tagOptions" :key="o.id"><option :value="o.id" x-text="o.name"></option></template>
                 </select>
+            </div>
+
+            <div class="ws-select-wrap">
+                <span x-html="icon('calendar')" style="width:14px;height:14px"></span>
+                <input type="text"
+                       class="ws-select"
+                       x-ref="dateInput"
+                       readonly
+                       placeholder="<?php echo esc_attr__('Datum of periode…', 'stride'); ?>">
+                <button type="button"
+                        class="ws-btn ws-btn--ghost ws-btn--sm"
+                        x-show="filters.dateFrom || filters.dateTo"
+                        @click="$refs.dateInput && _fp && _fp.clear()"
+                        title="<?php echo esc_attr__('Datum wissen', 'stride'); ?>">
+                    <span x-html="icon('x')"></span>
+                </button>
             </div>
 
             <button class="ws-btn ws-btn--subtle ws-btn--sm" x-show="hasFilters" @click="clearAllFilters()">

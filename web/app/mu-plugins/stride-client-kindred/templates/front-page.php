@@ -38,7 +38,7 @@ get_header();
         ">
             <?php echo wp_kses(
                 __('Trainingen voor mensen die <em class="t-serif">werken met mensen.</em>', 'stridence'),
-                ['em' => ['class' => []]]
+                ['em' => ['class' => []]],
             ); ?>
         </h1>
         <div class="t-mono" style="
@@ -123,8 +123,8 @@ get_header();
             ['04', __('Coaching', 'stridence'),     __('Loopbaancoaching, intervisie, ontwikkelgesprekken.', 'stridence')],
             ['05', __('Compliance', 'stridence'),   __('GDPR, integriteit, grensoverschrijdend gedrag.', 'stridence')],
         ];
-        foreach ($pillars as [$num, $label, $copy]) :
-        ?>
+foreach ($pillars as [$num, $label, $copy]) :
+    ?>
         <div style="
             padding: 32px 24px;
             border-right: 1px solid rgb(var(--color-border));
@@ -166,11 +166,11 @@ $editions = new WP_Query([
     'post_status'    => 'publish',
     'posts_per_page' => 6,
     'meta_query'     => [
-        [
-            'key'     => '_ntdst_status',
-            'value'   => ['draft', 'completed', 'archived'],
-            'compare' => 'NOT IN',
-        ],
+    [
+        'key'     => '_ntdst_status',
+        'value'   => ['draft', 'completed', 'archived'],
+        'compare' => 'NOT IN',
+    ],
     ],
 ]);
 ?>
@@ -237,7 +237,8 @@ $editions = new WP_Query([
                     margin: 0;
                 "><?php echo esc_html(wp_trim_words(get_the_excerpt(), 18)); ?></p>
             </a>
-            <?php endwhile; wp_reset_postdata(); ?>
+            <?php endwhile;
+            wp_reset_postdata(); ?>
         </div>
         <?php else : ?>
         <p class="t-serif" style="
@@ -280,7 +281,7 @@ $featured = $featured_courses[0] ?? null;
                 <?php echo get_the_post_thumbnail(
                     $featured->ID,
                     'large',
-                    ['style' => 'width:100%;height:100%;object-fit:cover;display:block;']
+                    ['style' => 'width:100%;height:100%;object-fit:cover;display:block;'],
                 ); ?>
             <?php endif; ?>
         </div>

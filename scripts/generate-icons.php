@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Generate placeholder PWA icons
  * Run: ddev exec wp eval-file scripts/generate-icons.php
@@ -34,18 +35,18 @@ foreach ($sizes as $name => $size) {
     $white = imagecolorallocate($img, $textColor[0], $textColor[1], $textColor[2]);
 
     // Draw a large S using filled rectangles for visibility
-    $padding = (int)($size * 0.25);
-    $thickness = (int)(($size - $padding * 2) * 0.2);
+    $padding = (int) ($size * 0.25);
+    $thickness = (int) (($size - $padding * 2) * 0.2);
 
     // S shape: top bar, left upper, middle, right lower, bottom bar
     // Top horizontal
     imagefilledrectangle($img, $padding, $padding, $size - $padding, $padding + $thickness, $white);
     // Left upper vertical
-    imagefilledrectangle($img, $padding, $padding, $padding + $thickness, (int)($size / 2), $white);
+    imagefilledrectangle($img, $padding, $padding, $padding + $thickness, (int) ($size / 2), $white);
     // Middle horizontal
-    imagefilledrectangle($img, $padding, (int)($size / 2) - (int)($thickness / 2), $size - $padding, (int)($size / 2) + (int)($thickness / 2), $white);
+    imagefilledrectangle($img, $padding, (int) ($size / 2) - (int) ($thickness / 2), $size - $padding, (int) ($size / 2) + (int) ($thickness / 2), $white);
     // Right lower vertical
-    imagefilledrectangle($img, $size - $padding - $thickness, (int)($size / 2), $size - $padding, $size - $padding, $white);
+    imagefilledrectangle($img, $size - $padding - $thickness, (int) ($size / 2), $size - $padding, $size - $padding, $white);
     // Bottom horizontal
     imagefilledrectangle($img, $padding, $size - $padding - $thickness, $size - $padding, $size - $padding, $white);
 

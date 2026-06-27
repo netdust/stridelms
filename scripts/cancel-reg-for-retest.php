@@ -1,4 +1,5 @@
 <?php
+
 // Cancel student3's registration for edition 5913 so E2E can re-enroll
 global $wpdb;
 $table = $wpdb->prefix . 'vad_registrations';
@@ -24,7 +25,7 @@ echo "Cleared organisation and department user meta\n";
 $result = $wpdb->update(
     $table,
     ['status' => 'cancelled', 'cancelled_at' => current_time('mysql')],
-    ['user_id' => $student3->ID, 'edition_id' => 5913]
+    ['user_id' => $student3->ID, 'edition_id' => 5913],
 );
 echo "Cancelled registration: " . ($result !== false ? "OK ({$result} row)" : "FAILED") . "\n";
 

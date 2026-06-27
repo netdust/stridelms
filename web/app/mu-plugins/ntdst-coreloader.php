@@ -55,7 +55,7 @@ function ntdst_enqueue_admin_toolkit(): void
         'ntdst-admin-toolkit',
         NTDST_URL . '/assets/css/admin-toolkit.css',
         [],
-        '1.0.0'
+        '1.0.0',
     );
 }
 
@@ -75,13 +75,13 @@ function ntdst_enqueue_api_client(): void
         NTDST_URL . '/assets/js/ntdst-api.js',
         [],
         file_exists($path) ? (string) filemtime($path) : '1.0.0',
-        false
+        false,
     );
     wp_add_inline_script(
         'ntdst-api',
         'window.ntdstAPIConfig = ' . wp_json_encode([
             'restNonce' => wp_create_nonce('wp_rest'),
         ]) . ';',
-        'before'
+        'before',
     );
 }

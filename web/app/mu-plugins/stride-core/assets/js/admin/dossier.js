@@ -108,9 +108,16 @@
     return STATUS_META[status] || { label: String(status || ''), cls: 'pending' };
   }
 
-  /* ---- state-appropriate actions for a single registration status -------- */
+  /* ---- state-appropriate actions for a single registration status --------
+     States MUST match the server transition map (RegistrationTransitions):
+     Interest → Pending | Cancelled only — there is NO Interest → Confirmed, so
+     "Goedkeuren" (approve→confirmed) is NOT a valid action on an interest row.
+     An interest registration is for a course with no planned edition yet; there
+     is nothing to approve until it becomes a real (pending) enrollment. Its only
+     actions are messaging + cancelling. (grid.js + vandaag.js already scope
+     approve to 'pending' — this aligns the dossier panel with them.) */
   const SMART_ACTIONS = [
-    { id: 'stride_approve',           label: 'Goedkeuren',               icon: 'checkCircle', states: ['pending', 'interest'] },
+    { id: 'stride_approve',           label: 'Goedkeuren',               icon: 'checkCircle', states: ['pending'] },
     { id: 'stride_promote_waitlist',  label: 'Promoveer van wachtlijst', icon: 'arrowUp',     states: ['waitlist'] },
     { id: 'stride_quote_sent',        label: 'Offerte verzonden',        icon: 'send',        states: ['confirmed'] },
     { id: 'stride_quote_exported',    label: 'Offerte verwerkt',         icon: 'checkCircle', states: ['confirmed'] },
@@ -232,11 +239,35 @@
     const attendanceMet = totalSessions > 0 && (present / totalSessions) >= 0.8;
 
     return [
-      { label: 'Goedkeuring inschrijving', done: r.status !== 'pending' && !!r.status },
+      { label: 'Goedkeuring inschrijving', done: ['confirmed', 'completed'].includes(r.status) },
       { label: 'Intake ingevuld',          done: stageSubmitted(stages, 'intake') },
       { label: 'Aanwezigheid ≥ 80%',       done: attendanceMet },
       { label: 'Eindevaluatie',            done: stageSubmitted(stages, 'evaluation') },
     ];
+  }
+
+  /* ======================================================================
+     Status-relevance gate (Tier A) — which detail sections are meaningful
+     ----------------------------------------------------------------------
+     Aanwezigheid / Gekozen sessies / Voltooiingstaken describe the FULFILLMENT
+     of an active enrollment. waitlist/interest are pre-fulfillment and
+     cancelled is terminal — none has attendance, session choices, or
+     completion progress to show, so the template gates those three sections
+     behind showsFulfillment() and renders a status-appropriate muted line
+     instead. (Ingediende gegevens + Notities stay visible for ALL statuses.)
+     ====================================================================== */
+  const FULFILLMENT_STATES = ['pending', 'confirmed', 'completed'];
+  function showsFulfillment(status) {
+    return FULFILLMENT_STATES.includes(status);
+  }
+  /* the muted line shown for non-fulfillment statuses (closed-enum Dutch copy). */
+  const FULFILLMENT_EMPTY_HINT = {
+    waitlist:  'Op de wachtlijst — nog geen aanwezigheid of voltooiing.',
+    interest:  'Interesse — nog niet ingeschreven.',
+    cancelled: 'Geannuleerd — geen voortgang.',
+  };
+  function fulfillmentEmptyHint(status) {
+    return FULFILLMENT_EMPTY_HINT[status] || 'Geen voortgang om te tonen voor deze status.';
   }
 
   /* ---- trajectory section helpers (§11.4) — pure presentational --------- */
@@ -368,6 +399,10 @@
       /* completion checklist (mapper 3) */
       completionFor(r) { return completionChecklist(r); },
 
+      /* status-relevance gate + the muted line for non-fulfillment statuses */
+      showsFulfillment(status) { return showsFulfillment(status); },
+      fulfillmentEmptyHint(status) { return fulfillmentEmptyHint(status); },
+
       /* attendance present/total ratio for a reg, as "N/M" microcopy */
       attSummary(r) {
         const a = r && r.attendance;
@@ -402,6 +437,8 @@
     auditToTimelineEvent,
     timelineForReg,
     completionChecklist,
+    showsFulfillment,
+    fulfillmentEmptyHint,
     offerteClass,
     statusMeta,
     actionsForState,

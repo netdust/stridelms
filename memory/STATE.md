@@ -682,3 +682,11 @@ Inventory only — left in place per user instruction:
 **Decisions**
 - **keep stacking, merge at slice end** — matches the original handoff plan. So:
 [2026-06-24] — session ended (no significant changes captured)
+
+---
+### 2026-06-24 — tagged capture
+
+**Decisions**
+- **Offertes gets Search+Tag+Date** (backend added), **Trajecten stays search-only** (skip tag+date — they don't fit its data model).
+[2026-06-25] — session ended (no significant changes captured)
+[2026-06-26] — session ended (no significant changes captured)

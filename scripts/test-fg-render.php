@@ -1,4 +1,5 @@
 <?php
+
 try {
     $service = ntdst_get(\Stride\Admin\FieldGroupSettingsPage::class);
     echo 'FieldGroupSettingsPage loaded OK' . PHP_EOL;

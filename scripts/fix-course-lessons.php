@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Fix LearnDash course-lesson association using LD internal functions
  */
@@ -18,7 +19,7 @@ foreach ($lessons as $order => $lesson_id) {
     // Set menu order
     wp_update_post([
         'ID' => $lesson_id,
-        'menu_order' => $order + 1
+        'menu_order' => $order + 1,
     ]);
 
     echo "  Lesson {$lesson_id}: meta updated, menu_order=" . ($order + 1) . "\n";
@@ -36,15 +37,15 @@ $steps = [
     'steps' => [
         'h' => [
             'sfwd-lessons' => [],
-            'sfwd-quiz' => []
-        ]
+            'sfwd-quiz' => [],
+        ],
     ],
     'course_id' => $course_id,
     'version' => LEARNDASH_VERSION,
     'empty' => false,
     'course_builder_enabled' => true,
     'course_shared_steps_enabled' => true,
-    'steps_count' => count($lessons)
+    'steps_count' => count($lessons),
 ];
 
 foreach ($lessons as $lesson_id) {

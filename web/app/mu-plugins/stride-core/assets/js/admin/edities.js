@@ -1,10 +1,15 @@
 /* ==========================================================================
-   Stride Admin Workspace — Edities list surface (Cluster F)
+   Stride Admin Workspace — Edities AGENDA surface (Cluster F)
    --------------------------------------------------------------------------
    One of the four functional list surfaces. Its own per-surface Alpine factory
-   owns ALL of its data in init(): it fetches GET /admin/editions?view=list
+   owns ALL of its data in init(): it fetches GET /admin/editions?view=agenda
    server-side (paging/filter server-owned) and re-loads on every filter/page
    change. It owns its own loading / empty / error state.
+
+   AGENDA view = ONE ROW PER SESSION DATE. A multi-session edition appears once
+   per session date, ordered by date (the same shape the old WP editions page
+   had). Each row therefore carries a session identity (sessionId, date,
+   startTime/endTime) layered on the edition base.
 
    The endpoint returns editions with the EFFECTIVE status (INV-7) — the same
    read the typeahead uses. The item carries `status` (an OfferingStatus VALUE,
@@ -12,12 +17,17 @@
    Dutch label + a closed-enum badge-hue class here (presentation only; we do
    NOT re-derive the status — the value is rendered as the server decided it).
 
-   Item shape (ground-truthed from EditionAdminMapper + getEditions LIST view):
-     { id, title, course{id,title,tags}, capacity, registeredCount,
-       status:<OfferingStatus value>, startDate|null, endDate|null, venue|null,
-       isToday, isPast, editUrl }
+   Item shape (ground-truthed from getEditionsAgendaView, AdminAPIController):
+     { id (editionId), sessionId, title (edition title), sessionTitle,
+       date (YYYY-MM-DD session date), startTime|null, endTime|null,
+       status:<OfferingStatus value>, capacity, registeredCount,
+       course{id,title}, venue|null, isToday, isPast, editUrl }
+   NOTE: agenda uses `date` (single session date) + startTime/endTime —
+   NOT startDate/endDate.
 
-   Edit action → editUrl (the server already sends post.php?post=<id>&action=edit).
+   FILTERS (exactly three): Search (edition title) + Tag (one dropdown from
+   GET /admin/course-tags `.tag`) + a single flatpickr field (mode:'range' →
+   single date OR range, with a clear ✕ that resets to the default cutoff).
 
    INV-5: every x-html binds a CONSTANT icon name via icon('<literal>'). Data via
    x-text (auto-escaped). INV-7: status value rendered as received; the label +
@@ -63,36 +73,77 @@
     return m ? m.cls : 'cancelled';
   }
 
-  /* The status filter options — the active (non-terminal) set an admin filters
-     by most. Closed enum, value + Dutch label. */
-  const STATUS_OPTIONS = [
-    { value: 'announcement', label: 'Vooraankondiging' },
-    { value: 'open',         label: 'Open voor inschrijving' },
-    { value: 'full',         label: 'Volzet' },
-    { value: 'in_progress',  label: 'Lopend' },
-    { value: 'postponed',    label: 'Uitgesteld' },
-    { value: 'completed',    label: 'Afgelopen' },
-    { value: 'cancelled',    label: 'Geannuleerd' },
-  ];
-
   function edities() {
     return {
-      statusOptions: STATUS_OPTIONS,
-
       rows: [],
       total: 0,
       page: 1,
       perPage: 25,
       pageCount: 1,
 
-      filters: { status: '', q: '' },
+      /* The Tag dropdown options — fetched ONCE from /admin/course-tags `.tag`. */
+      tagOptions: [],
+
+      filters: { q: '', tag: '', dateFrom: '', dateTo: '' },
 
       loading: false,
       error: '',
 
+      /* flatpickr instance (set in init, used by clearAllFilters). */
+      _fp: null,
+
       init() {
+        // The Tag vocabulary is independent of the edition load — fetch it once,
+        // regardless of lazy-load, so the dropdown is populated when the surface
+        // first paints.
+        this.loadFilterOptions();
+
+        // The single date field is a flatpickr range picker. Instantiate it on
+        // the x-ref input AFTER it exists (we're inside init()). nl locale +
+        // the picker are enqueued globally before Alpine boots.
+        if (window.flatpickr && this.$refs && this.$refs.dateInput) {
+          this._fp = window.flatpickr(this.$refs.dateInput, {
+            mode: 'range',
+            dateFormat: 'Y-m-d',
+            locale: 'nl',
+            onChange: (dates) => this.onDateChange(dates),
+          });
+        }
+
         // I-1: load the FIRST time edities becomes active, not on mount.
         window.WS.lazyLoad(this, 'edities', () => this.load(1));
+      },
+
+      /* Fetch the Tag vocabulary ONCE. We use only the `.tag` array (free-form
+         admin tags). On failure leave [] — the dropdown just shows "Alle tags". */
+      async loadFilterOptions() {
+        try {
+          const data = await this.api('/admin/course-tags');
+          this.tagOptions = (data && data.tag) || [];
+        } catch (e) {
+          this.tagOptions = [];
+        }
+      },
+
+      /* flatpickr range onChange:
+         - 1 date  → single day: date_from == date_to
+         - 2 dates → a range:    date_from = dates[0], date_to = dates[1]
+         - 0 dates → cleared:    both empty (back to the default cutoff)
+         Dates are formatted to YYYY-MM-DD via the picker so they match the
+         endpoint's date_from/date_to (sanitize_text_field, no parsing). */
+      onDateChange(dates) {
+        const fmt = (d) => (this._fp ? this._fp.formatDate(d, 'Y-m-d') : '');
+        if (dates && dates.length === 1) {
+          this.filters.dateFrom = fmt(dates[0]);
+          this.filters.dateTo = fmt(dates[0]);
+        } else if (dates && dates.length >= 2) {
+          this.filters.dateFrom = fmt(dates[0]);
+          this.filters.dateTo = fmt(dates[1]);
+        } else {
+          this.filters.dateFrom = '';
+          this.filters.dateTo = '';
+        }
+        this.load(1);
       },
 
       async load(page) {
@@ -101,12 +152,14 @@
         this.error = ''; // clear at the TOP (cluster-B lesson)
 
         const params = new URLSearchParams();
-        params.set('view', 'list');
+        params.set('view', 'agenda');
         params.set('page', String(this.page));
         params.set('per_page', String(this.perPage));
         const f = this.filters;
-        if (f.status) params.set('status', f.status);
         if (f.q) params.set('search', f.q);
+        if (f.tag) params.set('tag', String(f.tag));
+        if (f.dateFrom) params.set('date_from', f.dateFrom);
+        if (f.dateTo) params.set('date_to', f.dateTo);
 
         try {
           const data = await this.api(`/admin/editions?${params.toString()}`);
@@ -130,8 +183,17 @@
       goPage(p) { if (p >= 1 && p <= this.pageCount && p !== this.page) this.load(p); },
       onPerPageChange() { this.load(1); },
 
-      get hasFilters() { return !!(this.filters.status || this.filters.q); },
-      clearAllFilters() { this.filters = { status: '', q: '' }; this.load(1); },
+      get hasFilters() {
+        const f = this.filters;
+        return !!(f.q || f.tag || f.dateFrom || f.dateTo);
+      },
+      clearAllFilters() {
+        this.filters = { q: '', tag: '', dateFrom: '', dateTo: '' };
+        // clear() fires onChange([]) → guarded to both-empty; avoid a double
+        // load by clearing the picker first, then loading once below.
+        if (this._fp) this._fp.clear();
+        this.load(1);
+      },
 
       get rangeFrom() { return this.total === 0 ? 0 : (this.page - 1) * this.perPage + 1; },
       get rangeTo() { return Math.min(this.page * this.perPage, this.total); },
@@ -148,6 +210,14 @@
 
       statusLabel(value) { return editionStatusLabel(value); },
       badgeClass(value) { return editionBadgeClass(value); },
+
+      /* Session date + time-range cell. The row carries a single session `date`
+         plus optional startTime/endTime (agenda shape). */
+      timeLabel(r) {
+        if (!r) return '';
+        if (r.startTime && r.endTime) return `${r.startTime}–${r.endTime}`;
+        return r.startTime || r.endTime || '';
+      },
 
       /* capacity meter — registered / capacity, clamped, '—' when uncapped */
       fillPct(r) {
@@ -177,8 +247,7 @@
 
       emptyTitle() {
         if (this.filters.q) return `Geen edities voor "${this.filters.q}"`;
-        if (this.filters.status) return 'Geen edities met deze status';
-        return 'Geen edities gevonden';
+        return 'Geen sessies gevonden';
       },
     };
   }

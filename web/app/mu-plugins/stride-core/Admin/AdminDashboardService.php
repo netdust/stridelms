@@ -431,10 +431,9 @@ class AdminDashboardService extends AbstractService
             'admin/grid.js',
             'admin/dossier.js',
             'admin/trajecten.js',
-            // The four functional list surfaces (cluster F) — each is its own
+            // The functional list surfaces (cluster F) — each is its own
             // per-surface Alpine factory registered on window before Alpine boots.
             'admin/edities.js',
-            'admin/sessies.js',
             'admin/offertes.js',
             'admin/gebruikers.js',
             // The cohort-lens slideover (cluster G) — a per-surface factory mounted

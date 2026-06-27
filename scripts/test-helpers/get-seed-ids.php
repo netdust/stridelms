@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Discover seed data IDs for E2E testing.
  *
@@ -32,7 +33,7 @@ foreach ($candidates as $email) {
     if ($candidate) {
         $hasReg = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->prefix}vad_registrations WHERE user_id = %d",
-            $candidate->ID
+            $candidate->ID,
         ));
         if ($hasReg > 0) {
             $user = $candidate;
@@ -54,7 +55,7 @@ $editionId = (int) $wpdb->get_var(
     "SELECT p.ID FROM {$wpdb->posts} p
      JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_stride_seed_data'
      WHERE p.post_type = 'vad_edition' AND p.post_status = 'publish'
-     LIMIT 1"
+     LIMIT 1",
 );
 
 $editionTitle = $editionId ? get_the_title($editionId) : '';
@@ -65,8 +66,8 @@ if ($userId) {
     $registrationId = (int) $wpdb->get_var(
         $wpdb->prepare(
             "SELECT id FROM {$wpdb->prefix}vad_registrations WHERE user_id = %d LIMIT 1",
-            $userId
-        )
+            $userId,
+        ),
     );
 }
 
@@ -76,7 +77,7 @@ $quoteNumber = '';
 $quoteRow = $wpdb->get_row(
     "SELECT p.ID FROM {$wpdb->posts} p
      WHERE p.post_type = 'vad_quote' AND p.post_status = 'publish'
-     LIMIT 1"
+     LIMIT 1",
 );
 if ($quoteRow) {
     $quoteId = (int) $quoteRow->ID;

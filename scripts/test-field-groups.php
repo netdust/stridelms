@@ -1,4 +1,5 @@
 <?php
+
 $service = ntdst_get(\Stride\Admin\FieldGroupSettingsPage::class);
 echo "Settings page loaded: " . get_class($service) . "\n";
 

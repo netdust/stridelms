@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Migration: collapse the member/non-member price differential.
  *
@@ -35,8 +36,8 @@ $rows = $wpdb->get_results(
            ON pnm.post_id   = p.ID AND pnm.meta_key   = '_ntdst_price_non_member'
          WHERE p.post_type IN ({$placeholder})
            AND p.post_status IN ('publish', 'draft', 'private')",
-        ...$postTypes
-    )
+        ...$postTypes,
+    ),
 );
 
 $changed = 0;
@@ -70,7 +71,7 @@ foreach ($rows as $row) {
             $price ?? '(null)',
             $canonical,
             $pnm ?? '(null)',
-            $canonical
+            $canonical,
         ));
     } else {
         update_post_meta($id, '_ntdst_price', $canonical);
@@ -83,5 +84,5 @@ WP_CLI::success(sprintf(
     '%s%d aligned, %d already-canonical/skipped.',
     $dryRun ? '[dry-run] ' : '',
     $changed,
-    $skipped
+    $skipped,
 ));

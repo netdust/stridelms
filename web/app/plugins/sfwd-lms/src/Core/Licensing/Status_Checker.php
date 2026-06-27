@@ -43,6 +43,17 @@ class Status_Checker {
 	private const LEARNDASH_LICENSE_CHECKER_RAW_RESULT_TRANSIENT_KEY = 'learndash_license_checker_raw_result';
 
 	/**
+	 * Transient key prefix for storing the legacy license keys map returned by the
+	 * licensing server's /subscriptions/keys endpoint. The full key is suffixed
+	 * with a hash of the license key.
+	 *
+	 * @since 5.1.3
+	 *
+	 * @var string
+	 */
+	private const LEARNDASH_LEGACY_LICENSE_KEYS_TRANSIENT_KEY = 'learndash_legacy_license_keys';
+
+	/**
 	 * Timeout for the licensing cache.
 	 *
 	 * @since 4.17.0
@@ -103,7 +114,7 @@ class Status_Checker {
 	 *
 	 * @var string
 	 */
-	public static string $licensing_slug_groups_plus = 'learndash-group-plus';
+	public static string $licensing_slug_groups_plus = 'groups-management';
 
 	/**
 	 * Licensing slug for LearnDash Notes.
@@ -130,7 +141,7 @@ class Status_Checker {
 	 *
 	 * @var string
 	 */
-	public static string $licensing_slug_group_registration = 'learndash-group-plus';
+	public static string $licensing_slug_group_registration = 'groups-management';
 
 	/**
 	 * Licensing slug for MemberDash.
@@ -221,6 +232,127 @@ class Status_Checker {
 		}
 
 		return $current_license_status;
+	}
+
+	/**
+	 * Returns a map of product_slug => license_key for all legacy products
+	 * available to the supplied license key, fetched from the licensing server's
+	 * /subscriptions/keys endpoint.
+	 *
+	 * When the server returns more than one key for the same product_slug, only
+	 * the first one is retained.
+	 *
+	 * @since 5.1.3
+	 *
+	 * @param string|null $license_key The license key to use. If not set, the license key will be fetched from the WP options.
+	 *
+	 * @return array<string, string> Map of product_slug => license_key.
+	 */
+	public static function get_legacy_license_keys( ?string $license_key = null ): array {
+		if ( empty( $license_key ) ) {
+			$license_key = sanitize_text_field(
+				Cast::to_string( get_option( LEARNDASH_LICENSE_KEY ) )
+			);
+		}
+
+		if ( empty( $license_key ) ) {
+			return [];
+		}
+
+		$transient_key = self::LEARNDASH_LEGACY_LICENSE_KEYS_TRANSIENT_KEY . '_' . md5( $license_key );
+
+		$cached = get_transient( $transient_key );
+
+		if ( $cached === 'invalid' ) {
+			return [];
+		}
+
+		if ( is_array( $cached ) ) {
+			return self::sanitize_legacy_license_keys( $cached );
+		}
+
+		$request = wp_remote_get(
+			self::get_licensing_server_url() . 'wp-json/learndash/v2/subscriptions/keys?license_key=' . $license_key
+		);
+
+		if ( is_wp_error( $request ) ) {
+			return [];
+		}
+
+		$response = wp_remote_retrieve_body( $request );
+
+		if ( empty( $response ) ) {
+			return [];
+		}
+
+		$data = json_decode( $response, true );
+
+		if ( ! is_array( $data ) ) {
+			return [];
+		}
+
+		if (
+			isset( $data['code'] )
+			&& $data['code'] === 'rest_invalid_license_key'
+		) {
+			set_transient( $transient_key, 'invalid', self::LEARNDASH_LICENSING_TRANSIENT_TIMEOUT );
+
+			return [];
+		}
+
+		$keys = [];
+
+		foreach ( $data as $item ) {
+			if (
+				! is_array( $item )
+				|| ! isset( $item['license_key'], $item['product_slug'] )
+				|| ! is_string( $item['license_key'] )
+				|| ! is_string( $item['product_slug'] )
+				|| $item['license_key'] === ''
+				|| $item['product_slug'] === ''
+			) {
+				continue;
+			}
+
+			// First-wins: only keep the first license key seen per product_slug.
+			if ( ! isset( $keys[ $item['product_slug'] ] ) ) {
+				$keys[ $item['product_slug'] ] = $item['license_key'];
+			}
+		}
+
+		set_transient(
+			$transient_key,
+			$keys,
+			self::LEARNDASH_LICENSING_TRANSIENT_TIMEOUT
+		);
+
+		return $keys;
+	}
+
+	/**
+	 * Sanitizes a cached product_slug => license_key map.
+	 *
+	 * @since 5.1.3
+	 *
+	 * @param array<mixed> $keys The cached map.
+	 *
+	 * @return array<string, string>
+	 */
+	private static function sanitize_legacy_license_keys( array $keys ): array {
+		$sanitized = [];
+
+		foreach ( $keys as $product_slug => $license_key ) {
+			if (
+				is_string( $product_slug )
+				&& is_string( $license_key )
+				&& $product_slug !== ''
+				&& $license_key !== ''
+			) {
+				$sanitized[ $product_slug ] = $license_key;
+			}
+		}
+
+		return $sanitized;
 	}
 
 	/**

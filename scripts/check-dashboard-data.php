@@ -1,4 +1,5 @@
 <?php
+
 // Check all available data
 global $wpdb;
 $table = $wpdb->prefix . 'vad_registrations';
@@ -16,7 +17,8 @@ foreach ($editions as $e) {
 // Check admin user
 $admin = get_user_by('login', 'admin');
 $adminRegs = $wpdb->get_results($wpdb->prepare(
-    "SELECT id, edition_id, status FROM $table WHERE user_id = %d", $admin->ID
+    "SELECT id, edition_id, status FROM $table WHERE user_id = %d",
+    $admin->ID,
 ));
 echo "\nAdmin (ID:{$admin->ID}) registrations: " . count($adminRegs) . "\n";
 foreach ($adminRegs as $r) {

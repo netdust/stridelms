@@ -1,1 +1,1 @@
-<?php return 'stefan.vandermeulen@vad.be';
+<?php return '';

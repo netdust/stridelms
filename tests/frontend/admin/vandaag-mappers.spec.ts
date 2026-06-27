@@ -81,17 +81,28 @@ test.describe('mapActionBuckets', () => {
 });
 
 test.describe('mapQueues', () => {
-  test('maps the 5 mockup queue keys to the real worklistQueues keys', () => {
-    const wq = { pending: 7, waitlist_open: 3, offerte_opvolging: 12, nocert: 2, oldinterest: 0 };
+  test('maps the mockup queue keys to the real worklistQueues keys', () => {
+    const wq = { pending: 7, waitlist_open: 3, offerte_opvolging: 12, nocert: 2, oldinterest: 0, interest_to_invite: 5 };
     const queues = mappers.mapQueues(wq);
-    expect(queues.map((q: any) => q.key)).toEqual(['pending', 'waitlist', 'offerte', 'nocert', 'oldinterest']);
+    expect(queues.map((q: any) => q.key)).toEqual(['pending', 'waitlist', 'offerte', 'nocert', 'oldinterest', 'interest_to_invite']);
     expect(queues.find((q: any) => q.key === 'waitlist').count).toBe(3);
     expect(queues.find((q: any) => q.key === 'offerte').count).toBe(12);
   });
 
+  test('surfaces the interest_to_invite queue with its count from worklistQueues', () => {
+    // "Interesse — editie nu gepland": count flows generically from
+    // worklistQueues.interest_to_invite via the countKey mapping.
+    const wq = { pending: 0, waitlist_open: 0, offerte_opvolging: 0, nocert: 0, oldinterest: 0, interest_to_invite: 20 };
+    const queues = mappers.mapQueues(wq);
+    const invite = queues.find((q: any) => q.key === 'interest_to_invite');
+    expect(invite).toBeTruthy();
+    expect(invite.count).toBe(20);
+    expect(invite.label).toBe('Interesse — editie nu gepland');
+  });
+
   test('missing worklistQueues → all counts 0, no crash (empty branch)', () => {
     const queues = mappers.mapQueues(undefined);
-    expect(queues).toHaveLength(5);
+    expect(queues).toHaveLength(6);
     expect(queues.every((q: any) => q.count === 0)).toBe(true);
   });
 });

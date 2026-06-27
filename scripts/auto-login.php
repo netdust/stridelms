@@ -1,4 +1,5 @@
 <?php
+
 // Temporary auto-login script - DELETE AFTER USE
 require_once dirname(__DIR__) . '/web/wp/wp-load.php';
 

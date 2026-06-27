@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Ensure Stride email templates are seeded.
  *

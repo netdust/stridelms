@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Seed test editions for development.
  *

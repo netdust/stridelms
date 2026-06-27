@@ -618,6 +618,41 @@ class Learndash_Admin_Data_Reports_Courses extends Learndash_Admin_Settings_Data
 	}
 
 	/**
+	 * Resolve the LearnDash course ID for a report row.
+	 *
+	 * Prefer `activity_course_id` from the user activity table so CSV columns stay
+	 * aligned with course progress even when the joined `post_id` differs.
+	 *
+	 * @since 5.1.4
+	 *
+	 * @param object $report_item Activity query result row.
+	 *
+	 * @return int
+	 */
+	private function resolve_report_course_id( $report_item ): int {
+		if ( ! is_object( $report_item ) ) {
+			return 0;
+		}
+
+		if (
+			property_exists( $report_item, 'activity_course_id' )
+			&& Cast::to_string( $report_item->activity_course_id ) !== ''
+			&& Cast::to_int( $report_item->activity_course_id ) > 0
+		) {
+			return absint( $report_item->activity_course_id );
+		}
+
+		if (
+			property_exists( $report_item, 'post_id' )
+			&& ! empty( $report_item->post_id )
+		) {
+			return absint( $report_item->post_id );
+		}
+
+		return 0;
+	}
+
+	/**
 	 * Handles display formatting of report column value.
 	 *
 	 * @since 2.3.0
@@ -630,14 +665,7 @@ class Learndash_Admin_Data_Reports_Courses extends Learndash_Admin_Settings_Data
 	 * @return mixed $column_value;
 	 */
 	public function report_column( $column_value, $column_key, $report_item, $report_user ) {
-		if (
-			property_exists( $report_item, 'post_id' )
-			&& ! empty( $report_item->post_id )
-		) {
-			$course_id = absint( $report_item->post_id );
-		} else {
-			$course_id = 0;
-		}
+		$course_id = $this->resolve_report_course_id( $report_item );
 
 		switch ( $column_key ) {
 			case 'user_id':
@@ -664,7 +692,10 @@ class Learndash_Admin_Data_Reports_Courses extends Learndash_Admin_Settings_Data
 				break;
 
 			case 'course_title':
-				if ( property_exists( $report_item, 'post_title' ) ) {
+				if ( ! empty( $course_id ) ) {
+					$column_value = get_the_title( $course_id );
+					$column_value = str_replace( '’', "'", $column_value );
+				} elseif ( property_exists( $report_item, 'post_title' ) ) {
 					$column_value = $report_item->post_title;
 					$column_value = str_replace( '’', "'", $column_value );
 				}

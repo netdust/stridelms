@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Migrate Attendance Data to Dedicated Table
  *
@@ -69,7 +70,7 @@ $sessionCount = (int) $wpdb->get_var($wpdb->prepare(
      AND pm.meta_value != ''
      AND pm.meta_value != '[]'",
     SessionService::POST_TYPE,
-    $metaKey
+    $metaKey,
 ));
 
 echo "  Found {$sessionCount} sessions with attendance data\n";
@@ -103,7 +104,7 @@ while ($offset < $sessionCount) {
         SessionService::POST_TYPE,
         $metaKey,
         $chunkSize,
-        $offset
+        $offset,
     ), ARRAY_A);
 
     if (empty($sessions)) {
@@ -147,7 +148,7 @@ while ($offset < $sessionCount) {
         if (!$isForce) {
             $existingCount = $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$repo->getTableName()} WHERE session_id = %d",
-                $sessionId
+                $sessionId,
             ));
 
             if ($existingCount > 0) {
@@ -197,7 +198,7 @@ if (!$isDryRun) {
 
     // Verify a sample
     $sample = $wpdb->get_row($wpdb->prepare(
-        "SELECT session_id, user_id, status, marked_at FROM {$repo->getTableName()} ORDER BY id DESC LIMIT 1"
+        "SELECT session_id, user_id, status, marked_at FROM {$repo->getTableName()} ORDER BY id DESC LIMIT 1",
     ), ARRAY_A);
 
     if ($sample) {

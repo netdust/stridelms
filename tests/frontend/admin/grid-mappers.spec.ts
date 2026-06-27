@@ -52,6 +52,13 @@ test.describe('queueToParams', () => {
     expect(grid.queueToParams('oldinterest')).toEqual({ status: 'interest' });
   });
 
+  test('interest_to_invite → status=interest (deep-link to the interest list)', () => {
+    // "Interesse — editie nu gepland": the closest real filter is the interest
+    // status, same approach as oldinterest. The mail SEND is deferred; this
+    // deep-link only views the list.
+    expect(grid.queueToParams('interest_to_invite')).toEqual({ status: 'interest' });
+  });
+
   test('DENIAL: unknown queue key → {} (no fabricated backend param, no crash)', () => {
     expect(grid.queueToParams('not-a-queue')).toEqual({});
     expect(grid.queueToParams('')).toEqual({});

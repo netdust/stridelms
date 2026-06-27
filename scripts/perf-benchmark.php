@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Performance benchmark for key admin endpoints.
  *
@@ -42,7 +43,7 @@ function pick_heavy_user(): int
          INNER JOIN {$wpdb->users} u ON r.user_id = u.ID
          GROUP BY r.user_id
          ORDER BY cnt DESC
-         LIMIT 1"
+         LIMIT 1",
     );
     return $row ? (int) $row->user_id : 0;
 }
@@ -58,7 +59,7 @@ function synthesise_heavy_user(int $enrollments = 50): array
 
     // Find existing editions to attach to (uses what's there; no new editions).
     $editionIds = $wpdb->get_col(
-        "SELECT ID FROM {$wpdb->posts} WHERE post_type='vad_edition' AND post_status='publish' LIMIT {$enrollments}"
+        "SELECT ID FROM {$wpdb->posts} WHERE post_type='vad_edition' AND post_status='publish' LIMIT {$enrollments}",
     );
 
     $created = 0;
@@ -123,16 +124,18 @@ function bench(string $label, callable $fn): void
     printf("  wall time: %.1f ms\n", $elapsed * 1000);
     printf("  memory Δ:  %s\n", size_format($memDelta, 1));
     if ($slowest) {
-        printf("  slowest:   %.1f ms — %s\n",
+        printf(
+            "  slowest:   %.1f ms — %s\n",
             (float) $slowest[1] * 1000,
-            substr(preg_replace('/\s+/', ' ', $slowest[0]), 0, 100)
+            substr(preg_replace('/\s+/', ' ', $slowest[0]), 0, 100),
         );
     }
     if ($hotspotCount >= 3) {
-        printf("  hotspot:   %d× — %s%s\n",
+        printf(
+            "  hotspot:   %d× — %s%s\n",
             $hotspotCount,
             $hotspot,
-            $hotspotCount >= 10 ? '   ⚠️ likely N+1' : ''
+            $hotspotCount >= 10 ? '   ⚠️ likely N+1' : '',
         );
     }
     echo "\n";
@@ -154,7 +157,7 @@ if (getenv('HEAVY') === '1') {
     }
     $regCount = (int) $GLOBALS['wpdb']->get_var($GLOBALS['wpdb']->prepare(
         "SELECT COUNT(*) FROM {$GLOBALS['wpdb']->prefix}vad_registrations WHERE user_id = %d",
-        $userId
+        $userId,
     ));
     echo "Benchmarking against existing user $userId with $regCount registrations.\n";
     echo "(Pass HEAVY=1 to test against a synthesised 50-enrollment user.)\n\n";

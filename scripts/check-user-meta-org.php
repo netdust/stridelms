@@ -1,4 +1,5 @@
 <?php
+
 $user = get_user_by('email', 'admin@stride.local');
 if ($user) {
     echo 'User ID: ' . $user->ID . PHP_EOL;

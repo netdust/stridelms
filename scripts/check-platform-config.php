@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Check platform configuration for grade passback
  */

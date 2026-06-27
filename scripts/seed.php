@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Stride LMS - Development Seed Script (declarative feature matrix)
  * Run with: ddev exec wp eval-file scripts/seed.php

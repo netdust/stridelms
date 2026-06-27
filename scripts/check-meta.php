@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Test script to check meta access patterns
  */

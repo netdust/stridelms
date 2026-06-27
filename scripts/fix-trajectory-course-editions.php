@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Repair trajectory course entries authored without type/edition_id
  * (pre-2026-06-12 seeder shape — shake-out BUG-2).

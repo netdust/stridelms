@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Regenerate tc_index.html wrapper files for SCORM modules
  *
@@ -14,7 +15,7 @@ foreach ($scorm_modules as $module_id) {
     global $wpdb;
     $module_info = $wpdb->get_row(
         $wpdb->prepare("SELECT * FROM {$wpdb->prefix}snc_file_info WHERE ID = %d", $module_id),
-        ARRAY_A
+        ARRAY_A,
     );
 
     if (!$module_info) {
@@ -60,7 +61,7 @@ foreach ($scorm_modules as $module_id) {
 
     // Determine SCORM version
     $scorm_version = 'scorm1.2';
-    $schema = (string)$xml->metadata->schemaversion;
+    $schema = (string) $xml->metadata->schemaversion;
     if (strpos($schema, '2004') !== false || $schema === 'CAM 1.3') {
         $scorm_version = 'scorm2004';
     }
@@ -75,7 +76,7 @@ foreach ($scorm_modules as $module_id) {
         foreach ($xml->resources->resource as $resource) {
             $attrs = $resource->attributes();
             if (isset($attrs['href'])) {
-                $launch_file = (string)$attrs['href'];
+                $launch_file = (string) $attrs['href'];
                 break;
             }
         }
@@ -83,7 +84,7 @@ foreach ($scorm_modules as $module_id) {
 
     // Also try to get title from organization
     if (isset($xml->organizations->organization->title)) {
-        $launch_title = (string)$xml->organizations->organization->title;
+        $launch_title = (string) $xml->organizations->organization->title;
     }
 
     if (!$launch_file) {
@@ -149,7 +150,7 @@ HTML;
     $wpdb->update(
         $wpdb->prefix . 'snc_file_info',
         ['url' => $new_url],
-        ['ID' => $module_id]
+        ['ID' => $module_id],
     );
 
     echo "Updated database URL to: {$new_url}\n";

@@ -1,4 +1,5 @@
 <?php
+
 global $wpdb;
 
 // Check trajectory 4398 directly in database

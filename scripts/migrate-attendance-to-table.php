@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Migration Script: Attendance Postmeta to Table
  *
@@ -117,7 +118,7 @@ class AttendanceMigration
                AND pm.meta_value != '[]'
              ORDER BY p.ID ASC",
             SessionService::POST_TYPE,
-            $metaKey
+            $metaKey,
         ), ARRAY_A);
 
         return $results ?: [];
@@ -199,7 +200,7 @@ class AttendanceMigration
         $exists = $wpdb->get_var($wpdb->prepare(
             "SELECT id FROM {$table} WHERE session_id = %d AND user_id = %d",
             $sessionId,
-            $userId
+            $userId,
         ));
 
         if ($exists) {

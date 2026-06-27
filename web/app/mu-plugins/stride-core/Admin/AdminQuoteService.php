@@ -35,7 +35,7 @@ final class AdminQuoteService
     /**
      * Build the admin quote-list read-model for the given (pre-sanitised) filters.
      *
-     * @param array{page:int,per_page:int,search:string,status:string,edition_id:int} $filters
+     * @param array{page:int,per_page:int,search:string,status:string,edition_id:int,tag?:int,date_from?:string,date_to?:string} $filters
      * @return array<string,mixed>  Main envelope (items/total/page/perPage/totalPages),
      *                              OR the search-short-circuit envelope
      *                              (data/total/page/per_page) when the user search
@@ -50,6 +50,9 @@ final class AdminQuoteService
         $search = (string) ($filters['search'] ?? '');
         $status = (string) ($filters['status'] ?? '');
         $editionId = (int) ($filters['edition_id'] ?? 0);
+        $tagId = (int) ($filters['tag'] ?? 0);
+        $dateFrom = (string) ($filters['date_from'] ?? '');
+        $dateTo = (string) ($filters['date_to'] ?? '');
         $offset = ($page - 1) * $perPage;
 
         // Build query
@@ -96,6 +99,39 @@ final class AdminQuoteService
         if ($editionId > 0) {
             $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_edition WHERE pm_edition.post_id = p.ID AND pm_edition.meta_key = 'edition_id' AND pm_edition.meta_value = %d)";
             $params[] = $editionId;
+        }
+
+        // Filter by course tag. Walk: quote.edition_id (bare meta) → that edition's
+        // _ntdst_course_id (prefixed) → the course's term in the ld_course_tag
+        // taxonomy. Taxonomy + both meta keys are HARDCODED literals; the only
+        // user value is the term_id, cast (int) above and bound as %d below
+        // (mirrors the EXISTS pattern of the search/status/edition_id filters —
+        // no repo-signature change, the subquery rides $where/$params).
+        if ($tagId > 0) {
+            $where[] = "EXISTS (
+                SELECT 1 FROM {$wpdb->postmeta} pm_q_ed
+                JOIN {$wpdb->postmeta} pm_ed_course
+                    ON pm_ed_course.post_id = CAST(pm_q_ed.meta_value AS UNSIGNED)
+                   AND pm_ed_course.meta_key = '_ntdst_course_id'
+                JOIN {$wpdb->term_relationships} tr
+                    ON tr.object_id = CAST(pm_ed_course.meta_value AS UNSIGNED)
+                JOIN {$wpdb->term_taxonomy} tt
+                    ON tt.term_taxonomy_id = tr.term_taxonomy_id AND tt.taxonomy = 'ld_course_tag'
+                WHERE pm_q_ed.post_id = p.ID AND pm_q_ed.meta_key = 'edition_id' AND tt.term_id = %d
+            )";
+            $params[] = $tagId;
+        }
+
+        // Filter by quote date (p.post_date). Only inject a bound %s bound when the
+        // value parses as a real Y-m-d — an unparseable value is IGNORED, never
+        // concatenated into SQL.
+        if ($dateFrom !== '' && \DateTime::createFromFormat('Y-m-d', $dateFrom) !== false) {
+            $where[] = "p.post_date >= %s";
+            $params[] = $dateFrom . ' 00:00:00';
+        }
+        if ($dateTo !== '' && \DateTime::createFromFormat('Y-m-d', $dateTo) !== false) {
+            $where[] = "p.post_date <= %s";
+            $params[] = $dateTo . ' 23:59:59';
         }
 
         $whereClause = implode(' AND ', $where);

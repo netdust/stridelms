@@ -66,7 +66,7 @@ $courses = get_posts([
                 style="font-size: clamp(52px, 8.5vw, 112px); line-height: 0.95; letter-spacing: -0.035em; font-weight: 800;">
                 <?php echo wp_kses(
                     __('Look out<br>for <em class="font-serif italic font-normal" style="color: rgb(var(--color-primary));">each other.</em><br>Loud out.', 'stridence'),
-                    ['em' => ['class' => [], 'style' => []], 'br' => []]
+                    ['em' => ['class' => [], 'style' => []], 'br' => []],
                 ); ?>
             </h1>
 
@@ -107,7 +107,7 @@ $courses = get_posts([
                 <h2 class="font-heading text-text" style="font-size: clamp(34px, 5vw, 56px); line-height: 1; letter-spacing: -0.03em; font-weight: 700;">
                     <?php echo wp_kses(
                         __('Three workshops.<br>One <em class="font-serif italic font-normal" style="color: rgb(var(--color-primary));">very loud</em> season ahead.', 'stridence'),
-                        ['em' => ['class' => [], 'style' => []], 'br' => []]
+                        ['em' => ['class' => [], 'style' => []], 'br' => []],
                     ); ?>
                 </h2>
             </div>
@@ -198,7 +198,7 @@ $courses = get_posts([
         <blockquote class="font-heading text-text" style="font-size: clamp(32px, 5vw, 56px); line-height: 1.05; letter-spacing: -0.025em; font-weight: 700;">
             <?php echo wp_kses(
                 __('&ldquo;I thought it was going to be another <em class="font-serif italic font-normal" style="color: rgb(var(--color-primary));">don\'t-do-drugs</em> assembly. It wasn\'t. I left knowing what I\'d actually do if my friend went under.&rdquo;', 'stridence'),
-                ['em' => ['class' => [], 'style' => []]]
+                ['em' => ['class' => [], 'style' => []]],
             ); ?>
         </blockquote>
         <div class="flex items-center gap-4 mt-10">
@@ -232,14 +232,14 @@ $courses = get_posts([
             <?php foreach (array_slice($courses, 0, 3) as $i => $course) :
                 $format_terms = wp_get_post_terms($course->ID, 'stride_format', ['fields' => 'slugs']);
                 $format_slug = !empty($format_terms) ? $format_terms[0] : 'klassikaal';
-                $format_label = match($format_slug) {
+                $format_label = match ($format_slug) {
                     'online', 'e-learning' => 'E-LEARNING',
                     'webinar' => 'WEBINAR',
                     default => 'IN-PERSON',
                 };
                 // Alternate sticker colour for visual rhythm
                 $sticker = $i % 2 === 0 ? 'accent' : 'primary';
-            ?>
+                ?>
                 <a href="<?php echo esc_url(get_permalink($course)); ?>"
                    class="card-interactive p-7 rounded-[20px] flex flex-col gap-5 block"
                    style="background: rgb(var(--color-surface-card)); border: 2px solid rgb(var(--color-primary-dark));">
@@ -278,7 +278,7 @@ $courses = get_posts([
             <h2 class="font-heading" style="font-size: clamp(34px, 5vw, 56px); line-height: 1; letter-spacing: -0.03em; font-weight: 700; color: rgb(var(--color-text-inverse));">
                 <?php echo wp_kses(
                     __('90 minutes.<br>Three <em class="font-serif italic font-normal" style="color: rgb(var(--color-accent));">scenarios.</em><br>Zero slides.', 'stridence'),
-                    ['em' => ['class' => [], 'style' => []], 'br' => []]
+                    ['em' => ['class' => [], 'style' => []], 'br' => []],
                 ); ?>
             </h2>
         </div>
@@ -290,7 +290,7 @@ $courses = get_posts([
                 ['20–70', 'Three scenarios', 'Real situations. A friend who\'s too far gone. A first kiss that wasn\'t a kiss. A stranger at the back of the queue. You decide what you\'d do.'],
                 ['70–90', 'Walk-away kit', 'You leave with three numbers, a card for your wallet, and one promise. That\'s the workshop.'],
             ];
-            foreach ($steps as $idx => $step) : ?>
+foreach ($steps as $idx => $step) : ?>
                 <div>
                     <div class="font-heading mb-4" style="font-size: 88px; line-height: 0.85; letter-spacing: -0.05em; font-weight: 800; color: rgb(var(--color-accent));">
                         <?php echo (string) ($idx + 1); ?>
@@ -317,7 +317,7 @@ $courses = get_posts([
         <h2 class="font-heading mb-8" style="font-size: clamp(48px, 8vw, 96px); line-height: 0.95; letter-spacing: -0.035em; font-weight: 800; color: rgb(var(--color-primary-dark));">
             <?php echo wp_kses(
                 __('Your venue,<br>your school,<br><em class="font-serif italic font-normal">your festival.</em>', 'stridence'),
-                ['em' => ['class' => [], 'style' => []], 'br' => []]
+                ['em' => ['class' => [], 'style' => []], 'br' => []],
             ); ?>
         </h2>
         <p class="mb-10 max-w-xl mx-auto" style="font-size: 18px; line-height: 1.5; color: rgb(var(--color-primary-dark)); opacity: 0.78;">

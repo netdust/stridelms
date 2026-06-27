@@ -1,4 +1,5 @@
 <?php
+
 /**
  * Migration: normalise `_ntdst_session_slots` storage.
  *
@@ -26,7 +27,7 @@ $rows = $wpdb->get_results(
      WHERE meta_key = '_ntdst_session_slots'
        AND meta_value <> ''
        AND meta_value <> '[]'
-       AND meta_value <> 'a:0:{}'"
+       AND meta_value <> 'a:0:{}'",
 );
 
 $changed = 0;
@@ -57,7 +58,9 @@ foreach ($rows as $row) {
     // 2) Rename pick_count → max_selections per slot
     $needsWrite = false;
     foreach ($slots as &$slot) {
-        if (!is_array($slot)) continue;
+        if (!is_array($slot)) {
+            continue;
+        }
         if (isset($slot['pick_count']) && !isset($slot['max_selections'])) {
             $slot['max_selections'] = (int) $slot['pick_count'];
             unset($slot['pick_count']);
@@ -91,5 +94,5 @@ WP_CLI::success(sprintf(
     '%s%d migrated, %d already-canonical/skipped.',
     $dryRun ? '[dry-run] ' : '',
     $changed,
-    $skipped
+    $skipped,
 ));
