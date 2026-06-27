@@ -182,65 +182,30 @@ return [
                 ['title' => 'Hoofdstuk 5: Veelvoorkomende fouten', 'content' => '<h3>Valkuilen</h3><p>Supplementengebruik, crash-diëten en onvoldoende energie-inname bij jongeren.</p>'],
             ],
         ],
-        // === Row 4: multi-edition online closed — in_progress + open cohorts ===
+        // === Row 4: e-learning with one always-on online edition ===
+        // Online = e-learning OR webinar; e-learning is self-paced and is NEVER
+        // "planned", so it can't have multiple dated cohort editions (that's a
+        // cohort/traject concept, which doesn't belong on /online). This course
+        // was modelling dated coach-led cohorts as separate online editions —
+        // 3 near-identical cards for one course (Stefan, 2026-06-27). Collapsed
+        // to pure e-learning with ONE always-on dateless online edition (no
+        // dates, no coach, no sessions): one card, self-paced, the
+        // date:dateless_online enrollable.
         [
-            // Renamed from "E-learning: ..." — it's a begeleid cohort (coach +
-            // start/end dates + capacity), NOT self-paced e-learning. Calling it
-            // e-learning made the teacher and cohort dates look contradictory in
-            // the demo (Stefan, 2026-06-27). Drops the 'e-learning' format tag.
-            'title' => 'Begeleid traject: Beweegbeleid Ontwikkelen',
-            'description' => 'Begeleid cohorttraject: ontwikkel stap voor stap een beweegbeleid voor jouw organisatie, met begeleiding van een beleidscoach.',
-            'type' => 'online', 'format' => ['online'], 'themes' => ['schoolbeleid', 'beweging'],
+            'title' => 'E-learning: Beweegbeleid Ontwikkelen',
+            'description' => 'Online cursus: ontwikkel stap voor stap een beweegbeleid voor jouw organisatie. Volledig in je eigen tempo, met sjablonen voor je eigen beleidsplan.',
+            'type' => 'online', 'format' => ['online', 'e-learning'], 'themes' => ['schoolbeleid', 'beweging'],
             'ld_price_type' => 'closed',
-            'covers' => ['model:multi_edition'],
+            'covers' => ['model:closed_single'],
             'editions' => [
-                [   // Cohort A: started a month ago, running now
-                    'start_date' => date('Y-m-d', strtotime('-30 days')),
-                    'end_date' => date('Y-m-d', strtotime('+30 days')),
-                    'price' => 125.00, 'price_non_member' => 150.00, 'capacity' => 50,
-                    'venue' => 'Online',
-                    'status' => OfferingStatus::InProgress->value,
-                    'speakers' => [['name' => 'Karel Mertens', 'role' => 'Beleidscoach']],
-                    'content' => [
-                        'target_audience' => 'Beleidsmakers en coördinatoren in scholen en jeugdorganisaties.',
-                        'required_experience' => 'Geen voorkennis nodig',
-                        'included' => 'Online cursusmateriaal en sjablonen voor je eigen beleidsplan.',
-                        'price_includes' => 'incl. sjablonen en begeleiding',
-                        'cancellation_policy' => 'Kosteloos annuleren tot de startdatum van het cohort.',
-                        'cta_benefits' => "Eigen beleidsplan als eindresultaat\nBegeleiding door een beleidscoach",
-                        'enrollment_info' => 'Je krijgt toegang zodra het cohort start.',
-                    ],
-                    'covers' => ['status:in_progress', 'edition_type:online', 'sessions:type_online'],
-                    'registrations' => [
-                        ['user' => 'admin', 'status' => 'confirmed', 'path' => 'individual'],
-                    ],
-                    'sessions' => [
-                        ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => 'online', 'title' => 'Beweegbeleid (lopende cohort)', 'link_lesson' => true],
-                    ],
-                ],
-                [   // Cohort B: starts in two weeks
-                    'start_date' => date('Y-m-d', strtotime('+2 weeks')),
-                    'end_date' => date('Y-m-d', strtotime('+10 weeks')),
-                    'price' => 125.00, 'price_non_member' => 150.00, 'capacity' => 50,
-                    'venue' => 'Online',
-                    'status' => OfferingStatus::Open->value,
-                    'speakers' => [['name' => 'Karel Mertens', 'role' => 'Beleidscoach']],
-                    'covers' => ['status:open', 'edition_type:online'],
-                    'sessions' => [
-                        ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => 'online', 'title' => 'Beweegbeleid (nieuw cohort)', 'link_lesson' => true],
-                    ],
-                ],
-                [   // DATELESS ONLINE (always-on): no sessions → no
-                    // start_date/end_date meta, but status stays Open (rule 3
-                    // of the effective-status engine fires only for classroom
-                    // editions). Lists on /online as a NORMAL enroll card — no
-                    // "Binnenkort" band, no interest CTA. The always-on
-                    // self-paced enrollable (Stefan, 2026-06-14).
+                [   // DATELESS ONLINE (always-on): no sessions → no start/end_date
+                    // meta, status stays Open. Lists on /online as a NORMAL enroll
+                    // card — no "Binnenkort" band, no interest CTA, no coach. The
+                    // always-on self-paced enrollable (Stefan, 2026-06-14).
                     'dateless' => true,
                     'price' => 125.00, 'price_non_member' => 150.00, 'capacity' => 0,
                     'venue' => 'Online',
                     'status' => OfferingStatus::Open->value,
-                    'speakers' => [['name' => 'Karel Mertens', 'role' => 'Beleidscoach']],
                     'covers' => ['status:open', 'edition_type:online', 'date:dateless_online'],
                 ],
             ],
@@ -275,6 +240,23 @@ return [
                     ],
                     'enrollment_form' => 'default',
                     'covers' => ['status:few_spots', 'capacity:full_fake_display', 'sessions:type_in_person'],
+                    'sessions' => $blessureSessions,
+                ],
+                [   // Currently running — a multi-day klassikaal cohort that
+                    // started a few days ago and ends shortly. The realistic home
+                    // for status:in_progress (a running scheduled offering), moved
+                    // here off the e-learning course where dated cohorts didn't
+                    // belong (Stefan, 2026-06-27).
+                    'start_date' => date('Y-m-d', strtotime('-2 days')),
+                    'end_date' => date('Y-m-d', strtotime('+5 days')),
+                    'price' => 695.00, 'price_non_member' => 795.00, 'capacity' => 12,
+                    'venue' => 'BWEEG Opleidingscentrum Gent',
+                    'status' => OfferingStatus::InProgress->value,
+                    'speakers' => [['name' => 'Dr. Els Peters', 'role' => 'Kinesitherapeut']],
+                    'covers' => ['status:in_progress'],
+                    'registrations' => [
+                        ['user' => 'admin', 'status' => 'confirmed', 'path' => 'individual'],
+                    ],
                     'sessions' => $blessureSessions,
                 ],
                 [   // Past, completed — ALL THREE post-course requirements
@@ -883,7 +865,7 @@ return [
                 ['course_title' => 'E-learning: Basiskennis Jeugdgezondheid', 'required' => true, 'order' => 1],
                 ['course_title' => 'E-learning: Voeding en Prestatie bij Jonge Sporters', 'required' => true, 'order' => 2],
                 ['course_title' => 'Gezonde Tussendoortjes in de Jeugdwerking', 'required' => true, 'order' => 3],
-                ['course_title' => 'Begeleid traject: Beweegbeleid Ontwikkelen', 'required' => false, 'group' => 'Optionele verdieping'],
+                ['course_title' => 'E-learning: Beweegbeleid Ontwikkelen', 'required' => false, 'group' => 'Optionele verdieping'],
                 ['course_title' => 'Webinarreeks: Actuele Thema\'s in Jeugdgezondheid', 'required' => false, 'group' => 'Optionele verdieping'],
             ],
             'covers' => ['trajectory:self_paced'],
