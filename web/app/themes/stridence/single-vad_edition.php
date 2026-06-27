@@ -532,14 +532,9 @@ get_header();
                                 </p>
                             </div>
                         <?php endif; ?>
-                        <?php if ($cancellation_policy !== '') : ?>
-                            <div class="bg-surface-card rounded-[14px] shadow-card p-5">
-                                <h3 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Annuleren', 'stridence'); ?></h3>
-                                <p class="text-[14px] text-text-muted leading-relaxed mt-2">
-                                    <?php echo esc_html($cancellation_policy); ?>
-                                </p>
-                            </div>
-                        <?php endif; ?>
+                        <?php /* Annuleren (cancellation policy) is enrollment info — it
+                                 lives in the sidebar CTA card alongside the other
+                                 enrollment details, not as a content card here. */ ?>
                     </div>
 
                     <?php if ($enrollment_info !== '') : ?>
@@ -548,6 +543,18 @@ get_header();
                         <p class="lg:hidden text-[13px] text-text-muted leading-relaxed mt-4">
                             <?php echo esc_html($enrollment_info); ?>
                         </p>
+                    <?php endif; ?>
+
+                    <?php if ($cancellation_policy !== '') : ?>
+                        <?php /* Same mobile fallback as enrollment_info: the cancellation
+                                 policy lives in the desktop-only sidebar, so repeat it
+                                 here for mobile. */ ?>
+                        <div class="lg:hidden mt-4">
+                            <h4 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Annuleren', 'stridence'); ?></h4>
+                            <p class="text-[13px] text-text-muted leading-relaxed mt-2">
+                                <?php echo esc_html($cancellation_policy); ?>
+                            </p>
+                        </div>
                     <?php endif; ?>
                 </section>
 
@@ -679,6 +686,16 @@ get_header();
                                         </li>
                                     <?php endforeach; ?>
                                 </ul>
+                            </div>
+                        <?php endif; ?>
+
+                        <?php if ($cancellation_policy !== '') : ?>
+                            <!-- Annuleren: cancellation policy as enrollment fine-print -->
+                            <div class="border-t border-border-soft mt-5 pt-4">
+                                <h4 class="text-[11px] font-bold text-primary uppercase tracking-[0.08em]"><?php esc_html_e('Annuleren', 'stridence'); ?></h4>
+                                <p class="text-[13px] text-text-muted leading-relaxed mt-2">
+                                    <?php echo esc_html($cancellation_policy); ?>
+                                </p>
                             </div>
                         <?php endif; ?>
                     </aside>
