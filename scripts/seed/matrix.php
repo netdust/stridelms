@@ -184,9 +184,13 @@ return [
         ],
         // === Row 4: multi-edition online closed — in_progress + open cohorts ===
         [
-            'title' => 'E-learning: Beweegbeleid Ontwikkelen',
-            'description' => 'Begeleide e-learning in cohortvorm: ontwikkel stap voor stap een beweegbeleid voor jouw organisatie.',
-            'type' => 'online', 'format' => ['online', 'e-learning'], 'themes' => ['schoolbeleid', 'beweging'],
+            // Renamed from "E-learning: ..." — it's a begeleid cohort (coach +
+            // start/end dates + capacity), NOT self-paced e-learning. Calling it
+            // e-learning made the teacher and cohort dates look contradictory in
+            // the demo (Stefan, 2026-06-27). Drops the 'e-learning' format tag.
+            'title' => 'Begeleid traject: Beweegbeleid Ontwikkelen',
+            'description' => 'Begeleid cohorttraject: ontwikkel stap voor stap een beweegbeleid voor jouw organisatie, met begeleiding van een beleidscoach.',
+            'type' => 'online', 'format' => ['online'], 'themes' => ['schoolbeleid', 'beweging'],
             'ld_price_type' => 'closed',
             'covers' => ['model:multi_edition'],
             'editions' => [
@@ -211,7 +215,7 @@ return [
                         ['user' => 'admin', 'status' => 'confirmed', 'path' => 'individual'],
                     ],
                     'sessions' => [
-                        ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => 'online', 'title' => 'E-learning: Beweegbeleid (lopende cohort)', 'link_lesson' => true],
+                        ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => 'online', 'title' => 'Beweegbeleid (lopende cohort)', 'link_lesson' => true],
                     ],
                 ],
                 [   // Cohort B: starts in two weeks
@@ -223,7 +227,7 @@ return [
                     'speakers' => [['name' => 'Karel Mertens', 'role' => 'Beleidscoach']],
                     'covers' => ['status:open', 'edition_type:online'],
                     'sessions' => [
-                        ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => 'online', 'title' => 'E-learning: Beweegbeleid (nieuw cohort)', 'link_lesson' => true],
+                        ['date_offset' => 0, 'start' => '00:00', 'end' => '23:59', 'type' => 'online', 'title' => 'Beweegbeleid (nieuw cohort)', 'link_lesson' => true],
                     ],
                 ],
                 [   // DATELESS ONLINE (always-on): no sessions → no
@@ -879,7 +883,7 @@ return [
                 ['course_title' => 'E-learning: Basiskennis Jeugdgezondheid', 'required' => true, 'order' => 1],
                 ['course_title' => 'E-learning: Voeding en Prestatie bij Jonge Sporters', 'required' => true, 'order' => 2],
                 ['course_title' => 'Gezonde Tussendoortjes in de Jeugdwerking', 'required' => true, 'order' => 3],
-                ['course_title' => 'E-learning: Beweegbeleid Ontwikkelen', 'required' => false, 'group' => 'Optionele verdieping'],
+                ['course_title' => 'Begeleid traject: Beweegbeleid Ontwikkelen', 'required' => false, 'group' => 'Optionele verdieping'],
                 ['course_title' => 'Webinarreeks: Actuele Thema\'s in Jeugdgezondheid', 'required' => false, 'group' => 'Optionele verdieping'],
             ],
             'covers' => ['trajectory:self_paced'],
