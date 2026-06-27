@@ -690,3 +690,4 @@ Inventory only — left in place per user instruction:
 - **Offertes gets Search+Tag+Date** (backend added), **Trajecten stays search-only** (skip tag+date — they don't fit its data model).
 [2026-06-25] — session ended (no significant changes captured)
 [2026-06-26] — session ended (no significant changes captured)
+[2026-06-27] — session ended (no significant changes captured)
