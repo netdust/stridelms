@@ -133,6 +133,119 @@ class UserDashboardServiceTest extends TestCase
     }
 
     // ================================================================
+    // findEnrolledEditionForLesson() — edition-context resolution for the
+    // LearnDash "Terug" button (a lesson done via an edition's online
+    // session should return to that edition, not the bare course).
+    // ================================================================
+
+    /** @test */
+    public function testFindEnrolledEditionForLessonReturnsEditionWhenOnlineSessionLinksLesson(): void
+    {
+        // User enrolled (confirmed) in edition 50, whose online session links lesson 99.
+        $this->regRepo = $this->createMock(RegistrationRepository::class);
+        $this->regRepo->method('findByUser')->willReturn([
+            (object) ['edition_id' => 50, 'status' => 'confirmed'],
+        ]);
+        $this->sessionService = $this->createMock(SessionService::class);
+        $this->sessionService->method('getSessionsForEdition')->with(50)->willReturn([
+            ['type' => 'online', 'lesson_ids' => [99]],
+        ]);
+
+        $service = $this->makeService();
+
+        $this->assertSame(50, $service->findEnrolledEditionForLesson(1, 99));
+    }
+
+    /** @test */
+    public function testFindEnrolledEditionForLessonPicksMostRecentWhenMultipleMatch(): void
+    {
+        // findByUser returns registrations registered_at DESC — most recent first.
+        $this->regRepo = $this->createMock(RegistrationRepository::class);
+        $this->regRepo->method('findByUser')->willReturn([
+            (object) ['edition_id' => 70, 'status' => 'confirmed'], // most recent
+            (object) ['edition_id' => 50, 'status' => 'confirmed'],
+        ]);
+        $this->sessionService = $this->createMock(SessionService::class);
+        $this->sessionService->method('getSessionsForEdition')->willReturnCallback(
+            fn(int $e) => [['type' => 'online', 'lesson_ids' => [99]]],
+        );
+
+        $service = $this->makeService();
+
+        $this->assertSame(70, $service->findEnrolledEditionForLesson(1, 99));
+    }
+
+    /** @test */
+    public function testFindEnrolledEditionForLessonReturnsNullWhenNoSessionLinksLesson(): void
+    {
+        $this->regRepo = $this->createMock(RegistrationRepository::class);
+        $this->regRepo->method('findByUser')->willReturn([
+            (object) ['edition_id' => 50, 'status' => 'confirmed'],
+        ]);
+        $this->sessionService = $this->createMock(SessionService::class);
+        $this->sessionService->method('getSessionsForEdition')->willReturn([
+            ['type' => 'online', 'lesson_ids' => [11, 22]], // not 99
+        ]);
+
+        $service = $this->makeService();
+
+        $this->assertNull($service->findEnrolledEditionForLesson(1, 99));
+    }
+
+    /** @test */
+    public function testFindEnrolledEditionForLessonIgnoresNonOnlineSessions(): void
+    {
+        // An in_person session that happens to carry a lesson_id must NOT match —
+        // only online sessions surface lessons as e-learning steps.
+        $this->regRepo = $this->createMock(RegistrationRepository::class);
+        $this->regRepo->method('findByUser')->willReturn([
+            (object) ['edition_id' => 50, 'status' => 'confirmed'],
+        ]);
+        $this->sessionService = $this->createMock(SessionService::class);
+        $this->sessionService->method('getSessionsForEdition')->willReturn([
+            ['type' => 'in_person', 'lesson_ids' => [99]],
+        ]);
+
+        $service = $this->makeService();
+
+        $this->assertNull($service->findEnrolledEditionForLesson(1, 99));
+    }
+
+    /** @test */
+    public function testFindEnrolledEditionForLessonIgnoresNonActiveRegistrations(): void
+    {
+        // A cancelled registration must not resolve as the return edition.
+        $this->regRepo = $this->createMock(RegistrationRepository::class);
+        $this->regRepo->method('findByUser')->willReturn([
+            (object) ['edition_id' => 50, 'status' => 'cancelled'],
+        ]);
+        $this->sessionService = $this->createMock(SessionService::class);
+        $this->sessionService->method('getSessionsForEdition')->willReturn([
+            ['type' => 'online', 'lesson_ids' => [99]],
+        ]);
+
+        $service = $this->makeService();
+
+        $this->assertNull($service->findEnrolledEditionForLesson(1, 99));
+    }
+
+    /**
+     * Build a UserDashboardService from the current (possibly per-test
+     * re-mocked) dependencies.
+     */
+    private function makeService(): UserDashboardService
+    {
+        return new UserDashboardService(
+            $this->regRepo,
+            $this->editionService,
+            $this->editionRepository,
+            $this->sessionService,
+            $this->attendanceService,
+            $this->completionService,
+        );
+    }
+
+    // ================================================================
     // getInitials() tests (via reflection)
     // ================================================================
 
