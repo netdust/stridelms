@@ -147,27 +147,37 @@ if ($is_online) :
     <?php endif; ?>
 
     <?php
-$has_drip = $is_online && $user_id && LearnDashHelper::hasAccess($course_id, $user_id) && LearnDashHelper::hasDripFeed($course_id);
+// Show the Helder Tij styled lesson list whenever the visitor has access to
+// an online course's lessons — drip or not. getLessonsWithAvailability()
+// returns is_available=true for every lesson when no drip is configured, so
+// the same markup renders the full list (done / current / upcoming). The raw
+// LearnDash [course_content] is the fallback only when the styled list can't
+// be built (no access, or not an online course).
+$show_styled_list = $is_online && $user_id && LearnDashHelper::hasAccess($course_id, $user_id);
 
-if ($has_drip) :
+if ($show_styled_list) :
     $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $user_id);
-    $locked_lessons = array_filter($lessons_with_dates, fn($l) => !$l['is_available']);
+endif;
 
-    if (!empty($locked_lessons)) :
-        ?>
+if ($show_styled_list && !empty($lessons_with_dates)) :
+    $locked_lessons = array_filter($lessons_with_dates, fn($l) => !$l['is_available']);
+    ?>
+        <?php if (!empty($locked_lessons)) : ?>
         <div class="mb-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800 flex items-start gap-2">
             <?php echo stridence_icon('info', 'w-4 h-4 mt-0.5 shrink-0 text-blue-600'); ?>
             <span>
                 <?php esc_html_e('Sommige lessen worden op een later moment beschikbaar. Bekijk de planning hieronder.', 'stridence'); ?>
             </span>
         </div>
+        <?php endif; ?>
 
-        <!-- Custom drip list — our own markup, restyled to the Helder Tij
-             lesson-list recipe (white card, divider rows, status circles). -->
-        <div class="mb-6 bg-surface-card rounded-[16px] shadow-card flex flex-col">
+        <!-- Helder Tij lesson-list recipe (white card, divider rows, status
+             circles). Our own markup — the LearnDash list is never re-rendered
+             when this shows. -->
+        <div class="mb-6 bg-surface-card rounded-[16px] shadow-card flex flex-col overflow-hidden">
             <?php
             $current_marked = false;
-        foreach ($lessons_with_dates as $i => $lesson) :
+        foreach (array_values($lessons_with_dates) as $i => $lesson) :
             $is_done    = !empty($lesson['completed']);
             $is_locked  = empty($lesson['is_available']);
             $is_current = !$current_marked && !$is_done && !$is_locked;
@@ -188,9 +198,13 @@ if ($has_drip) :
                     <?php endif; ?>
 
                     <div class="flex-1 min-w-0">
+                        <?php
+                        // "N · " prefix mirrors the design's numbered rows.
+                        $num_prefix = ($i + 1) . ' · ';
+                        ?>
                         <?php if (!$is_locked) : ?>
                             <a href="<?php echo esc_url($lesson['url']); ?>" class="text-[15px] <?php echo $is_current ? 'font-bold text-text' : 'font-semibold ' . ($is_done ? 'text-text-muted' : 'text-text'); ?> hover:text-primary truncate block">
-                                <?php echo esc_html($lesson['title']); ?>
+                                <span class="text-text-muted font-normal"><?php echo esc_html($num_prefix); ?></span><?php echo esc_html($lesson['title']); ?>
                             </a>
                             <?php if ($is_current) : ?>
                                 <div class="text-[12px] font-bold text-badge-online-text mt-0.5">
@@ -199,7 +213,7 @@ if ($has_drip) :
                             <?php endif; ?>
                         <?php else : ?>
                             <span class="text-[15px] font-semibold text-text-muted truncate block">
-                                <?php echo esc_html($lesson['title']); ?>
+                                <span class="font-normal"><?php echo esc_html($num_prefix); ?></span><?php echo esc_html($lesson['title']); ?>
                             </span>
                         <?php endif; ?>
                     </div>
@@ -219,16 +233,13 @@ if ($has_drip) :
                 </div>
             <?php endforeach; ?>
         </div>
-    <?php
-        endif;
-endif;
-?>
-
+    <?php else : ?>
     <div class="learndash-course-content">
         <?php
-    echo do_shortcode('[course_content course_id="' . esc_attr($course_id) . '"]');
-?>
+        echo do_shortcode('[course_content course_id="' . esc_attr($course_id) . '"]');
+    ?>
     </div>
+    <?php endif; ?>
 </section>
 
 <?php if (!$is_online) : ?>
