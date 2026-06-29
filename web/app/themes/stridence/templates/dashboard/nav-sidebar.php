@@ -66,6 +66,11 @@ $item_idle   = $item_base . ' text-text-muted font-semibold hover:bg-surface-alt
                 class="w-8 h-8 rounded-sm text-sm text-text-muted hover:bg-surface-alt transition-colors duration-fast">&raquo;</button>
     </div>
 
+    <!-- Scrollable nav region: primary + utility. flex-1 + overflow-y-auto so
+         that on short viewports the nav scrolls while the logo (top) and
+         profile/logout block (bottom) stay pinned and always reachable. -->
+    <div class="flex-1 min-h-0 overflow-y-auto scrollbar-hide">
+
     <!-- Primary Navigation -->
     <nav class="flex flex-col gap-0.5">
         <?php foreach ($primary_nav as $slug => $item) :
@@ -124,6 +129,8 @@ $item_idle   = $item_base . ' text-text-muted font-semibold hover:bg-surface-alt
             </a>
         <?php endforeach; ?>
     </nav>
+
+    </div><!-- /scrollable nav region -->
 
     <!-- Profile row (bottom) -->
     <div class="mt-auto">
