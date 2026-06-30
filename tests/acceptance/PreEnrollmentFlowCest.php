@@ -96,6 +96,10 @@ class PreEnrollmentFlowCest
 
         $I->fillField('#' . $kind . '_name', $name);
         $I->fillField('#' . $kind . '_email', $email);
+        // The waitlist form carries a full billing section, so its submit
+        // button sits below the fold — a plain click is intercepted (the point
+        // is off-screen). Scroll it into view first so the click lands.
+        $I->scrollTo('button[type="submit"]');
         $I->click('button[type="submit"]');
 
         $expected = $kind === 'interest'
