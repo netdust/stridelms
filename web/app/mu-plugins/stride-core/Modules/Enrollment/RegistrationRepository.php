@@ -1463,6 +1463,36 @@ final class RegistrationRepository
     }
 
     /**
+     * Re-link an anonymous waitlist row to a resolved WP account.
+     *
+     * Minimal user_id-only write (INV-3, INV-9): sets ONLY `user_id`, leaving
+     * status, registered_at, enrollment_path and enrollment_data untouched —
+     * the promote capacity transaction owns the status flip, and the lead's
+     * captured data must stay per-registration. Deliberately NOT
+     * upgradeFromInterest(), which resets registered_at and forces status/path.
+     */
+    public function attachUserToWaitlistRow(int $registrationId, int $userId): bool
+    {
+        global $wpdb;
+
+        $result = $wpdb->update(
+            $this->table(),
+            ['user_id' => $userId],
+            ['id' => $registrationId],
+            ['%d'],
+            ['%d'],
+        );
+
+        $this->clearCache();
+
+        if ($result !== false) {
+            $this->emitRowEvent('row_updated', $registrationId, ['user_id' => $userId], 'attach_user_to_waitlist_row');
+        }
+
+        return $result !== false;
+    }
+
+    /**
      * Migration support (CR-D3 / INV-3): every registration that carries
      * completion_tasks, as minimal {id, completion_tasks} pairs. The table
      * is repository-owned, so table-wide scans read through here — not via
