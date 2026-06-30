@@ -127,6 +127,25 @@ final class QuestionnaireHandler
             return $validationResult;
         }
 
+        // The native offer/invoice fields rendered by the waitlist template are
+        // NOT declared in any questionnaire group, so QuestionnaireValidator does
+        // not enforce them. Enforce the offer essentials here. Field names are the
+        // EnrollmentService::getUserMetaMapping() input-keys so they map cleanly to
+        // billing_* usermeta on promote.
+        $nativeRequired = [
+            'company' => __('Bedrijf of organisatie op factuur is verplicht.', 'stride'),
+            'vat_number' => __('BTW-nummer is verplicht.', 'stride'),
+            'invoice_email' => __('Facturatie e-mailadres is verplicht.', 'stride'),
+        ];
+        foreach ($nativeRequired as $field => $message) {
+            if (empty($extraFields[$field])) {
+                return new WP_Error('validation_error', $message);
+            }
+        }
+        if (!is_email($extraFields['invoice_email'])) {
+            return new WP_Error('validation_error', __('Facturatie e-mailadres is ongeldig.', 'stride'));
+        }
+
         $registrations = ntdst_get(RegistrationRepository::class);
         $existing = $registrations->findAnonymousForEmailAndEdition($email, $editionId);
 

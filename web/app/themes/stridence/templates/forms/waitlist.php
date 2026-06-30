@@ -53,6 +53,85 @@ $alpine_config = json_encode([
                     <input type="email" id="waitlist_email" x-model="form.email" class="input-text" required>
                 </div>
 
+                <?php
+                /*
+                 * Native offer/invoice fields — shown BY DEFAULT (not driven through
+                 * the questionnaire builder). Field names are the EnrollmentService
+                 * getUserMetaMapping() INPUT-KEYS (company, vat_number, ...), bound to
+                 * form.extra_fields so they ride the same `extra_fields` payload that
+                 * the handler sanitizes + persists into enrollment_data.waitlist.data,
+                 * and map to billing_* usermeta on promote.
+                 *
+                 * Required vs optional: the offer essentials (company, vat_number,
+                 * invoice_email) are required client-side AND re-validated server-side
+                 * in QuestionnaireHandler::handleSubmitWaitlist. Address block
+                 * (address/postal_code/city) is helpful-but-optional at waitlist stage;
+                 * gln_number, organisation and department are optional.
+                 */
+                ?>
+                <fieldset class="grid gap-4 border-t border-border-subtle pt-4 mt-2">
+                    <legend class="text-sm font-semibold text-text-default mb-1">
+                        <?= esc_html__('Gegevens voor offerte/facturatie', 'stridence') ?>
+                    </legend>
+
+                    <div>
+                        <label class="input-label" for="waitlist_company">
+                            <?= esc_html__('Bedrijf / organisatie op factuur', 'stridence') ?> <span class="text-error">*</span>
+                        </label>
+                        <input type="text" id="waitlist_company" x-model="form.extra_fields.company" class="input-text" required>
+                    </div>
+                    <div>
+                        <label class="input-label" for="waitlist_vat_number">
+                            <?= esc_html__('BTW-nummer', 'stridence') ?> <span class="text-error">*</span>
+                        </label>
+                        <input type="text" id="waitlist_vat_number" x-model="form.extra_fields.vat_number" class="input-text" required>
+                    </div>
+                    <div>
+                        <label class="input-label" for="waitlist_invoice_email">
+                            <?= esc_html__('Facturatie e-mailadres', 'stridence') ?> <span class="text-error">*</span>
+                        </label>
+                        <input type="email" id="waitlist_invoice_email" x-model="form.extra_fields.invoice_email" class="input-text" required>
+                    </div>
+                    <div>
+                        <label class="input-label" for="waitlist_address">
+                            <?= esc_html__('Adres', 'stridence') ?>
+                        </label>
+                        <input type="text" id="waitlist_address" x-model="form.extra_fields.address" class="input-text">
+                    </div>
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <label class="input-label" for="waitlist_postal_code">
+                                <?= esc_html__('Postcode', 'stridence') ?>
+                            </label>
+                            <input type="text" id="waitlist_postal_code" x-model="form.extra_fields.postal_code" class="input-text">
+                        </div>
+                        <div>
+                            <label class="input-label" for="waitlist_city">
+                                <?= esc_html__('Gemeente', 'stridence') ?>
+                            </label>
+                            <input type="text" id="waitlist_city" x-model="form.extra_fields.city" class="input-text">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="input-label" for="waitlist_gln_number">
+                            <?= esc_html__('GLN-nummer', 'stridence') ?>
+                        </label>
+                        <input type="text" id="waitlist_gln_number" x-model="form.extra_fields.gln_number" class="input-text">
+                    </div>
+                    <div>
+                        <label class="input-label" for="waitlist_organisation">
+                            <?= esc_html__('Organisatie / werkgever', 'stridence') ?>
+                        </label>
+                        <input type="text" id="waitlist_organisation" x-model="form.extra_fields.organisation" class="input-text">
+                    </div>
+                    <div>
+                        <label class="input-label" for="waitlist_department">
+                            <?= esc_html__('Afdeling', 'stridence') ?>
+                        </label>
+                        <input type="text" id="waitlist_department" x-model="form.extra_fields.department" class="input-text">
+                    </div>
+                </fieldset>
+
                 <?php foreach ($field_groups as $group) : ?>
                     <?php stridence_template_part('forms/fields/field-group', null, ['group' => $group]); ?>
                 <?php endforeach; ?>
@@ -76,6 +155,13 @@ function strideWaitlistForm(config) {
         submitted: false,
         error: '',
         init() {
+            // Seed the native offer/invoice keys so x-model binds cleanly. These
+            // mirror EnrollmentService::getUserMetaMapping() input-keys. The group
+            // loop runs AFTER and may overwrite a same-named questionnaire field —
+            // that's fine (last-writer-wins, no double-clobber of native defaults).
+            ['company', 'vat_number', 'invoice_email', 'address', 'postal_code', 'city', 'gln_number', 'organisation', 'department'].forEach(key => {
+                this.form.extra_fields[key] = '';
+            });
             (config.fieldGroups || []).forEach(group => {
                 (group.fields || []).forEach(field => {
                     if (field.name) {
