@@ -66,6 +66,15 @@ jobs:
           --health-interval=10s
           --health-timeout=5s
           --health-retries=10
+      # Mailpit captures the synchronous confirmation mails PreEnrollmentFlowCest
+      # + TrajectoryE2ECest assert (they poll its HTTP API at :8025). The app
+      # sends via fluent-smtp → SMTP :1025 (configured below). Both ports bind on
+      # the runner host; app + tests reach them at 127.0.0.1.
+      mailpit:
+        image: axllent/mailpit:latest
+        ports:
+          - 8025:8025
+          - 1025:1025
 
     steps:
     - uses: actions/checkout@v4
@@ -161,19 +170,62 @@ jobs:
         wp option update siteurl "http://${HOST_GW}:8080/wp"
         wp rewrite flush --hard
 
-    # The /mijn-account/ dashboard page is manual content in the live DBs (see
-    # docs/LAUNCH-CHECKLIST.md "Recreate 6 footer pages") — NOT created by the
-    # theme or the seeder. The dashboard/profile/trajectory Cests resolve it via
-    # get_page_by_path('mijn-account') + the page-mijn-account.php template, so a
-    # fresh CI install must create it (idempotent: skip if it already exists).
-    - name: Create the /mijn-account/ dashboard page
+    # The manual content pages live DBs carry but code never provisions (see
+    # docs/LAUNCH-CHECKLIST.md "Recreate footer pages"). A fresh CI install must
+    # create them so the Cests that navigate to them resolve:
+    #   - mijn-account → page-mijn-account.php template (dashboard/profile/trajectory Cests)
+    #   - interesse    → [stride_interest] shortcode  (PreEnrollmentFlowCest)
+    #   - wachtlijst   → [stride_waitlist] shortcode  (PreEnrollmentFlowCest)
+    # Idempotent: skip any that already exist.
+    - name: Create the manual content pages
       run: |
-        if ! wp post list --post_type=page --name=mijn-account --field=ID | grep -q .; then
-          wp post create --post_type=page --post_status=publish \
-            --post_name=mijn-account --post_title="Mijn account" \
-            --page_template=page-mijn-account.php
-        fi
+        create_page() { # slug title (template|content)
+          local slug="$1" title="$2" kind="$3" val="$4"
+          if wp post list --post_type=page --name="$slug" --field=ID | grep -q .; then return; fi
+          if [ "$kind" = "template" ]; then
+            wp post create --post_type=page --post_status=publish \
+              --post_name="$slug" --post_title="$title" --page_template="$val"
+          else
+            wp post create --post_type=page --post_status=publish \
+              --post_name="$slug" --post_title="$title" --post_content="$val"
+          fi
+        }
+        create_page mijn-account "Mijn account" template page-mijn-account.php
+        create_page interesse    "Interesse"    content  "[stride_interest]"
+        create_page wachtlijst   "Wachtlijst"   content  "[stride_waitlist]"
         wp rewrite flush --hard
+
+    # Route wp_mail through fluent-smtp → Mailpit SMTP (127.0.0.1:1025). The app's
+    # confirmation mails are sent SYNCHRONOUSLY in the request thread (no cron),
+    # so they land in Mailpit before the Cests' 5s poll. The mailer's From is the
+    # site admin_email (ci@example.com, set by install-wp.sh) — map that exact
+    # address to the Mailpit connection AND force_from so any From routes there.
+    - name: Point fluent-smtp at Mailpit
+      run: |
+        wp option update fluentmail-settings --format=json '{
+          "connections": {
+            "mailpit": {
+              "title": "Mailpit",
+              "provider_settings": {
+                "sender_name": "Stride CI",
+                "sender_email": "ci@example.com",
+                "force_from_name": "no",
+                "force_from_email": "yes",
+                "provider": "smtp",
+                "host": "127.0.0.1",
+                "port": "1025",
+                "auth": "no",
+                "username": "",
+                "password": "",
+                "encryption": "none",
+                "auto_tls": "no",
+                "key_store": "db"
+              }
+            }
+          },
+          "mappings": { "ci@example.com": "mailpit" },
+          "misc": { "default_connection": "mailpit", "log_emails": "yes", "simulate_emails": "no" }
+        }'
 
     # Seed the feature-matrix fixtures the seed-dependent Cests need
     # (seed_student1 + its registrations, published editions, trajectories,
