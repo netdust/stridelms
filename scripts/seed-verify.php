@@ -311,6 +311,61 @@ if (!empty($regIds)) {
 $check('>=1 pending seed registration approval-ready (user tasks complete, approval open)', $approvalReady >= 1);
 
 // ---------------------------------------------------------------------------
+// 4. Demo persona (seed_completed_user) — every dashboard surface populated.
+//    Drives the SAME reads the dashboard tabs use, so a PASS here means the
+//    rendered surface will populate (premise ground-truth: trajectory needs a
+//    PARENT row, certificate needs a genuine LD completion + assigned cert).
+// ---------------------------------------------------------------------------
+$demo = get_user_by('email', 'seed_completed_user@seed.test');
+$check('demo persona user exists', $demo instanceof WP_User);
+if ($demo instanceof WP_User) {
+    $uid = (int) $demo->ID;
+
+    // F3 Meldingen: >=1 notification, >=1 unread (real product read)
+    $notif = ntdst_get(\Stride\Modules\Notification\NotificationService::class);
+    $all   = $notif->getNotifications($uid);
+    $check('demo persona has >=1 notification', count($all) >= 1);
+    $check('demo persona has >=1 UNREAD notification', $notif->getUnreadCount($uid) >= 1);
+
+    // F2 Certificaten: >=1 completed edition reg whose course yields a cert link
+    $regRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+    $edSvc   = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+    $hasCertLink = false;
+    foreach ($regRepo->findByUser($uid) as $r) {
+        if (($r->status ?? '') !== 'completed' || empty($r->edition_id)) {
+            continue;
+        }
+        $cid = (int) $edSvc->getCourseId((int) $r->edition_id);
+        if ($cid && \Stride\Integrations\LearnDash\LearnDashHelper::getCertificateLink($cid, $uid) !== '') {
+            $hasCertLink = true;
+            break;
+        }
+    }
+    $check('demo persona has a downloadable certificate link', $hasCertLink);
+
+    // F4 Offertes: >=1 quote tied to the demo persona — route through the SAME
+    // read the Offertes tab uses (QuoteService::getUserQuotes → QuoteRepository::
+    // findByUser, which enforces post_status='publish'). A raw user_id-meta count
+    // would also pass for a draft/trashed quote the tab never renders (CR I-2).
+    $quoteSvc   = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
+    $userQuotes = $quoteSvc->getUserQuotes($uid);
+    $check('demo persona has >=1 quote (Offertes tab read)', count($userQuotes) >= 1);
+
+    // F5 Trajecten: >=1 PARENT trajectory enrollment (the corrected premise)
+    $trajEnrollments = $regRepo->findTrajectoryEnrollmentsByUser($uid);
+    $check('demo persona has >=1 parent trajectory enrollment (tab-trajecten read)', count($trajEnrollments) >= 1);
+
+    // F1 Dashboard pending task: route through the SAME read the dashboard's
+    // "Acties nodig" uses (EnrollmentCompletion::getPendingForUser, which keeps
+    // only regs with >=1 INCOMPLETE task). A raw `completion_tasks IS NOT NULL`
+    // count would stay green on a stale DB even when every task is done or the
+    // selection window has lapsed and the surface renders empty (CR I-1).
+    $completion  = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+    $pendingRegs = $completion->getPendingForUser($uid);
+    $check('demo persona has >=1 pending registration with an open task (dashboard read)', count($pendingRegs) >= 1);
+}
+
+// ---------------------------------------------------------------------------
 echo "\n" . (empty($failures) ? "ALL DIMENSIONS COVERED\n" : count($failures) . " FAILURES\n");
 // NOTE: `ddev exec bash -c '...; echo $?'` always shows 0 — ddev expands `$?`
 // in its own wrapper shell. Check the HOST-side `$?` after `ddev exec` instead.

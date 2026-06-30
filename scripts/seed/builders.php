@@ -38,6 +38,194 @@ final class StrideSeedBuilders
     }
 
     /**
+     * Issue a downloadable LearnDash certificate for one user on one course.
+     * Idempotent: reuses the single shared seed certificate post; marking a
+     * complete course complete again is a no-op in LD. getCertificateLink()
+     * returns '' until BOTH a certificate post is assigned AND the course is
+     * genuinely complete — so we do both here (premise ground-truth fact 3).
+     *
+     * @return int|null certificate post id
+     */
+    public function buildCertificate(int $courseId, int $userId): ?int
+    {
+        if (!function_exists('learndash_process_mark_complete')) {
+            echo "      ! LearnDash mark-complete unavailable — certificate skipped\n";
+
+            return null;
+        }
+
+        // (a) one shared seed certificate post (idempotent by title)
+        $certId = $this->findIdByTitle('sfwd-certificates', 'Stride Demo Certificaat');
+        if (!$certId) {
+            $certId = wp_insert_post([
+                'post_title' => 'Stride Demo Certificaat',
+                'post_type' => 'sfwd-certificates',
+                'post_status' => 'publish',
+                'post_content' => '[certificate_title] — behaald op [certificate_completion_date]',
+            ]);
+            if (is_wp_error($certId)) {
+                echo "      ! Certificate post failed: {$certId->get_error_message()}\n";
+
+                return null;
+            }
+            update_post_meta($certId, StrideSeedRunner::SEED_META_KEY, true);
+            echo "      + Certificate post created (ID: {$certId})\n";
+        }
+
+        // (b) assign to course (merge, preserve price_type) — read via the LD meta shape
+        $ld = get_post_meta($courseId, '_sfwd-courses', true);
+        $ld = is_array($ld) ? $ld : [];
+        if (($ld['sfwd-courses_certificate'] ?? null) !== $certId) {
+            $ld['sfwd-courses_certificate'] = $certId;
+            update_post_meta($courseId, '_sfwd-courses', $ld);
+        }
+
+        // (c) grant access + genuinely complete. LD owns completion: marking the
+        // COURSE complete is a no-op while its required lesson/topic steps are
+        // unfinished (the lesson_ld_owns_completion gotcha). A seeded demo user
+        // never walks the lessons, so we complete every step first, then the
+        // course — only then does getCertificateLink() resolve to a real link.
+        if (function_exists('ld_update_course_access')) {
+            ld_update_course_access($userId, $courseId, false);
+        }
+        if (function_exists('learndash_get_course_steps')) {
+            $steps = learndash_get_course_steps($courseId);
+            foreach ((array) $steps as $stepId) {
+                learndash_process_mark_complete($userId, (int) $stepId, false, $courseId);
+            }
+        }
+        learndash_process_mark_complete($userId, $courseId);
+
+        echo "      🎓 Certificate issued: course {$courseId} → user {$userId}\n";
+
+        return (int) $certId;
+    }
+
+    /**
+     * Record audit rows that surface as dashboard Meldingen for one user.
+     * Routes through the PRODUCT write path (AuditService::record), NOT a raw
+     * insert — record() fires ntdst/audit/recorded (busts the unread-count
+     * transient) and AuditRepository sanitizes the action + encodes context
+     * (INV-3 audit-table convergence). Subject lives in context.user_id; for
+     * 'completion.*' the subject IS the actor (findBySubjectUser branch 2).
+     *
+     * Only mapper-known actions render (NotificationMapper) — any other slug
+     * yields a blank title and is dropped, so seed ONLY known actions.
+     *
+     * @param array<int,array{action:string,entity_type:string,entity_id:int,context?:array}> $specs
+     */
+    public function buildNotifications(int $userId, int $adminId, array $specs): void
+    {
+        $audit = ntdst_get(\NTDST\Audit\AuditService::class);
+        if (!$audit) {
+            echo "      ! AuditService unavailable — notifications skipped\n";
+
+            return;
+        }
+
+        global $wpdb;
+        // Respect the ntdst/audit/table_name filter (and the stride_ prefix)
+        // — never hardcode {$wpdb->prefix}audit_log. This READ is the only raw
+        // $wpdb here (a dedupe pre-check); the WRITE is always record().
+        $table = \NTDST\Audit\AuditTable::getTableName();
+
+        foreach ($specs as $spec) {
+            $action = $spec['action'];
+            $isCompletion = str_starts_with($action, 'completion.');
+            // Subject is always the student (context.user_id). Actor: admin for
+            // registration/attendance/session rows (so actor != subject, branch 1);
+            // the student for completion.* rows (branch 2 keys on actor_id).
+            $actorId = $isCompletion ? $userId : $adminId;
+            $context = array_merge(['user_id' => $userId], $spec['context'] ?? []);
+
+            // Idempotency: skip if an identical (action, subject, entity) row
+            // exists. subject_user_id is the STORED generated column derived
+            // from context.user_id (audit schema v2).
+            $exists = (int) $wpdb->get_var($wpdb->prepare(
+                "SELECT COUNT(*) FROM {$table}
+                 WHERE action = %s AND subject_user_id = %d AND entity_id = %d",
+                $action,
+                $userId,
+                $spec['entity_id'],
+            ));
+            if ($exists > 0) {
+                echo "        - Notification '{$action}' exists for user {$userId}\n";
+
+                continue;
+            }
+
+            $res = $audit->record($spec['entity_type'], $spec['entity_id'], $action, $actorId, $context);
+            if (is_wp_error($res)) {
+                echo "        ! Notification '{$action}' failed: {$res->get_error_message()}\n";
+
+                continue;
+            }
+            echo "        🔔 Notification: {$action} (subject user {$userId})\n";
+        }
+    }
+
+    /**
+     * Turn a matrix list of notification ACTION slugs into full buildNotifications
+     * specs, filling entity_type / entity_id / context from the LIVE ids of the
+     * registration just built. Keeps the matrix declarative (it names actions,
+     * not post ids). Unknown actions are skipped with a warning rather than
+     * recorded — only mapper-known slugs render a non-blank Melding.
+     *
+     * @param array<int,string> $actions mapper-known action slugs
+     * @return array<int,array{action:string,entity_type:string,entity_id:int,context:array}>
+     */
+    private function resolveNotificationSpecs(array $actions, int $editionId, int $courseId, int $userId): array
+    {
+        $courseTitle = get_the_title($courseId);
+        $certLink = '';
+        if (function_exists('learndash_get_course_certificate_link')) {
+            $certLink = (string) learndash_get_course_certificate_link($courseId, $userId);
+        }
+
+        $specs = [];
+        foreach ($actions as $action) {
+            // registration/attendance/session events key on the edition;
+            // completion/certificate events key on the course (matching the
+            // NotificationMapper's context reads per action).
+            $spec = match (true) {
+                $action === 'registration.created',
+                $action === 'registration.cancelled' => [
+                    'action' => $action,
+                    'entity_type' => 'registration',
+                    'entity_id' => $editionId,
+                    'context' => ['edition_id' => $editionId],
+                ],
+                str_starts_with($action, 'completion.') && $action !== 'completion.certificate_issued' => [
+                    'action' => $action,
+                    'entity_type' => 'course',
+                    'entity_id' => $courseId,
+                    'context' => ['course_id' => $courseId, 'course_title' => $courseTitle, 'edition_id' => $editionId],
+                ],
+                $action === 'completion.certificate_issued' => [
+                    'action' => $action,
+                    'entity_type' => 'course',
+                    'entity_id' => $courseId,
+                    'context' => [
+                        'course_id' => $courseId,
+                        'course_title' => $courseTitle,
+                        'certificate_link' => $certLink,
+                    ],
+                ],
+                default => null,
+            };
+
+            if ($spec === null) {
+                echo "      ! Unknown/unsupported notification action '{$action}' — skipped\n";
+
+                continue;
+            }
+            $specs[] = $spec;
+        }
+
+        return $specs;
+    }
+
+    /**
      * Ensure stride_format and stride_theme taxonomy terms exist.
      */
     public function ensureTaxonomyTerms(): void
@@ -574,6 +762,34 @@ final class StrideSeedBuilders
             $courseId = (int) ntdst_get(EditionService::class)->getCourseId($editionId);
             if ($courseId) {
                 ld_update_course_access($userId, $courseId, false);
+
+                // A completed registration that declares 'certificate' => true gets a
+                // genuinely-complete course + assigned cert post, so getCertificateLink()
+                // is non-empty on the Certificaten dashboard tab.
+                if ($status === 'completed' && !empty($reg['certificate'])) {
+                    $this->buildCertificate($courseId, (int) $userId);
+                }
+
+                // Declarative Meldingen: a registration's 'notifications' key lists
+                // mapper-known ACTIONS; the builder resolves each spec's entity_id +
+                // context from the LIVE registration/course/edition just built (the
+                // matrix declares intent, not ids). Left UNREAD so the demo persona
+                // shows an unread badge on the Meldingen tab.
+                if (!empty($reg['notifications'])) {
+                    $specs = $this->resolveNotificationSpecs(
+                        (array) $reg['notifications'],
+                        $editionId,
+                        $courseId,
+                        (int) $userId,
+                    );
+                    if ($specs) {
+                        $this->buildNotifications(
+                            (int) $userId,
+                            (int) ($userMap['seed_admin'] ?? 1),
+                            $specs,
+                        );
+                    }
+                }
             }
         }
 
@@ -984,6 +1200,56 @@ final class StrideSeedBuilders
         update_post_meta($id, StrideSeedRunner::SEED_META_KEY, true);
         echo "  + Trajectory: {$t['title']} [{$t['mode']}] (ID: {$id}, " . count($courses) . " courses)\n";
         return (int) $id;
+    }
+
+    /**
+     * Create a PARENT trajectory enrollment (trajectory_id set, edition_id NULL)
+     * — the shape tab-trajecten.php reads via findTrajectoryEnrollmentsByUser().
+     * A path:trajectory EDITION registration does NOT appear there (premise
+     * ground-truth fact 4). Idempotent via findByUserAndTrajectory.
+     *
+     * @param array<string,mixed> $spec
+     * @param array<string,int>   $userMap
+     * @return int|null registration id
+     */
+    public function buildTrajectoryEnrollment(array $spec, array $userMap): ?int
+    {
+        $repo   = ntdst_get(RegistrationRepository::class);
+        $userId = (int) ($userMap[$spec['user']] ?? 0);
+        if (!$userId) {
+            echo "  ! Trajectory enrollment: unknown user '{$spec['user']}'\n";
+
+            return null;
+        }
+        $trajectoryId = $this->findIdByTitle('vad_trajectory', $spec['trajectory_title']);
+        if (!$trajectoryId) {
+            echo "  ! Trajectory enrollment: trajectory not found '{$spec['trajectory_title']}'\n";
+
+            return null;
+        }
+
+        $existing = $repo->findByUserAndTrajectory($userId, $trajectoryId);
+        if ($existing) {
+            echo "  - Trajectory enrollment {$spec['user']} → {$spec['trajectory_title']} exists (ID: {$existing->id})\n";
+
+            return (int) $existing->id;
+        }
+
+        $regId = $repo->create([
+            'user_id'         => $userId,
+            'trajectory_id'   => $trajectoryId,   // parent: NO edition_id
+            'status'          => $spec['status'] ?? 'confirmed',
+            'enrollment_path' => RegistrationRepository::PATH_TRAJECTORY,
+            'notes'           => 'Seed: demo persona trajectory enrollment',
+        ]);
+        if (is_wp_error($regId)) {
+            echo "  ! Trajectory enrollment failed: {$regId->get_error_message()}\n";
+
+            return null;
+        }
+        echo "  + Trajectory enrollment: {$spec['user']} → {$spec['trajectory_title']} (ID: {$regId})\n";
+
+        return (int) $regId;
     }
 
     /**

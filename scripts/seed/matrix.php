@@ -39,14 +39,28 @@
  *       'attendance' => 'present'|null,  'quote' => 'draft'|'sent'|'exported'|'cancelled'|null,
  *       'init_tasks' => bool, 'init_post_tasks' => bool,
  *       'complete_user_tasks' => bool,   // with init_tasks: mark all non-approval tasks completed (approval-ready)
+ *       'certificate' => bool,           // with status 'completed': issue a downloadable LearnDash
+ *                                        // certificate (buildCertificate) → Certificaten dashboard tab
+ *       'notifications' => string[],     // flat list of mapper-known ACTION slugs
+ *                                        // (e.g. 'registration.created','completion.certificate_issued');
+ *                                        // resolveNotificationSpecs() fills entity_id/context from the
+ *                                        // live registration/course/edition → Meldingen dashboard tab
  *     ], ...],
  *     'covers' => string[],
  *     'sessions' => [['date_offset','start','end','type','title','optional'?,'slot'?,'location'?,'link_lesson'?]],
  *   ], ...],
  * ]
  *
- * Top-level keys returned: 'users', 'courses', 'trajectories', 'vouchers',
- * 'questionnaire_groups', 'company_details'.
+ * SHAPE of a trajectory_enrollment entry (flat top-level list, resolved AFTER
+ * trajectories are built so the title resolves to a parent trajectory id):
+ * [
+ *   'user' => string (login),
+ *   'trajectory_title' => string (exact vad_trajectory post title),
+ *   'status' => RegistrationStatus value,   // e.g. 'confirmed'
+ * ]
+ *
+ * Top-level keys returned: 'users', 'courses', 'trajectories',
+ * 'trajectory_enrollments', 'vouchers', 'questionnaire_groups', 'company_details'.
  */
 
 use Stride\Domain\OfferingStatus;
@@ -150,10 +164,19 @@ return [
                     'post_requires' => ['evaluation', 'documents'],
                     'covers' => ['status:completed', 'reg:completed', 'quote:exported',
                         'flow:attendance_marked', 'flow:post_course_ready',
-                        'req:post_evaluation', 'req:post_documents'],
+                        'req:post_evaluation', 'req:post_documents',
+                        'persona:completed_user', 'flow:certificate_issued', 'flow:notifications'],
                     'registrations' => [
                         ['user' => 'seed_student1', 'status' => 'completed', 'path' => 'individual',
                             'attendance' => 'present', 'init_post_tasks' => true, 'quote' => 'exported'],
+                        // Demo persona: consolidates the completed-with-certificate surface.
+                        // certificate => downloadable cert on the Certificaten tab (F4 needs the
+                        // 'sent' quote); notifications => unread Meldingen (F3). The builder fills
+                        // each spec's entity_id/context from the live reg/course it just built.
+                        ['user' => 'seed_completed_user', 'status' => 'completed', 'path' => 'individual',
+                            'attendance' => 'present', 'quote' => 'sent',
+                            'certificate' => true,
+                            'notifications' => ['registration.created', 'completion.certificate_issued']],
                     ],
                     'sessions' => [
                         ['date_offset' => 0, 'start' => '09:30', 'end' => '16:30', 'type' => 'in_person', 'title' => 'Motiverende gespreksvoering rond voeding'],
@@ -361,9 +384,13 @@ return [
                         ['slot' => 'Verdieping (kies 1)', 'label' => 'Verdieping (kies 1)', 'required' => true, 'max_selections' => 1],
                     ],
                     'covers' => ['status:open', 'sessions:slots_choose_n', 'sessions:selection_deadline',
-                        'req:pre_session_selection', 'reg:pending', 'form:default'],
+                        'req:pre_session_selection', 'reg:pending', 'form:default',
+                        'persona:completed_user'],
                     'registrations' => [
                         ['user' => 'seed_student2', 'status' => 'pending', 'path' => 'individual', 'init_tasks' => true],
+                        // Demo persona: a SEPARATE pending+init_tasks registration so the
+                        // consolidated persona also shows an open pre-enrollment task (F1).
+                        ['user' => 'seed_completed_user', 'status' => 'pending', 'path' => 'individual', 'init_tasks' => true],
                     ],
                     'sessions' => [
                         ['date_offset' => 0, 'start' => '09:00', 'end' => '17:00', 'type' => 'in_person', 'title' => 'Dag 1: Basisprincipes gezonde voeding', 'optional' => false],
@@ -904,6 +931,14 @@ return [
             'price' => 600, 'price_non_member' => 600,
             'covers' => [],
         ],
+    ],
+    // Parent trajectory enrollments — a FLAT list resolved AFTER trajectories are
+    // built (the title resolves to a parent vad_trajectory id). The runner loop
+    // that consumes this key is Task 4's job; this only DECLARES the data.
+    'trajectory_enrollments' => [
+        // Demo persona: enrolled in the cohort trajectory (F5).
+        ['user' => 'seed_completed_user', 'trajectory_title' => 'Traject Jeugdgezondheidsspecialist',
+            'status' => 'confirmed'],
     ],
     'vouchers' => [
         // SEEDVOUCHER10 code preserved (legacy fixture). discount_value: cents

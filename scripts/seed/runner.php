@@ -18,6 +18,7 @@ final class StrideSeedRunner
     private array $created = [
         'users' => [], 'courses' => [], 'lessons' => [], 'editions' => [],
         'sessions' => [], 'registrations' => [], 'trajectories' => [],
+        'trajectory_enrollments' => [],
         'vouchers' => [], 'quotes' => [], 'questionnaire_groups' => [],
     ];
     /** @var array<string,int> login => user_id, plus 'admin' => 1 */
@@ -54,6 +55,14 @@ final class StrideSeedRunner
             if ($id) {
                 $this->created['trajectories'][] = $id;
                 $this->covers["trajectory:$id"] = $t['covers'] ?? [];
+            }
+        }
+        // After trajectories are built so the title resolves to a parent id.
+        foreach (($this->matrix['trajectory_enrollments'] ?? []) as $te) {
+            $id = $this->builders->buildTrajectoryEnrollment($te, $this->userMap);
+            if ($id) {
+                $this->created['registrations'][] = $id;          // counts toward manifest
+                $this->created['trajectory_enrollments'][] = $id; // dedicated bucket
             }
         }
         foreach ($this->matrix['vouchers'] as $v) {
