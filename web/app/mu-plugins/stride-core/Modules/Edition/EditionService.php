@@ -720,7 +720,7 @@ class EditionService extends AbstractService implements EditionQueryInterface
     private function warnIfCapped(int $count, int $limit, string $context): void
     {
         if ($count >= $limit) {
-            ntdst_log()->warning('catalog enumeration filled the cap — items beyond it are silently hidden', [
+            ntdst_log('edition')->warning('catalog enumeration filled the cap — items beyond it are silently hidden', [
                 'context' => $context,
                 'cap'     => $limit,
             ]);

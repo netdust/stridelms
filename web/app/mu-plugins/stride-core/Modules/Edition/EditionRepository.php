@@ -83,10 +83,16 @@ final class EditionRepository extends AbstractRepository
 
     /**
      * THE single catalog-eligibility meta_query (Cluster 3 / Task 3.1, moved
-     * verbatim out of the theme's stridence_catalog_date_window_meta_query()).
+     * out of the theme's stridence_catalog_date_window_meta_query()).
      * Active status + the 3-branch date window, so the window rule has exactly
      * ONE home and can no longer fork across /klassikaal, /online and the
-     * course archive:
+     * course archive.
+     *
+     * Note: the grace cutoff uses wp_date() (site timezone) rather than the
+     * theme original's date() (server/UTC), matching this repository's existing
+     * convention (see buildOptionsWhere). For a Belgian-timezone site this is
+     * the correct, intended boundary; on a UTC site it is identical to the old
+     * behaviour. The 3-branch structure below is otherwise a verbatim lift:
      *   (1) dated:   end_date within a 2-day grace past today,
      *   (2) fallback: end_date missing AND start_date within the grace,
      *   (3) dateless: neither end_date nor start_date set (the "Binnenkort —
