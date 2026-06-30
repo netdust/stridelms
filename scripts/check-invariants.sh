@@ -110,8 +110,16 @@ echo
 # stride_format_date is NOT in the pattern: Task C2 (audit H-6) moved it into
 # stride-core/Support/formatting.php — it is core-owned now and core may call it.
 # Re-run that sweep and extend this pattern whenever a theme helper is added.
+# The grep filters out PHPDoc/comment lines (first non-blank char is * // or #):
+# remediation docblocks legitimately NAME theme helpers to explain the boundary
+# ("…not via stridence_catalog_theme_slugs()") and must not trip the check —
+# only real calls in code count. grep -P excludes the leading-comment prefix.
 echo "${BLUE}▸ INV-5  Plugin must not call theme helpers ${DIM}(BLOCKING since Task C2)${RESET}"
-INV5=$(grep -rn "stride_format_money\|stride_enrollment_url\|stridence_" --include="*.php" "$CORE" 2>/dev/null)
+# grep -rn emits "path:line:<code>"; drop hits whose <code> (after the
+# path:line: prefix and any indentation) begins with a comment marker — those
+# are docblocks naming a helper to document the boundary, not real calls.
+INV5=$(grep -rn "stride_format_money\|stride_enrollment_url\|stridence_" --include="*.php" "$CORE" 2>/dev/null \
+  | grep -vP "^[^:]+:[0-9]+:\s*(\*|//|#|/\*)")
 if [ -n "$INV5" ]; then
   echo "$INV5" | sed "s/^/  ${RED}•${RESET} /"
   echo "  ${DIM}stride-core must never call theme helpers — inverts the dependency arrow.${RESET}"
