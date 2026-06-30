@@ -21,6 +21,43 @@ $webRoot = dirname(__DIR__, 2) . '/web';
 // Load WordPress
 require_once $webRoot . '/wp/wp-load.php';
 
+// ---------------------------------------------------------------------------
+// DISPOSABLE-DB SAFETY GUARD
+//
+// The integration suite loads the REAL WordPress instance (wp-load.php above),
+// so it runs against whatever database DDEV is pointed at — by default the
+// working dev DB. Several tests issue destructive writes (incl. a table-wide
+// DELETE on vad_registrations), so running the suite against real data WIPES
+// live enrollments. (Incident 2026-06-30: AdminExportServiceTest's no-WHERE
+// DELETE emptied the registrations table.)
+//
+// Refuse to run unless the operator explicitly affirms the target DB is
+// disposable (a seeded/throwaway copy). This makes data-loss opt-IN, never
+// the silent default. To run: STRIDE_TEST_DB_DISPOSABLE=1 ddev exec \
+//   vendor/bin/phpunit -c phpunit-integration.xml.dist
+// ---------------------------------------------------------------------------
+if (getenv('STRIDE_TEST_DB_DISPOSABLE') !== '1') {
+    fwrite(STDERR, <<<'MSG'
+
+  ┌───────────────────────────────────────────────────────────────────────┐
+  │  REFUSING TO RUN THE INTEGRATION SUITE                                  │
+  │                                                                         │
+  │  These tests perform DESTRUCTIVE writes against the live WordPress DB   │
+  │  (including a table-wide DELETE on vad_registrations). Running them      │
+  │  against your working dev database WILL DELETE real enrollments.        │
+  │                                                                         │
+  │  Run only against a disposable / seeded DB, and opt in explicitly:      │
+  │                                                                         │
+  │    STRIDE_TEST_DB_DISPOSABLE=1 ddev exec \                              │
+  │      vendor/bin/phpunit -c phpunit-integration.xml.dist                 │
+  │                                                                         │
+  │  Reseed afterwards: ddev exec wp eval-file scripts/seed.php             │
+  └───────────────────────────────────────────────────────────────────────┘
+
+MSG);
+    exit(1);
+}
+
 // Ensure we're in a test-safe state
 if (!defined('DOING_PHPUNIT') && !defined('WP_TESTS_DOMAIN')) {
     define('DOING_PHPUNIT', true);
