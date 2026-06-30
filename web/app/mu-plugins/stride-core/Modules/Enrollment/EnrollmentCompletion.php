@@ -553,7 +553,7 @@ final class EnrollmentCompletion
     /**
      * Get task status summary for a registration.
      *
-     * @return array{tasks: array, availability: array, total: int, completed: int, has_approval: bool, ready_for_approval: bool}
+     * @return array{tasks: array, availability: array, descriptions: array<string, string>, total: int, completed: int, has_approval: bool, ready_for_approval: bool}
      */
     public function getTaskSummary(int $registrationId): array
     {
@@ -576,9 +576,35 @@ final class EnrollmentCompletion
             }
         }
 
+        // Resolve the offering this registration belongs to. Edition
+        // registrations (and cascade children) carry edition_id; a trajectory
+        // PARENT registration carries trajectory_id with edition_id NULL. The
+        // documents instruction must be read from the CORRECT host CPT — do not
+        // assume edition_id is always the offering.
+        $trajectoryId = (int) ($registration->trajectory_id ?? 0);
+        if ($editionId > 0) {
+            $postId   = $editionId;
+            $postType = 'vad_edition';
+        } else {
+            $postId   = $trajectoryId;
+            $postType = 'vad_trajectory';
+        }
+
+        // Per-offering instruction for the document tasks present on this
+        // registration. This is the single plugin->theme channel: the theme
+        // reads $task_summary['descriptions'], never a repository.
+        $descriptions = [];
+        if ($postId > 0 && isset($tasks['documents'])) {
+            $descriptions['documents'] = $this->documentsInstruction($postId, $postType, false);
+        }
+        if ($postId > 0 && isset($tasks['post_documents'])) {
+            $descriptions['post_documents'] = $this->documentsInstruction($postId, $postType, true);
+        }
+
         return [
             'tasks' => $tasks,
             'availability' => $availability,
+            'descriptions' => $descriptions,
             'total' => $total,
             'completed' => $completed,
             'has_approval' => isset($tasks['approval']),
