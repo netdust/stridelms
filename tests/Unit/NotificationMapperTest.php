@@ -108,6 +108,39 @@ class NotificationMapperTest extends TestCase
 
         $this->assertEquals('certificate', $notification['type']);
         $this->assertStringContainsString('certificaat', strtolower($notification['title']));
+
+        // The certificate notification must link to the Certificaten dashboard
+        // tab — NOT the raw LearnDash cert-PDF endpoint (the stored
+        // certificate_link), which is nonce/permission-gated and renders
+        // "Access to certificate page is disallowed".
+        $this->assertStringContainsString(
+            '/mijn-account/?tab=certificaten',
+            $notification['url'],
+            'certificate notification must link to the Certificaten dashboard tab',
+        );
+        $this->assertStringNotContainsString(
+            'example.com/cert/123',
+            $notification['url'],
+            'denial path: must never link to the raw LearnDash certificate-PDF endpoint',
+        );
+    }
+
+    /** @test */
+    public function testCertificateUrlIsTheTabEvenWithoutCourseId(): void
+    {
+        $entry = (object) [
+            'id' => 9,
+            'entity_type' => 'completion',
+            'entity_id' => 1,
+            'action' => 'completion.certificate_issued',
+            'actor_id' => null,
+            'context' => json_encode([]), // no course_id, no certificate_link
+            'created_at' => '2026-03-10 14:30:00',
+        ];
+
+        $notification = $this->mapper->fromAuditEntry($entry);
+
+        $this->assertStringContainsString('/mijn-account/?tab=certificaten', $notification['url']);
     }
 
     /** @test */

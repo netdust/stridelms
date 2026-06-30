@@ -176,6 +176,24 @@ if (!function_exists('__')) {
     }
 }
 
+if (!function_exists('human_time_diff')) {
+    function human_time_diff(int $from, int $to = 0): string
+    {
+        $to   = $to ?: time();
+        $diff = abs($to - $from);
+
+        if ($diff < HOUR_IN_SECONDS) {
+            $mins = max(1, (int) round($diff / MINUTE_IN_SECONDS));
+            return $mins . ' min';
+        }
+        if ($diff < DAY_IN_SECONDS) {
+            return max(1, (int) round($diff / HOUR_IN_SECONDS)) . ' uur';
+        }
+
+        return max(1, (int) round($diff / DAY_IN_SECONDS)) . ' dagen';
+    }
+}
+
 if (!function_exists('_n')) {
     function _n(string $single, string $plural, int $number, string $domain = 'default'): string
     {

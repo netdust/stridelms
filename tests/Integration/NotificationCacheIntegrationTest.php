@@ -159,6 +159,64 @@ final class NotificationCacheIntegrationTest extends IntegrationTestCase
         $this->assertSame(0, $this->freshService()->getUnreadCount(self::$testUserId));
     }
 
+    /**
+     * @test
+     * The Meldingen tab snapshots getNotifications() (with this-load read
+     * flags) BEFORE calling markAllRead(), so the current render keeps its
+     * unread accents while the badge clears for next load. Pin that ordering:
+     * the snapshot is unaffected by the subsequent mark, and the count goes 0.
+     */
+    public function snapshotBeforeMarkKeepsRenderFlagsAndClearsBadge(): void
+    {
+        $this->recordAudit('registration', 'registration.created', [
+            'user_id' => self::$testUserId,
+            'edition_id' => 0,
+        ]);
+
+        $svc = $this->freshService();
+
+        // 1. Snapshot — as the tab template does before marking.
+        $snapshot = $svc->getNotifications(self::$testUserId);
+        $this->assertNotEmpty($snapshot, 'fixture must produce at least one notification');
+        $unreadInSnapshot = array_filter($snapshot, fn(array $n): bool => !$n['read']);
+        $this->assertNotEmpty($unreadInSnapshot, 'arrival render must still show unread items');
+
+        // 2. Mark — the auto-mark-read on tab view.
+        $svc->markAllRead(self::$testUserId);
+
+        // 3. This-load-vs-next-load divergence: the pre-mark snapshot still
+        //    shows its items UNREAD (so the arrival render keeps its accents),
+        //    while a FRESH read after the mark shows them READ. This is the
+        //    behaviour the auto-mark-read UX depends on — and it only holds
+        //    because getNotifications() returns a by-value snapshot, so the
+        //    mark cannot retroactively flip the array already handed to render.
+        foreach ($unreadInSnapshot as $n) {
+            $this->assertFalse($n['read'], 'arrival snapshot must keep its unread flags after the mark');
+        }
+        $fresh = $this->freshService()->getNotifications(self::$testUserId);
+        $this->assertNotEmpty($fresh);
+        foreach ($fresh as $n) {
+            $this->assertTrue($n['read'], 'a fresh read after markAllRead must show items as read');
+        }
+
+        // 4. Badge clears for next load.
+        $this->assertSame(0, $this->freshService()->getUnreadCount(self::$testUserId));
+    }
+
+    /**
+     * @test
+     * Empty edge: no notifications → markAllRead is a safe no-op, count stays 0.
+     */
+    public function markAllReadOnEmptyFeedIsANoOp(): void
+    {
+        $svc = $this->freshService();
+        $this->assertSame(0, $svc->getUnreadCount(self::$testUserId));
+
+        $svc->markAllRead(self::$testUserId); // must not error on an empty feed
+
+        $this->assertSame(0, $this->freshService()->getUnreadCount(self::$testUserId));
+    }
+
     // === Helpers ===
 
     /**
