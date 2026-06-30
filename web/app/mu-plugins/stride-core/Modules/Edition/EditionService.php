@@ -408,6 +408,240 @@ class EditionService extends AbstractService implements EditionQueryInterface
     }
 
     /**
+     * Default upper bound on the catalog enumeration (ids only — memory guard).
+     * The theme passes STRIDENCE_CATALOG_MAX_ITEMS in; stride-core must NOT
+     * reference the theme constant (INV-5), so it carries its own default.
+     */
+    public const CATALOG_MAX_ITEMS = 500;
+
+    /** The catalog keys getCatalogItems() understands. */
+    private const ONLINE_FORMAT_SLUGS    = ['online', 'webinar', 'e-learning'];
+    private const CLASSROOM_FORMAT_SLUGS = ['klassikaal', 'classroom'];
+
+    /**
+     * THE catalog item list for a catalog key — the POLICY that used to live in
+     * helpers/catalog.php (Cluster 3 / Task 3.2). Composes the repo's eligible
+     * enumeration (Task 3.1) into the fully-shaped, light item list the theme's
+     * INV-7 batch prepass consumes:
+     *
+     *   - 'klassikaal': eligible editions, format-excluded (an online-only-format
+     *     course's edition is dropped), NO pure-LD courses, returned UNORDERED —
+     *     the theme applies its KLASSIKAAL band-ordering presentation on top.
+     *   - 'online': eligible editions of online-format courses PLUS pure-LD
+     *     online courses (kind 'course') that never had an edition. Flat.
+     *
+     * Returns the exact struct the prepass + pure-renderer partials expect, so
+     * neither is touched by this extraction:
+     *   list<
+     *     array{kind:'edition', edition:array{id,title,course_id,start_date,
+     *       end_date,venue,price,capacity,status,spots_remaining},
+     *       themes:list<string>}
+     *     | array{kind:'course', course_id:int, themes:list<string>}
+     *   >
+     *
+     * INV-3: every query is a repo call (findCatalogEligibleIds /
+     * findOnlineFormatCourseIds / courseIdsWithAnyEdition / findFields). INV-5:
+     * no theme symbol is referenced — theme slugs are read here via the
+     * taxonomy, not via stridence_catalog_theme_slugs(). INV-7: the item's
+     * `status` is the RAW stored status passed through to the prepass, which
+     * applies effective-status — this method does NOT pre-apply it (preserve
+     * the existing wiring; do not double-apply).
+     *
+     * @param string $catalog 'klassikaal' or 'online' (anything not 'online'
+     *                         is treated as klassikaal, matching the theme).
+     * @return list<array<string, mixed>>
+     */
+    public function getCatalogItems(string $catalog, int $limit = self::CATALOG_MAX_ITEMS): array
+    {
+        return $catalog === 'online'
+            ? $this->getOnlineCatalogItems($limit)
+            : $this->getKlassikaalCatalogItems($limit);
+    }
+
+    /**
+     * /klassikaal policy: all eligible editions, then drop editions of
+     * online-ONLY-format courses (online format present AND no classroom
+     * format). Returned UNORDERED — band-ordering is theme presentation.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function getKlassikaalCatalogItems(int $limit): array
+    {
+        $ids = $this->repository->findCatalogEligibleIds(null, $limit);
+        $this->warnIfCapped(count($ids), $limit, 'klassikaal editions');
+
+        $items = $this->hydrateEditionItems($ids);
+
+        return array_values(array_filter($items, function (array $item): bool {
+            $courseId = (int) ($item['edition']['course_id'] ?? 0);
+            if (!$courseId) {
+                return true;
+            }
+
+            return !$this->isOnlineOnlyFormat($courseId);
+        }));
+    }
+
+    /**
+     * /online policy: (a) eligible editions of online-format courses, plus
+     * (b) pure-LD online courses (online format, never had an edition) tagged
+     * kind 'course'. Flat — no band-ordering.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function getOnlineCatalogItems(int $limit): array
+    {
+        $onlineCourseIds = $this->repository->findOnlineFormatCourseIds($limit);
+        $this->warnIfCapped(count($onlineCourseIds), $limit, 'online courses');
+
+        if (empty($onlineCourseIds)) {
+            return [];
+        }
+
+        // (a) Active editions of online courses.
+        $editionIds = $this->repository->findCatalogEligibleIds($onlineCourseIds, $limit);
+        $this->warnIfCapped(count($editionIds), $limit, 'online editions');
+        $items = $this->hydrateEditionItems($editionIds);
+
+        // (b) Pure-LD online courses (never had an edition at all).
+        $withEditions = $this->repository->courseIdsWithAnyEdition($onlineCourseIds);
+        $pureLdIds    = array_values(array_diff($onlineCourseIds, $withEditions));
+
+        if (!empty($pureLdIds)) {
+            _prime_post_caches($pureLdIds, true, true);
+            foreach ($pureLdIds as $courseId) {
+                if (get_post_status($courseId) !== 'publish') {
+                    continue;
+                }
+                $items[] = [
+                    'kind'      => 'course',
+                    'course_id' => $courseId,
+                    'themes'    => $this->courseThemeSlugs($courseId),
+                ];
+            }
+        }
+
+        return $items;
+    }
+
+    /**
+     * Hydrate eligible edition IDs into the light item structs the prepass
+     * expects. Batches post/meta/term caches first. Preserves the INF-1
+     * published-course guard verbatim: an edition whose course is no longer
+     * published (trashed/draft/private/deleted) produces no public card —
+     * get_post_status() returns a status for TRASHED posts too, so the plain
+     * get_post() null-check only catches hard deletes. Course-less editions
+     * (course_id 0) stay eligible.
+     *
+     * @param list<int> $editionIds
+     * @return list<array{kind: string, edition: array<string, mixed>, themes: list<string>}>
+     */
+    private function hydrateEditionItems(array $editionIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        _prime_post_caches($ids, false, true);
+
+        $courseIds = [];
+        foreach ($ids as $id) {
+            $courseId = (int) $this->repository->getField($id, 'course_id', 0);
+            if ($courseId) {
+                $courseIds[$courseId] = $courseId;
+            }
+        }
+        if (!empty($courseIds)) {
+            _prime_post_caches(array_values($courseIds), true, true);
+        }
+
+        $items = [];
+        foreach ($ids as $id) {
+            $post = get_post($id);
+            if (!$post) {
+                continue;
+            }
+            $fields   = $this->repository->findFields($id);
+            $courseId = (int) ($fields['course_id'] ?? 0);
+
+            // INF-1: edition of a non-published course is suppressed.
+            if ($courseId && get_post_status($courseId) !== 'publish') {
+                continue;
+            }
+
+            $items[] = [
+                'kind'    => 'edition',
+                'edition' => [
+                    'id'              => $id,
+                    'title'           => $post->post_title,
+                    'course_id'       => $courseId ?: null,
+                    'start_date'      => $fields['start_date'] ?? null,
+                    'end_date'        => $fields['end_date'] ?? null,
+                    'venue'           => $fields['venue'] ?? null,
+                    'price'           => $fields['price'] ?? null,
+                    'capacity'        => $fields['capacity'] ?? null,
+                    'status'          => $fields['status'] ?? 'open',
+                    'spots_remaining' => $fields['spots_remaining'] ?? null,
+                ],
+                'themes'  => $courseId ? $this->courseThemeSlugs($courseId) : [],
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * True when the course has an online format AND no classroom format —
+     * the "online-only" exclusion rule for /klassikaal.
+     */
+    private function isOnlineOnlyFormat(int $courseId): bool
+    {
+        $formats = get_the_terms($courseId, 'stride_format');
+        if (!$formats || is_wp_error($formats)) {
+            return false;
+        }
+        $slugs = wp_list_pluck($formats, 'slug');
+
+        $isOnline    = (bool) array_intersect($slugs, self::ONLINE_FORMAT_SLUGS);
+        $isClassroom = (bool) array_intersect($slugs, self::CLASSROOM_FORMAT_SLUGS);
+
+        return $isOnline && !$isClassroom;
+    }
+
+    /**
+     * stride_theme slugs for a course (term cache expected primed). Read here
+     * via the taxonomy directly — INV-5 forbids stride-core calling the theme's
+     * stridence_catalog_theme_slugs().
+     *
+     * @return list<string>
+     */
+    private function courseThemeSlugs(int $courseId): array
+    {
+        $terms = get_the_terms($courseId, 'stride_theme');
+        if (!$terms || is_wp_error($terms)) {
+            return [];
+        }
+
+        return array_values(wp_list_pluck($terms, 'slug'));
+    }
+
+    /**
+     * Observability for the enumeration cap (moved from the theme's
+     * stridence_catalog_warn_if_capped). A result filling the cap has silently
+     * truncated the catalog — surface it rather than presenting it as whole.
+     */
+    private function warnIfCapped(int $count, int $limit, string $context): void
+    {
+        if ($count >= $limit) {
+            ntdst_log()->warning('catalog enumeration filled the cap — items beyond it are silently hidden', [
+                'context' => $context,
+                'cap'     => $limit,
+            ]);
+        }
+    }
+
+    /**
      * True when the edition's course is classified as classroom format.
      *
      * Differs from `!isOnline()`: requires a positive classroom signal so
