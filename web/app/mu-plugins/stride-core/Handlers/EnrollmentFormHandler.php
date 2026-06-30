@@ -372,9 +372,9 @@ final class EnrollmentFormHandler
             return new WP_Error('trajectory_not_found', 'Trajectory not found');
         }
 
-        // Get price (could be member vs non-member in future)
-        $price = (float) $trajectory['price'];
-        $priceCents = (int) round($price * 100);
+        // Get price (could be member vs non-member in future). The stored
+        // trajectory price is canonical CENTS — use it directly, do NOT ×100.
+        $priceCents = (int) $trajectory['price'];
 
         // Build quote items
         $items = [
@@ -502,7 +502,8 @@ final class EnrollmentFormHandler
         if ($itemType === 'trajectory') {
             $trajectoryService = ntdst_get(TrajectoryService::class);
             $trajectory = $trajectoryService->getTrajectory($itemId);
-            return $trajectory ? Money::eur((float) $trajectory['price']) : null;
+            // Stored trajectory price is canonical CENTS — read directly.
+            return $trajectory ? Money::cents((int) $trajectory['price']) : null;
         }
 
         // Default: edition — pass current user for member pricing

@@ -13,7 +13,7 @@
  *     @type string      $status         OfferingStatus value (badge).
  *     @type int         $course_count
  *     @type int         $elective_count Number of elective groups.
- *     @type float       $price          Euros (0 → "Gratis").
+ *     @type int         $price          Cents (0 → "Gratis").
  *     @type string      $deadline       '' or Y-m-d.
  *     @type int|null    $progress       0-100 when enrolled (→ dashboard card);
  *                                       null → catalog card. Sole mode switch.
@@ -33,7 +33,7 @@ $title         = (string) ($args['title'] ?? '');
 $status        = (string) ($args['status'] ?? 'open');
 $course_count  = (int) ($args['course_count'] ?? 0);
 $elective_count = (int) ($args['elective_count'] ?? 0);
-$price         = (float) ($args['price'] ?? 0);
+$price         = (int) ($args['price'] ?? 0); // canonical cents
 $deadline      = (string) ($args['deadline'] ?? '');
 $progress      = $args['progress'] ?? null;
 $started_at    = (string) ($args['started_at'] ?? '');
@@ -123,7 +123,7 @@ if (!$enrolled) {
     <!-- Footer (divider above): price left, CTA right -->
     <div class="mt-auto pt-4 border-t border-border flex items-center justify-between gap-3">
         <span class="text-[18px] font-extrabold <?php echo $price > 0 ? 'text-text' : 'text-badge-free-text'; ?>">
-            <?php echo $price > 0 ? esc_html(stride_format_money((int) round($price * 100))) : esc_html__('Gratis', 'stridence'); ?>
+            <?php echo $price > 0 ? esc_html(stride_format_money($price)) : esc_html__('Gratis', 'stridence'); ?>
         </span>
         <?php if ($enrolled) : ?>
             <a href="<?php echo esc_url($target_url); ?>" class="btn-primary btn-sm">

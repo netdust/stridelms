@@ -225,8 +225,11 @@ class EditionService extends AbstractService implements EditionQueryInterface
     {
         $isMember = $userId !== null ? $this->isMember($userId) : false;
         $field = $isMember ? 'price' : 'price_non_member';
-        $amount = (float) $this->repository->getField($editionId, $field, 0);
-        $price = Money::eur($amount);
+        // Stored value is canonical CENTS (admin save ×100, admin display ÷100).
+        // Read it as cents — never Money::eur(), which would treat it as euros
+        // and render 100× too large.
+        $amount = (int) $this->repository->getField($editionId, $field, 0);
+        $price = Money::cents($amount);
 
         return apply_filters('stride/membership/price', $price, $editionId, $userId, $isMember);
     }

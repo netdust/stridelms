@@ -87,15 +87,15 @@ if ($item_type === 'edition' && $item_id) {
     $trajectory = ntdst_get(TrajectoryService::class)->getTrajectory($item_id);
 
     if ($trajectory) {
-        // getTrajectory() returns price as a float in EUROS; stride_format_money
-        // takes cents — match the public template (single-vad_trajectory.php:159).
-        $price = (float) ($trajectory['price'] ?? 0);
+        // getTrajectory() returns price as canonical CENTS; stride_format_money
+        // takes cents — match the public template (single-vad_trajectory.php).
+        $price = (int) ($trajectory['price'] ?? 0);
 
         $edition_data = [
             'title'      => $trajectory['title'] ?? get_the_title($item_id),
             'start_date' => '',
             'venue'      => '',
-            'price'      => $price > 0 ? stride_format_money((int) round($price * 100)) : '',
+            'price'      => $price > 0 ? stride_format_money($price) : '',
             'sessions'   => [],
         ];
     }

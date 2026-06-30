@@ -55,13 +55,19 @@ class EditionServicePricingTest extends TestCase
     }
 
     // === getPrice() ===
+    //
+    // CANONICAL UNIT: the stored `price` / `price_non_member` field is in CENTS
+    // (admin save converts the entered euros ×100; admin display divides ÷100).
+    // getPrice() must therefore read the stored value AS cents — a stored 35000
+    // is €350,00, and a stored 495 is €4,95. Reading it as euros (Money::eur)
+    // multiplied by another 100 and rendered prices 100× too large.
 
     public function testGetPriceWithoutUserIdReturnsNonMemberPrice(): void
     {
         $editionId = 100;
         $this->repository->method('getField')
             ->willReturnMap([
-                [$editionId, 'price_non_member', 0, 350.0],
+                [$editionId, 'price_non_member', 0, 35000.0],
             ]);
 
         $price = $this->service->getPrice($editionId);
@@ -70,13 +76,29 @@ class EditionServicePricingTest extends TestCase
         self::assertSame(35000, $price->inCents());
     }
 
+    public function testGetPriceReadsStoredFieldAsCentsNotEuros(): void
+    {
+        // THE BUG: stored 495 cents = €4,95. The euros-interpretation
+        // (Money::eur(495)) would yield 49500 cents = "€ 495,00".
+        $editionId = 100;
+        $this->repository->method('getField')
+            ->willReturnMap([
+                [$editionId, 'price_non_member', 0, 495.0],
+            ]);
+
+        $price = $this->service->getPrice($editionId);
+
+        self::assertSame(495, $price->inCents());
+        self::assertSame('€ 4,95', $price->format());
+    }
+
     public function testGetPriceWithNonMemberUserIdReturnsNonMemberPrice(): void
     {
         $editionId = 100;
         $this->membership->method('isMember')->willReturn(false);
         $this->repository->method('getField')
             ->willReturnMap([
-                [$editionId, 'price_non_member', 0, 350.0],
+                [$editionId, 'price_non_member', 0, 35000.0],
             ]);
 
         $price = $this->service->getPrice($editionId, 11);
@@ -93,7 +115,7 @@ class EditionServicePricingTest extends TestCase
         $this->membership->method('isMember')->willReturn(true);
         $this->repository->method('getField')
             ->willReturnMap([
-                [$editionId, 'price', 0, 250.0],
+                [$editionId, 'price', 0, 25000.0],
             ]);
 
         $price = $this->service->getPrice($editionId, 10);
@@ -108,7 +130,7 @@ class EditionServicePricingTest extends TestCase
         $this->membership->method('isMember')->willReturn(true);
         $this->repository->method('getField')
             ->willReturnMap([
-                [$editionId, 'price', 0, 200.0],
+                [$editionId, 'price', 0, 20000.0],
             ]);
 
         $receivedArgs = [];
@@ -130,7 +152,7 @@ class EditionServicePricingTest extends TestCase
         $editionId = 100;
         $this->repository->method('getField')
             ->willReturnMap([
-                [$editionId, 'price_non_member', 0, 350.0],
+                [$editionId, 'price_non_member', 0, 35000.0],
             ]);
 
         $receivedUid = 'not-called';

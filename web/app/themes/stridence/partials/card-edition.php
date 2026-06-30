@@ -18,7 +18,7 @@
  * - free:      Gratis badge + green "Gratis" footer price (price == 0)
  *
  * @param array $args {
- *     @type array        $edition         Edition data array with id/ID, start_date, venue/location, price, capacity, status
+ *     @type array        $edition         Edition data array with id/ID, start_date, venue/location, price (canonical CENTS), capacity, status
  *     @type WP_Post      $course          Optional course post for title
  *     @type string       $status          Prefetched EFFECTIVE status value (INV-7 — from EditionService::getEffectiveStatuses())
  *     @type int|null     $spots_remaining Prefetched spots remaining (null = unlimited/unknown)
@@ -227,7 +227,7 @@ $cta_colour = $is_interest ? 'text-accent' : 'text-primary';
             <?php if ($is_free) : ?>
                 <span class="text-[16px] font-extrabold text-badge-free-text"><?php esc_html_e('Gratis', 'stridence'); ?></span>
             <?php else : ?>
-                <span class="text-[16px] font-extrabold"><?php echo esc_html(stride_format_money((int) ($price * 100))); ?></span>
+                <span class="text-[16px] font-extrabold"><?php echo esc_html(stride_format_money((int) $price)); ?></span>
             <?php endif; ?>
         <?php endif; ?>
         <span class="text-sm font-bold <?php echo $cta_colour; ?>"><?php echo esc_html($cta_label); ?> &rarr;</span>

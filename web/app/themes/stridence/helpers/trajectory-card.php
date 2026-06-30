@@ -45,7 +45,7 @@ if (!function_exists('stridence_build_trajectory_card_args')) {
             'status'         => $trajectory['status'] ?? 'open',
             'course_count'   => $service->getCourseCount($trajectoryId),
             'elective_count' => $service->getElectiveGroupCount($trajectoryId),
-            'price'          => (float) ($trajectory['price'] ?? 0),
+            'price'          => (int) ($trajectory['price'] ?? 0), // canonical cents
             'deadline'       => (string) ($trajectory['enrollment_deadline'] ?? ''),
             // Enrolled-only (dashboard) — null/'' on the catalog path.
             'progress'       => $progress,

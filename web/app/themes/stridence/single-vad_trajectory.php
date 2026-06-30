@@ -39,7 +39,7 @@ $status             = $trajectory['status'];
 $status_enum        = $trajectory['status_enum'];
 $deadline           = $trajectory['enrollment_deadline'];
 $can_enroll         = $trajectoryService->isEnrollmentOpen($trajectory_id);
-$price              = $trajectory['price'] ?? 0;
+$price              = (int) ($trajectory['price'] ?? 0); // canonical cents
 $capacity           = $trajectory['capacity'] ?? 0;
 
 // Already-enrolled check. Trajectory enrollment is a PARENT registration row
@@ -174,7 +174,7 @@ get_header();
                 <?php if ($price > 0) : ?>
                     <span class="flex items-center gap-2 font-semibold text-text">
                         <?php echo stridence_icon('receipt', 'w-5 h-5 text-text-muted'); ?>
-                        <?php echo esc_html(stride_format_money((int) ($price * 100))); ?>
+                        <?php echo esc_html(stride_format_money($price)); ?>
                     </span>
                 <?php endif; ?>
             </div>
@@ -211,7 +211,7 @@ get_header();
                     <!-- Price hero -->
                     <?php if ($price > 0) : ?>
                         <div class="flex items-baseline gap-2">
-                            <span class="text-[32px] font-extrabold tracking-[-0.01em] text-text"><?php echo esc_html(stride_format_money((int) ($price * 100))); ?></span>
+                            <span class="text-[32px] font-extrabold tracking-[-0.01em] text-text"><?php echo esc_html(stride_format_money($price)); ?></span>
                             <span class="text-[13px] text-text-faint"><?php esc_html_e('per deelnemer', 'stridence'); ?></span>
                         </div>
                     <?php else : ?>

@@ -304,8 +304,11 @@ final class StrideSeedBuilders
         }
 
         // v1 has no member feature — both price keys must hold the same value;
-        // price_non_member is canonical.
-        $effectivePrice = $data['price_non_member'] ?? $data['price'] ?? 0;
+        // price_non_member is canonical. Seed config authors human-readable EUROS
+        // (e.g. 495 → €495); the stored field is canonical CENTS, so ×100 on store
+        // to match the admin save path (EditionAdminController ×100).
+        $effectivePriceEuros = $data['price_non_member'] ?? $data['price'] ?? 0;
+        $effectivePrice = (int) round((float) $effectivePriceEuros * 100);
 
         $createData = [
             'title' => $postTitle,
@@ -725,7 +728,9 @@ final class StrideSeedBuilders
 
         // No fallback price: a €0 quote on a paid edition should surface a
         // matrix mistake, not be masked. price_non_member is canonical (v1).
-        $priceCents = (int) round(((float) ntdst_get(EditionRepository::class)->getField($editionId, 'price_non_member', 0)) * 100);
+        // The stored price_non_member field is canonical CENTS already — read it
+        // directly, do NOT ×100 (it would double-convert now editions store cents).
+        $priceCents = (int) ntdst_get(EditionRepository::class)->getField($editionId, 'price_non_member', 0);
         $taxCents = (int) round($priceCents * 0.21);
         $quoteNumber = $repo->generateQuoteNumber();   // real numbering, not rand()
 
@@ -943,8 +948,10 @@ final class StrideSeedBuilders
             'status' => $t['status'],
             'enrollment_deadline' => $t['enrollment_deadline'] ?? '',
             'capacity' => $t['capacity'] ?? 0,
-            'price' => $t['price'],
-            'price_non_member' => $t['price_non_member'],
+            // Seed config authors human-readable EUROS; stored field is canonical
+            // CENTS — ×100 on store (mirrors TrajectoryAdminController save path).
+            'price' => (int) round((float) $t['price'] * 100),
+            'price_non_member' => (int) round((float) $t['price_non_member'] * 100),
         ];
         // Only write keys the entry actually declares — keeps the slug-pinned
         // fixture's stored meta identical to the old wp_insert_post path.
