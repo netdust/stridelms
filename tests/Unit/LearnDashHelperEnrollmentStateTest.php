@@ -73,6 +73,26 @@ class LearnDashHelperEnrollmentStateTest extends TestCase
         $this->assertFalse(LearnDashHelper::isEnrolled(42, 7));
     }
 
+    /**
+     * Open courses grant access to EVERY logged-in user, so
+     * sfwd_lms_has_access() returns true for someone who never enrolled.
+     * isEnrolled() must not let that universal access masquerade as
+     * enrollment: with no marker and no progress, an open-course visitor
+     * is NOT enrolled. (Regression: a free webinar's course page showed
+     * every logged-in visitor the "Goed bezig / Start opleiding" enrolled
+     * sidebar without them ever enrolling.)
+     *
+     * @test
+     * @runInSeparateProcess
+     * @preserveGlobalState disabled
+     */
+    public function openModeAccessWithoutMarkerOrProgressIsNotEnrolled(): void
+    {
+        $this->defineLearnDash(mode: 'open', hasAccess: true, progressPct: 0);
+
+        $this->assertFalse(LearnDashHelper::isEnrolled(42, 7));
+    }
+
     // === Helpers ===
 
     /**

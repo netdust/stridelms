@@ -616,7 +616,7 @@ get_header();
                                 <div class="text-[13px] text-text-muted mt-1"><?php echo esc_html($price_includes); ?></div>
                             <?php endif; ?>
                         <?php else : ?>
-                            <div class="text-[32px] font-extrabold tracking-[-0.01em] text-text"><?php esc_html_e('Op aanvraag', 'stridence'); ?></div>
+                            <div class="text-[32px] font-extrabold tracking-[-0.01em] text-badge-free-text"><?php esc_html_e('Gratis', 'stridence'); ?></div>
                         <?php endif; ?>
 
                         <!-- Capacity bar -->
@@ -730,7 +730,7 @@ get_header();
             <div class="flex items-center gap-3.5">
                 <div class="flex-1 min-w-0">
                     <div class="text-[17px] font-extrabold text-text">
-                        <?php echo !$price->isZero() ? esc_html(stride_format_money($price->inCents())) : esc_html__('Op aanvraag', 'stridence'); ?>
+                        <?php echo !$price->isZero() ? esc_html(stride_format_money($price->inCents())) : esc_html__('Gratis', 'stridence'); ?>
                     </div>
                     <?php if ($show_capacity_bar) : ?>
                         <div class="text-[12px] font-bold <?php echo $spots_few ? 'text-badge-few-text' : 'text-text-muted'; ?>">

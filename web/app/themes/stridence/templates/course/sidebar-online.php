@@ -9,59 +9,47 @@
  *
  * Below the CTA: course details (points, expiration, dates) in all states.
  *
+ * Rendered only for pure-LD online courses (no active edition); courses that
+ * have editions use the edition-overview layout, which has no sidebar.
+ *
  * @param array $args {
- *     @type int    $course_id      Course post ID
- *     @type string $enrollment_url Stride enrollment URL (edition-based)
- *     @type array  $lessons        Course lessons (LearnDashHelper::getLessons),
- *                                  fetched once in single-sfwd-courses.php
+ *     @type int   $course_id Course post ID
+ *     @type array $lessons   Course lessons (LearnDashHelper::getLessons),
+ *                            fetched once in single-sfwd-courses.php
  * }
  */
 
 defined('ABSPATH') || exit;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
-use Stride\Domain\Money;
-use Stride\Domain\OfferingStatus;
 
-$course_id              = $args['course_id'] ?? get_the_ID();
-$lessons                = $args['lessons'] ?? [];
-$enrollment_url         = $args['enrollment_url'] ?? '';
-$stride_enrolled        = $args['user_enrolled'] ?? false;
-$edition_price          = $args['edition_price'] ?? null; // Money object from edition
-$primary_edition_id     = (int) ($args['primary_edition_id'] ?? 0);
-$primary_edition_status = $args['primary_edition_status'] ?? null; // OfferingStatus|null
-$user_id                = get_current_user_id();
+$course_id = $args['course_id'] ?? get_the_ID();
+$lessons   = $args['lessons'] ?? [];
+$user_id   = get_current_user_id();
 
-// When an edition exists for this online course, edition status gates the CTA.
-// Pure-LD courses (no edition) keep the original LD payment-button flow.
-$has_edition = $primary_edition_id > 0 && $primary_edition_status instanceof OfferingStatus;
+// This sidebar is the pure-LD e-learning surface only: single-sfwd-courses.php
+// renders it exclusively for online courses with NO active edition (a course
+// that HAS editions is an edition-overview page with no sidebar). So enrollment
+// and price come straight from LearnDash — there is no edition to gate on here.
 
 // ── Enrollment state ──
-// Check both LearnDash access AND Stride registration (covers sync delays)
-$has_access  = $user_id && (LearnDashHelper::hasAccess($course_id, $user_id) || $stride_enrolled);
-$is_enrolled = $user_id && (LearnDashHelper::isEnrolled($course_id, $user_id) || $stride_enrolled);
+$has_access  = $user_id && LearnDashHelper::hasAccess($course_id, $user_id);
+$is_enrolled = $user_id && LearnDashHelper::isEnrolled($course_id, $user_id);
 $progress    = $has_access ? LearnDashHelper::getProgress($course_id, $user_id) : 0;
 $is_complete = $has_access && $progress >= 100;
 $is_open     = LearnDashHelper::getAccessMode($course_id) === LearnDashHelper::MODE_OPEN;
 
 // ── Price info (for not-enrolled state) ──
-// Prefer Stride edition price over LearnDash price (LD returns null for closed-type courses)
-$has_edition_price = $edition_price instanceof Money && !$edition_price->isZero();
-
-$price_info = function_exists('learndash_get_course_price')
+$price_info   = function_exists('learndash_get_course_price')
     ? learndash_get_course_price($course_id)
     : [];
-$price_type   = $has_edition_price ? 'paynow' : ($price_info['type'] ?? 'open');
+$price_type   = $price_info['type'] ?? 'open';
 $course_price = $price_info['price'] ?? '';
 
 // Format price display (Helder Tij: via stride_format_money, cents-based)
-if ($has_edition_price) {
-    $price_formatted = stride_format_money($edition_price->inCents());
-} else {
-    $price_formatted = !empty($course_price)
-        ? stride_format_money((int) round(((float) $course_price) * 100))
-        : '';
-}
+$price_formatted = !empty($course_price)
+    ? stride_format_money((int) round(((float) $course_price) * 100))
+    : '';
 
 // Subscription billing text
 $billing_text = '';
@@ -299,28 +287,6 @@ $benefit_rows = [
                 <a href="<?php echo esc_url(LearnDashHelper::getFirstLessonUrl($course_id)); ?>" class="btn-primary w-full text-center">
                     <?php esc_html_e('Direct starten', 'stridence'); ?>
                 </a>
-            <?php elseif ($enrollment_url) : ?>
-                <a href="<?php echo esc_url($enrollment_url); ?>" class="btn-primary w-full text-center">
-                    <?php esc_html_e('Inschrijven', 'stridence'); ?>
-                </a>
-            <?php elseif ($has_edition && $primary_edition_status->allowsInterest()) : ?>
-                <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $primary_edition_id)); ?>" class="btn-primary w-full text-center block">
-                    <?php esc_html_e('Interesse melden', 'stridence'); ?>
-                </a>
-                <p class="text-xs text-text-muted mt-3 text-center">
-                    <?php esc_html_e('Deze editie is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
-                </p>
-            <?php elseif ($has_edition && $primary_edition_status->allowsWaitlist()) : ?>
-                <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $primary_edition_id)); ?>" class="btn-primary w-full text-center block">
-                    <?php esc_html_e('Op wachtlijst plaatsen', 'stridence'); ?>
-                </a>
-                <p class="text-xs text-text-muted mt-3 text-center">
-                    <?php esc_html_e('Deze editie is volzet. Laat je gegevens achter en we nemen contact op als er een plaats vrijkomt.', 'stridence'); ?>
-                </p>
-            <?php elseif ($has_edition) : ?>
-                <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
-                    <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
-                </button>
             <?php elseif ($price_type === 'open' || $price_type === 'free') : ?>
                 <a href="<?php echo esc_url($pureLdEnrollUrl); ?>" class="btn-primary w-full text-center">
                     <?php echo esc_html($cta_label); ?>
@@ -416,14 +382,4 @@ if ($has_info) :
         </div>
     <?php endif; ?>
 </aside>
-
-<?php if ($has_edition) : ?>
-    <!-- Accent-subtle chip — only when this course has an active edition
-         (same data condition that renders the #edities list in content). -->
-    <a href="#edities"
-       class="bg-accent-subtle rounded-[14px] px-[22px] py-[18px] text-sm text-accent-hover flex items-center justify-between gap-3 transition-shadow hover:shadow-card">
-        <span class="font-semibold"><?php esc_html_e('Liever klassikaal?', 'stridence'); ?></span>
-        <span class="font-bold"><?php esc_html_e('Bekijk de edities', 'stridence'); ?> &rarr;</span>
-    </a>
-<?php endif; ?>
 </div>

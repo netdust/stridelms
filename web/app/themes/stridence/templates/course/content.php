@@ -24,6 +24,13 @@ $lessons      = $args['lessons'] ?? [];
 // When rendered on /edities/<course-slug>/ (the enrollment surface itself),
 // we don't repeat the editions list — the visitor is already past discovery.
 $show_editions = $args['show_editions'] ?? true;
+// An edition-overview surface (a course that HAS active editions, online or
+// klassikaal) is a chooser: it shows only the LD course intro (Overzicht) and
+// the editions list. Programma (lessons), Sprekers and Praktische informatie
+// are the enrolled / edition-specific experience and belong on the edition
+// page, not here. Defaults to false so the e-learning and no-edition surfaces
+// render their full content unchanged.
+$is_edition_overview = $args['is_edition_overview'] ?? false;
 
 ?>
 
@@ -116,6 +123,7 @@ endif;
 <?php endif; ?>
 
 <!-- Programma Section -->
+<?php if (!$is_edition_overview) : ?>
 <section id="programma" class="scroll-mt-32">
     <?php
 // One design for the lesson list everywhere: the styled "Inhoud van de
@@ -127,16 +135,16 @@ endif;
 // gebleven") once the visitor is logged in with access. The raw LearnDash
 // [course_content] is the fallback only when the course has no lessons.
 $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $user_id ?: null);
-$has_styled_list    = !empty($lessons_with_dates);
+    $has_styled_list    = !empty($lessons_with_dates);
 
-// Progress label ("X van Y modules afgerond") only when the visitor is logged
-// in with access AND there is progress data to show.
-$lesson_total         = count($lessons_with_dates);
-$lessons_done         = count(array_filter($lessons_with_dates, static fn(array $l): bool => !empty($l['completed'])));
-$show_lesson_progress = $user_id
-    && $lesson_total > 0
-    && LearnDashHelper::hasAccess($course_id, $user_id);
-?>
+    // Progress label ("X van Y modules afgerond") only when the visitor is logged
+    // in with access AND there is progress data to show.
+    $lesson_total         = count($lessons_with_dates);
+    $lessons_done         = count(array_filter($lessons_with_dates, static fn(array $l): bool => !empty($l['completed'])));
+    $show_lesson_progress = $user_id
+        && $lesson_total > 0
+        && LearnDashHelper::hasAccess($course_id, $user_id);
+    ?>
     <?php if ($has_styled_list) : ?>
     <div class="flex justify-between items-baseline gap-3.5 flex-wrap mb-3">
         <h2 class="text-[18px] font-bold text-text">
@@ -145,8 +153,8 @@ $show_lesson_progress = $user_id
         <?php if ($show_lesson_progress) : ?>
             <div class="text-[13px] font-bold text-text-muted">
                 <?php
-            /* translators: 1: completed modules, 2: total modules */
-            echo esc_html(sprintf(__('%1$d van %2$d modules afgerond', 'stridence'), $lessons_done, $lesson_total));
+                /* translators: 1: completed modules, 2: total modules */
+                echo esc_html(sprintf(__('%1$d van %2$d modules afgerond', 'stridence'), $lessons_done, $lesson_total));
             ?>
             </div>
         <?php endif; ?>
@@ -241,8 +249,9 @@ if ($has_styled_list) :
     </div>
     <?php endif; ?>
 </section>
+<?php endif; // !$is_edition_overview?>
 
-<?php if (!$is_online) : ?>
+<?php if (!$is_online && !$is_edition_overview) : ?>
 <!-- Sprekers Section (in-person only) -->
 <section id="sprekers" class="scroll-mt-32">
     <h2 class="font-heading text-2xl font-bold text-text mb-6">
@@ -258,6 +267,7 @@ if ($has_styled_list) :
 <?php endif; ?>
 
 <!-- Praktisch Section -->
+<?php if (!$is_edition_overview) : ?>
 <section id="praktisch" class="scroll-mt-32">
     <h2 class="font-heading text-2xl font-bold text-text mb-6">
         <?php esc_html_e('Praktische informatie', 'stridence'); ?>
@@ -291,8 +301,8 @@ if ($has_styled_list) :
 
     <?php
     $materials = LearnDashHelper::getCourseMaterials($course_id);
-if (!empty($materials)) :
-    ?>
+    if (!empty($materials)) :
+        ?>
         <div class="card-bordered p-5 mt-6">
             <h3 class="font-semibold text-text mb-3 flex items-center gap-2">
                 <?php echo stridence_icon('file-text', 'w-5 h-5 text-primary'); ?>
@@ -304,3 +314,4 @@ if (!empty($materials)) :
         </div>
     <?php endif; ?>
 </section>
+<?php endif; // !$is_edition_overview?>
