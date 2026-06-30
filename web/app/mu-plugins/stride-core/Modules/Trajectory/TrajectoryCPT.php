@@ -44,7 +44,7 @@ final class TrajectoryCPT
         ]);
     }
 
-    private static function getFields(): array
+    public static function getFields(): array
     {
         return [
             'mode' => [
@@ -172,6 +172,11 @@ final class TrajectoryCPT
                 'label' => 'Documenten vereist',
                 'description' => 'Enrollment requires document upload',
             ],
+            'documents_instruction' => [
+                'type' => 'textarea',
+                'label' => 'Instructie documenten',
+                'description' => 'Toelichting die de deelnemer ziet bij de taak "Documenten uploaden". Leeg = standaardtekst.',
+            ],
             'post_requires_evaluation' => [
                 'type' => 'boolean',
                 'label' => 'Evaluatie vereist na afloop',
@@ -181,6 +186,11 @@ final class TrajectoryCPT
                 'type' => 'boolean',
                 'label' => 'Documenten vereist na afloop',
                 'description' => 'Post-trajectory document upload required',
+            ],
+            'post_documents_instruction' => [
+                'type' => 'textarea',
+                'label' => 'Instructie documenten na afloop',
+                'description' => 'Toelichting bij de upload-taak na afloop. Leeg = standaardtekst.',
             ],
             'post_requires_approval' => [
                 'type' => 'boolean',
