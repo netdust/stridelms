@@ -463,6 +463,54 @@ class EnrollmentCompletionTest extends TestCase
         $this->assertStringContainsString('goedkeuring', strtolower($reason['label']));
     }
 
+    // === documentsInstruction() — admin-authored instruction with default fallback ===
+
+    /** @test */
+    public function testDocumentsInstructionReturnsAdminValueWhenSet(): void
+    {
+        $this->setDataManagerMeta('vad_edition', 42, [
+            'documents_instruction' => 'Breng je diploma mee.',
+        ]);
+
+        $this->assertSame(
+            'Breng je diploma mee.',
+            $this->service->documentsInstruction(42, 'vad_edition'),
+        );
+    }
+
+    /** @test */
+    public function testDocumentsInstructionFallsBackToDefaultWhenEmpty(): void
+    {
+        // Schema-registered fields never return getField() defaults — an unset/cleared
+        // instruction reads as null/'' and must fall back to the const.
+        $this->assertSame(
+            EnrollmentCompletion::DEFAULT_DOCUMENTS_INSTRUCTION,
+            $this->service->documentsInstruction(42, 'vad_edition'),
+        );
+
+        // Explicitly-stored empty string also falls back.
+        $this->setDataManagerMeta('vad_edition', 43, ['documents_instruction' => '   ']);
+        $this->assertSame(
+            EnrollmentCompletion::DEFAULT_DOCUMENTS_INSTRUCTION,
+            $this->service->documentsInstruction(43, 'vad_edition'),
+        );
+    }
+
+    /** @test */
+    public function testDocumentsInstructionPostCourseReadsPostKey(): void
+    {
+        // Enrollment-phase key is set, but post-course must read its OWN key.
+        $this->setDataManagerMeta('vad_edition', 42, [
+            'documents_instruction'      => 'Enrollment-phase text.',
+            'post_documents_instruction' => 'Upload je attest.',
+        ]);
+
+        $this->assertSame(
+            'Upload je attest.',
+            $this->service->documentsInstruction(42, 'vad_edition', true),
+        );
+    }
+
     /** @test */
     public function testCompleteTaskAcceptsPostCourseTypes(): void
     {

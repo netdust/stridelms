@@ -39,6 +39,32 @@ final class EnrollmentCompletion
         };
     }
 
+    /**
+     * Default instruction shown for the "Documenten uploaden" task when the
+     * admin has not authored a per-offering instruction. Single source of truth
+     * for the fallback string — the admin pre-fill and the theme both defer here.
+     */
+    public const DEFAULT_DOCUMENTS_INSTRUCTION
+        = 'Upload de gevraagde bewijsstukken (bv. diploma of attest). Toegestane formaten: PDF, JPG, PNG — max. 10 MB.';
+
+    /**
+     * Resolve the admin-authored documents instruction for an offering, with a
+     * fallback to DEFAULT_DOCUMENTS_INSTRUCTION when unset/cleared.
+     *
+     * Schema-registered fields never return getField() defaults (the field reads
+     * as null/'' when unset), so the default is applied here, not by the schema.
+     * This is a real transform layer, not a repository pass-through.
+     *
+     * @param bool $postCourse Read the post-course key (post_documents_instruction).
+     */
+    public function documentsInstruction(int $postId, string $postType, bool $postCourse = false): string
+    {
+        $key   = $postCourse ? 'post_documents_instruction' : 'documents_instruction';
+        $value = trim((string) $this->repoFor($postType)->getField($postId, $key));
+
+        return $value !== '' ? $value : self::DEFAULT_DOCUMENTS_INSTRUCTION;
+    }
+
     private const TASK_TYPES = [
         'session_selection', 'questionnaire', 'documents', 'approval',
         'post_evaluation', 'post_documents', 'post_approval',
