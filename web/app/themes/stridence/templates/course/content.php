@@ -118,15 +118,26 @@ endif;
 <!-- Programma Section -->
 <section id="programma" class="scroll-mt-32">
     <?php
-if ($is_online) :
-    // Helder Tij: heading row with progress label ("X van Y modules afgerond")
-    // from the hoisted $lessons arg — only when the visitor has access.
-    $lesson_total   = count($lessons);
-    $lessons_done   = count(array_filter($lessons, static fn(array $l): bool => !empty($l['completed'])));
-    $show_lesson_progress = $user_id
-        && $lesson_total > 0
-        && LearnDashHelper::hasAccess($course_id, $user_id);
-    ?>
+// One design for the lesson list everywhere: the styled "Inhoud van de
+// opleiding" card renders for ANY course (online or in-person) that has
+// LearnDash lessons, for ANY visitor. getLessonsWithAvailability() degrades
+// cleanly for anon / not-enrolled visitors ($user_id=0 → every row neutral,
+// no completion/drip data), so the same markup is a read-only preview when
+// logged out and gains progress decoration (done / current / "Hier ben je
+// gebleven") once the visitor is logged in with access. The raw LearnDash
+// [course_content] is the fallback only when the course has no lessons.
+$lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $user_id ?: null);
+$has_styled_list    = !empty($lessons_with_dates);
+
+// Progress label ("X van Y modules afgerond") only when the visitor is logged
+// in with access AND there is progress data to show.
+$lesson_total         = count($lessons_with_dates);
+$lessons_done         = count(array_filter($lessons_with_dates, static fn(array $l): bool => !empty($l['completed'])));
+$show_lesson_progress = $user_id
+    && $lesson_total > 0
+    && LearnDashHelper::hasAccess($course_id, $user_id);
+?>
+    <?php if ($has_styled_list) : ?>
     <div class="flex justify-between items-baseline gap-3.5 flex-wrap mb-3">
         <h2 class="text-[18px] font-bold text-text">
             <?php esc_html_e('Inhoud van de opleiding', 'stridence'); ?>
@@ -134,8 +145,8 @@ if ($is_online) :
         <?php if ($show_lesson_progress) : ?>
             <div class="text-[13px] font-bold text-text-muted">
                 <?php
-                /* translators: 1: completed modules, 2: total modules */
-                echo esc_html(sprintf(__('%1$d van %2$d modules afgerond', 'stridence'), $lessons_done, $lesson_total));
+            /* translators: 1: completed modules, 2: total modules */
+            echo esc_html(sprintf(__('%1$d van %2$d modules afgerond', 'stridence'), $lessons_done, $lesson_total));
             ?>
             </div>
         <?php endif; ?>
@@ -147,19 +158,7 @@ if ($is_online) :
     <?php endif; ?>
 
     <?php
-// Show the Helder Tij styled lesson list whenever the visitor has access to
-// an online course's lessons — drip or not. getLessonsWithAvailability()
-// returns is_available=true for every lesson when no drip is configured, so
-// the same markup renders the full list (done / current / upcoming). The raw
-// LearnDash [course_content] is the fallback only when the styled list can't
-// be built (no access, or not an online course).
-$show_styled_list = $is_online && $user_id && LearnDashHelper::hasAccess($course_id, $user_id);
-
-if ($show_styled_list) :
-    $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $user_id);
-endif;
-
-if ($show_styled_list && !empty($lessons_with_dates)) :
+if ($has_styled_list) :
     $locked_lessons = array_filter($lessons_with_dates, fn($l) => !$l['is_available']);
     ?>
         <?php if (!empty($locked_lessons)) : ?>
@@ -234,6 +233,7 @@ if ($show_styled_list && !empty($lessons_with_dates)) :
             <?php endforeach; ?>
         </div>
     <?php else : ?>
+    <!-- Fallback only when the course has no LearnDash lessons to style. -->
     <div class="learndash-course-content">
         <?php
         echo do_shortcode('[course_content course_id="' . esc_attr($course_id) . '"]');
