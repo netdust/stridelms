@@ -955,4 +955,121 @@ class EditionService extends AbstractService implements EditionQueryInterface
             'price_max_cents'   => $priceMaxCents,
         ];
     }
+
+    /**
+     * Publicly-visible editions for a course's discovery surface, partitioned into
+     * upcoming/past — the visibility POLICY + the partition + the sort extracted out
+     * of templates/course/editions-list.php (Cluster 3 / Task 3.6 / B6). The template
+     * becomes a pure renderer over this struct.
+     *
+     * THE POLICY (this is the value the method adds — not a pass-through):
+     *   - Active (Announcement/Open/Full/InProgress) → shown.
+     *   - Completed → shown (it lives in the collapsed "past" block).
+     *   - Anything else (Draft/Postponed/Cancelled/Archived) → SUPPRESSED from the
+     *     public set UNLESS $userId is enrolled in that edition — an enrolled user
+     *     must still see their own registration even after the edition is cancelled.
+     *   - A guest ($userId null) gets ZERO enrolled-exception: only the public set.
+     *
+     * THE PARTITION is EFFECTIVE-STATUS-driven (INV-7): a Completed edition is past
+     * regardless of its stored start_date (an admin can leave a future date on a
+     * cohort marked Completed); every other visible edition partitions by start_date
+     * vs today — start before today → past[], else upcoming[]. Upcoming is sorted ASC
+     * by start_date, past DESC.
+     *
+     * INV-7: visibility AND partition read the EFFECTIVE status (getEffectiveStatuses,
+     * batched), never the raw stored status — an edition whose stored start is future
+     * but whose effective status is Completed is treated as past. INV-3: editions and
+     * fields come through the repository; enrollment through EnrollmentService (resolved
+     * lazily to avoid the EditionService↔EnrollmentService DI cycle — EnrollmentService
+     * depends on EditionQueryInterface, which this class implements).
+     *
+     * session_count and price_cents are presentation-enrichment carried in the row so
+     * the template renders without a second per-edition lookup; the optional-price
+     * try/catch is preserved (a price-lookup failure yields 0, never a fatal — price is
+     * decorative on this discovery surface).
+     *
+     * @return array{
+     *     upcoming: list<array{id:int,start_date:string,end_date:string,venue:string,
+     *         status:OfferingStatus,is_enrolled:bool,permalink:string,
+     *         session_count:int,price_cents:int}>,
+     *     past: list<array{id:int,start_date:string,end_date:string,venue:string,
+     *         status:OfferingStatus,is_enrolled:bool,permalink:string,
+     *         session_count:int,price_cents:int}>,
+     * }
+     */
+    public function getPubliclyVisibleEditions(int $courseId, ?int $userId = null): array
+    {
+        $editionIds = [];
+        foreach ($this->repository->findByCourse($courseId) as $row) {
+            $eid = (int) ($row['id'] ?? $row['ID'] ?? 0);
+            if ($eid) {
+                $editionIds[] = $eid;
+            }
+        }
+
+        if (empty($editionIds)) {
+            return ['upcoming' => [], 'past' => []];
+        }
+
+        // INV-7: effective status through the single decision point (batched).
+        $statuses      = $this->getEffectiveStatuses($editionIds);
+        $sessionCounts = $this->sessions->countByEditions($editionIds);
+        $enrolledIds   = $userId
+            ? ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class)->getEnrolledEditionIds($userId)
+            : [];
+
+        $today    = strtotime(date('Y-m-d'));
+        $upcoming = [];
+        $past     = [];
+
+        foreach ($editionIds as $editionId) {
+            $status     = $statuses[$editionId] ?? OfferingStatus::Draft;
+            $isEnrolled = in_array($editionId, $enrolledIds, true);
+
+            // Visibility policy: suppress non-active, non-Completed editions from the
+            // public set unless the visitor is enrolled in them.
+            if (!$isEnrolled && !$status->isActive() && $status !== OfferingStatus::Completed) {
+                continue;
+            }
+
+            $startDate = (string) $this->repository->getField($editionId, 'start_date', '');
+            $endDate   = (string) $this->repository->getField($editionId, 'end_date', '');
+            $venue     = (string) $this->repository->getField($editionId, 'venue', '');
+
+            try {
+                $price      = $this->getPrice($editionId, $userId ?: null);
+                $priceCents = $price->inCents();
+            } catch (\Throwable $e) {
+                // Intentional: price is decorative on this discovery surface. A failed
+                // lookup falls back to 0 (hidden), never a fatal.
+                $priceCents = 0;
+            }
+
+            $row = [
+                'id'            => $editionId,
+                'start_date'    => $startDate,
+                'end_date'      => $endDate,
+                'venue'         => $venue,
+                'status'        => $status,
+                'is_enrolled'   => $isEnrolled,
+                'permalink'     => (string) get_permalink($editionId),
+                'session_count' => (int) ($sessionCounts[$editionId] ?? 0),
+                'price_cents'   => $priceCents,
+            ];
+
+            // Effective-status partition: a Completed edition is past no matter its
+            // stored start; otherwise partition by start_date vs today.
+            $startTs = $startDate ? strtotime($startDate) : 0;
+            if ($status === OfferingStatus::Completed || ($startTs && $startTs < $today)) {
+                $past[] = $row;
+            } else {
+                $upcoming[] = $row;
+            }
+        }
+
+        usort($upcoming, static fn(array $a, array $b): int => strcmp((string) $a['start_date'], (string) $b['start_date']));
+        usort($past, static fn(array $a, array $b): int => strcmp((string) $b['start_date'], (string) $a['start_date']));
+
+        return ['upcoming' => $upcoming, 'past' => $past];
+    }
 }
