@@ -7,6 +7,10 @@ name: Acceptance
 # Phase 4). The shared tests/acceptance.suite.yml is NOT edited — CI overrides
 # live in tests/_envs/ci.yml, merged via `--env ci`. DDEV-local runs untouched.
 on:
+  # Push is limited to long-lived branches (+ ci-seam-* for throwaway proof
+  # pushes); a PR-branch push would otherwise double-run this — the most
+  # expensive suite (it boots Selenium). Do NOT widen the push branch list
+  # without removing the pull_request trigger, or every PR runs acceptance twice.
   push:
     branches: [main, staging, 'ci-seam-*']
   pull_request:
@@ -95,6 +99,10 @@ jobs:
         HOST_GW=$(docker exec "$SVC" sh -c "ip route | awk '/default/ {print \$3}'")
         if [ -z "$HOST_GW" ]; then echo "could not resolve gateway"; exit 1; fi
         echo "host_gw=$HOST_GW" >> "$GITHUB_OUTPUT"
+        # Persist the resolved container ID so the later reachability check
+        # provably targets the SAME selenium container (CR I-2) instead of
+        # re-deriving it with another `docker ps` that could pick a different one.
+        echo "svc=$SVC" >> "$GITHUB_OUTPUT"
         echo "Selenium reaches runner host at: $HOST_GW"
 
     # WP_HOME/WP_URL host = the gateway IP (same string both sides). DB_PREFIX
@@ -135,6 +143,11 @@ jobs:
       run: |
         HOST_GW='${{ steps.gw.outputs.host_gw }}'
         wp option update home "http://${HOST_GW}:8080"
+        # NB (CR I-3): the siteurl OPTION write below is inert — Bedrock's
+        # WP_SITEURL constant (set in .env above) overrides the DB option at
+        # runtime, so the constant is what actually takes effect. Kept for
+        # symmetry with `home`. Do NOT "simplify" by deleting the .env
+        # WP_SITEURL line believing this option write covers it — it does not.
         wp option update siteurl "http://${HOST_GW}:8080/wp"
         wp rewrite flush --hard
 
@@ -172,7 +185,8 @@ jobs:
     - name: Verify Selenium can reach php -S
       run: |
         HOST_GW='${{ steps.gw.outputs.host_gw }}'
-        SVC=$(docker ps --filter "ancestor=selenium/standalone-chrome:latest" --format '{{.ID}}' | head -1)
+        # Reuse the exact container the gateway was resolved from (CR I-2).
+        SVC='${{ steps.gw.outputs.svc }}'
         docker exec "$SVC" sh -c "curl -fsS -o /dev/null -w '%{http_code}\n' http://${HOST_GW}:8080/index.php?rest_route=/" \
           || { echo "Selenium CANNOT reach php -S at ${HOST_GW}:8080 — networking premise failed"; cat /tmp/php-server.log; exit 1; }
         echo "Selenium reaches php -S at ${HOST_GW}:8080 — networking OK"
