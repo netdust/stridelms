@@ -5,8 +5,10 @@ declare(strict_types=1);
 namespace Stride\Tests\Integration;
 
 use IntegrationTestCase;
+use Netdust\Mail\MailService;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\Mail\StrideMailBridge;
 
 /**
  * Integration tests for EnrollmentService::promoteFromWaitlist (Task 2.2, Decision 1).
@@ -453,5 +455,210 @@ class PromoteFromWaitlistTest extends IntegrationTestCase
         $row = $this->registrations->find($regId);
         $this->assertNotNull($row, 'row still exists');
         $this->assertSame('waitlist', $row->status, 'row stays on the waitlist after a relink failure');
+    }
+
+    // === Task 4: confirmation-mail suppression on collision (M-NEW-USER-MAIL-ONLY) ===
+
+    /** @var list<array<string,mixed>> Captured wp_mail $atts per send (this test). */
+    private array $sentMails = [];
+
+    /** @var callable|null The pre_wp_mail capture filter, removed in finally. */
+    private $mailCapture = null;
+
+    /**
+     * Capture every wp_mail send (recording $atts) and short-circuit the real
+     * transport. This is the un-mocked seam: promoteFromWaitlist → dispatch →
+     * the REAL netdust-mail confirmed-trigger closure → wp_mail. We assert on
+     * the recipient list that actually reaches wp_mail.
+     */
+    private function startMailCapture(): void
+    {
+        $this->sentMails = [];
+        $this->mailCapture = function ($short, $atts) {
+            // If an earlier filter (the production suppression guard at p10)
+            // already short-circuited, this never runs — so a suppressed mail is
+            // correctly NOT recorded. We register at p99 so the guard wins first.
+            if ($short !== null) {
+                return $short;
+            }
+            $this->sentMails[] = $atts;
+
+            return true; // short-circuit the real transport (no actual send)
+        };
+        add_filter('pre_wp_mail', $this->mailCapture, 99, 2);
+    }
+
+    private function stopMailCapture(): void
+    {
+        if ($this->mailCapture !== null) {
+            remove_filter('pre_wp_mail', $this->mailCapture, 99);
+            $this->mailCapture = null;
+        }
+    }
+
+    private function mailsTo(string $email): int
+    {
+        $count = 0;
+        foreach ($this->sentMails as $atts) {
+            $to = $atts['to'] ?? [];
+            $recipients = is_array($to) ? $to : [$to];
+            foreach ($recipients as $r) {
+                if (strcasecmp(trim((string) $r), $email) === 0) {
+                    $count++;
+                }
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * Ensure the REAL netdust-mail confirmed-trigger closure is live on
+     * stride/registration/confirmed (it is registered at init priority 20 from
+     * the seeded active template; on a fresh CI DB the template is seeded here).
+     * Idempotent: only activates triggers if no netdust-mail closure is present,
+     * so we never double-register (which would double-send).
+     */
+    private function ensureConfirmedMailTriggerLive(): void
+    {
+        ntdst_get(StrideMailBridge::class)->seedTemplates();
+
+        global $wp_filter;
+        $hook = $wp_filter['stride/registration/confirmed'] ?? null;
+        $hasNdmailClosure = false;
+        if ($hook) {
+            foreach (($hook->callbacks[10] ?? []) as $cb) {
+                $fn = $cb['function'];
+                if ($fn instanceof \Closure) {
+                    $ref = new \ReflectionFunction($fn);
+                    if (str_contains((string) $ref->getFileName(), 'netdust-mail')) {
+                        $hasNdmailClosure = true;
+                        break;
+                    }
+                }
+            }
+        }
+
+        if (!$hasNdmailClosure) {
+            ntdst_get(MailService::class)->activateTriggers();
+        }
+    }
+
+    /**
+     * @test
+     * Task 4 (a): a NEW-account anon promote sends EXACTLY ONE confirmation mail
+     * to the newly-created user's email. The seeded confirmed-trigger already
+     * covers this — we assert it still works (no over-suppression / no double).
+     */
+    public function newAccountPromoteSendsExactlyOneConfirmMailToNewUser(): void
+    {
+        $this->ensureConfirmedMailTriggerLive();
+
+        $editionId = $this->createTestEdition(['meta' => ['_ntdst_capacity' => 5]]);
+        $email = 'newacct_' . wp_generate_password(6, false) . '@lead.test';
+        $regId = $this->seedAnonWaitlistRegistration($editionId, [
+            'name' => 'Nieuwe Klant',
+            'email' => $email,
+        ]);
+
+        $this->startMailCapture();
+        try {
+            $result = $this->enrollmentService->promoteFromWaitlist($regId);
+        } finally {
+            $this->stopMailCapture();
+        }
+
+        $this->assertTrue($result, 'new-account promote should succeed');
+
+        $row = $this->registrations->find($regId);
+        $this->createdUserIds[] = (int) $row->user_id;
+
+        $this->assertSame(
+            1,
+            $this->mailsTo($email),
+            'the new user must receive exactly one confirmation mail',
+        );
+    }
+
+    /**
+     * @test
+     * Task 4 (b) — THE bug-catching denial case: a collision promote (anon email
+     * matches a PRE-EXISTING account) must send ZERO confirmation mail to that
+     * existing account (M-NEW-USER-MAIL-ONLY / attack 6). The row is still
+     * confirmed + linked + granted — only the unsolicited mail is suppressed.
+     */
+    public function collisionPromoteSendsZeroConfirmMailToExistingAccount(): void
+    {
+        $this->ensureConfirmedMailTriggerLive();
+
+        $editionId = $this->createTestEdition(['meta' => ['_ntdst_capacity' => 5]]);
+
+        $email = 'existing_mail_' . wp_generate_password(6, false) . '@real.test';
+        $existingUserId = wp_create_user('existing_mail_' . wp_generate_password(6, false), 'pw123456', $email);
+        $this->assertIsInt($existingUserId);
+        $this->createdUserIds[] = $existingUserId;
+        update_user_meta($existingUserId, 'first_name', 'Echte');
+        update_user_meta($existingUserId, 'last_name', 'Gebruiker');
+
+        $regId = $this->seedAnonWaitlistRegistration($editionId, [
+            'name' => 'Imposter',
+            'email' => $email,
+        ]);
+
+        $this->startMailCapture();
+        try {
+            $result = $this->enrollmentService->promoteFromWaitlist($regId);
+        } finally {
+            $this->stopMailCapture();
+        }
+
+        $this->assertTrue($result, 'collision promote should still succeed (links to existing)');
+
+        // Row is still confirmed + linked to the existing account.
+        $row = $this->registrations->find($regId);
+        $this->assertSame($existingUserId, (int) $row->user_id, 'row linked to existing account');
+        $this->assertSame('confirmed', $row->status, 'row still confirmed');
+
+        // The denial: ZERO confirmation mail to the pre-existing account.
+        $this->assertSame(
+            0,
+            $this->mailsTo($email),
+            'an unsolicited confirmation mail must NOT reach a pre-existing account',
+        );
+    }
+
+    /**
+     * @test
+     * Task 4 (c) — the over-suppression guard: a NORMAL logged-in-user confirm
+     * (the existing free-seat case, user_id already set, was_new_account=false
+     * but NOT a collision) must STILL send its confirmation mail. Suppression is
+     * scoped to the anon-promote collision, never to all was_new_account===false
+     * confirms.
+     */
+    public function normalAccountedPromoteStillSendsConfirmMail(): void
+    {
+        $this->ensureConfirmedMailTriggerLive();
+
+        $editionId = $this->createTestEdition(['meta' => ['_ntdst_capacity' => 5]]);
+        // A waitlist row that ALREADY carries a real user_id (the logged-in case).
+        $regId = $this->seedWaitlistRegistration($editionId);
+
+        $user = get_userdata(self::$testUserId);
+        $email = (string) $user->user_email;
+
+        $this->startMailCapture();
+        try {
+            $result = $this->enrollmentService->promoteFromWaitlist($regId);
+        } finally {
+            $this->stopMailCapture();
+        }
+
+        $this->assertTrue($result, 'accounted promote should succeed');
+
+        $this->assertSame(
+            1,
+            $this->mailsTo($email),
+            'a normal accounted confirm must still send its confirmation mail (no over-suppression)',
+        );
     }
 }

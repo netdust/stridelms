@@ -624,7 +624,14 @@ final class EnrollmentService extends AbstractService
         // flips status. A later transaction rollback leaves the row on the
         // waitlist carrying a real user_id (benign-idempotent: this block is
         // gated on user_id===0, so a retry resolves nothing new).
-        $wasExisting = true;
+        //
+        // $resolvedToExistingAnon tracks the COLLISION case specifically: an
+        // anonymous lead (entered the branch below) whose email matched a
+        // pre-existing account. That is the ONLY case whose confirmation mail is
+        // suppressed (M-NEW-USER-MAIL-ONLY). A normal accounted promote never
+        // enters the branch, so it keeps the default false and still mails.
+        $resolvedToExistingAnon = false;
+        $createdNewAnonAccount = false;
         if ((int) $registration->user_id === 0) {
             $captured = $registration->enrollment_data['waitlist']['data'] ?? [];
 
@@ -636,13 +643,14 @@ final class EnrollmentService extends AbstractService
                 return $resolved;
             }
 
-            $wasExisting = $resolved['was_existing'];
+            $resolvedToExistingAnon = $resolved['was_existing'];
+            $createdNewAnonAccount = !$resolved['was_existing'];
 
             // M-META-MAP — new account only: map the captured reserved-name fields
             // onto the new user via the existing convergence (getUserMetaMapping /
             // updateUserProfile, which re-sanitizes). M-NO-OVERWRITE — an existing
             // account is left entirely untouched (no meta write at all).
-            if (!$wasExisting) {
+            if (!$resolvedToExistingAnon) {
                 $this->updateUserProfile($resolved['user_id'], $captured);
             }
 
@@ -708,14 +716,19 @@ final class EnrollmentService extends AbstractService
 
         // Status already transitioned to Confirmed inside the transaction; run the
         // shared grant + event tail without re-writing the status. Thread the
-        // account-resolution outcome through so Task 4 can gate the welcome mail
-        // on a genuinely-new account (M-NEW-USER-MAIL-ONLY) — Task 3 itself does
-        // NOT change mail behavior, only makes the value available.
+        // account-resolution outcome through so StrideMailBridge can gate the
+        // confirmation mail (M-NEW-USER-MAIL-ONLY): a brand-new account is the
+        // intended welcome recipient (mail allowed), but the COLLISION case — an
+        // anonymous lead resolved to a PRE-EXISTING account — must NOT receive an
+        // unsolicited confirmation mail (suppressConfirmMail). A normal accounted
+        // promote never entered the anon branch, so both flags stay false and its
+        // confirmation mail is sent as before.
         return $this->confirmCore(
             $registration,
             'Registration promoted from waitlist',
             false,
-            !$wasExisting,
+            $createdNewAnonAccount,
+            $resolvedToExistingAnon,
         );
     }
 
@@ -730,9 +743,17 @@ final class EnrollmentService extends AbstractService
      * @param bool   $writeStatus    write status=Confirmed here; false when the
      *                               caller already transitioned it under a lock.
      * @param bool   $wasNewAccount  true when this confirm resolved a brand-new
-     *                               account for an anonymous waitlist lead. Task 4
-     *                               consumes this to gate the welcome mail; Task 3
-     *                               only threads it (no mail behavior change yet).
+     *                               account for an anonymous waitlist lead.
+     *                               Additive on the event payload for listeners.
+     * @param bool   $suppressConfirmMail true ONLY for the anonymous-promote
+     *                               COLLISION case (an anon lead whose email
+     *                               matched a PRE-EXISTING account). The seeded
+     *                               stride-enrollment-confirmed trigger would
+     *                               otherwise send an unsolicited confirmation
+     *                               mail to that stranger's account
+     *                               (M-NEW-USER-MAIL-ONLY / attack 6). The grant,
+     *                               audit, quote and cache listeners still fire —
+     *                               only the confirmation mail is suppressed.
      * @return true|WP_Error
      */
     private function confirmCore(
@@ -740,6 +761,7 @@ final class EnrollmentService extends AbstractService
         string $logMessage,
         bool $writeStatus = true,
         bool $wasNewAccount = false,
+        bool $suppressConfirmMail = false,
     ): true|WP_Error {
         $registrationId = (int) $registration->id;
         $editionId = (int) $registration->edition_id;
@@ -764,11 +786,21 @@ final class EnrollmentService extends AbstractService
             }
         }
 
-        // Fire event
+        // Fire event. `was_new_account` is additive (existing listeners ignore
+        // unknown keys) and lets StrideMailBridge suppress the seeded
+        // confirmation-mail trigger for the anonymous-promote COLLISION case —
+        // a confirm against a PRE-EXISTING account whose email a stranger typed
+        // into the public waitlist form must not receive an unsolicited
+        // confirmation/welcome mail (M-NEW-USER-MAIL-ONLY / attack 6). A normal
+        // accounted confirm (where no account was resolved on this path) carries
+        // was_new_account=false too, but is NOT suppressed — the bridge keys
+        // suppression on the anon-promote collision, not on the flag alone.
         $this->dispatch('registration/confirmed', [
             'registration_id' => $registrationId,
             'user_id' => (int) $registration->user_id,
             'edition_id' => $editionId,
+            'was_new_account' => $wasNewAccount,
+            'suppress_confirm_mail' => $suppressConfirmMail,
         ]);
 
         ntdst_log('enrollment')->info($logMessage, [

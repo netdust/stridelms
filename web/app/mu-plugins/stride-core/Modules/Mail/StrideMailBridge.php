@@ -65,6 +65,18 @@ final class StrideMailBridge extends AbstractService
         add_action('stride/registration/interest_registered', [$this, 'onInterestRegisteredUserMail']);
         add_action('stride/registration/waitlisted', [$this, 'onWaitlistRegisteredUserMail']);
 
+        // M-NEW-USER-MAIL-ONLY / attack 6: the stride/registration/confirmed event
+        // is bound to the seeded, active `stride-enrollment-confirmed` template,
+        // which netdust-mail auto-sends (priority 10) to the row's user. For an
+        // anonymous-waitlist-promote COLLISION (an anon lead whose email matched a
+        // PRE-EXISTING account), that mail would be an unsolicited confirmation to
+        // a stranger. We arm a per-dispatch suppression BEFORE the netdust-mail
+        // trigger (priority 5) and disarm it AFTER (priority 15), so the suppression
+        // is scoped to exactly this dispatch and never disables the template
+        // globally or affects normal (logged-in / new-account) confirms.
+        add_action('stride/registration/confirmed', [$this, 'armConfirmMailSuppression'], 5);
+        add_action('stride/registration/confirmed', [$this, 'disarmConfirmMailSuppression'], 15);
+
         // Quote send email (triggered from admin)
         add_action('stride/quote/send_email', [$this, 'onQuoteSendEmail'], 10, 3);
 
@@ -157,6 +169,100 @@ final class StrideMailBridge extends AbstractService
             'edition_id' => $editionId,
             'edition' => ['title' => $edition ? $edition->post_title : ''],
         ], ['to' => $email]);
+    }
+
+    /**
+     * The per-dispatch pre_wp_mail guard currently armed (null when disarmed).
+     *
+     * @var callable|null
+     */
+    private $confirmMailGuard = null;
+
+    /**
+     * Arm a per-dispatch suppression of the seeded confirmation mail for the
+     * anonymous-promote COLLISION case (M-NEW-USER-MAIL-ONLY / attack 6).
+     *
+     * Runs at priority 5, BEFORE netdust-mail's confirmed-trigger send (priority
+     * 10). When the dispatch carries `suppress_confirm_mail === true`, we install
+     * a narrowly-scoped pre_wp_mail short-circuit that suppresses ONLY the
+     * confirmation mail to the resolved (pre-existing) account: it matches both
+     * the recipient email AND the confirmation template's subject prefix, so the
+     * quote/created mail (different subject) and any mail to a different recipient
+     * are untouched. The guard self-removes after one match and is unconditionally
+     * disarmed at priority 15.
+     *
+     * Why this seam: netdust-mail exposes no per-send short-circuit filter
+     * (`ndmail_before_send` is registered but never applied; there is no
+     * recipient/pre_send filter), and gating the whole `confirmed` dispatch would
+     * also silence the audit, quote, cache and trajectory listeners for the
+     * collision row — which IS a real confirmed enrollment. Suppressing at
+     * pre_wp_mail keeps the grant + those four listeners intact and removes only
+     * the unsolicited mail.
+     *
+     * @param array{user_id?: int|null, suppress_confirm_mail?: bool} $data
+     */
+    public function armConfirmMailSuppression(array $data): void
+    {
+        if (empty($data['suppress_confirm_mail'])) {
+            return;
+        }
+
+        $userId = (int) ($data['user_id'] ?? 0);
+        if (!$userId) {
+            return;
+        }
+        $user = get_userdata($userId);
+        if (!$user || !$user->user_email) {
+            return;
+        }
+        $target = strtolower(trim((string) $user->user_email));
+
+        // Static prefix of the confirmation template's subject (before the first
+        // SmartCode), so the match is template-specific without hardcoding the
+        // rendered edition title. e.g. "Inschrijving bevestigd: {{edition.title}}"
+        // → "Inschrijving bevestigd:".
+        $template = get_page_by_path('stride-enrollment-confirmed', OBJECT, 'ndmail_template');
+        $rawSubject = $template ? (string) get_post_meta($template->ID, '_ndmail_subject', true) : '';
+        $subjectPrefix = trim((string) strstr($rawSubject, '{{', true)) ?: $rawSubject;
+
+        $this->confirmMailGuard = function ($short, $atts) use ($target, $subjectPrefix) {
+            $to = $atts['to'] ?? [];
+            $recipients = is_array($to) ? $to : [$to];
+            $matchesRecipient = false;
+            foreach ($recipients as $r) {
+                if (strtolower(trim((string) $r)) === $target) {
+                    $matchesRecipient = true;
+                    break;
+                }
+            }
+
+            $subject = (string) ($atts['subject'] ?? '');
+            $matchesSubject = $subjectPrefix === '' || str_starts_with($subject, $subjectPrefix);
+
+            if ($matchesRecipient && $matchesSubject) {
+                // Suppress this one send (return non-null short-circuits wp_mail).
+                $this->disarmConfirmMailSuppression([]);
+                return true;
+            }
+
+            return $short;
+        };
+
+        add_filter('pre_wp_mail', $this->confirmMailGuard, 10, 2);
+    }
+
+    /**
+     * Disarm the per-dispatch confirmation-mail suppression (priority 15, after
+     * the netdust-mail trigger). Idempotent — also called from inside the guard
+     * after a single match so a later, unrelated send in the same request is
+     * never suppressed.
+     */
+    public function disarmConfirmMailSuppression(array $data = []): void
+    {
+        if ($this->confirmMailGuard !== null) {
+            remove_filter('pre_wp_mail', $this->confirmMailGuard, 10);
+            $this->confirmMailGuard = null;
+        }
     }
 
     /**
