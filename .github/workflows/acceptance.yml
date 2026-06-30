@@ -235,6 +235,24 @@ jobs:
     - name: Seed feature-matrix fixtures
       run: wp eval-file scripts/seed.php
 
+    # TEMP DIAGNOSTIC (remove once OnlineEnrollmentCest is green): dump what
+    # LearnDash actually reads back for the Beweegbeleid course's price type, so
+    # we can see whether the seeder's learndash_update_setting write took effect
+    # in CI (it does in DDEV; CI still renders "Start").
+    - name: DEBUG course price type
+      run: |
+        wp eval '
+          $id = get_page_by_path("e-learning-beweegbeleid-ontwikkelen", OBJECT, "sfwd-courses")->ID ?? 0;
+          if (!$id) { $p = get_posts(["post_type"=>"sfwd-courses","s"=>"Beweegbeleid Ontwikkelen","numberposts"=>1]); $id = $p[0]->ID ?? 0; }
+          echo "course_id=$id\n";
+          echo "learndash_get_setting(price_type)=" . var_export(learndash_get_setting($id,"course_price_type"), true) . "\n";
+          echo "learndash_get_course_price=" . json_encode(function_exists("learndash_get_course_price") ? learndash_get_course_price($id) : "n/a") . "\n";
+          $ld = get_post_meta($id, "_sfwd-courses", true);
+          echo "_sfwd-courses=" . json_encode($ld) . "\n";
+          echo "_ld_price_type=" . var_export(get_post_meta($id, "_ld_price_type", true), true) . "\n";
+          echo "getAccessMode=" . \Stride\Integrations\LearnDash\LearnDashHelper::getAccessMode($id) . "\n";
+        '
+
     # Synthesize tests/.env the suite + Acceptance helper read (%WP_URL%,
     # admin creds, admin path, and the SAME login secret so the codecept CLI
     # process resolves it via Acceptance::testLoginSecret()).
@@ -294,20 +312,7 @@ jobs:
     - name: Run acceptance suite (all Cests)
       run: |
         set -e
-        for cest in \
-          SmokeTestCest \
-          EnrollmentCest EnrollmentEdgeCest EnrollmentDataShapeCest \
-          PreEnrollmentFlowCest OnlineEnrollmentCest \
-          AttendanceCest QuestionnaireBuilderCest \
-          ProfileCest \
-          DashboardCest DashboardE2ECest DashboardTabShakeoutCest DashboardQuoteGdprEdgeCest \
-          CatalogShakeoutCest CourseSidebarStatusCest \
-          TrajectoryCest TrajectoryE2ECest TrajectoryCascadeCest \
-          AdminEditionCest AdminEditionDeelnemersCest AdminQuoteCest AdminVoucherCest \
-          EditionDuplicateCest \
-          AssistantPluginCest AuditPluginCest AuthPluginCest \
-          FullUserJourneyCest \
-        ; do
+        for cest in OnlineEnrollmentCest; do  # TEMP diagnostic scope
           echo "── Running acceptance: $cest ──"
           vendor/bin/codecept run acceptance --env ci "$cest"
         done
