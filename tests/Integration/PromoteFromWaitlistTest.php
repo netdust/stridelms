@@ -661,4 +661,95 @@ class PromoteFromWaitlistTest extends IntegrationTestCase
             'a normal accounted confirm must still send its confirmation mail (no over-suppression)',
         );
     }
+
+    /** Count captured mails to $email whose subject starts with $prefix. */
+    private function mailsToWithSubjectPrefix(string $email, string $prefix): int
+    {
+        $count = 0;
+        foreach ($this->sentMails as $atts) {
+            $to = $atts['to'] ?? [];
+            $recipients = is_array($to) ? $to : [$to];
+            $subject = (string) ($atts['subject'] ?? '');
+            foreach ($recipients as $r) {
+                if (strcasecmp(trim((string) $r), $email) === 0
+                    && str_starts_with($subject, $prefix)) {
+                    $count++;
+                }
+            }
+        }
+
+        return $count;
+    }
+
+    /**
+     * @test
+     * Task 4 (d) — SUBJECT-SCOPING over-suppression guard (test-effectiveness
+     * blind spot, 2026-06-30): the collision suppression at pre_wp_mail matches
+     * BOTH recipient AND the confirmation template's subject prefix
+     * (StrideMailBridge::armConfirmMailSuppression, $matchesRecipient &&
+     * $matchesSubject). The existing collision test only ever emits the single
+     * confirm mail to the existing recipient, so it passes whether or not the
+     * subject half is enforced — a regression to recipient-only matching would
+     * NOT be caught.
+     *
+     * This test bites that: during a COLLISION promote, while the guard is armed
+     * (prio 5) and BEFORE the netdust-mail confirm send (prio 10) self-disarms
+     * it, we emit an UNRELATED wp_mail to the SAME existing recipient with a
+     * DIFFERENT subject (a hook at prio 6). That non-confirm mail must SURVIVE —
+     * only the confirmation subject is suppressed. If subject-scoping breaks
+     * (recipient-only), this unrelated mail is wrongly swallowed and the assert
+     * goes RED.
+     */
+    public function collisionSuppressionDoesNotSwallowOtherSubjectToSameRecipient(): void
+    {
+        $this->ensureConfirmedMailTriggerLive();
+
+        $editionId = $this->createTestEdition(['meta' => ['_ntdst_capacity' => 5]]);
+
+        $email = 'subjscope_' . wp_generate_password(6, false) . '@real.test';
+        $existingUserId = wp_create_user('subjscope_' . wp_generate_password(6, false), 'pw123456', $email);
+        $this->assertIsInt($existingUserId);
+        $this->createdUserIds[] = $existingUserId;
+
+        $regId = $this->seedAnonWaitlistRegistration($editionId, [
+            'name' => 'Imposter',
+            'email' => $email,
+        ]);
+
+        // While the guard is ARMED (prio 5) but BEFORE the confirm send disarms it
+        // (the confirm send is prio 10; this fires at prio 6), emit an unrelated
+        // mail to the SAME recipient with a clearly different subject. It must NOT
+        // be suppressed — only the confirmation subject is in scope.
+        $otherSubject = 'Offerte ontvangen - andere mail';
+        $otherMail = function () use ($email, $otherSubject): void {
+            wp_mail($email, $otherSubject, 'Body of an unrelated mail.');
+        };
+        add_action('stride/registration/confirmed', $otherMail, 6);
+
+        $this->startMailCapture();
+        try {
+            $result = $this->enrollmentService->promoteFromWaitlist($regId);
+        } finally {
+            $this->stopMailCapture();
+            remove_action('stride/registration/confirmed', $otherMail, 6);
+        }
+
+        $this->assertTrue($result, 'collision promote should still succeed');
+
+        // The DENIAL the existing collision test already covers: zero confirm mail.
+        $this->assertSame(
+            0,
+            $this->mailsToWithSubjectPrefix($email, 'Inschrijving bevestigd'),
+            'the confirmation mail must still be suppressed for the collision account',
+        );
+
+        // The NEW assertion (subject-scoping): the unrelated, different-subject mail
+        // to the same recipient SURVIVES — suppression is scoped to the confirm
+        // subject, not to the recipient wholesale.
+        $this->assertSame(
+            1,
+            $this->mailsToWithSubjectPrefix($email, $otherSubject),
+            'an unrelated mail (different subject) to the same recipient must NOT be suppressed',
+        );
+    }
 }
