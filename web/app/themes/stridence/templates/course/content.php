@@ -24,6 +24,11 @@ $lessons      = $args['lessons'] ?? [];
 // When rendered on /edities/<course-slug>/ (the enrollment surface itself),
 // we don't repeat the editions list — the visitor is already past discovery.
 $show_editions = $args['show_editions'] ?? true;
+// The "Inhoud van de opleiding" lesson list is suppressed on the
+// online-with-editions overview (the caller passes false) — the lesson list is
+// the enrolled experience, not the public edition chooser. Defaults to true so
+// every other surface (e-learning, klassikaal) is unchanged.
+$show_lessons = $args['show_lessons'] ?? true;
 
 ?>
 
@@ -116,6 +121,7 @@ endif;
 <?php endif; ?>
 
 <!-- Programma Section -->
+<?php if ($show_lessons) : ?>
 <section id="programma" class="scroll-mt-32">
     <?php
 // One design for the lesson list everywhere: the styled "Inhoud van de
@@ -127,16 +133,16 @@ endif;
 // gebleven") once the visitor is logged in with access. The raw LearnDash
 // [course_content] is the fallback only when the course has no lessons.
 $lessons_with_dates = LearnDashHelper::getLessonsWithAvailability($course_id, $user_id ?: null);
-$has_styled_list    = !empty($lessons_with_dates);
+    $has_styled_list    = !empty($lessons_with_dates);
 
-// Progress label ("X van Y modules afgerond") only when the visitor is logged
-// in with access AND there is progress data to show.
-$lesson_total         = count($lessons_with_dates);
-$lessons_done         = count(array_filter($lessons_with_dates, static fn(array $l): bool => !empty($l['completed'])));
-$show_lesson_progress = $user_id
-    && $lesson_total > 0
-    && LearnDashHelper::hasAccess($course_id, $user_id);
-?>
+    // Progress label ("X van Y modules afgerond") only when the visitor is logged
+    // in with access AND there is progress data to show.
+    $lesson_total         = count($lessons_with_dates);
+    $lessons_done         = count(array_filter($lessons_with_dates, static fn(array $l): bool => !empty($l['completed'])));
+    $show_lesson_progress = $user_id
+        && $lesson_total > 0
+        && LearnDashHelper::hasAccess($course_id, $user_id);
+    ?>
     <?php if ($has_styled_list) : ?>
     <div class="flex justify-between items-baseline gap-3.5 flex-wrap mb-3">
         <h2 class="text-[18px] font-bold text-text">
@@ -145,8 +151,8 @@ $show_lesson_progress = $user_id
         <?php if ($show_lesson_progress) : ?>
             <div class="text-[13px] font-bold text-text-muted">
                 <?php
-            /* translators: 1: completed modules, 2: total modules */
-            echo esc_html(sprintf(__('%1$d van %2$d modules afgerond', 'stridence'), $lessons_done, $lesson_total));
+                /* translators: 1: completed modules, 2: total modules */
+                echo esc_html(sprintf(__('%1$d van %2$d modules afgerond', 'stridence'), $lessons_done, $lesson_total));
             ?>
             </div>
         <?php endif; ?>
@@ -241,6 +247,7 @@ if ($has_styled_list) :
     </div>
     <?php endif; ?>
 </section>
+<?php endif; // $show_lessons?>
 
 <?php if (!$is_online) : ?>
 <!-- Sprekers Section (in-person only) -->
