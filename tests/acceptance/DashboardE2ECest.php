@@ -76,7 +76,7 @@ class DashboardE2ECest
 
         // Home is the active item and its href carries no tab param.
         $activeHref = (string) $I->executeJS(
-            "const a = document.querySelector('[aria-label=\"Dashboard navigatie\"] a[aria-current=\"page\"]'); return a ? a.href : '';"
+            "const a = document.querySelector('[aria-label=\"Dashboard navigatie\"] a[aria-current=\"page\"]'); return a ? a.href : '';",
         );
         \PHPUnit\Framework\Assert::assertStringNotContainsString('tab=', $activeHref, 'home must be the active nav item');
 
@@ -84,7 +84,7 @@ class DashboardE2ECest
         $I->amOnPage('/mijn-account/?tab=offertes');
         $I->waitForElement('[aria-label="Dashboard navigatie"]', 10);
         $activeHref = (string) $I->executeJS(
-            "const a = document.querySelector('[aria-label=\"Dashboard navigatie\"] a[aria-current=\"page\"]'); return a ? a.href : '';"
+            "const a = document.querySelector('[aria-label=\"Dashboard navigatie\"] a[aria-current=\"page\"]'); return a ? a.href : '';",
         );
         \PHPUnit\Framework\Assert::assertStringContainsString('tab=offertes', $activeHref, 'offertes must be the active nav item on its own tab');
     }
@@ -107,8 +107,8 @@ class DashboardE2ECest
         // panels hidden until booted, so visible-text matching is flaky here.
         $I->see('Binnenkort');
         $agendaText = (string) $I->executeJS(
-            "const h = Array.from(document.querySelectorAll('h2,h3')).find(el => el.textContent.includes('Binnenkort'));" .
-            "return h ? h.closest('section').textContent : '';"
+            "const h = Array.from(document.querySelectorAll('h2,h3')).find(el => el.textContent.includes('Binnenkort'));"
+            . "return h ? h.closest('section').textContent : '';",
         );
         \PHPUnit\Framework\Assert::assertStringContainsString(self::ACTIVE_COURSE, $agendaText, 'upcoming agenda must list the active course session');
         \PHPUnit\Framework\Assert::assertStringNotContainsString(self::COMPLETED_COURSE, $agendaText, 'completed course must not appear in the upcoming agenda');
@@ -145,8 +145,8 @@ class DashboardE2ECest
         // completion flow flips it to status=completed, which moves it here.
         $I->see('Afgerond');
         $afgerondText = (string) $I->executeJS(
-            "const h = Array.from(document.querySelectorAll('h2,h3')).find(el => el.textContent.includes('Afgerond'));" .
-            "return h ? h.closest('section').textContent : '';"
+            "const h = Array.from(document.querySelectorAll('h2,h3')).find(el => el.textContent.includes('Afgerond'));"
+            . "return h ? h.closest('section').textContent : '';",
         );
         \PHPUnit\Framework\Assert::assertStringContainsString(self::COMPLETED_COURSE, $afgerondText, 'completed registration must be in the Afgerond section');
         \PHPUnit\Framework\Assert::assertStringNotContainsString(self::ACTIVE_COURSE, $afgerondText, 'active registration must NOT be in the Afgerond section');
@@ -234,11 +234,13 @@ class DashboardE2ECest
         $I->waitForElement('main', 10);
 
         $I->see('Meldingen', 'h1');
-        // Either populated (mark-all-read control) or the explicit empty state —
-        // never a half-rendered page.
+        // Either populated (notification rows under Vandaag/Eerder sections) or the
+        // explicit empty state — never a half-rendered page.
         $state = (string) $I->executeJS(
-            "return document.body.innerText.includes('Alles als gelezen markeren') ? 'list'" .
-            " : (document.body.innerText.includes('Geen meldingen') ? 'empty' : 'broken');"
+            "const t = document.body.innerText;"
+            . "if (t.includes('Geen meldingen')) return 'empty';"
+            . "if (t.includes('Vandaag') || t.includes('Eerder')) return 'list';"
+            . "return 'broken';",
         );
         \PHPUnit\Framework\Assert::assertContains($state, ['list', 'empty'], 'meldingen must render its list or its empty state');
         $I->dontSee('Fatal error');
