@@ -674,6 +674,204 @@ class UserDashboardServiceTest extends TestCase
     }
 
     // ================================================================
+    // getProfileData() — pre-assembled profile/billing/notification struct
+    // (Task 3.9 / B9). The documented trap: personal `organisation` and
+    // billing `billing_company` are SEPARATE concerns and must NEVER fall
+    // back between each other (CLAUDE.md).
+    // ================================================================
+
+    /** @test */
+    public function testGetProfileDataMapsPersonalFieldsToExactMetaKeys(): void
+    {
+        global $_test_user_meta;
+        $_test_user_meta[7] = [
+            'phone'        => ['+32 11 22 33 44'],
+            'organisation' => ['Rode Kruis'],
+            'department'   => ['Opleidingen'],
+        ];
+
+        $result = $this->service->getProfileData(7);
+
+        $this->assertSame('+32 11 22 33 44', $result['personal']['phone']);
+        $this->assertSame('Rode Kruis', $result['personal']['organisation']);
+        $this->assertSame('Opleidingen', $result['personal']['department']);
+    }
+
+    /** @test */
+    public function testGetProfileDataMapsBillingFieldsToExactMetaKeys(): void
+    {
+        global $_test_user_meta;
+        $_test_user_meta[7] = [
+            'billing_company'   => ['Acme NV'],
+            'billing_vat'       => ['BE0123456789'],
+            'billing_address_1' => ['Hoofdstraat 1'],
+            'billing_postcode'  => ['3500'],
+            'billing_city'      => ['Hasselt'],
+            'invoice_email'     => ['facturen@acme.test'],
+            'gln_number'        => ['5400000000007'],
+        ];
+
+        $result = $this->service->getProfileData(7);
+
+        $this->assertSame('Acme NV', $result['billing']['company']);
+        $this->assertSame('BE0123456789', $result['billing']['vat_number']);
+        $this->assertSame('Hoofdstraat 1', $result['billing']['address']);
+        $this->assertSame('3500', $result['billing']['postal_code']);
+        $this->assertSame('Hasselt', $result['billing']['city']);
+        $this->assertSame('facturen@acme.test', $result['billing']['invoice_email']);
+        $this->assertSame('5400000000007', $result['billing']['gln_number']);
+    }
+
+    /**
+     * The documented trap (CLAUDE.md): `organisation` (personal employer)
+     * MUST NOT fall back to `billing_company` (invoice company), nor the
+     * reverse. Set one, leave the other empty, assert NO cross-bleed.
+     *
+     * @test
+     */
+    public function testGetProfileDataNeverFallsBackBetweenPersonalAndBilling(): void
+    {
+        global $_test_user_meta;
+        // Personal organisation present; billing company DELIBERATELY absent.
+        $_test_user_meta[7] = [
+            'organisation' => ['Rode Kruis'],
+            // no billing_company
+        ];
+
+        $result = $this->service->getProfileData(7);
+
+        $this->assertSame('Rode Kruis', $result['personal']['organisation']);
+        $this->assertSame(
+            '',
+            $result['billing']['company'],
+            'billing.company must NOT fall back to the personal organisation',
+        );
+
+        // And the reverse direction: billing company present, personal absent.
+        $_test_user_meta[8] = [
+            'billing_company' => ['Acme NV'],
+            // no organisation
+        ];
+
+        $reverse = $this->service->getProfileData(8);
+
+        $this->assertSame('Acme NV', $reverse['billing']['company']);
+        $this->assertSame(
+            '',
+            $reverse['personal']['organisation'],
+            'personal organisation must NOT fall back to the billing company',
+        );
+    }
+
+    /** @test */
+    public function testGetProfileDataNotificationDefaultsWhenMetaMissing(): void
+    {
+        global $_test_user_meta;
+        $_test_user_meta[9] = []; // no notification meta at all
+
+        $result = $this->service->getProfileData(9);
+
+        // reminders / new_courses default ON (stored value !== 'no')
+        $this->assertTrue($result['notifications']['reminders']);
+        $this->assertTrue($result['notifications']['new_courses']);
+        // newsletter defaults OFF (stored value === 'yes')
+        $this->assertFalse($result['notifications']['newsletter']);
+        // language defaults to 'nl'
+        $this->assertSame('nl', $result['notifications']['language']);
+    }
+
+    /** @test */
+    public function testGetProfileDataNotificationsRespectStoredOptOut(): void
+    {
+        global $_test_user_meta;
+        $_test_user_meta[10] = [
+            'stride_notify_reminders'       => ['no'],
+            'stride_notify_new_courses'     => ['no'],
+            'stride_notify_newsletter'      => ['yes'],
+            'stride_communication_language' => ['fr'],
+        ];
+
+        $result = $this->service->getProfileData(10);
+
+        $this->assertFalse($result['notifications']['reminders']);
+        $this->assertFalse($result['notifications']['new_courses']);
+        $this->assertTrue($result['notifications']['newsletter']);
+        $this->assertSame('fr', $result['notifications']['language']);
+    }
+
+    // ================================================================
+    // getEnrollmentPrefill() — flat prefill shape for the enrollment form
+    // (Task 3.9 / B9). Same meta-key mappings as getProfileData's personal
+    // + billing blocks, plus first/last name and the phone→billing_phone
+    // fallback the form relies on.
+    // ================================================================
+
+    /** @test */
+    public function testGetEnrollmentPrefillMapsFieldsToExactMetaKeys(): void
+    {
+        global $_test_user_meta;
+        $_test_user_meta[11] = [
+            'first_name'        => ['Jan'],
+            'last_name'         => ['Peeters'],
+            'phone'             => ['+32 400 00 00 00'],
+            'organisation'      => ['Rode Kruis'],
+            'department'        => ['Opleidingen'],
+            'billing_company'   => ['Acme NV'],
+            'invoice_email'     => ['facturen@acme.test'],
+            'billing_address_1' => ['Hoofdstraat 1'],
+            'billing_postcode'  => ['3500'],
+            'billing_city'      => ['Hasselt'],
+            'billing_vat'       => ['BE0123456789'],
+            'gln_number'        => ['5400000000007'],
+        ];
+
+        $result = $this->service->getEnrollmentPrefill(11);
+
+        $this->assertSame('Jan', $result['first_name']);
+        $this->assertSame('Peeters', $result['last_name']);
+        $this->assertSame('+32 400 00 00 00', $result['phone']);
+        $this->assertSame('Rode Kruis', $result['organisation']);
+        $this->assertSame('Opleidingen', $result['department']);
+        $this->assertSame('Acme NV', $result['company']);
+        $this->assertSame('facturen@acme.test', $result['invoice_email']);
+        $this->assertSame('Hoofdstraat 1', $result['address']);
+        $this->assertSame('3500', $result['postal_code']);
+        $this->assertSame('Hasselt', $result['city']);
+        $this->assertSame('BE0123456789', $result['vat_number']);
+        $this->assertSame('5400000000007', $result['gln_number']);
+    }
+
+    /** @test */
+    public function testGetEnrollmentPrefillPhoneFallsBackToBillingPhone(): void
+    {
+        global $_test_user_meta;
+        // No `phone`, but a `billing_phone` exists — the form's documented
+        // fallback. organisation/company kept separate here too.
+        $_test_user_meta[12] = [
+            'billing_phone' => ['+32 9 99 99 99'],
+        ];
+
+        $result = $this->service->getEnrollmentPrefill(12);
+
+        $this->assertSame('+32 9 99 99 99', $result['phone']);
+    }
+
+    /** @test */
+    public function testGetEnrollmentPrefillNeverFallsBackOrganisationToCompany(): void
+    {
+        global $_test_user_meta;
+        $_test_user_meta[13] = [
+            'organisation' => ['Rode Kruis'],
+            // no billing_company
+        ];
+
+        $result = $this->service->getEnrollmentPrefill(13);
+
+        $this->assertSame('Rode Kruis', $result['organisation']);
+        $this->assertSame('', $result['company'], 'company must NOT fall back to the personal organisation');
+    }
+
+    // ================================================================
     // Helpers
     // ================================================================
 

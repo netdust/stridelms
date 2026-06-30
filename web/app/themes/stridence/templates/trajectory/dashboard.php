@@ -73,27 +73,25 @@ $completed_count = (int) $progress['completed_count'];
 $total_required = (int) $progress['total_required'];
 $progress_percent = $total_required > 0 ? (int) round(($completed_count / $total_required) * 100) : 0;
 
-// Open-choice count for the Keuzes tab badge (same window logic as tab-keuzes)
-$trajectory_data = ntdst_get(TrajectoryService::class)->getTrajectory($trajectory->ID);
-$choice_available = $trajectory_data['choice_available_date'] ?? '';
-$choice_deadline = $trajectory_data['choice_deadline'] ?? '';
-
+// Open-choice count for the Keuzes tab badge. The window rule is the SERVICE's
+// single decision point (TrajectoryService::isChoiceWindowOpen) — the same call
+// tab-keuzes uses. The dashboard previously re-derived it inline and required
+// BOTH dates, which drifted from the service (Shake-out BUG-4): a trajectory
+// without configured dates rendered "closed" here while the server accepted
+// submissions. Delegating closes the drift.
 $open_choices = 0;
-if (!empty($choice_available) && !empty($choice_deadline)) {
-    $now = time();
-    if ($now >= strtotime($choice_available) && $now <= strtotime($choice_deadline)) {
-        // Picks as COURSE ids through the single decision point — the raw
-        // selections column stores flat EDITION ids, never grouped course ids.
-        $trajectory_selection = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class);
-        $selected_course_ids = $trajectory_selection->getSelectedCourseIds((int) ($enrollment->id ?? 0));
+if (ntdst_get(TrajectoryService::class)->isChoiceWindowOpen($trajectory->ID)) {
+    // Picks as COURSE ids through the single decision point — the raw
+    // selections column stores flat EDITION ids, never grouped course ids.
+    $trajectory_selection = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class);
+    $selected_course_ids = $trajectory_selection->getSelectedCourseIds((int) ($enrollment->id ?? 0));
 
-        foreach ($progress['elective_groups'] as $group) {
-            $required = (int) ($group['required'] ?? 0);
-            $chosen = $trajectory_selection->countChosenInGroup($group, $selected_course_ids);
+    foreach ($progress['elective_groups'] as $group) {
+        $required = (int) ($group['required'] ?? 0);
+        $chosen = $trajectory_selection->countChosenInGroup($group, $selected_course_ids);
 
-            if ($required > 0 && $chosen < $required) {
-                $open_choices++;
-            }
+        if ($required > 0 && $chosen < $required) {
+            $open_choices++;
         }
     }
 }

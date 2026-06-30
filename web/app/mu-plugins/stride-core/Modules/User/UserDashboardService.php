@@ -930,6 +930,83 @@ final class UserDashboardService
     }
 
     /**
+     * Pre-assemble the profile tab's user-meta into a display-ready struct.
+     *
+     * Personal and billing are SEPARATE concerns (CLAUDE.md): `organisation`
+     * (personal employer) is NOT `billing_company` (invoice company), and the
+     * two NEVER fall back between each other. The notification block carries
+     * the exact `!== 'no'` / `=== 'yes'` / `?: 'nl'` defaults the template used.
+     *
+     * @return array{
+     *   personal: array{first_name: string, last_name: string, phone: string, organisation: string, department: string},
+     *   billing: array{company: string, vat_number: string, address: string, postal_code: string, city: string, invoice_email: string, gln_number: string},
+     *   notifications: array{reminders: bool, new_courses: bool, newsletter: bool, language: string},
+     * }
+     */
+    public function getProfileData(int $userId): array
+    {
+        return [
+            'personal' => [
+                'first_name'   => (string) get_user_meta($userId, 'first_name', true),
+                'last_name'    => (string) get_user_meta($userId, 'last_name', true),
+                'phone'        => (string) get_user_meta($userId, 'phone', true),
+                'organisation' => (string) get_user_meta($userId, 'organisation', true),
+                'department'   => (string) get_user_meta($userId, 'department', true),
+            ],
+            // Billing keys are DISTINCT from personal — never fall back to
+            // personal.organisation for company. See CLAUDE.md.
+            'billing' => [
+                'company'       => (string) get_user_meta($userId, 'billing_company', true),
+                'vat_number'    => (string) get_user_meta($userId, 'billing_vat', true),
+                'address'       => (string) get_user_meta($userId, 'billing_address_1', true),
+                'postal_code'   => (string) get_user_meta($userId, 'billing_postcode', true),
+                'city'          => (string) get_user_meta($userId, 'billing_city', true),
+                'invoice_email' => (string) get_user_meta($userId, 'invoice_email', true),
+                'gln_number'    => (string) get_user_meta($userId, 'gln_number', true),
+            ],
+            'notifications' => [
+                'reminders'   => get_user_meta($userId, 'stride_notify_reminders', true) !== 'no',
+                'new_courses' => get_user_meta($userId, 'stride_notify_new_courses', true) !== 'no',
+                'newsletter'  => get_user_meta($userId, 'stride_notify_newsletter', true) === 'yes',
+                'language'    => get_user_meta($userId, 'stride_communication_language', true) ?: 'nl',
+            ],
+        ];
+    }
+
+    /**
+     * Flat user-meta prefill for the enrollment form.
+     *
+     * Same meta-key mappings as getProfileData()'s personal + billing blocks
+     * (personal `organisation` stays distinct from billing `company`), plus
+     * the two enrollment-only needs: first/last name and the
+     * phone → billing_phone fallback the form has always relied on.
+     *
+     * @return array{first_name: string, last_name: string, phone: string, organisation: string, department: string, company: string, invoice_email: string, address: string, postal_code: string, city: string, vat_number: string, gln_number: string}
+     */
+    public function getEnrollmentPrefill(int $userId): array
+    {
+        $profile = $this->getProfileData($userId);
+
+        $phone = $profile['personal']['phone']
+            ?: (string) get_user_meta($userId, 'billing_phone', true);
+
+        return [
+            'first_name'    => $profile['personal']['first_name'],
+            'last_name'     => $profile['personal']['last_name'],
+            'phone'         => $phone,
+            'organisation'  => $profile['personal']['organisation'],
+            'department'    => $profile['personal']['department'],
+            'company'       => $profile['billing']['company'],
+            'invoice_email' => $profile['billing']['invoice_email'],
+            'address'       => $profile['billing']['address'],
+            'postal_code'   => $profile['billing']['postal_code'],
+            'city'          => $profile['billing']['city'],
+            'vat_number'    => $profile['billing']['vat_number'],
+            'gln_number'    => $profile['billing']['gln_number'],
+        ];
+    }
+
+    /**
      * Get quote data grouped by status for dashboard display.
      *
      * @return array{active: array, cancelled: array}

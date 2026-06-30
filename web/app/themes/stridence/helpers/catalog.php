@@ -59,86 +59,11 @@ function stridence_catalog_items(string $catalog): array
 }
 
 /**
- * THE eligibility meta_query for catalog edition enumeration (panel
- * simplicity SF-1): active status + date window (end_date within a 2-day
- * grace past today, start_date fallback when end_date is missing). One
- * builder for all three sites — /klassikaal, /online and the course
- * archive's online query — so the window rule cannot fork again.
- *
- * NOTE — dateless editions are now INCLUDED for both klassikaal and online.
- * The `orderby => meta_value` + `meta_key => start_date` pairing that
- * previously forced an EXISTS join on start_date (excluding fully-dateless
- * editions) has been removed from all item builders; the OR-fallback below
- * now also matches editions with neither end_date nor start_date set.
- * Klassikaal band-orders the result via stridence_catalog_order_into_bands()
- * (a /klassikaal-only presentation layer); online returns a flat enrollable
- * list. See plan docs/plans/2026-06-14-dateless-editions-catalog.md.
- * Inclusion is gated by post_status=publish + the active-status IN-clause
- * here + the published-course guard downstream (INF-1) — a draft edition or
- * a draft-course edition still never lists.
- *
- * @param string $prefix Edition meta prefix (EditionRepository::getMetaPrefix())
- * @return array<int, array<string, mixed>> meta_query clauses (AND-joined by WP_Query)
- */
-function stridence_catalog_date_window_meta_query(string $prefix): array
-{
-    $past_cutoff = date('Y-m-d', strtotime('-2 days'));
-
-    return [
-        [
-            'key'     => $prefix . 'status',
-            'value'   => OfferingStatus::activeValues(),
-            'compare' => 'IN',
-        ],
-        [
-            'relation' => 'OR',
-            // (1) dated: end_date within the grace window
-            [
-                'key'     => $prefix . 'end_date',
-                'value'   => $past_cutoff,
-                'compare' => '>=',
-                'type'    => 'DATE',
-            ],
-            // (2) end_date missing but start_date within the grace window
-            [
-                'relation' => 'AND',
-                [
-                    'key'     => $prefix . 'end_date',
-                    'compare' => 'NOT EXISTS',
-                ],
-                [
-                    'key'     => $prefix . 'start_date',
-                    'value'   => $past_cutoff,
-                    'compare' => '>=',
-                    'type'    => 'DATE',
-                ],
-            ],
-            // (3) fully dateless: neither end_date nor start_date set. For a
-            //     KLASSIKAAL edition these are the "Binnenkort — toon
-            //     interesse" anchors; for an ONLINE edition these are
-            //     always-on enrollables. Inclusion is still gated by
-            //     post_status=publish + the active-status IN-clause above +
-            //     the published-course guard downstream (INF-1). Treatment
-            //     differs per kind; inclusion does not. See plan threat note.
-            [
-                'relation' => 'AND',
-                [
-                    'key'     => $prefix . 'end_date',
-                    'compare' => 'NOT EXISTS',
-                ],
-                [
-                    'key'     => $prefix . 'start_date',
-                    'compare' => 'NOT EXISTS',
-                ],
-            ],
-        ],
-    ];
-}
-
-/**
- * Observability for the enumeration cap (panel perf SF-2): a query that
- * fills STRIDENCE_CATALOG_MAX_ITEMS has silently truncated the catalog —
- * surface it instead of presenting the capped list as the whole offer.
+ * Observability for the enumeration cap (panel perf SF-2): a result filling
+ * STRIDENCE_CATALOG_MAX_ITEMS has silently truncated the catalog. RETAINED for
+ * the course-card prepass (stridence_prefetch_course_cards) + the archive,
+ * which still run their own enumeration. The /klassikaal+/online builders'
+ * cap-warning now lives service-side (EditionService::warnIfCapped).
  *
  * @param array<int|WP_Post> $results
  */
@@ -153,206 +78,33 @@ function stridence_catalog_warn_if_capped(array $results, string $context): void
 }
 
 /**
- * Eligible items for /klassikaal: active-status editions inside the date
- * window (2-day grace past end_date, start_date fallback, OR fully dateless),
- * excluding editions of online-only-format courses. The SQL start_date
- * ordering was removed so dateless editions are enumerated; dated ordering
- * is applied in PHP by the band-ordering pass (task 3 of the dateless plan).
+ * Eligible items for /klassikaal: the POLICY (eligibility query +
+ * format-exclusion + INF-1 published-course guard + item-shaping) now lives in
+ * EditionService::getCatalogItems('klassikaal') (Cluster 3 / Task 3.2). The
+ * theme keeps only the KLASSIKAAL-only PRESENTATION on top: band-ordering
+ * (dated-soon / dateless / grace) so the dateless "Binnenkort — toon interesse"
+ * anchors always land on page 1. The /online builder intentionally does NOT
+ * band-order — online courses are always-on (flat enrollable list).
  */
 function stridence_catalog_klassikaal_items(): array
 {
-    $prefix = ntdst_get(EditionRepository::class)->getMetaPrefix();
+    $items = ntdst_get(EditionService::class)
+        ->getCatalogItems('klassikaal', STRIDENCE_CATALOG_MAX_ITEMS);
 
-    $query = new WP_Query([
-        'post_type'      => 'vad_edition',
-        'posts_per_page' => STRIDENCE_CATALOG_MAX_ITEMS,
-        'post_status'    => 'publish',
-        'fields'         => 'ids',
-        'no_found_rows'  => true,
-        'meta_query'     => stridence_catalog_date_window_meta_query($prefix),
-        // No start_date orderby: ordering by meta_value forces an EXISTS join
-        // on start_date, which would exclude fully-dateless editions. Dated
-        // ordering for /klassikaal is applied in PHP by the band-ordering pass
-        // (task 3); inclusion is what matters at the query layer.
-    ]);
-    stridence_catalog_warn_if_capped($query->posts, 'klassikaal editions');
-
-    $items = stridence_catalog_edition_items_from_ids(array_map('intval', $query->posts));
-
-    // Exclude editions of online-only-format courses (same rule as before:
-    // online format present AND no classroom format).
-    $items = array_values(array_filter($items, static function (array $item): bool {
-        $course_id = (int) ($item['edition']['course_id'] ?? 0);
-        if (!$course_id) {
-            return true;
-        }
-        $formats = get_the_terms($course_id, 'stride_format');
-        if (!$formats || is_wp_error($formats)) {
-            return true;
-        }
-        $format_slugs = wp_list_pluck($formats, 'slug');
-
-        $is_online    = (bool) array_intersect($format_slugs, ['online', 'webinar', 'e-learning']);
-        $is_classroom = (bool) array_intersect($format_slugs, ['klassikaal', 'classroom']);
-
-        return !($is_online && !$is_classroom);
-    }));
-
-    // KLASSIKAAL-only presentation layer: band-order (dated-soon / dateless /
-    // grace) with a page-1 guard so the dateless "Binnenkort — toon interesse"
-    // anchors always land on page 1. Replaces the SQL start_date ordering that
-    // was dropped (it forced an EXISTS join excluding dateless editions). The
-    // /online builder intentionally does NOT call this — it returns a flat
-    // enrollable list (see dateless-editions-catalog plan).
     return stridence_catalog_order_into_bands($items);
 }
 
 /**
- * Eligible items for /online: one card per enrollable — (a) active editions
- * of online-format courses inside the date window (including fully-dateless
- * always-on editions), plus (b) pure-LD online courses that never had an
- * edition. Returns a FLAT enrollable list — no band-ordering: online courses
- * are always-on, so dateless online editions are normal enroll cards (see
- * stridence_catalog_date_window_meta_query() and the dateless-catalog plan).
+ * Eligible items for /online: one card per enrollable — active editions of
+ * online-format courses (incl. dateless always-on) plus pure-LD online courses
+ * that never had an edition. The POLICY lives in
+ * EditionService::getCatalogItems('online') (Task 3.2); the theme is a thin
+ * pass to it. Returns a FLAT enrollable list — no band-ordering.
  */
 function stridence_catalog_online_items(): array
 {
-    $editionRepo = ntdst_get(EditionRepository::class);
-    $prefix = $editionRepo->getMetaPrefix();
-
-    $online_course_ids = get_posts([
-        'post_type'      => 'sfwd-courses',
-        'posts_per_page' => STRIDENCE_CATALOG_MAX_ITEMS,
-        'post_status'    => 'publish',
-        'fields'         => 'ids',
-        'tax_query'      => [
-            [
-                'taxonomy' => 'stride_format',
-                'field'    => 'slug',
-                'terms'    => ['online', 'e-learning', 'webinar'],
-            ],
-        ],
-    ]);
-    stridence_catalog_warn_if_capped($online_course_ids, 'online courses');
-
-    if (empty($online_course_ids)) {
-        return [];
-    }
-
-    $items = [];
-
-    // --- (a) Active editions of online courses ---
-    $online_meta_query = stridence_catalog_date_window_meta_query($prefix);
-    $online_meta_query[] = [
-        'key'     => $prefix . 'course_id',
-        'value'   => $online_course_ids,
-        'compare' => 'IN',
-    ];
-    $edition_query = new WP_Query([
-        'post_type'      => 'vad_edition',
-        'posts_per_page' => STRIDENCE_CATALOG_MAX_ITEMS,
-        'post_status'    => 'publish',
-        'fields'         => 'ids',
-        'no_found_rows'  => true,
-        'meta_query'     => $online_meta_query,
-        // No start_date orderby (see klassikaal note): it would force an
-        // EXISTS join on start_date and exclude dateless always-on online
-        // editions. /online renders a flat enrollable grid and does NOT
-        // band-order — online courses are always-on, so there is no
-        // "Binnenkort" interest band here (Stefan, 2026-06-14).
-    ]);
-    stridence_catalog_warn_if_capped($edition_query->posts, 'online editions');
-
-    $items = stridence_catalog_edition_items_from_ids(array_map('intval', $edition_query->posts));
-
-    // --- (b) Pure-LD online courses (never had an edition at all) ---
-    $with_editions = $editionRepo->courseIdsWithAnyEdition(array_map('intval', $online_course_ids));
-    $pure_ld_ids = array_values(array_diff(array_map('intval', $online_course_ids), $with_editions));
-
-    if (!empty($pure_ld_ids)) {
-        _prime_post_caches($pure_ld_ids, true, true);
-        foreach ($pure_ld_ids as $course_id) {
-            if (!get_post($course_id)) {
-                continue;
-            }
-            $items[] = [
-                'kind'      => 'course',
-                'course_id' => $course_id,
-                'themes'    => stridence_catalog_theme_slugs($course_id),
-            ];
-        }
-    }
-
-    return $items;
-}
-
-/**
- * Build light edition items (data array + course theme slugs) for a list of
- * edition ids — batched: posts + meta + course terms are primed first.
- *
- * @param array<int> $edition_ids
- * @return list<array{kind: string, edition: array<string, mixed>, themes: list<string>}>
- */
-function stridence_catalog_edition_items_from_ids(array $edition_ids): array
-{
-    $ids = array_values(array_unique(array_filter(array_map('intval', $edition_ids))));
-    if (empty($ids)) {
-        return [];
-    }
-
-    $editionRepo = ntdst_get(EditionRepository::class);
-
-    _prime_post_caches($ids, false, true);
-
-    $course_ids = [];
-    foreach ($ids as $id) {
-        $course_id = (int) $editionRepo->getField($id, 'course_id', 0);
-        if ($course_id) {
-            $course_ids[$course_id] = $course_id;
-        }
-    }
-    if (!empty($course_ids)) {
-        _prime_post_caches(array_values($course_ids), true, true);
-    }
-
-    $items = [];
-    foreach ($ids as $id) {
-        $post = get_post($id);
-        if (!$post) {
-            continue;
-        }
-        $fields = $editionRepo->findFields($id);
-        $course_id = (int) ($fields['course_id'] ?? 0);
-
-        // Shake-out F2 (AF-4 wrong-order edge / INF-1): an edition whose
-        // course is no longer published (trashed, draft, private, deleted)
-        // must not produce a public card — get_post_status() returns the
-        // status for TRASHED posts too, so a plain get_post() null-check
-        // only catches hard deletes. Course-less editions (course_id 0)
-        // stay eligible. Cache-hit: course posts were primed above.
-        if ($course_id && get_post_status($course_id) !== 'publish') {
-            continue;
-        }
-
-        $items[] = [
-            'kind'    => 'edition',
-            'edition' => [
-                'id'              => $id,
-                'title'           => $post->post_title,
-                'course_id'       => $course_id ?: null,
-                'start_date'      => $fields['start_date'] ?? null,
-                'end_date'        => $fields['end_date'] ?? null,
-                'venue'           => $fields['venue'] ?? null,
-                'price'           => $fields['price'] ?? null,
-                'capacity'        => $fields['capacity'] ?? null,
-                'status'          => $fields['status'] ?? 'open',
-                'spots_remaining' => $fields['spots_remaining'] ?? null,
-            ],
-            'themes'  => $course_id ? stridence_catalog_theme_slugs($course_id) : [],
-        ];
-    }
-
-    return $items;
+    return ntdst_get(EditionService::class)
+        ->getCatalogItems('online', STRIDENCE_CATALOG_MAX_ITEMS);
 }
 
 /**
@@ -607,21 +359,29 @@ function stridence_prefetch_course_cards(array $course_ids, ?int $user_id = null
 
     $primary = [];
     if (!empty($edition_ids)) {
-        $statuses = ntdst_get(EditionService::class)->getEffectiveStatuses($edition_ids);
+        $editionService = ntdst_get(EditionService::class);
+        $statuses = $editionService->getEffectiveStatuses($edition_ids);
 
-        $best_rank = [];
+        // Bin the active editions by course, dropping any whose EFFECTIVE status
+        // is no longer active (a past edition may have flipped to Completed —
+        // stale visibility leak). Then defer the "which cohort is primary" pick
+        // to the single-home policy in stride-core (EditionService::
+        // getPrimaryEdition, INV-7 / B4) so the catalog card and the single-
+        // course CTA rank cohorts identically (enrollable wins over running).
+        $active_by_course = [];
         foreach ($edition_ids as $edition_id) {
             $course_id = (int) $editionRepo->getField($edition_id, 'course_id', 0);
             $eff = $statuses[$edition_id] ?? null;
-            // Effective status may flip a past edition to Completed — filter
-            // that out (stale visibility leak), same rule as before.
             if (!$course_id || !$eff || !$eff->isActive()) {
                 continue;
             }
-            $rank = $eff->allowsEnrollment() ? 2 : 1;
-            if ($rank > ($best_rank[$course_id] ?? -1)) {
-                $primary[$course_id] = ['id' => $edition_id, 'status' => $eff, 'spots' => null];
-                $best_rank[$course_id] = $rank;
+            $active_by_course[$course_id][] = $edition_id;
+        }
+
+        foreach ($active_by_course as $course_id => $course_edition_ids) {
+            $primary_id = (int) $editionService->getPrimaryEdition($course_edition_ids);
+            if ($primary_id) {
+                $primary[$course_id] = ['id' => $primary_id, 'status' => $statuses[$primary_id], 'spots' => null];
             }
         }
 

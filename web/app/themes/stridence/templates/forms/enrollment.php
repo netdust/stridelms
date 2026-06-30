@@ -33,21 +33,10 @@ if (!$is_online && $item_type === 'edition' && $item_id) {
 
 $current_user = wp_get_current_user();
 
-// Pre-fill user data
-$user_meta = [
-    'first_name'    => get_user_meta($current_user->ID, 'first_name', true),
-    'last_name'     => get_user_meta($current_user->ID, 'last_name', true),
-    'phone'         => get_user_meta($current_user->ID, 'phone', true) ?: get_user_meta($current_user->ID, 'billing_phone', true),
-    'organisation'  => get_user_meta($current_user->ID, 'organisation', true),
-    'department'    => get_user_meta($current_user->ID, 'department', true),
-    'company'       => get_user_meta($current_user->ID, 'billing_company', true),
-    'invoice_email' => get_user_meta($current_user->ID, 'invoice_email', true),
-    'address'       => get_user_meta($current_user->ID, 'billing_address_1', true),
-    'postal_code'   => get_user_meta($current_user->ID, 'billing_postcode', true),
-    'city'          => get_user_meta($current_user->ID, 'billing_city', true),
-    'vat_number'    => get_user_meta($current_user->ID, 'billing_vat', true),
-    'gln_number'    => get_user_meta($current_user->ID, 'gln_number', true),
-];
+// Pre-fill user data — pre-assembled by stride-core. Personal `organisation`
+// stays distinct from billing `company` (no cross-fallback); `phone` falls
+// back to `billing_phone` inside the service.
+$user_meta = ntdst_get(\Stride\Modules\User\UserDashboardService::class)->getEnrollmentPrefill($current_user->ID);
 
 // Fetch edition/course details
 $edition_data = [];

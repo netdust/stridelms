@@ -9,9 +9,13 @@
  *
  * Row info: date(s), venue, session count, price, status badge.
  *
+ * Pure renderer: the visibility policy, upcoming/past partition and sort are owned
+ * by EditionService::getPubliclyVisibleEditions($course_id, $user_id) — this template
+ * only renders the returned {upcoming, past} struct.
+ *
  * @param array $args {
- *     @type array $editions  Array of edition arrays from EditionService
- *     @type int   $course_id Course post ID
+ *     @type int  $course_id Course post ID
+ *     @type bool $is_online Whether this is a pure-LD online course (no editions)
  * }
  */
 
@@ -20,97 +24,19 @@ declare(strict_types=1);
 defined('ABSPATH') || exit;
 
 use Stride\Modules\Edition\EditionService;
-use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\SessionRepository;
-use Stride\Modules\Enrollment\EnrollmentService;
 
-$editions  = $args['editions'] ?? [];
 $course_id = (int) ($args['course_id'] ?? 0);
 $is_online = (bool) ($args['is_online'] ?? false);
 $user_id   = get_current_user_id();
 
-$editionService = ntdst_get(EditionService::class);
-$editionRepo    = ntdst_get(EditionRepository::class);
-
-// Batch pre-pass (Task G1 / audit 2.2): statuses through the single INV-7
-// decision point, session counts in one GROUP BY, the user's enrolled set
-// in one cached read — instead of four lookups per row.
-$edition_ids = [];
-foreach ($editions as $edition) {
-    $eid = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
-    if ($eid) {
-        $edition_ids[] = $eid;
-    }
-}
-
-$statuses       = $editionService->getEffectiveStatuses($edition_ids);
-$session_counts = ntdst_get(SessionRepository::class)->countByEditions($edition_ids);
-$enrolled_ids   = $user_id
-    ? ntdst_get(EnrollmentService::class)->getEnrolledEditionIds($user_id)
-    : [];
-
-$today = strtotime(date('Y-m-d'));
-
-$upcoming = [];
-$past     = [];
-
-foreach ($editions as $edition) {
-    $edition_id = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
-    // getEffectiveStatuses() returns an entry for EVERY non-zero id passed in
-    // (S10) — only the zero-id guard is live.
-    if (!$edition_id) {
-        continue;
-    }
-
-    // Resolve fields via the repository — it strips the _ntdst_ prefix and
-    // is the single source of truth (cache-hit: the batch pre-pass primed
-    // all rows). The raw $edition array keys aren't reliable for meta values.
-    $start_date    = (string) $editionRepo->getField($edition_id, 'start_date', '');
-    $end_date      = (string) $editionRepo->getField($edition_id, 'end_date', '');
-    $venue         = (string) $editionRepo->getField($edition_id, 'venue', '');
-    $status        = $statuses[$edition_id];
-    $session_count = (int) ($session_counts[$edition_id] ?? 0);
-    $is_enrolled   = in_array($edition_id, $enrolled_ids, true);
-
-    // Hide editions that should never reach the public discovery surface.
-    // Active statuses (Announcement/Open/Full/InProgress) go in upcoming;
-    // Completed lives in the collapsed "past" block. Anything else (Draft,
-    // Postponed, Cancelled, Archived) is suppressed unless the visitor is
-    // enrolled in it — they need to see their own registration even if the
-    // edition got cancelled.
-    if (!$is_enrolled && !$status->isActive() && $status !== \Stride\Domain\OfferingStatus::Completed) {
-        continue;
-    }
-
-    try {
-        $price = $editionService->getPrice($edition_id, $user_id ?: null);
-        $price_cents = $price ? $price->inCents() : 0;
-    } catch (\Throwable $e) {
-        $price_cents = 0;
-    }
-
-    $row = [
-        'id'            => $edition_id,
-        'start_date'    => $start_date,
-        'end_date'      => $end_date,
-        'venue'         => $venue,
-        'status'        => $status,
-        'is_enrolled'   => $is_enrolled,
-        'permalink'     => get_permalink($edition_id),
-        'session_count' => $session_count,
-        'price_cents'   => $price_cents,
-    ];
-
-    $start_ts = $start_date ? strtotime($start_date) : 0;
-    if ($start_ts && $start_ts < $today) {
-        $past[] = $row;
-    } else {
-        $upcoming[] = $row;
-    }
-}
-
-usort($upcoming, fn($a, $b) => strcmp((string) $a['start_date'], (string) $b['start_date']));
-usort($past, fn($a, $b) => strcmp((string) $b['start_date'], (string) $a['start_date']));
+// The visibility POLICY + upcoming/past PARTITION + sort live in stride-core now
+// (EditionService::getPubliclyVisibleEditions, Cluster 3 / Task 3.6 / B6) — this
+// template is a pure renderer over the returned struct. INV-7 effective status,
+// the enrolled-exception, and the optional-price try/catch are all owned by the
+// method; the template no longer reaches into the repository or duplicates the rule.
+$visible  = ntdst_get(EditionService::class)->getPubliclyVisibleEditions($course_id, $user_id ?: null);
+$upcoming = $visible['upcoming'];
+$past     = $visible['past'];
 
 /**
  * Renders one edition row — matches dashboard tab-inschrijvingen visual rhythm

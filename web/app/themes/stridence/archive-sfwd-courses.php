@@ -12,76 +12,20 @@ declare(strict_types=1);
 
 defined('ABSPATH') || exit;
 
-use Stride\Domain\OfferingStatus;
-use Stride\Modules\Edition\EditionRepository;
+use Stride\Modules\Edition\EditionService;
 
-$editionRepository = ntdst_get(EditionRepository::class);
-$meta_prefix = $editionRepository->getMetaPrefix();
+$editionService = ntdst_get(EditionService::class);
 $archive_user_id = get_current_user_id() ?: null;
 
 // --- Classroom editions ---
-// Get online course IDs to exclude their editions
-$online_course_ids = get_posts([
-    'post_type'      => 'sfwd-courses',
-    'posts_per_page' => 500,
-    'post_status'    => 'publish',
-    'fields'         => 'ids',
-    'tax_query'      => [
-        [
-            'taxonomy' => 'stride_format',
-            'field'    => 'slug',
-            'terms'    => ['online', 'e-learning', 'webinar'],
-        ],
-    ],
-]);
-
-// NOTE (pre-existing divergence, left as-is): unlike the online query below
-// and the /klassikaal page, this classroom teaser has NO date window — it
-// filters on active status only (stridence_catalog_date_window_meta_query
-// would add the end_date/start_date grace window). Convergence is a product
-// ruling, not a refactor — tracked with the dateless-catalog follow-up.
-$edition_meta_query = [
-    [
-        'key'     => $meta_prefix . 'status',
-        'value'   => OfferingStatus::activeValues(),
-        'compare' => 'IN',
-    ],
-];
-// Exclude editions linked to online courses
-if (!empty($online_course_ids)) {
-    $edition_meta_query[] = [
-        'relation' => 'OR',
-        [
-            'key'     => $meta_prefix . 'course_id',
-            'value'   => $online_course_ids,
-            'compare' => 'NOT IN',
-        ],
-        [
-            'key'     => $meta_prefix . 'course_id',
-            'compare' => 'NOT EXISTS',
-        ],
-    ];
-}
-
-$edition_query = new WP_Query([
-    'post_type'      => 'vad_edition',
-    'posts_per_page' => 6,
-    'post_status'    => 'publish',
-    'fields'         => 'ids',
-    'no_found_rows'  => true,
-    'meta_query'     => $edition_meta_query,
-    // dateless excluded here — teaser only (6-item homepage strip). The
-    // start_date orderby forces an EXISTS join that drops dateless editions;
-    // canonical dateless inclusion is /klassikaal + /online (see
-    // docs/plans/2026-06-14-dateless-editions-catalog.md, sibling-site audit).
-    'orderby'        => 'meta_value',
-    'meta_key'       => $meta_prefix . 'start_date',
-    'order'          => 'ASC',
-]);
-
-// Batch-hydrated card items (Task G1 / audit 2.2) — rendered through the
-// catalog pre-pass; the card partials are pure renderers.
-$classroom_items = stridence_catalog_edition_items_from_ids(array_map('intval', $edition_query->posts));
+// SEO teaser strip (6 items). PRODUCT RULING (Stefan, 2026-06-30): this strip
+// is DELIBERATELY active-status-only with NO date window and EXCLUDES dateless
+// editions — distinct from the /klassikaal + /online catalog (which is
+// date-windowed and includes dateless). The query/shaping lives in stride-core
+// (EditionService::getArchiveTeaserItems → EditionRepository teaser queries) so
+// no raw WP_Query lives in the theme (Task 3.3 / INV-3); the teaser's distinct
+// behaviour is PRESERVED there, not converged.
+$classroom_items = $editionService->getArchiveTeaserItems('classroom');
 
 // --- Trajectories ---
 $trajectory_model = ntdst_data()->get('vad_trajectory');
@@ -93,53 +37,12 @@ $trajectories = $trajectory_model->where('post_status', 'publish')
                                  ->get();
 
 // --- Online enrollables (active editions + pure-LD courses) ---
-// Same rule as page-online.php: catalog list = the set of things a visitor
-// can enroll in. See [[lesson_url_role_split]].
-$online_items = [];
-
-if (!empty($online_course_ids)) {
-    // Eligibility rule shared with /klassikaal and /online — single builder
-    // (dateless/self-paced exclusion documented there).
-    $online_meta_query = stridence_catalog_date_window_meta_query($meta_prefix);
-    $online_meta_query[] = [
-        'key'     => $meta_prefix . 'course_id',
-        'value'   => $online_course_ids,
-        'compare' => 'IN',
-    ];
-    $online_edition_query = new WP_Query([
-        'post_type'      => 'vad_edition',
-        'posts_per_page' => 6,
-        'post_status'    => 'publish',
-        'fields'         => 'ids',
-        'no_found_rows'  => true,
-        'meta_query'     => $online_meta_query,
-        // dateless excluded here — teaser only; canonical inclusion is
-        // /klassikaal + /online (same audit note as the classroom teaser above).
-        'orderby'        => 'meta_value',
-        'meta_key'       => $meta_prefix . 'start_date',
-        'order'          => 'ASC',
-    ]);
-    $online_items = stridence_catalog_edition_items_from_ids(array_map('intval', $online_edition_query->posts));
-}
-
-// Top up with pure-LD courses (courses with NO edition at all — not "no
-// currently-visible edition"). A course with only past editions is off-catalog
-// until a new one is scheduled.
-$remaining = 6 - count($online_items);
-if ($remaining > 0 && !empty($online_course_ids)) {
-    $with_editions = $editionRepository->courseIdsWithAnyEdition(array_map('intval', $online_course_ids));
-    $pure_ld_ids = array_values(array_diff(array_map('intval', $online_course_ids), $with_editions));
-    foreach (array_slice($pure_ld_ids, 0, $remaining) as $course_id) {
-        if (!get_post($course_id)) {
-            continue;
-        }
-        $online_items[] = [
-            'kind'      => 'course',
-            'course_id' => $course_id,
-            'themes'    => [],
-        ];
-    }
-}
+// SEO teaser strip (6 items). Unlike the classroom strip, the online strip IS
+// date-windowed (canonical eligibility, past-grace dropped) and tops up with
+// pure-LD online courses — but, like the classroom strip, EXCLUDES dateless
+// editions (teaser only). Same stride-core method owns the query + shaping +
+// top-up (Task 3.3); see [[lesson_url_role_split]].
+$online_items = $editionService->getArchiveTeaserItems('online');
 
 get_header();
 ?>
