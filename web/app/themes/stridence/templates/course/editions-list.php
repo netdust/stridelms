@@ -182,7 +182,14 @@ $render_edition_row = function (array $row, bool $faded = false) {
     <?php endif; ?>
 
     <?php if (!empty($past)) : ?>
-        <details class="group mt-6">
+        <?php
+        // Open the past-editions accordion by default when the visitor is
+        // enrolled in one of them — otherwise their "Ingeschreven" row (the only
+        // signal that they're enrolled in this course) is hidden behind a
+        // collapsed summary and they land on the page seeing no enrollment.
+        $enrolled_in_past = (bool) array_filter($past, static fn(array $row): bool => !empty($row['is_enrolled']));
+        ?>
+        <details class="group mt-6"<?php echo $enrolled_in_past ? ' open' : ''; ?>>
             <summary class="cursor-pointer flex items-center gap-2 text-sm font-medium text-text-muted hover:text-text">
                 <?php printf(esc_html(_n('%d voorbije editie tonen', '%d voorbije edities tonen', count($past), 'stridence')), count($past)); ?>
                 <?php echo stridence_icon('chevron-down', 'w-4 h-4 group-open:rotate-180 transition'); ?>
