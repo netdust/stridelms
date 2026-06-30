@@ -182,7 +182,21 @@ final class AdminRegistrationQueryService
             $editionId = (int) ($row->edition_id ?? 0);
             $regId     = (int) $row->id;
 
-            $user = $userId > 0 ? ($users[$userId] ?? null) : null;
+            $user   = $userId > 0 ? ($users[$userId] ?? null) : null;
+            $isAnon = $userId <= 0;
+
+            // Identity. Logged-in rows resolve from the joined user record.
+            // Anonymous interest/waitlist rows (user_id 0/NULL) have no user
+            // record — fall back to the name/email captured in enrollment_data,
+            // mirroring the per-edition roster path (INV-3: identical decode).
+            if ($isAnon) {
+                $identity = $this->resolveAnonymousIdentity($row);
+                $name  = $identity['name'];
+                $email = $identity['email'];
+            } else {
+                $name  = $user?->display_name ?? '';
+                $email = $user?->user_email ?? '';
+            }
 
             // Status
             $statusEnum  = RegistrationStatus::tryFrom((string) $row->status);
@@ -230,9 +244,10 @@ final class AdminRegistrationQueryService
                 'id'           => $regId,
                 'user'         => [
                     'id'    => $userId,
-                    'name'  => $user?->display_name ?? '',
-                    'email' => $user?->user_email ?? '',
+                    'name'  => $name,
+                    'email' => $email,
                 ],
+                'anonymous'    => $isAnon,
                 'edition'      => [
                     'id'    => $editionId,
                     'title' => $editionTitle,
@@ -252,6 +267,42 @@ final class AdminRegistrationQueryService
         }
 
         return $this->paginationEnvelope($items, $total, $page, $perPage);
+    }
+
+    /**
+     * Resolve the captured name/email for an anonymous (user_id 0/NULL) row
+     * from its enrollment_data JSON.
+     *
+     * Anonymous interest/waitlist submissions store the submitter's identity
+     * in the enrollment_data envelope: enrollment_data[<stage>]['data']['name'|'email'],
+     * where <stage> equals the row's status ('interest' or 'waitlist').
+     *
+     * Decode semantics are IDENTICAL to the per-edition roster path
+     * (AdminAPIController::formatEditionRoster) — INV-3: the two reads of this
+     * one concern must not drift. Same envelope path, same '(anoniem)' / ''
+     * defaults.
+     *
+     * @param  object $row  Grid row with ->status and ->enrollment_data (raw JSON string|null).
+     * @return array{name:string,email:string}
+     */
+    private function resolveAnonymousIdentity(object $row): array
+    {
+        $stageData = [];
+        $raw = $row->enrollment_data ?? '';
+        if (is_string($raw) && $raw !== '') {
+            $decoded = json_decode($raw, true);
+            if (is_array($decoded)) {
+                // status maps to the stage key (interest/waitlist).
+                // Wrapped shape: $decoded[$status]['data'][field].
+                $stageEnvelope = $decoded[$row->status] ?? [];
+                $stageData = is_array($stageEnvelope['data'] ?? null) ? $stageEnvelope['data'] : [];
+            }
+        }
+
+        return [
+            'name'  => $stageData['name'] ?? '(anoniem)',
+            'email' => $stageData['email'] ?? '',
+        ];
     }
 
     // =========================================================================

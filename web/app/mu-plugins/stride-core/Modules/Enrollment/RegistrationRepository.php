@@ -1782,10 +1782,14 @@ final class RegistrationRepository
 
         // --- Fetch rows (structured columns only — M5) ---
         // ORDER BY: column name comes from the server-side allowlist (M4), never from user input.
+        // enrollment_data is selected SOLELY for the anonymous-lead name/email fallback
+        // (anon interest/waitlist rows have no wp_users join). It is NEVER filtered or
+        // sorted on, so it does not participate in the M4/M5 SQL-safety invariants.
         $dataSql = "SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
                            r.parent_registration_id, r.status, r.enrollment_path,
                            r.company_id, r.registered_at, r.completed_at,
-                           r.cancelled_at, r.quote_id, r.enrolled_by, r.notes
+                           r.cancelled_at, r.quote_id, r.enrolled_by, r.notes,
+                           r.enrollment_data
                     FROM {$regTable} r
                     LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
                     {$activeJoin}
