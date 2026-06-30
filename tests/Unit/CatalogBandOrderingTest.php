@@ -23,9 +23,16 @@ final class CatalogBandOrderingTest extends TestCase
     }
 
     /** @return array<string,mixed> */
-    private function ed(int $id, ?string $start): array
+    private function ed(int $id, ?string $start, ?string $sortDate = null, string $title = ''): array
     {
-        return ['kind' => 'edition', 'edition' => ['id' => $id, 'start_date' => $start], 'themes' => []];
+        return ['kind' => 'edition', 'edition' => [
+            'id'         => $id,
+            'start_date' => $start,
+            // sort_date is the next-upcoming-session date the caller computes;
+            // defaults to start_date so existing tests keep their meaning.
+            'sort_date'  => $sortDate ?? $start,
+            'title'      => $title,
+        ], 'themes' => []];
     }
 
     /** @return array<string,mixed> */
@@ -127,5 +134,68 @@ final class CatalogBandOrderingTest extends TestCase
         $items = [$this->ed(2, null), $this->ed(1, $soon)];
         $out = $this->ids(stridence_catalog_order_into_bands($items));
         $this->assertSame([1, 2], $out, 'dated-soon first, dateless after');
+    }
+
+    // ── next-session ordering + stable tiebreak (refresh-shuffle fix) ──
+
+    public function test_dated_band_sorts_by_sort_date_not_start_date(): void
+    {
+        // Edition 1 starts earliest but its first session passed; its next
+        // upcoming session (sort_date) is later than edition 2's. Order must
+        // follow sort_date, so edition 2 comes first.
+        $items = [
+            $this->ed(1, date('Y-m-d', strtotime('-10 days')), date('Y-m-d', strtotime('+20 days')), 'Alpha'),
+            $this->ed(2, date('Y-m-d', strtotime('+5 days')), date('Y-m-d', strtotime('+5 days')), 'Beta'),
+        ];
+        $out = $this->ids(stridence_catalog_order_into_bands($items));
+        $this->assertSame([2, 1], $out, 'sort by next-session date, not start_date');
+    }
+
+    public function test_equal_sort_dates_break_tie_alphabetically_by_title(): void
+    {
+        $d = date('Y-m-d', strtotime('+7 days'));
+        // Deliberately out of alphabetical input order.
+        $items = [
+            $this->ed(10, $d, $d, 'Charlie'),
+            $this->ed(11, $d, $d, 'Alpha'),
+            $this->ed(12, $d, $d, 'Bravo'),
+        ];
+        $out = $this->ids(stridence_catalog_order_into_bands($items));
+        $this->assertSame([11, 12, 10], $out, 'same date → A→Z by title (Alpha, Bravo, Charlie)');
+    }
+
+    public function test_tiebreak_is_deterministic_regardless_of_input_order(): void
+    {
+        // The refresh-shuffle bug: same input, different enumeration order from
+        // the DB must produce the SAME output. Two permutations → identical result.
+        $d = date('Y-m-d', strtotime('+7 days'));
+        $perm1 = [
+            $this->ed(10, $d, $d, 'Charlie'),
+            $this->ed(11, $d, $d, 'Alpha'),
+            $this->ed(12, $d, $d, 'Bravo'),
+        ];
+        $perm2 = [
+            $this->ed(12, $d, $d, 'Bravo'),
+            $this->ed(10, $d, $d, 'Charlie'),
+            $this->ed(11, $d, $d, 'Alpha'),
+        ];
+        $this->assertSame(
+            $this->ids(stridence_catalog_order_into_bands($perm1)),
+            $this->ids(stridence_catalog_order_into_bands($perm2)),
+            'tied dates must order identically no matter the DB enumeration order',
+        );
+    }
+
+    public function test_grace_band_also_sorts_by_sort_date_with_title_tiebreak(): void
+    {
+        // Two grace editions (next session already passed) sharing a sort_date
+        // must still order deterministically by title.
+        $past = date('Y-m-d', strtotime('-2 days'));
+        $items = [
+            $this->ed(20, $past, $past, 'Zulu'),
+            $this->ed(21, $past, $past, 'Mike'),
+        ];
+        $out = $this->ids(stridence_catalog_order_into_bands($items));
+        $this->assertSame([21, 20], $out, 'grace band: same date → A→Z by title');
     }
 }
