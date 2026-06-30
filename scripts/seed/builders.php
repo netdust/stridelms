@@ -157,7 +157,6 @@ final class StrideSeedBuilders
             }
 
             update_post_meta($courseId, StrideSeedRunner::SEED_META_KEY, true);
-            update_post_meta($courseId, '_course_type', $courseData['type']);
 
             // --- LearnDash course settings ---
             $ldSettings = ['course_price_type' => $courseData['ld_price_type'] ?? 'open'];
@@ -177,12 +176,13 @@ final class StrideSeedBuilders
             if (!empty($themes)) {
                 wp_set_object_terms($courseId, $themes, 'stride_theme');
             }
-            $ldCategory = match ($courseData['type']) {
-                'online' => 'online',
-                'webinar' => 'webinar',
-                default => 'in-person',
-            };
-            wp_set_object_terms($courseId, $ldCategory, 'ld_course_category');
+            // NOTE: delivery is decided SOLELY by the stride_format taxonomy
+            // (klassikaal/online/webinar/e-learning) — see EditionService::isOnline()
+            // and the e-learning-only session gate in EditionAdminController. We do
+            // NOT write ld_course_category or _course_type meta here: the product
+            // reads neither, and seeding them created two competing "what decides
+            // delivery?" axes that confused every reseed. stride_format is the one
+            // source of truth. The matrix 'type' key is human intent only.
 
             echo "  + Course: {$courseData['title']} (ID: {$courseId}) [format: " . implode(',', $formats) . "] [themes: " . implode(',', $themes) . "]\n";
         }
