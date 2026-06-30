@@ -2,11 +2,14 @@ name: Acceptance
 
 # Smoke subset of the Codeception acceptance suite, run against a throwaway
 # CI WordPress + a Selenium service container. Gates a SMALL reliable subset
-# first (SmokeTestCest, EnrollmentCest, AttendanceCest, ProfileCest — all
-# fully self-seeding, no seeder needed); the seeder + the remaining Cests
-# (incl. AdminEditionCest, whose later methods need a seeded published edition)
-# are a follow-up (see docs/plans/2026-06-30-codeception-ci-gate.md Phase 4).
-# The shared tests/acceptance.suite.yml is NOT edited — CI overrides live in
+# first: SmokeTestCest, EnrollmentCest, AttendanceCest — the Cests that seed
+# ALL their own data AND don't depend on configured site structure. Excluded
+# from the smoke gate (they need the full seeder, which builds the catalog +
+# the /mijn-account/ page etc.): AdminEditionCest (needs a seeded published
+# edition), ProfileCest (needs the /mijn-account/ page to exist), and the rest.
+# The seeder + those Cests are a follow-up (see
+# docs/plans/2026-06-30-codeception-ci-gate.md Phase 4). The shared
+# tests/acceptance.suite.yml is NOT edited — CI overrides live in
 # tests/_envs/ci.yml, merged via `--env ci`. DDEV-local runs untouched.
 on:
   # Push is limited to long-lived branches (+ ci-seam-* for throwaway proof
@@ -215,7 +218,7 @@ jobs:
     - name: Run acceptance smoke subset
       run: |
         set -e
-        for cest in SmokeTestCest EnrollmentCest AttendanceCest ProfileCest; do
+        for cest in SmokeTestCest EnrollmentCest AttendanceCest; do
           echo "── Running acceptance: $cest ──"
           vendor/bin/codecept run acceptance --env ci "$cest"
         done
