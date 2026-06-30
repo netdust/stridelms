@@ -32,6 +32,21 @@ if ($path !== '/' && is_file($root . $path)) {
     return false;
 }
 
+// Directory requests with an index.php (e.g. /wp/wp-admin/, /wp/wp-admin/edit.php
+// is a file handled above, but /wp/wp-admin/ is a dir) → run that index.php, the
+// way nginx/apache `index index.php` does. Without this, /wp/wp-admin/ falls
+// through to the front-end front controller and 404s even for a logged-in admin
+// (acceptance suite hits wp-admin; the integration suite never did, so this
+// directory-index case never surfaced before).
+if ($path !== '/' && is_dir($root . $path) && is_file($root . rtrim($path, '/') . '/index.php')) {
+    $admin = rtrim($path, '/') . '/index.php';
+    $_SERVER['SCRIPT_NAME'] = $admin;
+    $_SERVER['SCRIPT_FILENAME'] = $root . $admin;
+    $_SERVER['PHP_SELF'] = $admin;
+    require $root . $admin;
+    return true;
+}
+
 // Everything else goes through the Bedrock front controller.
 $_SERVER['SCRIPT_NAME'] = '/index.php';
 $_SERVER['SCRIPT_FILENAME'] = $root . '/index.php';
