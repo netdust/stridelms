@@ -82,7 +82,9 @@
 
         /**
          * Toggle sessions/attendance visibility based on course format.
-         * Online courses don't have sessions or attendance.
+         * Sessions hide for SELF-PACED e-learning only (webinars/live-online keep
+         * their scheduled sessions). Venue/attendance/format tabs hide for ALL
+         * online formats (online/webinar/e-learning) — they have no physical venue.
          */
         initFormatToggle: function() {
             var self = this;
@@ -99,9 +101,12 @@
         applyFormatToggle: function(courseId) {
             var onlineIds = strideEditionAdmin.onlineCourseIds || [];
             var isOnline = courseId && onlineIds.indexOf(parseInt(courseId, 10)) !== -1;
+            var selfPacedIds = strideEditionAdmin.selfPacedCourseIds || [];
+            var isSelfPaced = courseId && selfPacedIds.indexOf(parseInt(courseId, 10)) !== -1;
 
-            // Toggle sessions metabox (classroom only)
-            $('#stride_edition_sessions').toggle(!isOnline);
+            // Toggle sessions metabox — hidden for self-paced e-learning only
+            // (webinars/live-online keep their scheduled live sessions).
+            $('#stride_edition_sessions').toggle(!isSelfPaced);
 
             // Toggle attendance tab + content (classroom only)
             $('.stride-tab[data-tab="aanwezigheid"]').toggle(!isOnline);

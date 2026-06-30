@@ -199,6 +199,7 @@ final class EditionAdminController
                 'editionId' => $post ? $post->ID : 0,
                 'currentUser' => $currentUser->display_name ?: $currentUser->user_login,
                 'onlineCourseIds' => $this->getOnlineCourseIds(),
+                'selfPacedCourseIds' => $this->getSelfPacedCourseIds(),
                 'i18n' => [
                     'searchCourse' => __('Zoek cursus...', 'stride'),
                     'noResults' => __('Geen resultaten gevonden', 'stride'),
@@ -238,6 +239,31 @@ final class EditionAdminController
                 'taxonomy' => 'stride_format',
                 'field' => 'slug',
                 'terms' => ['online', 'webinar', 'e-learning'],
+            ]],
+        ]);
+
+        return array_map('intval', $courses);
+    }
+
+    /**
+     * Get IDs of courses that are self-paced e-learning ONLY.
+     *
+     * Narrower than {@see getOnlineCourseIds()}: webinars and live-online
+     * courses have scheduled live sessions and keep their Sessions metabox —
+     * only self-paced e-learning suppresses the Sessions UI.
+     *
+     * @return int[]
+     */
+    private function getSelfPacedCourseIds(): array
+    {
+        $courses = get_posts([
+            'post_type' => 'sfwd-courses',
+            'posts_per_page' => 500,
+            'fields' => 'ids',
+            'tax_query' => [[
+                'taxonomy' => 'stride_format',
+                'field' => 'slug',
+                'terms' => ['e-learning'],
             ]],
         ]);
 
