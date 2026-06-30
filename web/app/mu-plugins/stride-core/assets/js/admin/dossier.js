@@ -303,7 +303,36 @@
       loading: { detail: true, trajectories: true },
       errors: { detail: '', trajectories: '' },
 
+      // per-row action feedback (keyed by registration id) — a brief inline
+      // confirmation/error shown under that registration's action row. The
+      // ENDPOINT is the security boundary; this is presentational feedback only.
+      actionBusy: 0,            // registration id currently running, 0 = idle
+      actionFeedback: {},       // { [regId]: { kind: 'ok'|'err', text } }
+
       get hasRegs() { return this.regs.length > 0; },
+
+      /* Mirror of grid.js:443 — true to the proven god-component bulkApi(): POST
+         to the ntdst/v1/action registry (envelope {success,data}), distinct from
+         the shell api() (stride/v1). Carries the per-action nonce armed via
+         StrideConfig.bulkNonces. The two surfaces are separate Alpine components,
+         so the dossier owns its own copy rather than refactoring grid.js. */
+      async bulkApi(action, payload) {
+        const cfg = window.StrideConfig || {};
+        const base = (cfg.apiUrl || '').replace(/\/stride\/v1$/, '/ntdst/v1');
+        const nonce = (cfg.bulkNonces || {})[action] || '';
+        const response = await fetch(`${base}/action`, {
+          method: 'POST',
+          headers: { 'X-WP-Nonce': cfg.nonce, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ ...payload, action, nonce }),
+        });
+        const json = await response.json().catch(() => ({}));
+        if (!json || json.success !== true) {
+          throw new Error((json && json.data && json.data.message) || 'Actie mislukt.');
+        }
+        return json.data;
+      },
+
+      get canManage() { return !!(window.StrideConfig || {}).canManage; },
 
       /* init() reads ?user= then loads BOTH endpoints in parallel. I-1: gated so
          it loads the FIRST time dossier becomes active (it is reached via a
@@ -414,6 +443,50 @@
       statusMeta(status) { return statusMeta(status); },
       offerteClass(label) { return offerteClass(label); },
       actionsFor(state) { return actionsForState(state); },
+
+      /* Map a dossier SMART_ACTION id → the gated bulk action id and dispatch it
+         for this single registration via ids:[r.id]. Scope is the waitlist-promote
+         feature: only `stride_promote_waitlist` → `stride_bulk_promote_waitlist`
+         (the dossier id intentionally lacks `bulk_`; mirror grid.js:145). Other
+         ids are no-ops here (still presentational) until they get wired. The
+         bulk endpoint re-checks `stride_manage`, so a view-only user who somehow
+         sees the button gets a 403 — the endpoint is the security boundary, not
+         the button's visibility. */
+      async runSmartAction(a, r) {
+        const BULK_ID = { stride_promote_waitlist: 'stride_bulk_promote_waitlist' };
+        const bulkId = a && BULK_ID[a.id];
+        if (!bulkId || !r || !r.id || this.actionBusy) return;
+
+        this.actionBusy = r.id;
+        this.actionFeedback = { ...this.actionFeedback, [r.id]: null };
+        try {
+          const report = await this.bulkApi(bulkId, { ids: [r.id] });
+          const failed = (report && report.failed) || [];
+          const mine = failed.find((f) => Number(f.id) === Number(r.id));
+          if (mine) {
+            // The endpoint returns a per-row reason (e.g. lead_no_email,
+            // capacity_full) — surface it, do not swallow it.
+            this.actionFeedback = {
+              ...this.actionFeedback,
+              [r.id]: { kind: 'err', text: mine.message || 'Promoveren mislukt.' },
+            };
+          } else {
+            this.actionFeedback = {
+              ...this.actionFeedback,
+              [r.id]: { kind: 'ok', text: 'Gepromoveerd van wachtlijst.' },
+            };
+            // Refresh the dossier so the row's new `confirmed` status shows.
+            this.load();
+          }
+        } catch (e) {
+          this.actionFeedback = {
+            ...this.actionFeedback,
+            [r.id]: { kind: 'err', text: (e && e.message) || 'Promoveren mislukt.' },
+          };
+        } finally {
+          this.actionBusy = 0;
+        }
+      },
       trajStatus(s) { return TRAJ_STATUS[s] || { label: String(s || ''), cls: 'completed' }; },
       trajMode(m) { return TRAJ_MODE[m] || String(m || ''); },
       courseStateLabel(state) { return COURSE_STATE_LABEL[state] || String(state || ''); },

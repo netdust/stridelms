@@ -367,7 +367,9 @@ defined('ABSPATH') || exit;
                                         <template x-for="(a, i) in actionsFor(r.status)" :key="a.id">
                                             <button class="ws-action-btn"
                                                     :class="a.danger ? 'ws-action-btn--danger' : (i===0 ? 'ws-action-btn--primary' : 'ws-action-btn--secondary')"
-                                                    :title="a.label">
+                                                    :title="a.label"
+                                                    :disabled="actionBusy === r.id"
+                                                    @click="runSmartAction(a, r)">
                                                 <span class="ws-action-btn__ico" x-html="icon(a.icon)"></span>
                                                 <span x-text="a.label"></span>
                                             </button>
@@ -379,6 +381,12 @@ defined('ABSPATH') || exit;
                                             </span>
                                         </template>
                                     </div>
+                                    <template x-if="actionFeedback[r.id]">
+                                        <p class="ws-reg-actions__feedback"
+                                           :class="actionFeedback[r.id].kind === 'ok' ? 'is-ok' : 'is-err'"
+                                           x-text="actionFeedback[r.id].text"
+                                           style="margin:var(--ws-2) 0 0;font-size:var(--ws-fs-sm)"></p>
+                                    </template>
                                 </div>
 
                             </div>
