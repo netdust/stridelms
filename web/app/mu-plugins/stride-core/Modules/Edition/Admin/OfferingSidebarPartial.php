@@ -98,7 +98,7 @@ final class OfferingSidebarPartial
                         $docVal = \Stride\Modules\Enrollment\EnrollmentCompletion::DEFAULT_DOCUMENTS_INSTRUCTION;
                     }
                     ?>
-                    <div id="stride-documents-instruction" style="margin: 4px 0 8px 24px; <?= $checked ? '' : 'display:none;' ?>">
+                    <div id="stride-documents-instruction" style="margin: 4px 0 8px 0; <?= $checked ? '' : 'display:none;' ?>">
                         <textarea name="ntdst_fields[documents_instruction]" rows="3"
                                   style="width: 100%; font-size: 12px;"
                                   placeholder="<?php esc_attr_e('Instructie voor de deelnemer…', 'stride'); ?>"><?= esc_textarea($docVal) ?></textarea>
@@ -134,7 +134,7 @@ final class OfferingSidebarPartial
                         $postDocVal = \Stride\Modules\Enrollment\EnrollmentCompletion::DEFAULT_DOCUMENTS_INSTRUCTION;
                     }
                     ?>
-                    <div id="stride-post-documents-instruction" style="margin: 4px 0 8px 24px; <?= $checked ? '' : 'display:none;' ?>">
+                    <div id="stride-post-documents-instruction" style="margin: 4px 0 8px 0; <?= $checked ? '' : 'display:none;' ?>">
                         <textarea name="ntdst_fields[post_documents_instruction]" rows="3"
                                   style="width: 100%; font-size: 12px;"
                                   placeholder="<?php esc_attr_e('Instructie voor de deelnemer…', 'stride'); ?>"><?= esc_textarea($postDocVal) ?></textarea>
