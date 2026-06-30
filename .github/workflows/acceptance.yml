@@ -207,10 +207,16 @@ jobs:
 
     # SMOKE SUBSET ONLY — explicit Cest list (self-seeding / install-admin; no
     # seeder). Expanding to all 27 + the seeder is Phase 4.
+    # Codeception 5's `run` takes at most ONE test argument (`run <suite> <test>`),
+    # so iterate the subset — one `run` per Cest — and fail the step on the first
+    # failure. (A single `run acceptance A B C` errors "Too many arguments".)
     - name: Run acceptance smoke subset
       run: |
-        vendor/bin/codecept run acceptance --env ci \
-          SmokeTestCest EnrollmentCest AdminEditionCest AttendanceCest ProfileCest
+        set -e
+        for cest in SmokeTestCest EnrollmentCest AdminEditionCest AttendanceCest ProfileCest; do
+          echo "── Running acceptance: $cest ──"
+          vendor/bin/codecept run acceptance --env ci "$cest"
+        done
 
     - name: Upload Codeception output on failure
       if: failure()
