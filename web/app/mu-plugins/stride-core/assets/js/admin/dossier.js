@@ -332,8 +332,6 @@
         return json.data;
       },
 
-      get canManage() { return !!(window.StrideConfig || {}).canManage; },
-
       /* init() reads ?user= then loads BOTH endpoints in parallel. I-1: gated so
          it loads the FIRST time dossier becomes active (it is reached via a
          ?user= deep-link, so view === 'dossier' on arrival → the guard fires on
