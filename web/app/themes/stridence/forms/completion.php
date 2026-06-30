@@ -51,6 +51,13 @@ $task_descriptions = [
     'post_approval'     => __('Een beheerder zal je dossier beoordelen.', 'stridence'),
 ];
 
+// Overlay admin-supplied instructions (from EnrollmentCompletion::getTaskSummary()).
+// Admin instruction wins for document tasks; generic strings stay for every other
+// task type and as the last-resort fallback. Read ONLY $task_summary['descriptions'] —
+// never a stride-core repository or helper (mu-plugin-no-theme-calls invariant).
+$admin_descriptions = $task_summary['descriptions'] ?? [];
+$task_descriptions  = array_merge($task_descriptions, array_filter($admin_descriptions, 'strlen'));
+
 // Map post-course task types to existing templates
 $template_map = [
     'post_evaluation' => 'task-questionnaire',
