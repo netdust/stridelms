@@ -159,6 +159,58 @@ final class NotificationCacheIntegrationTest extends IntegrationTestCase
         $this->assertSame(0, $this->freshService()->getUnreadCount(self::$testUserId));
     }
 
+    /**
+     * @test
+     * The Meldingen tab snapshots getNotifications() (with this-load read
+     * flags) BEFORE calling markAllRead(), so the current render keeps its
+     * unread accents while the badge clears for next load. Pin that ordering:
+     * the snapshot is unaffected by the subsequent mark, and the count goes 0.
+     */
+    public function snapshotBeforeMarkKeepsRenderFlagsAndClearsBadge(): void
+    {
+        $this->recordAudit('registration', 'registration.created', [
+            'user_id' => self::$testUserId,
+            'edition_id' => 0,
+        ]);
+
+        $svc = $this->freshService();
+
+        // 1. Snapshot — as the tab template does before marking.
+        $snapshot = $svc->getNotifications(self::$testUserId);
+        $this->assertNotEmpty($snapshot, 'fixture must produce at least one notification');
+        $unreadInSnapshot = array_filter($snapshot, fn(array $n): bool => !$n['read']);
+        $this->assertNotEmpty($unreadInSnapshot, 'arrival render must still show unread items');
+
+        // 2. Mark — the auto-mark-read on tab view.
+        $svc->markAllRead(self::$testUserId);
+
+        // 3. The already-returned snapshot is unchanged (no retroactive mutation).
+        foreach ($snapshot as $i => $n) {
+            $this->assertSame(
+                $unreadInSnapshot[$i]['read'] ?? $n['read'],
+                $n['read'],
+                'markAllRead must not retroactively mutate the returned snapshot',
+            );
+        }
+
+        // 4. Badge clears for next load.
+        $this->assertSame(0, $this->freshService()->getUnreadCount(self::$testUserId));
+    }
+
+    /**
+     * @test
+     * Empty edge: no notifications → markAllRead is a safe no-op, count stays 0.
+     */
+    public function markAllReadOnEmptyFeedIsANoOp(): void
+    {
+        $svc = $this->freshService();
+        $this->assertSame(0, $svc->getUnreadCount(self::$testUserId));
+
+        $svc->markAllRead(self::$testUserId); // must not error on an empty feed
+
+        $this->assertSame(0, $this->freshService()->getUnreadCount(self::$testUserId));
+    }
+
     // === Helpers ===
 
     /**
