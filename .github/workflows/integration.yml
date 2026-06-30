@@ -17,6 +17,10 @@ on:
 # Mirrors local DDEV behavior; the same setup can be simulated locally via
 # scripts/ci/install-wp.sh (see its header).
 
+# Least-privilege: the integration suite only reads the repo. No write scope.
+permissions:
+  contents: read
+
 jobs:
   integration:
     runs-on: ubuntu-latest

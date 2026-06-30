@@ -19,6 +19,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# Least-privilege: this workflow only reads the repo + uploads an artifact
+# (the artifact service does not use GITHUB_TOKEN). No write scope needed.
+permissions:
+  contents: read
+
 jobs:
   browser:
     runs-on: ubuntu-latest
