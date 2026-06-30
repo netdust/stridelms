@@ -347,10 +347,12 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 
 ### ── REVIEW GATE 4 ── (tier: STANDARD — public-form field capture (new public input surface → wp-security) + invariants doc) — Tasks 5–6
 
-### Task 5: Add the personal/invoice field set to the `waitlist` questionnaire stage + verify round-trip
+> **DESIGN PIVOT 2026-06-30 (user decision, supersedes Task 5's questionnaire-config approach):** The offer/invoice fields are a DEFAULT part of the waitlist FORM, rendered as NATIVE inputs in `templates/forms/waitlist.php` — **NOT** entered through the questionnaire builder. Reason: questionnaire groups have no code default, so the form shipped as naam/email until manually configured per edition — the feature was invisible. New **Task 8** renders the field set natively (bound to `form.extra_fields.<input-key>`, same payload → same `sanitizeExtraFields` → same `wrapStage` persist → same promote-time `updateUserProfile` map, so the Task-3 round-trip is unchanged). The questionnaire `waitlist` stage REMAINS available for EXTRA custom questions on top. Task 5 below is retained as the record that the pipeline accepts these field names; its "configure the groups" step is SUPERSEDED by Task 8's native rendering.
+
+### Task 5: ~~Add the personal/invoice field set to the `waitlist` questionnaire stage~~ → SUPERSEDED by Task 8 (native form fields) + verify round-trip
 
 **Files:**
-- Configure: the `waitlist`-stage field groups (questionnaire builder data for the relevant edition(s) / the seed/default config).
+- ~~Configure: the `waitlist`-stage field groups (questionnaire builder data).~~ SUPERSEDED — fields are native to the form (Task 8), not questionnaire config.
 - Verify (no structural change expected): `web/app/themes/stridence/templates/forms/waitlist.php`, `Modules/Questionnaire/QuestionnaireHandler.php::handleSubmitWaitlist` + `sanitizeExtraFields`.
 - Test: round-trip assertion (folded into Task 3's integration test as case (a); this task confirms the *configured* fields are what (a) exercises).
 
@@ -393,6 +395,28 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 - [ ] **Step 3: Commit** `feat(admin): wire dossier waitlist-promote button to the gated bulk action`.
 
 `no unit test: Tier B, frontend glue to an already-tested + already-gated endpoint. Risk (the per-row report rendering + the deny path) → F1/F2 shake-out browser pass + the Task 4b handler deny test.`
+
+### ── REVIEW GATE 6 ── (tier: STANDARD — new public-form input fields, but riding the existing sanitize/persist pipeline + a small server-side required-check) — Task 8
+
+### Task 8: Native offer/invoice fields on the waitlist form by default (user decision — NOT via questionnaire)
+
+> The deliverable that makes the feature VISIBLE. The waitlist form (`templates/forms/waitlist.php`) shipped as naam/email because the questionnaire stage has no code default. Per the user's decision, the offer/invoice fields are NATIVE to the form, not questionnaire-builder data.
+
+**Files:**
+- Modify: `web/app/themes/stridence/templates/forms/waitlist.php` (native fields bound to `form.extra_fields.<input-key>` + Alpine `init()` seeding).
+- Modify: `web/app/mu-plugins/stride-core/Modules/Questionnaire/QuestionnaireHandler.php` (`handleSubmitWaitlist` — server-side required-check for the native offer essentials, since `QuestionnaireValidator` only validates group-declared fields).
+- Test: unit test for the handler's native-required validation.
+
+**Interfaces:** native inputs use the exact `getUserMetaMapping()` INPUT-KEYS (`company, address, postal_code, city, vat_number, invoice_email, gln_number, organisation, department`). Same `extra_fields` payload → same `sanitizeExtraFields` → same `wrapStage` persist → same promote-time `updateUserProfile` map. The Task-3 round-trip (`promotesAnonRowCreatesUserMapsBillingMetaAndConfirms`) is unchanged — fields now come from the template, not a questionnaire group.
+
+**Tier: A** for the handler required-validation (RED-first: missing-required + invalid-`invoice_email` denial); **Tier B** for the template render (F0 browser flow at shake-out is the load-bearing render check).
+
+- [ ] **Step 1:** Render the 9 native fields in `waitlist.php` with Dutch labels under a "Gegevens voor offerte/facturatie" subheading; `company`/`vat_number`/`invoice_email` required (client), rest optional; init the keys in Alpine `init()`.
+- [ ] **Step 2:** Add the server-side required-check + `is_email(invoice_email)` to `handleSubmitWaitlist` after the questionnaire validate call, returning the existing `WP_Error('validation_error', …)` shape (Dutch). RED-first unit test (missing `company` → error; invalid email → error; all present → persist).
+- [ ] **Step 3:** Confirm the round-trip integration filter stays green (data path unchanged).
+- [ ] **Step 4: Commit** `feat(waitlist): native offer/invoice fields on the waitlist form by default`.
+
+**Acceptance:** F0 (anonymous upfront capture) at shake-out now drives a form that ACTUALLY shows + collects the offer/invoice fields; the validation-reject edge (blank required) is the load-bearing F0 edge.
 
 ---
 
