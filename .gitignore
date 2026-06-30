@@ -69,3 +69,8 @@ memory/.stop-hook-state.json
 
 # PHPUnit result cache (machine-local, churns every run)
 .phpunit.cache/
+
+# Playwright/Codeception local run artifacts (throwaway; should never be committed)
+/playwright-report/
+/tests/frontend/test-results/
+/tests/_output/
