@@ -408,6 +408,48 @@ class EditionService extends AbstractService implements EditionQueryInterface
     }
 
     /**
+     * Pick the primary edition for a course's CTA from a set of ALREADY-ACTIVE
+     * edition ids (Task 3.4 / B4) — the single home for the "which cohort drives
+     * the enroll button" policy that used to live in single-sfwd-courses.php and
+     * the catalog course-card prepass.
+     *
+     * THE RULE: among the given ids, return the FIRST whose effective status
+     * (INV-7, via getEffectiveStatuses) allowsEnrollment(); if none is enrollable,
+     * return the first id; if the array is empty, return null.
+     *
+     * B4: a course can have a RUNNING cohort (active, not enrollable) AND an OPEN
+     * cohort (enrollable). The enrollable cohort must win even when it is not
+     * first — otherwise the CTA reads "Niet beschikbaar" while an open cohort
+     * exists. This is policy (a ranking), not a pass-through.
+     *
+     * Caller contract: pass the course's active edition ids (e.g. from
+     * EditionRepository::findActiveIdsByCourse()). Effective status may still flip
+     * a stale member of that set to a non-enrollable state — which is exactly why
+     * the pick reads effective status rather than trusting the stored value.
+     *
+     * @param array<int> $activeEditionIds Active edition ids, in caller order.
+     * @return int|null The primary edition id, or null when the set is empty.
+     */
+    public function getPrimaryEdition(array $activeEditionIds): ?int
+    {
+        $ids = array_values(array_filter(array_map('intval', $activeEditionIds)));
+        if (empty($ids)) {
+            return null;
+        }
+
+        $statuses = $this->getEffectiveStatuses($ids);
+
+        foreach ($ids as $id) {
+            if (($statuses[$id] ?? null)?->allowsEnrollment()) {
+                return $id;
+            }
+        }
+
+        // No enrollable cohort: the first active edition is still the primary.
+        return $ids[0];
+    }
+
+    /**
      * Default upper bound on the catalog enumeration (ids only — memory guard).
      * The theme passes STRIDENCE_CATALOG_MAX_ITEMS in; stride-core must NOT
      * reference the theme constant (INV-5), so it carries its own default.

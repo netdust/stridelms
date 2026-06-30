@@ -359,21 +359,29 @@ function stridence_prefetch_course_cards(array $course_ids, ?int $user_id = null
 
     $primary = [];
     if (!empty($edition_ids)) {
-        $statuses = ntdst_get(EditionService::class)->getEffectiveStatuses($edition_ids);
+        $editionService = ntdst_get(EditionService::class);
+        $statuses = $editionService->getEffectiveStatuses($edition_ids);
 
-        $best_rank = [];
+        // Bin the active editions by course, dropping any whose EFFECTIVE status
+        // is no longer active (a past edition may have flipped to Completed —
+        // stale visibility leak). Then defer the "which cohort is primary" pick
+        // to the single-home policy in stride-core (EditionService::
+        // getPrimaryEdition, INV-7 / B4) so the catalog card and the single-
+        // course CTA rank cohorts identically (enrollable wins over running).
+        $active_by_course = [];
         foreach ($edition_ids as $edition_id) {
             $course_id = (int) $editionRepo->getField($edition_id, 'course_id', 0);
             $eff = $statuses[$edition_id] ?? null;
-            // Effective status may flip a past edition to Completed — filter
-            // that out (stale visibility leak), same rule as before.
             if (!$course_id || !$eff || !$eff->isActive()) {
                 continue;
             }
-            $rank = $eff->allowsEnrollment() ? 2 : 1;
-            if ($rank > ($best_rank[$course_id] ?? -1)) {
-                $primary[$course_id] = ['id' => $edition_id, 'status' => $eff, 'spots' => null];
-                $best_rank[$course_id] = $rank;
+            $active_by_course[$course_id][] = $edition_id;
+        }
+
+        foreach ($active_by_course as $course_id => $course_edition_ids) {
+            $primary_id = (int) $editionService->getPrimaryEdition($course_edition_ids);
+            if ($primary_id) {
+                $primary[$course_id] = ['id' => $primary_id, 'status' => $statuses[$primary_id], 'spots' => null];
             }
         }
 
