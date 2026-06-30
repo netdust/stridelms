@@ -1,0 +1,193 @@
+name: Acceptance
+
+# Smoke subset of the Codeception acceptance suite, run against a throwaway
+# CI WordPress + a Selenium service container. Gates a SMALL reliable subset
+# first (SmokeTestCest + 4 self-seeding Cests, no seeder); the seeder + the
+# remaining 22 Cests are a follow-up (see docs/plans/2026-06-30-codeception-ci-gate.md
+# Phase 4). The shared tests/acceptance.suite.yml is NOT edited — CI overrides
+# live in tests/_envs/ci.yml, merged via `--env ci`. DDEV-local runs untouched.
+on:
+  push:
+    branches: [main, staging, 'ci-seam-*']
+  pull_request:
+  workflow_dispatch:
+
+# Least-privilege: reads the repo + uploads a failure artifact only.
+permissions:
+  contents: read
+
+jobs:
+  acceptance:
+    runs-on: ubuntu-latest
+
+    env:
+      # The standup mirrors integration.yml's disposable-DB affirmation.
+      STRIDE_TEST_DB_DISPOSABLE: '1'
+      # Throwaway literal — NOT a real secret (mirrors integration.yml's
+      # ci-not-secret). Valid ONLY against this per-run throwaway WordPress,
+      # which is destroyed with the runner. The login backdoor it arms is hard-
+      # gated to non-production WP_ENV (web/app/mu-plugins/test-login-helper.php).
+      STRIDE_TEST_LOGIN_SECRET: 'ci-acceptance-not-secret'
+      # Web-side test-env signal so test-login-helper.php arms without DDEV.
+      CODECEPTION_TEST: 'true'
+
+    services:
+      database:
+        image: mariadb:10.11
+        env:
+          MYSQL_DATABASE: wordpress
+          MYSQL_USER: wordpress
+          MYSQL_PASSWORD: password
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=20s
+          --health-retries=10
+      selenium:
+        image: selenium/standalone-chrome:latest
+        ports:
+          - 4444:4444
+        # CRITICAL: chrome crashes intermittently without enlarged /dev/shm.
+        options: >-
+          --shm-size=2g
+          --health-cmd="curl -f http://localhost:4444/wd/hub/status"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: mysqli, gd, zip, intl
+        coverage: none
+        tools: wp-cli
+
+    - name: Cache Composer dependencies
+      id: composer-cache
+      run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+    - uses: actions/cache@v4
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+        restore-keys: ${{ runner.os }}-composer-
+
+    - name: Install Composer dependencies
+      run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+    # Resolve the bridge-gateway IP the SELENIUM container uses to reach the
+    # runner host. This single value is used for BOTH WP_HOME (asset origin)
+    # and WP_URL (browser-navigated origin) so the host strings match (CORS-
+    # module rule) AND the selenium container can reach php -S. No hardcoded
+    # subnet — read the default route from inside the running container.
+    - name: Resolve runner-host gateway as seen by Selenium
+      id: gw
+      run: |
+        SVC=$(docker ps --filter "ancestor=selenium/standalone-chrome:latest" --format '{{.ID}}' | head -1)
+        if [ -z "$SVC" ]; then echo "selenium container not found"; docker ps; exit 1; fi
+        HOST_GW=$(docker exec "$SVC" sh -c "ip route | awk '/default/ {print \$3}'")
+        if [ -z "$HOST_GW" ]; then echo "could not resolve gateway"; exit 1; fi
+        echo "host_gw=$HOST_GW" >> "$GITHUB_OUTPUT"
+        echo "Selenium reaches runner host at: $HOST_GW"
+
+    # WP_HOME/WP_URL host = the gateway IP (same string both sides). DB_PREFIX
+    # stride_ matches the overlay + the shared suite default. The login secret
+    # is written via heredoc (never on a command line / never echoed).
+    - name: Write .env
+      run: |
+        HOST_GW='${{ steps.gw.outputs.host_gw }}'
+        cat > .env <<ENV
+        DB_NAME=wordpress
+        DB_USER=wordpress
+        DB_PASSWORD=password
+        DB_HOST=127.0.0.1
+        DB_PREFIX=stride_
+        WP_ENV=development
+        WP_HOME=http://${HOST_GW}:8080
+        WP_SITEURL=http://${HOST_GW}:8080/wp
+        STRIDE_TEST_LOGIN_SECRET=${STRIDE_TEST_LOGIN_SECRET}
+        AUTH_KEY=ci-not-secret
+        SECURE_AUTH_KEY=ci-not-secret
+        LOGGED_IN_KEY=ci-not-secret
+        NONCE_KEY=ci-not-secret
+        AUTH_SALT=ci-not-secret
+        SECURE_AUTH_SALT=ci-not-secret
+        LOGGED_IN_SALT=ci-not-secret
+        NONCE_SALT=ci-not-secret
+        ENV
+
+    # install-wp.sh hardcodes `wp core install --url=http://localhost:8080`.
+    # The acceptance run needs the install URL to match WP_HOME (gateway IP) so
+    # siteurl/home options emit gateway-host asset URLs. Override the option
+    # AFTER the script runs (the script set localhost; correct it here) rather
+    # than forking the shared script.
+    - name: Install WordPress + Stride stack
+      run: bash scripts/ci/install-wp.sh
+
+    - name: Point siteurl/home at the gateway host
+      run: |
+        HOST_GW='${{ steps.gw.outputs.host_gw }}'
+        wp option update home "http://${HOST_GW}:8080"
+        wp option update siteurl "http://${HOST_GW}:8080/wp"
+        wp rewrite flush --hard
+
+    # Synthesize tests/.env the suite + Acceptance helper read (%WP_URL%,
+    # admin creds, admin path, and the SAME login secret so the codecept CLI
+    # process resolves it via Acceptance::testLoginSecret()).
+    - name: Write tests/.env for Codeception
+      run: |
+        HOST_GW='${{ steps.gw.outputs.host_gw }}'
+        cat > tests/.env <<ENV
+        WP_URL=http://${HOST_GW}:8080
+        WP_ADMIN_USERNAME=ciadmin
+        WP_ADMIN_PASSWORD=ciadmin
+        WP_ADMIN_PATH=/wp/wp-admin
+        STRIDE_TEST_LOGIN_SECRET=${STRIDE_TEST_LOGIN_SECRET}
+        ENV
+
+    # Bind 0.0.0.0 (NOT 127.0.0.1) so the selenium container can reach php -S
+    # via the gateway. Health-probe via the gateway host, matching what the
+    # browser will use.
+    - name: Serve WordPress over HTTP (php -S on 0.0.0.0)
+      run: |
+        PHP_CLI_SERVER_WORKERS=4 php -S 0.0.0.0:8080 -t web scripts/ci/router.php >/tmp/php-server.log 2>&1 &
+        for i in $(seq 1 30); do
+          if curl -fso /dev/null "http://localhost:8080/index.php?rest_route=/"; then
+            echo "server up after ${i}s"; exit 0
+          fi
+          sleep 1
+        done
+        echo "PHP built-in server failed to come up"; cat /tmp/php-server.log; exit 1
+
+    # HIGHEST-RISK PREMISE CHECK: prove the selenium container can actually
+    # reach php -S at the gateway BEFORE running Cests, so a networking failure
+    # is one clear line, not 5 Cest timeouts.
+    - name: Verify Selenium can reach php -S
+      run: |
+        HOST_GW='${{ steps.gw.outputs.host_gw }}'
+        SVC=$(docker ps --filter "ancestor=selenium/standalone-chrome:latest" --format '{{.ID}}' | head -1)
+        docker exec "$SVC" sh -c "curl -fsS -o /dev/null -w '%{http_code}\n' http://${HOST_GW}:8080/index.php?rest_route=/" \
+          || { echo "Selenium CANNOT reach php -S at ${HOST_GW}:8080 — networking premise failed"; cat /tmp/php-server.log; exit 1; }
+        echo "Selenium reaches php -S at ${HOST_GW}:8080 — networking OK"
+
+    # SMOKE SUBSET ONLY — explicit Cest list (self-seeding / install-admin; no
+    # seeder). Expanding to all 27 + the seeder is Phase 4.
+    - name: Run acceptance smoke subset
+      run: |
+        vendor/bin/codecept run acceptance --env ci \
+          SmokeTestCest EnrollmentCest AdminEditionCest AttendanceCest ProfileCest
+
+    - name: Upload Codeception output on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: codeception-output
+        path: tests/_output/
+        retention-days: 7
