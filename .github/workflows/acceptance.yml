@@ -1,16 +1,16 @@
 name: Acceptance
 
-# Smoke subset of the Codeception acceptance suite, run against a throwaway
-# CI WordPress + a Selenium service container. Gates a SMALL reliable subset
-# first: SmokeTestCest, EnrollmentCest, AttendanceCest — the Cests that seed
-# ALL their own data AND don't depend on configured site structure. Excluded
-# from the smoke gate (they need the full seeder, which builds the catalog +
-# the /mijn-account/ page etc.): AdminEditionCest (needs a seeded published
-# edition), ProfileCest (needs the /mijn-account/ page to exist), and the rest.
-# The seeder + those Cests are a follow-up (see
-# docs/plans/2026-06-30-codeception-ci-gate.md Phase 4). The shared
-# tests/acceptance.suite.yml is NOT edited — CI overrides live in
-# tests/_envs/ci.yml, merged via `--env ci`. DDEV-local runs untouched.
+# FULL Codeception acceptance suite (all 27 Cests), run against a throwaway CI
+# WordPress + a Selenium service container. The standup creates the manual
+# /mijn-account/ dashboard page and runs the feature-matrix seeder
+# (scripts/seed.php) so the seed-dependent Cests (dashboards, trajectories,
+# online enrollment, course-sidebar) have their fixtures. install-wp.sh
+# activates every plugin the Cests need (LearnDash, ntdst-assistant/audit/auth,
+# fluent-crm/smtp). The shared tests/acceptance.suite.yml is NOT edited — CI
+# overrides live in tests/_envs/ci.yml, merged via `--env ci`; DDEV-local runs
+# untouched. Cests run one-per-`codecept run` (Codeception 5 takes one test
+# arg) via an explicit allow-list so a future-broken Cest can be dropped
+# without touching the shared suite.
 on:
   # Push is limited to long-lived branches (+ ci-seam-* for throwaway proof
   # pushes); a PR-branch push would otherwise double-run this — the most
@@ -161,6 +161,28 @@ jobs:
         wp option update siteurl "http://${HOST_GW}:8080/wp"
         wp rewrite flush --hard
 
+    # The /mijn-account/ dashboard page is manual content in the live DBs (see
+    # docs/LAUNCH-CHECKLIST.md "Recreate 6 footer pages") — NOT created by the
+    # theme or the seeder. The dashboard/profile/trajectory Cests resolve it via
+    # get_page_by_path('mijn-account') + the page-mijn-account.php template, so a
+    # fresh CI install must create it (idempotent: skip if it already exists).
+    - name: Create the /mijn-account/ dashboard page
+      run: |
+        if ! wp post list --post_type=page --name=mijn-account --field=ID | grep -q .; then
+          wp post create --post_type=page --post_status=publish \
+            --post_name=mijn-account --post_title="Mijn account" \
+            --page_template=page-mijn-account.php
+        fi
+        wp rewrite flush --hard
+
+    # Seed the feature-matrix fixtures the seed-dependent Cests need
+    # (seed_student1 + its registrations, published editions, trajectories,
+    # catalog content). Gated to WP_ENV in [development,local]; the .env above
+    # sets WP_ENV=development so the gate passes. Pure DB writes, idempotent,
+    # no network — runs once, before the Cest loop.
+    - name: Seed feature-matrix fixtures
+      run: wp eval-file scripts/seed.php
+
     # Synthesize tests/.env the suite + Acceptance helper read (%WP_URL%,
     # admin creds, admin path, and the SAME login secret so the codecept CLI
     # process resolves it via Acceptance::testLoginSecret()).
@@ -210,15 +232,30 @@ jobs:
           cat /tmp/php-server.log; exit 1
         fi
 
-    # SMOKE SUBSET ONLY — explicit Cest list (self-seeding / install-admin; no
-    # seeder). Expanding to all 27 + the seeder is Phase 4.
-    # Codeception 5's `run` takes at most ONE test argument (`run <suite> <test>`),
-    # so iterate the subset — one `run` per Cest — and fail the step on the first
-    # failure. (A single `run acceptance A B C` errors "Too many arguments".)
-    - name: Run acceptance smoke subset
+    # FULL SUITE — explicit allow-list (one `run` per Cest). Codeception 5's
+    # `run` takes at most ONE test argument, and an explicit list keeps per-Cest
+    # fail-fast + lets us drop a future-broken Cest without editing the shared
+    # acceptance.suite.yml. All 27 should pass given the seeder + /mijn-account
+    # page above (install-wp.sh activates every plugin the Cests need). Graceful
+    # self-skippers (CatalogShakeout one method, EnrollmentDataShape, Trajectory)
+    # report skips, not failures.
+    - name: Run acceptance suite (all Cests)
       run: |
         set -e
-        for cest in SmokeTestCest EnrollmentCest AttendanceCest; do
+        for cest in \
+          SmokeTestCest \
+          EnrollmentCest EnrollmentEdgeCest EnrollmentDataShapeCest \
+          PreEnrollmentFlowCest OnlineEnrollmentCest \
+          AttendanceCest QuestionnaireBuilderCest \
+          ProfileCest \
+          DashboardCest DashboardE2ECest DashboardTabShakeoutCest DashboardQuoteGdprEdgeCest \
+          CatalogShakeoutCest CourseSidebarStatusCest \
+          TrajectoryCest TrajectoryE2ECest TrajectoryCascadeCest \
+          AdminEditionCest AdminEditionDeelnemersCest AdminQuoteCest AdminVoucherCest \
+          EditionDuplicateCest \
+          AssistantPluginCest AuditPluginCest AuthPluginCest \
+          FullUserJourneyCest \
+        ; do
           echo "── Running acceptance: $cest ──"
           vendor/bin/codecept run acceptance --env ci "$cest"
         done
