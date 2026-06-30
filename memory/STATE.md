@@ -705,3 +705,9 @@ Inventory only — left in place per user instruction:
 
 **Decisions**
 - I'll branch the new feature work off the current branch tip (which includes both main's history *and* the disposable-DB CI guard — relevant since the plan's integration tests depend on `STRIDE_TEST_DB_DISPOSABLE`). This keeps the CI guard available without polluting the feature branch with unrelated concerns once `288d099e` merges. Let me create the feature branch.
+
+---
+### 2026-06-30 — tagged capture
+
+**Decisions**
+- **only e-learning hides sessions.** Now let me implement this through the harness as the global rules require. This is a small, well-scoped bug fix (Class E/C) — change the predicate so the gate keys on `e-learning` only.
