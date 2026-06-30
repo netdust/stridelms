@@ -1207,6 +1207,18 @@ if (!function_exists('wp_generate_password')) {
     }
 }
 
+// wp_new_user_notification stub — counts invocations so tests can assert it is
+// NEVER called on the collision-safe (existing-account) resolve path.
+global $_test_new_user_notification_calls;
+$_test_new_user_notification_calls = 0;
+if (!function_exists('wp_new_user_notification')) {
+    function wp_new_user_notification($user_id, $deprecated = null, $notify = ''): void
+    {
+        global $_test_new_user_notification_calls;
+        $_test_new_user_notification_calls++;
+    }
+}
+
 if (!function_exists('current_time')) {
     function current_time(string $type = 'mysql'): string
     {

@@ -1097,6 +1097,79 @@ final class EnrollmentService extends AbstractService
     }
 
     /**
+     * Collision-safe find-or-create for an anonymous lead account (INV-9).
+     *
+     * The single convergence point that turns an anonymous pre-account
+     * registration (the public interest/waitlist forms) into a real WP account.
+     * Unlike {@see resolveParticipant()} (the colleague-enroll sibling, a tracked
+     * INV-9 bypass) this method sends NO credential/welcome notification: a
+     * matched existing account is returned untouched (M-COLLISION-SAFE / attack 6),
+     * and this method writes NO billing/personal meta — meta-mapping happens in
+     * the promote branch where {@see $wasExisting} is consumed (M-NO-OVERWRITE /
+     * M-META-MAP). The welcome mail is sent later, only for new accounts, via the
+     * enriched `stride/registration/confirmed` event.
+     *
+     * @return array{user_id:int, was_existing:bool}|WP_Error
+     */
+    private function resolveLeadAccount(string $email, string $name): array|WP_Error
+    {
+        // M-EMAIL-VALIDATE — re-validate the stored (public-form) email BEFORE
+        // any user creation.
+        $email = sanitize_email((string) $email);
+        if (!is_email($email)) {
+            return new WP_Error(
+                'lead_no_email',
+                __('De wachtlijst-aanmelding heeft geen geldig e-mailadres.', 'stride'),
+            );
+        }
+
+        // M-COLLISION-SAFE — found existing: return the ID, send NO credentials,
+        // write NO meta, return BEFORE any notification.
+        $existing = get_user_by('email', $email);
+        if ($existing) {
+            return ['user_id' => (int) $existing->ID, 'was_existing' => true];
+        }
+
+        // Create a new, active account. Derive a unique username from the email
+        // local-part (mirrors resolveParticipant's uniqueness idiom).
+        $username = sanitize_user(explode('@', $email)[0], true);
+        $counter = 1;
+        while (username_exists($username)) {
+            $username = sanitize_user(explode('@', $email)[0], true) . $counter;
+            $counter++;
+        }
+
+        $password = wp_generate_password(16, true, true); // never logged/returned
+        $userId = wp_create_user($username, $password, $email);
+
+        if (is_wp_error($userId)) {
+            ntdst_log('enrollment')->error('Failed to create lead account on waitlist promote', [
+                'email' => $email,
+                'error' => $userId->get_error_message(),
+            ]);
+
+            return new WP_Error(
+                'account_create_failed',
+                __('Het account voor de wachtlijst-aanmelding kon niet worden aangemaakt.', 'stride'),
+            );
+        }
+
+        $name = sanitize_text_field($name);
+        $parts = preg_split('/\s+/', trim($name), 2) ?: [];
+        $firstName = $parts[0] ?? '';
+        $lastName = $parts[1] ?? '';
+
+        wp_update_user([
+            'ID' => $userId,
+            'first_name' => $firstName,
+            'last_name' => $lastName,
+            'display_name' => $name !== '' ? $name : $username,
+        ]);
+
+        return ['user_id' => (int) $userId, 'was_existing' => false];
+    }
+
+    /**
      * Update user profile with enrollment form data.
      */
     /**
