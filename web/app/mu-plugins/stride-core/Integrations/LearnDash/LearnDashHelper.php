@@ -93,6 +93,16 @@ final class LearnDashHelper
             return true;
         }
 
+        // Open courses grant access to EVERY logged-in user, so
+        // sfwd_lms_has_access() is true for someone who never enrolled. That's
+        // access, not enrollment — the marker/progress checks above are the
+        // only real enrollment signals for an open course. The fallback below
+        // is meaningful only for the gated modes (free/paynow/subscribe),
+        // where access tracks an actual enrollment record.
+        if (self::getAccessMode($courseId) === self::MODE_OPEN) {
+            return false;
+        }
+
         return sfwd_lms_has_access($courseId, $userId);
     }
 
