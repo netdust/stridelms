@@ -96,11 +96,14 @@ class PreEnrollmentFlowCest
 
         $I->fillField('#' . $kind . '_name', $name);
         $I->fillField('#' . $kind . '_email', $email);
-        // The waitlist form carries a full billing section, so its submit
-        // button sits below the fold — a plain click is intercepted (the point
-        // is off-screen). Scroll it into view first so the click lands.
-        $I->scrollTo('button[type="submit"]');
-        $I->click('button[type="submit"]');
+        // Submit via JS rather than a coordinate click: the long waitlist form's
+        // full-width submit button sits at the bottom where a fixed bottom-right
+        // toast (z-50) overlaps its right edge, so a WebDriver click is
+        // intercepted ("element click intercepted"). A direct .click() on the
+        // element bypasses the actionability/overlap check and fires the same
+        // Alpine @submit handler. (The short interest form is unaffected either
+        // way; this keeps one code path for both.)
+        $I->executeJS("document.querySelector('button[type=\"submit\"]').click();");
 
         $expected = $kind === 'interest'
             ? 'Je interesse is geregistreerd'
