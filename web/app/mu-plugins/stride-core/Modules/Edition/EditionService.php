@@ -1018,7 +1018,9 @@ class EditionService extends AbstractService implements EditionQueryInterface
             ? ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class)->getEnrolledEditionIds($userId)
             : [];
 
-        $today    = strtotime(date('Y-m-d'));
+        // Site-timezone "today" boundary, consistent with getCourseHeaderSummary
+        // (both decide "is this edition upcoming" — they must agree at midnight).
+        $today    = (int) strtotime(wp_date('Y-m-d'));
         $upcoming = [];
         $past     = [];
 
