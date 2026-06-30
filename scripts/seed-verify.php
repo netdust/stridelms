@@ -343,26 +343,26 @@ if ($demo instanceof WP_User) {
     }
     $check('demo persona has a downloadable certificate link', $hasCertLink);
 
-    // F4 Offertes: >=1 quote tied to the demo persona (vad_quote user_id meta is BARE)
-    $quoteCount = (int) $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$wpdb->postmeta} pm
-         JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_quote'
-         WHERE pm.meta_key = 'user_id' AND pm.meta_value = %d",
-        $uid,
-    ));
-    $check('demo persona has >=1 quote', $quoteCount >= 1);
+    // F4 Offertes: >=1 quote tied to the demo persona — route through the SAME
+    // read the Offertes tab uses (QuoteService::getUserQuotes → QuoteRepository::
+    // findByUser, which enforces post_status='publish'). A raw user_id-meta count
+    // would also pass for a draft/trashed quote the tab never renders (CR I-2).
+    $quoteSvc   = ntdst_get(\Stride\Modules\Invoicing\QuoteService::class);
+    $userQuotes = $quoteSvc->getUserQuotes($uid);
+    $check('demo persona has >=1 quote (Offertes tab read)', count($userQuotes) >= 1);
 
     // F5 Trajecten: >=1 PARENT trajectory enrollment (the corrected premise)
     $trajEnrollments = $regRepo->findTrajectoryEnrollmentsByUser($uid);
     $check('demo persona has >=1 parent trajectory enrollment (tab-trajecten read)', count($trajEnrollments) >= 1);
 
-    // F1 Dashboard pending task: >=1 pending reg with open completion_tasks
-    $pendingWithTasks = (int) $wpdb->get_var($wpdb->prepare(
-        "SELECT COUNT(*) FROM {$wpdb->prefix}vad_registrations
-         WHERE user_id = %d AND status = 'pending' AND completion_tasks IS NOT NULL",
-        $uid,
-    ));
-    $check('demo persona has >=1 pending registration with a completion task', $pendingWithTasks >= 1);
+    // F1 Dashboard pending task: route through the SAME read the dashboard's
+    // "Acties nodig" uses (EnrollmentCompletion::getPendingForUser, which keeps
+    // only regs with >=1 INCOMPLETE task). A raw `completion_tasks IS NOT NULL`
+    // count would stay green on a stale DB even when every task is done or the
+    // selection window has lapsed and the surface renders empty (CR I-1).
+    $completion  = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+    $pendingRegs = $completion->getPendingForUser($uid);
+    $check('demo persona has >=1 pending registration with an open task (dashboard read)', count($pendingRegs) >= 1);
 }
 
 // ---------------------------------------------------------------------------
