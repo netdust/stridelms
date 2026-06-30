@@ -47,7 +47,15 @@ final class AdminExportServiceTest extends IntegrationTestCase
     private function cleanRegistrations(): void
     {
         global $wpdb;
-        $wpdb->query("DELETE FROM {$wpdb->prefix}vad_registrations");
+        // Scope to THIS test's fixture user only — never a table-wide DELETE.
+        // The integration suite runs against the real WP DB (see bootstrap),
+        // so an unscoped DELETE here wipes live enrollments. Every registration
+        // this test creates uses self::$testUserId, so this fully clears the
+        // test's own data without touching anyone else's. (Incident 2026-06-30.)
+        $wpdb->query($wpdb->prepare(
+            "DELETE FROM {$wpdb->prefix}vad_registrations WHERE user_id = %d",
+            self::$testUserId,
+        ));
     }
 
     // =========================================================================
@@ -99,23 +107,28 @@ final class AdminExportServiceTest extends IntegrationTestCase
             'status'     => RegistrationStatus::Confirmed->value,
         ]);
         // EXCLUDED: confirmed but the edition is PAST.
-        $this->repo->create([
+        $pastRegId = $this->repo->create([
             'user_id'    => self::$testUserId,
             'edition_id' => $pastEdition,
             'status'     => RegistrationStatus::Confirmed->value,
         ]);
         // EXCLUDED: upcoming edition but NOT confirmed (waitlist).
-        $this->repo->create([
+        $waitlistRegId = $this->repo->create([
             'user_id'    => self::$testUserId,
             'edition_id' => $upcomingEdition,
             'status'     => RegistrationStatus::Waitlist->value,
         ]);
 
         $rows = $this->repo->findForExport($today);
-
         $ids = array_map(static fn($r) => (int) $r->id, $rows);
+
+        // Assert about OUR three fixtures specifically rather than a global
+        // row count — findForExport() is an all-users admin query, so a
+        // table-wide count is brittle against other fixtures (and cleanup is
+        // now correctly scoped to this user, not the whole table).
         $this->assertContains($includedRegId, $ids, 'confirmed + upcoming reg must be exported');
-        $this->assertCount(1, $rows, 'only the confirmed + upcoming reg is exported (past + non-confirmed excluded)');
+        $this->assertNotContains($pastRegId, $ids, 'confirmed but PAST reg must be excluded');
+        $this->assertNotContains($waitlistRegId, $ids, 'upcoming but non-confirmed (waitlist) reg must be excluded');
     }
 
     // =========================================================================
