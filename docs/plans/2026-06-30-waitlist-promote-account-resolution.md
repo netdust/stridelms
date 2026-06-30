@@ -307,19 +307,27 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 - Modify: `web/app/mu-plugins/stride-core/Modules/Mail/StrideMailBridge.php` (consume name/email; condition welcome send)
 
 **Interfaces:**
-- Consumes: `was_existing` + name/email threaded from Task 3.
-- Produces: `stride/registration/confirmed` payload optionally carries `['name'=>…, 'email'=>…, 'was_new_account'=>bool]` (additive — existing 6 listeners ignore unknown keys).
+- Consumes: `was_existing` (as `was_new_account` = `!was_existing`) threaded from Task 3 into `confirmCore`.
+- Produces: `stride/registration/confirmed` payload carries `['was_new_account'=>bool]` (additive — existing listeners ignore unknown keys).
+
+> **MECHANISM CORRECTED 2026-06-30 (ground-truthed by the controller before dispatch — supersedes the original "add a new add_action sender" approach, which was WRONG):**
+> The `stride/registration/confirmed` event is ALREADY bound to a SEEDED, active netdust-mail template `stride-enrollment-confirmed` (`StrideMailBridge::seedTemplates()` :625-638, trigger registered :416). netdust-mail's `activateTriggers()` (`MailService.php:176-191`) auto-`add_action`s every triggered template and resolves the recipient from the event's `user_id` (`MailService.php:236-242`: `$to = $options['to'] ?? get_userdata($context['user_id'])->user_email`). **Therefore:**
+> - **New-account promote (was_new_account=true):** the new user has a real `user_id`+email → the EXISTING trigger ALREADY sends the confirmation/welcome mail. Nothing to ADD. ✓
+> - **Existing-account collision (was_new_account=false):** the row links to the real user → the EXISTING trigger ALSO fires → an UNSOLICITED confirm mail to a stranger's account. **THIS is the M-NEW-USER-MAIL-ONLY / attack-6 gap — and the job is to SUPPRESS it, not to add a sender.**
+> - Adding a second `add_action` sender (the original plan) would DOUBLE-SEND for new accounts (trigger + new handler). Do NOT do that.
+>
+> **The correct, minimal mechanism:** suppress the `confirmed`-trigger mail for the collision case. Implement by having the promote path, on the `was_existing===true` anon branch, NOT let the seeded `stride-enrollment-confirmed` template fire — the lowest-risk way is a guard in `StrideMailBridge` keyed on `was_new_account`. Concretely: register an `add_action('stride/registration/confirmed', …, priority < the trigger's 10)` that, when the payload carries `was_new_account===false` AND the row came via the anon-promote path, short-circuits the seeded template send for that dispatch (e.g. via a per-dispatch `ndmail`-suppression filter the netdust-mail send checks, or by gating the seeded template's activation). **The implementer MUST ground-truth netdust-mail's available suppression seam** (`ndmail_before_send`/a `pre_send` filter, template-active check, or an explicit `to`-override to empty) and pick the one that suppresses ONLY this dispatch without disabling the template globally or affecting normal (logged-in user) confirms. If no clean per-dispatch suppression seam exists, the fallback is: do NOT dispatch `stride/registration/confirmed` for the `was_existing` anon-collision case at all (move the dispatch inside `if ($wasNewAccount || !$cameFromAnonPromote)`), accepting that other `confirmed` listeners also won't fire for that one collision row — document the trade-off. **Decide based on what the code actually offers; this is the load-bearing design call of Task 4.**
 
 **Tier: A** — recipient-resolution + the no-credential-to-existing-account guard (M-NEW-USER-MAIL-ONLY/M6/M7). RED-first.
-**Test contract:** (a) new-account promote → welcome mail once to the lead email (recipient = lead email, not empty); (b) **existing-account promote → NO welcome/credential mail** (denial — M-COLLISION-SAFE); (c) accounted normal confirm → unchanged.
+**Test contract:** (a) new-account promote → confirmation/welcome mail once to the NEW user's email (recipient present, not empty); (b) **existing-account collision promote → NO confirm/credential mail to the existing account** (denial — M-COLLISION-SAFE/attack 6); (c) accounted normal confirm (a logged-in user's own enrollment) → unchanged, mail still sent. **The bug-catching case is (b): exactly ZERO mail to the pre-existing account.**
 
-- [ ] **Step 1: Write failing tests** (recipient present on new-account, recipient ABSENT on existing-account; mail-capture via `ndmail`/`wp_mail` stub or Mailpit in integration).
-- [ ] **Step 2: Run — expect FAIL.**
-- [ ] **Step 3: Implement** — `confirmCore` adds name/email/was_new_account when provided; `StrideMailBridge` adds a NEW `add_action('stride/registration/confirmed', …)` handler in `init()` that sends the welcome stage-mail ONLY when `was_new_account===true`, reusing the dual-shape recipient logic (sibling of `sendUserStageMail`). Additive payload. **NOTE (freshness review DRIFT-3):** `stride/registration/confirmed` is already a netdust-mail *trigger* (template-driven, StrideMailBridge:416). The new `add_action` handler must NOT double-send alongside that trigger — if a `confirmed` mail template is seeded, gate so the user gets exactly ONE mail. Verify in the integration gate (Mailpit shows exactly one).
-- [ ] **Step 4: Run — expect PASS** (full suite + existing mail tests green).
-- [ ] **Step 5: Commit** `feat(mail): welcome mail to new waitlist-promoted lead, none to existing account`.
+- [ ] **Step 1: Ground-truth netdust-mail's per-dispatch suppression seam** (read `MailService::send` + `activateTriggers` + any `ndmail_*` filters) and pick the minimal mechanism per the corrected note above.
+- [ ] **Step 2: Write failing integration tests** (a)/(b)/(c) — mail-capture via Mailpit or a `wp_mail`/`ndmail` stub that counts sends per recipient. (b) must assert 0 sends to the existing user's email. Run — expect FAIL.
+- [ ] **Step 3: Implement** the suppression keyed on `was_new_account===false` for the collision case; thread `was_new_account` into the `confirmed` payload from `confirmCore`. Do NOT add a competing sender for the new-account case (the trigger already covers it).
+- [ ] **Step 4: Run — expect PASS** (full suite + existing mail tests green; the normal logged-in confirm still mails).
+- [ ] **Step 5: Commit** `feat(mail): suppress confirmation mail to pre-existing account on waitlist-promote collision`.
 
-**Integration gate:** Mailpit shows exactly one welcome mail for a new-account promote, zero for an existing-account promote.
+**Integration gate:** Mailpit shows exactly one confirmation mail for a new-account promote, ZERO for an existing-account collision promote, and the normal logged-in-user confirm is unchanged (still one).
 
 ### ── REVIEW GATE 3 ── (tier: STANDARD — handler-level deny + batch isolation; no new 1a primitive beyond GATE 1) — Task 4b
 
