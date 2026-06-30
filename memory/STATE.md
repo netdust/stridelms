@@ -693,3 +693,9 @@ Inventory only — left in place per user instruction:
 [2026-06-27] — session ended (no significant changes captured)
 [2026-06-29] — session ended (no significant changes captured)
 [2026-06-30] — session ended (no significant changes captured)
+
+---
+### 2026-06-30 — tagged capture
+
+**Decisions**
+- **keep teaser behavior, just de-duplicate.** Task 3.3's scope is now refined — the archive repoint preserves the homepage's distinct active-only/no-dateless behavior, but moves the query code into stride-core so no raw `WP_Query`/`meta_query` lives in the theme. This is a more correct (and safer) version of B3 than the plan assumed.
