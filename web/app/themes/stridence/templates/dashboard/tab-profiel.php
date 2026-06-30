@@ -18,37 +18,23 @@ defined('ABSPATH') || exit;
 $user    = $args['user'] ?? wp_get_current_user();
 $user_id = $user->ID;
 
-// Personal data
-$first_name   = $user->first_name;
-$last_name    = $user->last_name;
-$email        = $user->user_email;
-$phone        = get_user_meta($user_id, 'phone', true);
-$organisation = get_user_meta($user_id, 'organisation', true);
-$department   = get_user_meta($user_id, 'department', true);
+// Personal + billing + notification data — pre-assembled by stride-core.
+// Personal `organisation` and billing `company` are SEPARATE concerns and
+// never fall back between each other (the struct preserves the distinction).
+$profile       = ntdst_get(\Stride\Modules\User\UserDashboardService::class)->getProfileData($user_id);
+$first_name    = $user->first_name;
+$last_name     = $user->last_name;
+$email         = $user->user_email;
+$phone         = $profile['personal']['phone'];
+$organisation  = $profile['personal']['organisation'];
+$department    = $profile['personal']['department'];
+$billing       = $profile['billing'];
+$notifications = $profile['notifications'];
 
 // Profile type data
 $profileTypeService = ntdst_get(\Stride\Modules\User\ProfileTypeService::class);
 $profileTypes = $profileTypeService->getTypes();
 $currentProfileType = $profileTypeService->getUserType($user_id);
-
-// Billing data (meta keys match getUserMetaMapping)
-$billing = [
-    'company'     => get_user_meta($user_id, 'billing_company', true),
-    'vat_number'  => get_user_meta($user_id, 'billing_vat', true),
-    'address'     => get_user_meta($user_id, 'billing_address_1', true),
-    'postal_code' => get_user_meta($user_id, 'billing_postcode', true),
-    'city'        => get_user_meta($user_id, 'billing_city', true),
-    'invoice_email' => get_user_meta($user_id, 'invoice_email', true),
-    'gln_number'  => get_user_meta($user_id, 'gln_number', true),
-];
-
-// Notification preferences
-$notifications = [
-    'reminders'    => get_user_meta($user_id, 'stride_notify_reminders', true) !== 'no',
-    'new_courses'  => get_user_meta($user_id, 'stride_notify_new_courses', true) !== 'no',
-    'newsletter'   => get_user_meta($user_id, 'stride_notify_newsletter', true) === 'yes',
-    'language'     => get_user_meta($user_id, 'stride_communication_language', true) ?: 'nl',
-];
 ?>
 
 <div class="max-w-[720px] space-y-5">
