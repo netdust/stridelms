@@ -38,6 +38,70 @@ final class StrideSeedBuilders
     }
 
     /**
+     * Issue a downloadable LearnDash certificate for one user on one course.
+     * Idempotent: reuses the single shared seed certificate post; marking a
+     * complete course complete again is a no-op in LD. getCertificateLink()
+     * returns '' until BOTH a certificate post is assigned AND the course is
+     * genuinely complete — so we do both here (premise ground-truth fact 3).
+     *
+     * @return int|null certificate post id
+     */
+    public function buildCertificate(int $courseId, int $userId): ?int
+    {
+        if (!function_exists('learndash_process_mark_complete')) {
+            echo "      ! LearnDash mark-complete unavailable — certificate skipped\n";
+
+            return null;
+        }
+
+        // (a) one shared seed certificate post (idempotent by title)
+        $certId = $this->findIdByTitle('sfwd-certificates', 'Stride Demo Certificaat');
+        if (!$certId) {
+            $certId = wp_insert_post([
+                'post_title' => 'Stride Demo Certificaat',
+                'post_type' => 'sfwd-certificates',
+                'post_status' => 'publish',
+                'post_content' => '[certificate_title] — behaald op [certificate_completion_date]',
+            ]);
+            if (is_wp_error($certId)) {
+                echo "      ! Certificate post failed: {$certId->get_error_message()}\n";
+
+                return null;
+            }
+            update_post_meta($certId, StrideSeedRunner::SEED_META_KEY, true);
+            echo "      + Certificate post created (ID: {$certId})\n";
+        }
+
+        // (b) assign to course (merge, preserve price_type) — read via the LD meta shape
+        $ld = get_post_meta($courseId, '_sfwd-courses', true);
+        $ld = is_array($ld) ? $ld : [];
+        if (($ld['sfwd-courses_certificate'] ?? null) !== $certId) {
+            $ld['sfwd-courses_certificate'] = $certId;
+            update_post_meta($courseId, '_sfwd-courses', $ld);
+        }
+
+        // (c) grant access + genuinely complete. LD owns completion: marking the
+        // COURSE complete is a no-op while its required lesson/topic steps are
+        // unfinished (the lesson_ld_owns_completion gotcha). A seeded demo user
+        // never walks the lessons, so we complete every step first, then the
+        // course — only then does getCertificateLink() resolve to a real link.
+        if (function_exists('ld_update_course_access')) {
+            ld_update_course_access($userId, $courseId, false);
+        }
+        if (function_exists('learndash_get_course_steps')) {
+            $steps = learndash_get_course_steps($courseId);
+            foreach ((array) $steps as $stepId) {
+                learndash_process_mark_complete($userId, (int) $stepId, false, $courseId);
+            }
+        }
+        learndash_process_mark_complete($userId, $courseId);
+
+        echo "      🎓 Certificate issued: course {$courseId} → user {$userId}\n";
+
+        return (int) $certId;
+    }
+
+    /**
      * Ensure stride_format and stride_theme taxonomy terms exist.
      */
     public function ensureTaxonomyTerms(): void
@@ -574,6 +638,13 @@ final class StrideSeedBuilders
             $courseId = (int) ntdst_get(EditionService::class)->getCourseId($editionId);
             if ($courseId) {
                 ld_update_course_access($userId, $courseId, false);
+
+                // A completed registration that declares 'certificate' => true gets a
+                // genuinely-complete course + assigned cert post, so getCertificateLink()
+                // is non-empty on the Certificaten dashboard tab.
+                if ($status === 'completed' && !empty($reg['certificate'])) {
+                    $this->buildCertificate($courseId, (int) $userId);
+                }
             }
         }
 
