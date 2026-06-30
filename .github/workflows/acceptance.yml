@@ -251,6 +251,13 @@ jobs:
           echo "_sfwd-courses=" . json_encode($ld) . "\n";
           echo "_ld_price_type=" . var_export(get_post_meta($id, "_ld_price_type", true), true) . "\n";
           echo "getAccessMode=" . \Stride\Integrations\LearnDash\LearnDashHelper::getAccessMode($id) . "\n";
+          $sid = get_user_by("login","seed_student1")->ID ?? 0;
+          echo "seed_student1_id=$sid\n";
+          echo "has_access=" . var_export(function_exists("sfwd_lms_has_access") ? sfwd_lms_has_access($id,$sid) : "n/a", true) . "\n";
+          echo "course_access_from_meta=" . var_export(get_user_meta($sid, "course_".$id."_access_from", true), true) . "\n";
+          $cal = get_post_meta($id, "course_access_list", true);
+          echo "course_access_list=" . var_export($cal, true) . "\n";
+          echo "getCourseAction_label=" . (\Stride\Integrations\LearnDash\LearnDashHelper::getCourseAction($id,$sid)["label"] ?? "?") . "\n";
         '
 
     # Synthesize tests/.env the suite + Acceptance helper read (%WP_URL%,
