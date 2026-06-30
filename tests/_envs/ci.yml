@@ -1,0 +1,23 @@
+# tests/_envs/ci.yml — CI-ONLY overlay merged via `codecept run acceptance --env ci`.
+# Overrides ONLY what differs from the DDEV-default tests/acceptance.suite.yml:
+#   - WPWebDriver.host: the Selenium service is reachable from the runner host as
+#     localhost:4444 (GHA maps the service container's published port to runner
+#     localhost), NOT the docker-compose service name `selenium` DDEV uses.
+#   - WPDb.dsn host: the MariaDB service is reachable from the runner as 127.0.0.1.
+#   - WPDb.tablePrefix: the CI WordPress is installed with DB_PREFIX=stride_, matching
+#     the shared default — kept explicit so the overlay is self-describing.
+# WP_URL (the browser-navigated origin) comes from tests/.env, set by the workflow to
+# http://<runner-bridge-gateway>:8080 so the Selenium container can REACH php -S AND the
+# host string matches WP_HOME's asset origin (CORS-module rule). The shared suite default
+# is never touched — local DDEV runs keep working.
+modules:
+  config:
+    WPWebDriver:
+      host: localhost
+      port: 4444
+      path: /wd/hub
+    WPDb:
+      dsn: 'mysql:host=127.0.0.1;dbname=wordpress'
+      user: 'wordpress'
+      password: 'password'
+      tablePrefix: 'stride_'
