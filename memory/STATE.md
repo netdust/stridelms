@@ -699,3 +699,9 @@ Inventory only — left in place per user instruction:
 
 **Decisions**
 - **keep teaser behavior, just de-duplicate.** Task 3.3's scope is now refined — the archive repoint preserves the homepage's distinct active-only/no-dateless behavior, but moves the query code into stride-core so no raw `WP_Query`/`meta_query` lives in the theme. This is a more correct (and safer) version of B3 than the plan assumed.
+
+---
+### 2026-06-30 — tagged capture
+
+**Decisions**
+- I'll branch the new feature work off the current branch tip (which includes both main's history *and* the disposable-DB CI guard — relevant since the plan's integration tests depend on `STRIDE_TEST_DB_DISPOSABLE`). This keeps the CI guard available without polluting the feature branch with unrelated concerns once `288d099e` merges. Let me create the feature branch.
