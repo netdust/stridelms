@@ -184,13 +184,19 @@ final class NotificationCacheIntegrationTest extends IntegrationTestCase
         // 2. Mark — the auto-mark-read on tab view.
         $svc->markAllRead(self::$testUserId);
 
-        // 3. The already-returned snapshot is unchanged (no retroactive mutation).
-        foreach ($snapshot as $i => $n) {
-            $this->assertSame(
-                $unreadInSnapshot[$i]['read'] ?? $n['read'],
-                $n['read'],
-                'markAllRead must not retroactively mutate the returned snapshot',
-            );
+        // 3. This-load-vs-next-load divergence: the pre-mark snapshot still
+        //    shows its items UNREAD (so the arrival render keeps its accents),
+        //    while a FRESH read after the mark shows them READ. This is the
+        //    behaviour the auto-mark-read UX depends on — and it only holds
+        //    because getNotifications() returns a by-value snapshot, so the
+        //    mark cannot retroactively flip the array already handed to render.
+        foreach ($unreadInSnapshot as $n) {
+            $this->assertFalse($n['read'], 'arrival snapshot must keep its unread flags after the mark');
+        }
+        $fresh = $this->freshService()->getNotifications(self::$testUserId);
+        $this->assertNotEmpty($fresh);
+        foreach ($fresh as $n) {
+            $this->assertTrue($n['read'], 'a fresh read after markAllRead must show items as read');
         }
 
         // 4. Badge clears for next load.
