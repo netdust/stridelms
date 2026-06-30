@@ -177,14 +177,14 @@ if ($show_styled_list && !empty($lessons_with_dates)) :
         <div class="mb-6 bg-surface-card rounded-[16px] shadow-card flex flex-col overflow-hidden">
             <?php
             $current_marked = false;
-        foreach (array_values($lessons_with_dates) as $i => $lesson) :
-            $is_done    = !empty($lesson['completed']);
-            $is_locked  = empty($lesson['is_available']);
-            $is_current = !$current_marked && !$is_done && !$is_locked;
-            if ($is_current) {
-                $current_marked = true;
-            }
-            ?>
+    foreach (array_values($lessons_with_dates) as $i => $lesson) :
+        $is_done    = !empty($lesson['completed']);
+        $is_locked  = empty($lesson['is_available']);
+        $is_current = !$current_marked && !$is_done && !$is_locked;
+        if ($is_current) {
+            $current_marked = true;
+        }
+        ?>
                 <?php if ($i > 0) : ?>
                     <div class="h-px bg-surface-alt mx-5"></div>
                 <?php endif; ?>
@@ -199,9 +199,9 @@ if ($show_styled_list && !empty($lessons_with_dates)) :
 
                     <div class="flex-1 min-w-0">
                         <?php
-                        // "N · " prefix mirrors the design's numbered rows.
-                        $num_prefix = ($i + 1) . ' · ';
-                        ?>
+                    // "N · " prefix mirrors the design's numbered rows.
+                    $num_prefix = ($i + 1) . ' · ';
+        ?>
                         <?php if (!$is_locked) : ?>
                             <a href="<?php echo esc_url($lesson['url']); ?>" class="text-[15px] <?php echo $is_current ? 'font-bold text-text' : 'font-semibold ' . ($is_done ? 'text-text-muted' : 'text-text'); ?> hover:text-primary truncate block">
                                 <span class="text-text-muted font-normal"><?php echo esc_html($num_prefix); ?></span><?php echo esc_html($lesson['title']); ?>
@@ -237,7 +237,7 @@ if ($show_styled_list && !empty($lessons_with_dates)) :
     <div class="learndash-course-content">
         <?php
         echo do_shortcode('[course_content course_id="' . esc_attr($course_id) . '"]');
-    ?>
+        ?>
     </div>
     <?php endif; ?>
 </section>
@@ -249,7 +249,7 @@ if ($show_styled_list && !empty($lessons_with_dates)) :
         <?php esc_html_e('Sprekers', 'stridence'); ?>
     </h2>
     <?php
-    // TODO: Wire up speakers from course/edition meta
+        // TODO: Wire up speakers from course/edition meta
     ?>
     <p class="text-text-muted">
         <?php esc_html_e('Informatie over sprekers wordt binnenkort toegevoegd.', 'stridence'); ?>

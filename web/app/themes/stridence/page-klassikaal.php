@@ -155,7 +155,7 @@ get_header();
     <div class="container py-6 lg:py-8">
         <?php if ($total > 0) : ?>
             <div class="grid grid-cols-[repeat(auto-fill,minmax(300px,1fr))] gap-[18px]" x-ref="grid">
-                <?php echo stridence_catalog_render_cards($initial_slice, $uid); // escaped within partials ?>
+                <?php echo stridence_catalog_render_cards($initial_slice, $uid); // escaped within partials?>
             </div>
 
             <!-- Empty state for filtered results -->
@@ -167,7 +167,7 @@ stridence_template_part('partials/empty-state', null, [
     'message' => __('Er zijn geen klassikale opleidingen in dit thema.', 'stridence'),
     'band'    => true,
 ]);
-?>
+            ?>
                 <div class="mt-4 flex justify-center">
                     <button @click="setFilter('')" type="button" class="btn-ghost">
                         <?php esc_html_e('Toon alles', 'stridence'); ?>
@@ -192,11 +192,11 @@ stridence_template_part('partials/empty-state', null, [
 
         <?php else : ?>
             <?php
-            stridence_template_part('partials/empty-state', null, [
-                'icon'    => 'calendar',
-                'title'   => __('Geen opleidingen gevonden', 'stridence'),
-                'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),
-            ]);
+                        stridence_template_part('partials/empty-state', null, [
+                            'icon'    => 'calendar',
+                            'title'   => __('Geen opleidingen gevonden', 'stridence'),
+                            'message' => __('Er zijn momenteel geen klassikale opleidingen gepland.', 'stridence'),
+                        ]);
             ?>
         <?php endif; ?>
     </div>

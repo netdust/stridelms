@@ -220,8 +220,8 @@ $wrapper_surface = $is_interest
     // Interest cards never show a price (no booking yet) and use the accent
     // divider/CTA to match their tinted surface.
     $show_price = !$is_cancelled && !$is_enrolled && !$is_interest && $price !== null;
-    $cta_colour = $is_interest ? 'text-accent' : 'text-primary';
-    ?>
+$cta_colour = $is_interest ? 'text-accent' : 'text-primary';
+?>
     <div class="mt-auto pt-4 border-t border-border flex items-center gap-3 <?php echo $show_price ? 'justify-between' : 'justify-end'; ?>">
         <?php if ($show_price) : ?>
             <?php if ($is_free) : ?>
