@@ -92,6 +92,21 @@ final class OfferingSidebarPartial
                            <?php checked($checked); ?>>
                     <span style="font-size: 12px;"><?= esc_html($label) ?></span>
                 </label>
+                <?php if ($key === 'requires_documents'):
+                    $docVal = (string) $model->getMeta($post->ID, 'documents_instruction');
+                    if ($docVal === '') {
+                        $docVal = \Stride\Modules\Enrollment\EnrollmentCompletion::DEFAULT_DOCUMENTS_INSTRUCTION;
+                    }
+                    ?>
+                    <div id="stride-documents-instruction" style="margin: 4px 0 8px 24px; <?= $checked ? '' : 'display:none;' ?>">
+                        <textarea name="ntdst_fields[documents_instruction]" rows="3"
+                                  style="width: 100%; font-size: 12px;"
+                                  placeholder="<?php esc_attr_e('Instructie voor de deelnemer…', 'stride'); ?>"><?= esc_textarea($docVal) ?></textarea>
+                        <p class="description" style="font-size: 11px;">
+                            <?php esc_html_e('Leeg laten = standaardtekst tonen.', 'stride'); ?>
+                        </p>
+                    </div>
+                <?php endif; ?>
             <?php endforeach; ?>
             <?php if ($duringHint !== ''): ?>
                 <p class="description" style="margin-top: 8px; font-size: 11px; color: #646970;">
@@ -113,6 +128,21 @@ final class OfferingSidebarPartial
                            <?php checked($checked); ?>>
                     <span style="font-size: 12px;"><?= esc_html($label) ?></span>
                 </label>
+                <?php if ($key === 'post_requires_documents'):
+                    $postDocVal = (string) $model->getMeta($post->ID, 'post_documents_instruction');
+                    if ($postDocVal === '') {
+                        $postDocVal = \Stride\Modules\Enrollment\EnrollmentCompletion::DEFAULT_DOCUMENTS_INSTRUCTION;
+                    }
+                    ?>
+                    <div id="stride-post-documents-instruction" style="margin: 4px 0 8px 24px; <?= $checked ? '' : 'display:none;' ?>">
+                        <textarea name="ntdst_fields[post_documents_instruction]" rows="3"
+                                  style="width: 100%; font-size: 12px;"
+                                  placeholder="<?php esc_attr_e('Instructie voor de deelnemer…', 'stride'); ?>"><?= esc_textarea($postDocVal) ?></textarea>
+                        <p class="description" style="font-size: 11px;">
+                            <?php esc_html_e('Leeg laten = standaardtekst tonen.', 'stride'); ?>
+                        </p>
+                    </div>
+                <?php endif; ?>
             <?php endforeach; ?>
         </div>
 
@@ -120,6 +150,12 @@ final class OfferingSidebarPartial
         jQuery(function($) {
             $('#stride-enrollment-form').on('change', function() {
                 $('#stride-approval-controls').toggle($(this).val() !== 'direct');
+            });
+            $('input[name="ntdst_fields[requires_documents]"][type=checkbox]').on('change', function() {
+                $('#stride-documents-instruction').toggle(this.checked);
+            });
+            $('input[name="ntdst_fields[post_requires_documents]"][type=checkbox]').on('change', function() {
+                $('#stride-post-documents-instruction').toggle(this.checked);
             });
         });
         </script>
