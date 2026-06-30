@@ -82,6 +82,155 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
+     * THE single catalog-eligibility meta_query (Cluster 3 / Task 3.1, moved
+     * verbatim out of the theme's stridence_catalog_date_window_meta_query()).
+     * Active status + the 3-branch date window, so the window rule has exactly
+     * ONE home and can no longer fork across /klassikaal, /online and the
+     * course archive:
+     *   (1) dated:   end_date within a 2-day grace past today,
+     *   (2) fallback: end_date missing AND start_date within the grace,
+     *   (3) dateless: neither end_date nor start_date set (the "Binnenkort —
+     *       toon interesse" anchors for klassikaal, always-on enrollables for
+     *       online — treatment differs per kind downstream; inclusion does not).
+     *
+     * Inclusion is additionally gated by post_status=publish (applied by the
+     * caller's WP_Query) + the published-course guard downstream (INF-1).
+     *
+     * INV-3: the meta prefix derives from $this->getMetaPrefix(); it is no
+     * longer passed in as a string — the builder is now internal to the repo.
+     *
+     * @return array<int, array<string, mixed>> meta_query clauses (AND-joined)
+     */
+    private function catalogDateWindowMetaQuery(int $graceDays = 2): array
+    {
+        $prefix     = $this->getMetaPrefix();
+        $pastCutoff = wp_date('Y-m-d', strtotime('-' . max(0, $graceDays) . ' days'));
+
+        return [
+            [
+                'key'     => $prefix . 'status',
+                'value'   => OfferingStatus::activeValues(),
+                'compare' => 'IN',
+            ],
+            [
+                'relation' => 'OR',
+                // (1) dated: end_date within the grace window
+                [
+                    'key'     => $prefix . 'end_date',
+                    'value'   => $pastCutoff,
+                    'compare' => '>=',
+                    'type'    => 'DATE',
+                ],
+                // (2) end_date missing but start_date within the grace window
+                [
+                    'relation' => 'AND',
+                    [
+                        'key'     => $prefix . 'end_date',
+                        'compare' => 'NOT EXISTS',
+                    ],
+                    [
+                        'key'     => $prefix . 'start_date',
+                        'value'   => $pastCutoff,
+                        'compare' => '>=',
+                        'type'    => 'DATE',
+                    ],
+                ],
+                // (3) fully dateless: neither end_date nor start_date set
+                [
+                    'relation' => 'AND',
+                    [
+                        'key'     => $prefix . 'end_date',
+                        'compare' => 'NOT EXISTS',
+                    ],
+                    [
+                        'key'     => $prefix . 'start_date',
+                        'compare' => 'NOT EXISTS',
+                    ],
+                ],
+            ],
+        ];
+    }
+
+    /**
+     * Catalog-eligible edition IDs — the raw enumeration that used to live in
+     * stridence_catalog_klassikaal_items() / _online_items(): published
+     * editions matching the single date-window predicate, capped to $limit.
+     *
+     * When $courseIdFilter is a non-empty list, the result is AND-restricted to
+     * editions whose course_id is in that set (the /online path: editions of
+     * online-format courses). A null/empty filter enumerates all eligible
+     * editions (the /klassikaal path).
+     *
+     * Returns IDs only — item-shaping/hydration (themes, prices, statuses) stays
+     * in the theme prepass (INV-7 convergence point), which is unchanged.
+     *
+     * @param list<int>|null $courseIdFilter
+     * @return list<int>
+     */
+    public function findCatalogEligibleIds(?array $courseIdFilter = null, int $limit = 200): array
+    {
+        $metaQuery = $this->catalogDateWindowMetaQuery();
+
+        $courseIds = $courseIdFilter === null
+            ? []
+            : array_values(array_unique(array_filter(array_map('intval', $courseIdFilter))));
+
+        if ($courseIdFilter !== null && empty($courseIds)) {
+            // An explicit but empty filter restricts to nothing.
+            return [];
+        }
+
+        if (!empty($courseIds)) {
+            $metaQuery[] = [
+                'key'     => $this->getMetaPrefix() . 'course_id',
+                'value'   => $courseIds,
+                'compare' => 'IN',
+            ];
+        }
+
+        $query = new \WP_Query([
+            'post_type'      => $this->postType,
+            'posts_per_page' => max(1, $limit),
+            'post_status'    => 'publish',
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+            // No start_date orderby: ordering by meta_value forces an EXISTS
+            // join on start_date which would drop fully-dateless editions.
+            // Dated ordering is presentation, applied downstream by the theme.
+            'meta_query'     => $metaQuery,
+        ]);
+
+        return array_map('intval', $query->posts);
+    }
+
+    /**
+     * Published sfwd-courses IDs tagged with an online stride_format
+     * (online / e-learning / webinar) — the online-course enumeration the
+     * /online catalog path used to run inline. The diff against
+     * courseIdsWithAnyEdition() (the pure-LD set) stays in the policy layer.
+     *
+     * @return list<int>
+     */
+    public function findOnlineFormatCourseIds(int $limit = 200): array
+    {
+        $ids = get_posts([
+            'post_type'      => 'sfwd-courses',
+            'posts_per_page' => max(1, $limit),
+            'post_status'    => 'publish',
+            'fields'         => 'ids',
+            'tax_query'      => [
+                [
+                    'taxonomy' => 'stride_format',
+                    'field'    => 'slug',
+                    'terms'    => ['online', 'e-learning', 'webinar'],
+                ],
+            ],
+        ]);
+
+        return array_map('intval', $ids);
+    }
+
+    /**
      * Build the shared WHERE clause + bound params for the edition typeahead
      * picker (AdminAPIController::getEditionOptions). Centralises the picker's
      * SQL predicate in the repo (its sanctioned home) instead of the
