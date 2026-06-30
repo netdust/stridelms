@@ -3,7 +3,9 @@
  * Dashboard Tab: Meldingen (Notifications)
  *
  * Displays user notifications derived from audit log events.
- * Grouped by "Vandaag" / "Eerder" with mark-all-read capability.
+ * Grouped by "Vandaag" / "Eerder". Opening this tab is itself the
+ * "I've seen these" signal: items render in their current read/unread
+ * state this load, then all are marked read so the badge clears next load.
  *
  * @param array $args {
  *     @type WP_User $user Current user object
@@ -18,10 +20,10 @@ defined('ABSPATH') || exit;
 $user    = $args['user'] ?? wp_get_current_user();
 $user_id = $user->ID;
 
-// Get notifications
+// Get notifications (snapshot their read/unread state BEFORE auto-marking,
+// so this render still shows what was new on arrival).
 $notificationService = ntdst_get(\Stride\Modules\Notification\NotificationService::class);
 $notifications       = $notificationService->getNotifications($user_id);
-$unreadCount         = $notificationService->getUnreadCount($user_id);
 
 // Group by today / earlier
 $today  = wp_date('Y-m-d');
@@ -32,21 +34,15 @@ foreach ($notifications as $n) {
     $key  = ($date === $today) ? 'today' : 'earlier';
     $groups[$key][] = $n;
 }
+
+// Viewing the tab marks everything read — clears the sidebar badge on the
+// next page load. Done after the snapshot above, so the current render keeps
+// its unread accents.
+$notificationService->markAllRead($user_id);
 ?>
 
 <div class="space-y-6">
     <?php if (!empty($notifications)) : ?>
-
-        <!-- Mark-all-read action (page title is rendered by page-mijn-account.php) -->
-        <?php if ($unreadCount > 0) : ?>
-            <div class="flex justify-end">
-                <button type="button"
-                        class="text-[13px] font-bold text-primary hover:text-primary-hover transition-colors"
-                        onclick="(async () => { await ntdstAPI.call('stride_mark_notifications_read'); window.location.reload(); })()">
-                    <?php esc_html_e('Alles als gelezen markeren', 'stridence'); ?>
-                </button>
-            </div>
-        <?php endif; ?>
 
         <!-- Vandaag -->
         <?php if (!empty($groups['today'])) : ?>
