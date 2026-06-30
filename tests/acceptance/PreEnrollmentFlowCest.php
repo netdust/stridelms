@@ -96,6 +96,16 @@ class PreEnrollmentFlowCest
 
         $I->fillField('#' . $kind . '_name', $name);
         $I->fillField('#' . $kind . '_email', $email);
+        // The waitlist form (unlike the short interest form) carries the offer
+        // essentials — company / vat_number / invoice_email are required both
+        // client- and server-side (it can convert to a paid enrollment). Fill
+        // them, or the submit is blocked by validation and the success text
+        // never appears.
+        if ($kind === 'waitlist') {
+            $I->fillField('#waitlist_company', 'CI Test BV');
+            $I->fillField('#waitlist_vat_number', 'BE0123456789');
+            $I->fillField('#waitlist_invoice_email', $email);
+        }
         // Submit via JS rather than a coordinate click: the long waitlist form's
         // full-width submit button sits at the bottom where a fixed bottom-right
         // toast (z-50) overlaps its right edge, so a WebDriver click is
