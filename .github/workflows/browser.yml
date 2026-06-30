@@ -28,7 +28,12 @@ jobs:
       # throwaway DB; declared here for parity even though the harness specs
       # below inject their own markup and do not touch registrations.
       STRIDE_TEST_DB_DISPOSABLE: '1'
-      PLAYWRIGHT_BASE_URL: 'http://127.0.0.1:8080'
+      # MUST match WP_HOME's host (localhost, not 127.0.0.1): the theme emits
+      # asset URLs from WP_HOME, and the dashboard bundle is a `type="module"`
+      # script — modules are CORS-checked, so a 127.0.0.1 page origin loading a
+      # localhost-hosted module is a cross-origin block (net::ERR_FAILED →
+      # window.Alpine never defined). Same host on both sides = same origin.
+      PLAYWRIGHT_BASE_URL: 'http://localhost:8080'
 
     services:
       database:
