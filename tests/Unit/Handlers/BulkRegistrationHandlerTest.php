@@ -739,6 +739,119 @@ class BulkRegistrationHandlerTest extends TestCase
         $this->assertSame(1, $this->actionFireCount('stride/registration/bulk_completed'));
     }
 
+    // =========================================================================
+    // Task 4b — anon promote: capability deny + per-row isolation + mixed batch
+    //   (M-CAP-GATE / A2, M-PER-ROW / M10). The handler is surface-agnostic: it
+    //   simply calls promoteFromWaitlist per row. The accountless-vs-accounted
+    //   distinction (and the "only the accountless one creates a user" assertion)
+    //   lives INSIDE the domain method and is integration-tested in Task 3 — a unit
+    //   test with a mocked EnrollmentService cannot observe user creation.
+    // =========================================================================
+
+    /**
+     * (a) M-CAP-GATE / A2: a stride_view-only actor is denied 403 BEFORE any row
+     * runs — promoteFromWaitlist is NEVER reached on the mock. denyIfNotManager()
+     * short-circuits ahead of runBulk, so no account-creation/grant/mail primitive
+     * is exposed to a non-manager.
+     */
+    public function test_bulk_promote_waitlist_denies_view_only_actor_before_any_row(): void
+    {
+        global $current_user_caps;
+        $current_user_caps = ['stride_manage' => false]; // view-only
+
+        // The domain method must never be invoked when the actor is denied.
+        $enrollment = $this->createMock(EnrollmentService::class);
+        $enrollment->expects($this->never())->method('promoteFromWaitlist');
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        // The repo must never be touched either — denial precedes the loop.
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->expects($this->never())->method('find');
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $result = $this->handler->handleBulkPromoteWaitlist([], ['ids' => [301, 302]]);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('forbidden', $result->get_error_code());
+        $this->assertSame(403, $result->get_error_data()['status'] ?? null);
+    }
+
+    /**
+     * (b) M-PER-ROW / M10: a batch where the malformed-email row comes FIRST,
+     * followed by valid rows. The domain method returns WP_Error('lead_no_email')
+     * for the first id and true for the rest. The malformed id lands in failed[]
+     * with the distinct lead_no_email code, BOTH trailing valid rows still land in
+     * succeeded[], summary is {ok:2, error:1}. Ordering the failure first is
+     * deliberate: it proves the WP_Error does NOT abort the batch (a break-on-error
+     * runner would drop the trailing valid rows — this assertion bites that).
+     */
+    public function test_bulk_promote_waitlist_per_row_malformed_lead_isolated_from_valid(): void
+    {
+        $rows = [
+            312 => (object) ['id' => 312, 'status' => 'waitlist', 'edition_id' => 10],
+            313 => (object) ['id' => 313, 'status' => 'waitlist', 'edition_id' => 10],
+            314 => (object) ['id' => 314, 'status' => 'waitlist', 'edition_id' => 10],
+        ];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturnCallback(fn(int $id) => $rows[$id] ?? null);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $enrollment = $this->createMock(EnrollmentService::class);
+        $enrollment->method('promoteFromWaitlist')->willReturnCallback(
+            fn(int $id) => $id === 312
+                ? new \WP_Error('lead_no_email', 'De wachtlijst-aanmelding heeft geen geldig e-mailadres.')
+                : true,
+        );
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        // Malformed row FIRST — a batch-aborting runner would drop 313 + 314.
+        $report = $this->handler->handleBulkPromoteWaitlist([], ['ids' => [312, 313, 314]]);
+
+        $this->assertSame(3, $report['total']);
+        $this->assertCount(2, $report['succeeded'], 'the trailing valid rows still promoted');
+        $this->assertSame([313, 314], array_column($report['succeeded'], 'id'));
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame(312, $report['failed'][0]['id']);
+        $this->assertSame('lead_no_email', $report['failed'][0]['code']);
+        $this->assertSame(['ok' => 2, 'error' => 1], $report['summary']);
+    }
+
+    /**
+     * (c) Mixed accountless + already-accounted waitlist rows: the handler is
+     * surface-agnostic — it calls promoteFromWaitlist per id and reports both ok
+     * when the domain method returns true for both. BOTH land in succeeded[].
+     *
+     * NOTE: the "only the accountless one creates a WP user" assertion lives in
+     * Task 3 integration (PromoteFromWaitlistTest), NOT here — a mocked
+     * EnrollmentService cannot observe user creation through promoteFromWaitlist.
+     * This unit test only proves the handler passes BOTH ids through and reports
+     * both succeeded.
+     */
+    public function test_bulk_promote_waitlist_passes_accountless_and_accounted_rows_through(): void
+    {
+        // 320 = accountless anon lead (user_id 0); 321 = already has an account.
+        $rows = [
+            320 => (object) ['id' => 320, 'status' => 'waitlist', 'edition_id' => 10, 'user_id' => 0],
+            321 => (object) ['id' => 321, 'status' => 'waitlist', 'edition_id' => 10, 'user_id' => 42],
+        ];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturnCallback(fn(int $id) => $rows[$id] ?? null);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $enrollment = $this->createMock(EnrollmentService::class);
+        // Domain method resolves the account-or-not internally; both promote ok.
+        $enrollment->expects($this->exactly(2))->method('promoteFromWaitlist')->willReturn(true);
+        ntdst_set(EnrollmentService::class, $enrollment);
+
+        $report = $this->handler->handleBulkPromoteWaitlist([], ['ids' => [320, 321]]);
+
+        $this->assertSame(2, $report['total']);
+        $this->assertCount(2, $report['succeeded']);
+        $this->assertCount(0, $report['failed']);
+        $this->assertSame([320, 321], array_column($report['succeeded'], 'id'));
+        $this->assertSame(['ok' => 2, 'error' => 0], $report['summary']);
+    }
+
     private function resetActionCalls(): void
     {
         global $_test_action_calls;
