@@ -51,14 +51,11 @@ $lessons = $is_online
 // so it gets neither the sidebar nor the lesson list.
 $show_online_sidebar = $is_online && !$has_active_edition;
 
+// The sidebar only renders for pure-LD courses (no edition), so it needs no
+// edition-derived args — enrollment + price come straight from LearnDash.
 $online_sidebar_args = [
-    'course_id'              => $course_id,
-    'lessons'                => $lessons,
-    'enrollment_url'         => '',
-    'user_enrolled'          => false,
-    'edition_price'          => null,
-    'primary_edition_id'     => 0,
-    'primary_edition_status' => null,
+    'course_id' => $course_id,
+    'lessons'   => $lessons,
 ];
 
 $breadcrumbs = [
@@ -95,17 +92,20 @@ get_header();
 
     <div class="container py-8 lg:py-12">
         <?php if ($show_online_sidebar) : ?>
-            <!-- Online course: two-column with CTA sidebar (self-enroll for
-                 pure-LD, primary-edition CTA when an active edition exists) -->
+            <!-- Pure-LD online course (no active edition): two-column with the
+                 self-enroll CTA sidebar. (Online courses WITH editions take the
+                 edition-overview branch below — no sidebar.) -->
             <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
                 <div class="lg:col-span-2 space-y-12">
                     <?php
+                // No editions list here: $show_online_sidebar implies
+                // !$has_active_edition, so there are none to show.
                 stridence_template_part('templates/course/content', null, [
                     'course_id'     => $course_id,
                     'is_online'     => true,
                     'editions'      => $editions,
                     'lessons'       => $lessons,
-                    'show_editions' => $has_active_edition,
+                    'show_editions' => false,
                 ]);
             ?>
                 </div>

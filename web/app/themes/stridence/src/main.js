@@ -106,7 +106,11 @@ function createDetailTabs(sections) {
   });
 }
 
-Alpine.data('courseDetailTabs', createDetailTabs(['overzicht', 'programma', 'sprekers', 'praktisch']));
+// 'edities' is present only on the edition-overview variant of the course page;
+// init() observes a section only when it exists, so listing it here is a no-op
+// on pages without an #edities section and gives the Edities tab scroll-spy on
+// the overview page.
+Alpine.data('courseDetailTabs', createDetailTabs(['overzicht', 'edities', 'programma', 'sprekers', 'praktisch']));
 Alpine.data('editionDetailTabs', createDetailTabs(['omschrijving', 'programma', 'praktisch', 'lesgever']));
 Alpine.data('trajectoryDetailTabs', createDetailTabs(['overzicht', 'cursussen', 'praktisch', 'faq']));
 
