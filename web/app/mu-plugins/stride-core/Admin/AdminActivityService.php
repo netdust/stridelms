@@ -71,7 +71,7 @@ final class AdminActivityService
 
         $auditTable = AuditTable::getTableName();
         $entries = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$auditTable} ORDER BY created_at DESC LIMIT %d",
+            "SELECT * FROM {$auditTable} ORDER BY created_at DESC, id DESC LIMIT %d",
             $limit,
         ));
 
@@ -207,7 +207,7 @@ final class AdminActivityService
 
         // phpcs:ignore WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $entries = $wpdb->get_results($wpdb->prepare(
-            "SELECT * FROM {$table} WHERE action IN ({$placeholders}) ORDER BY created_at DESC LIMIT 10",
+            "SELECT * FROM {$table} WHERE action IN ({$placeholders}) ORDER BY created_at DESC, id DESC LIMIT 10",
             ...$actions,
         ));
 
