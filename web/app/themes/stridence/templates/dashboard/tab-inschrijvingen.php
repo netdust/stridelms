@@ -226,7 +226,7 @@ $cancelled_editions = $data['cancelled_editions'];
                 <div class="flex flex-col gap-[14px]">
                     <?php foreach ($completed_items as $reg) :
                         $args = stridence_build_course_card_args_from_enrollment($reg, completed: true);
-                        get_template_part('templates/components/course-card', null, $args);
+                        stridence_template_part('partials/card-course-expandable', null, $args);
                     endforeach; ?>
                 </div>
             </div>

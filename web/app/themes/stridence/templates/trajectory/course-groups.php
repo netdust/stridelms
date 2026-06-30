@@ -39,7 +39,7 @@ $electiveGroups  = $args['elective_groups'] ?? [];
                 $course,
                 ['label' => __('Verplicht', 'stridence'), 'tone' => 'primary'],
             );
-            get_template_part('templates/components/course-card', null, $args);
+            stridence_template_part('partials/card-course-expandable', null, $args);
         endforeach; ?>
     </div>
 </div>
@@ -72,7 +72,7 @@ $electiveGroups  = $args['elective_groups'] ?? [];
                     $course,
                     ['label' => __('Keuzevak', 'stridence'), 'tone' => 'accent'],
                 );
-                get_template_part('templates/components/course-card', null, $args);
+                stridence_template_part('partials/card-course-expandable', null, $args);
             endforeach; ?>
         </div>
     </div>

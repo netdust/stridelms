@@ -267,16 +267,19 @@ stride/
 │   │           ├── theme-config.php     # Frontend services config
 │   │           ├── services/
 │   │           │   └── frontend/
-│   │           │       └── shortcodes/  # InterestShortcodes, IntakeShortcodes, EvaluationShortcodes
-│   │           ├── helpers/             # icons.php, formatting.php, templates.php
+│   │           │       ├── CatalogEndpoint.php   # ntdst api_data filter (public catalog)
+│   │           │       ├── shortcodes/  # Enrollment, Interest, Waitlist
+│   │           │       └── hooks/       # Navigation, LearnDash, Browser, Asset hooks
+│   │           ├── helpers/             # icons.php, formatting.php, templates.php, catalog.php, trajectory-card.php
+│   │           ├── partials/            # Shared view fragments (cards, badges, states, progress-bar)
+│   │           ├── enrollment/          # Router-rendered enrollment-form page wrapper
+│   │           ├── forms/               # Router-rendered completion page wrapper
 │   │           ├── templates/           # View templates
-│   │           │   ├── dashboard/
-│   │           │   ├── course/
-│   │           │   ├── enrollment/
-│   │           │   ├── invoice/
-│   │           │   ├── emails/
-│   │           │   └── pdf/
-│   │           └── src/css/             # Tailwind source + tokens.css
+│   │           │   ├── dashboard/       # Dashboard tabs + dashboard/partials/
+│   │           │   ├── course/          # Single-course page partials
+│   │           │   ├── trajectory/      # Trajectory dashboard + tabs
+│   │           │   └── forms/           # Form bodies (enrollment steps, completion tasks)
+│   │           └── src/                 # Tailwind source (css/) + JS factories (js/)
 │   └── wp/                              # WordPress core (Bedrock)
 ├── config/                              # Bedrock config
 ├── vendor/                              # Composer dependencies

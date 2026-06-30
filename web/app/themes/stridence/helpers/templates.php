@@ -88,12 +88,12 @@ function stridence_render_error_state(string $icon, string $title, string $messa
  * Build course-card partial args from a UserDashboardService enrollment array.
  *
  * Maps the dashboard service's enrollment shape (edition or online) into the
- * normalised contract consumed by templates/components/course-card.php.
+ * normalised contract consumed by partials/card-course-expandable.php.
  *
  * @param array $enrollment One element of $data['active_editions'], $data['active_online'],
  *                          or $data['completed_items'] from UserDashboardService::getEnrollmentData().
  * @param bool  $completed  When true: clears primary_cta, sets status_pill to 'Voltooid'.
- * @return array            See course-card.php docblock for the full contract.
+ * @return array            See card-course-expandable.php docblock for the full contract.
  */
 function stridence_build_course_card_args_from_enrollment(array $enrollment, bool $completed = false): array
 {
@@ -275,7 +275,7 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
  *
  * @param \WP_Post $course      Course post (sfwd-courses)
  * @param array    $statusPill  ['label' => string, 'tone' => 'primary'|'accent']
- * @return array                See course-card.php docblock for the full contract.
+ * @return array                See card-course-expandable.php docblock for the full contract.
  */
 function stridence_build_course_card_args_from_trajectory_course(\WP_Post $course, array $statusPill): array
 {
