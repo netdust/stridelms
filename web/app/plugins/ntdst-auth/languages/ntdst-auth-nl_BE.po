@@ -44,6 +44,9 @@ msgstr "Registreren"
 msgid "Already have an account?"
 msgstr "Heb je al een account?"
 
+msgid "Don't have an account?"
+msgstr "Nog geen account?"
+
 msgid "Back to Login"
 msgstr "Terug naar aanmelden"
 

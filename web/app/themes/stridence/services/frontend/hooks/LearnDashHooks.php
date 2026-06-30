@@ -76,16 +76,61 @@ final class LearnDashHooks
             return $header_element;
         }
 
-        $course_url   = get_permalink($course_id);
-        $course_title = get_the_title($course_id);
+        // When this lesson is being consumed through an edition's online
+        // session the user is enrolled in, return to the edition rather than
+        // the bare course — the lesson is "part of" that edition. Falls back
+        // to the course for pure e-learning / non-enrolled learners.
+        [$back_url, $back_title] = $this->resolveBackTarget($course_id, $user_id);
 
         return sprintf(
             '<a href="%s" class="ld-brand-back-link" title="%s">%s<span class="ld-brand-back-text">%s</span></a>',
-            esc_url($course_url),
-            esc_attr(sprintf(__('Terug naar %s', 'stridence'), $course_title)),
+            esc_url($back_url),
+            esc_attr(sprintf(__('Terug naar %s', 'stridence'), $back_title)),
             stridence_icon('chevron-left', 'ld-brand-back-icon'),
             esc_html__('Terug', 'stridence'),
         );
+    }
+
+    /**
+     * Resolve the "back" target for the current lesson: the enrolled edition
+     * the lesson is consumed through, else the course.
+     *
+     * @return array{0: string, 1: string} [url, title]
+     */
+    private function resolveBackTarget(int $course_id, int $user_id): array
+    {
+        $edition_id = $this->enrolledEditionForCurrentLesson($user_id);
+
+        if ($edition_id) {
+            return [get_permalink($edition_id), get_the_title($edition_id)];
+        }
+
+        return [get_permalink($course_id), get_the_title($course_id)];
+    }
+
+    /**
+     * The enrolled edition the CURRENT (global) lesson is reached through, or
+     * 0 when none. Guards every dependency so a non-lesson context, missing
+     * service, or logged-out user resolves to 0 (course fallback).
+     */
+    private function enrolledEditionForCurrentLesson(int $user_id): int
+    {
+        if ($user_id <= 0) {
+            return 0;
+        }
+
+        $lesson = get_post();
+        if (!$lesson || !in_array($lesson->post_type, ['sfwd-lessons', 'sfwd-topic'], true)) {
+            return 0;
+        }
+
+        if (!function_exists('ntdst_get')
+            || !class_exists(\Stride\Modules\User\UserDashboardService::class)) {
+            return 0;
+        }
+
+        return (int) ntdst_get(\Stride\Modules\User\UserDashboardService::class)
+            ->findEnrolledEditionForLesson($user_id, (int) $lesson->ID);
     }
 
     public function focusHeaderUserMenu(array $menu_items, int $course_id, int $user_id): array

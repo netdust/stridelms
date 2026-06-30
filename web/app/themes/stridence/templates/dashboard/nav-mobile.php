@@ -43,11 +43,18 @@ $chip_inactive = $chip_base . ' bg-surface-alt text-text-muted';
 <nav class="lg:hidden sticky top-0 z-20 bg-surface-card border-b border-border-soft"
      aria-label="<?php esc_attr_e('Dashboard navigatie', 'stridence'); ?>">
 
-    <!-- Row 1: wordmark + profile avatar -->
-    <div class="flex items-center justify-between px-5 py-3">
-        <span class="text-base font-extrabold tracking-tight text-text"><?php echo esc_html(get_bloginfo('name')); ?><span class="text-primary">.</span></span>
+    <!-- Row 1: back link + wordmark (links home) + profile avatar -->
+    <div class="flex items-center justify-between gap-3 px-5 py-3">
+        <a href="<?php echo esc_url(wp_get_referer() ?: home_url('/')); ?>"
+           onclick="if (document.referrer && document.referrer !== location.href) { history.back(); return false; }"
+           class="inline-flex items-center gap-1 text-[13px] font-semibold text-text-muted hover:text-text shrink-0"
+           aria-label="<?php esc_attr_e('Terug', 'stridence'); ?>">
+            <?php echo stridence_icon('arrow-left', 'w-4 h-4'); ?>
+            <?php esc_html_e('Terug', 'stridence'); ?>
+        </a>
+        <a href="<?php echo esc_url(home_url('/')); ?>" class="text-base font-extrabold tracking-tight text-text whitespace-nowrap"><?php echo esc_html(get_bloginfo('name')); ?><span class="text-primary">.</span></a>
         <a href="<?php echo esc_url(add_query_arg('tab', 'profiel', $base_url)); ?>"
-           class="w-8 h-8 rounded-full bg-accent-subtle text-accent-hover text-[12px] font-bold grid place-items-center"
+           class="w-8 h-8 rounded-full bg-accent-subtle text-accent-hover text-[12px] font-bold grid place-items-center shrink-0"
            aria-label="<?php esc_attr_e('Profiel', 'stridence'); ?>"
            <?php echo $current_tab === 'profiel' ? 'aria-current="page"' : ''; ?>><?php echo esc_html($initials); ?></a>
     </div>

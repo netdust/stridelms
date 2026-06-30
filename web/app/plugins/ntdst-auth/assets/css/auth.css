@@ -2,65 +2,128 @@
  * NTDST Auth - Styles
  *
  * Extends UIkit for authentication pages.
+ * Brand-aligned to the host theme (Stride): deep-teal primary,
+ * cool "IJs" surfaces, Newsreader serif for the title. Tokens mirror
+ * themes/stridence/src/css/tokens.css — keep in sync if the brand shifts.
  */
 
+:root {
+    --auth-primary: #0E6E6B;        /* deep teal */
+    --auth-primary-hover: #0A5E5B;
+    --auth-primary-dark: #094F4D;
+    --auth-surface: #F9FAFC;        /* page */
+    --auth-surface-alt: #EEF1F5;
+    --auth-card: #FFFFFF;
+    --auth-border: #D2D6DD;
+    --auth-border-soft: #E3E6EB;
+    --auth-text: #292C31;
+    --auth-text-muted: #585C63;
+    --auth-radius: 10px;
+    --auth-radius-card: 16px;
+}
+
 .ntdst-auth-page {
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    /* Calm cool surface with a faint teal wash, not the generic purple gradient. */
+    background:
+        radial-gradient(120% 90% at 50% -10%, rgba(14, 110, 107, 0.06) 0%, rgba(14, 110, 107, 0) 60%),
+        var(--auth-surface);
     min-height: 100vh;
+    color: var(--auth-text);
 }
 
 .ntdst-auth-page .uk-card {
-    box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+    border-radius: var(--auth-radius-card);
+    border: 1px solid var(--auth-border-soft);
+    box-shadow: 0 12px 32px rgba(41, 44, 49, 0.08);
+    background: var(--auth-card);
+    padding: 2.25rem;
 }
 
 .ntdst-auth-page .uk-card-title {
-    font-weight: 600;
-    color: #333;
+    font-family: "Newsreader", Georgia, "Times New Roman", serif;
+    font-weight: 500;
+    font-size: 1.75rem;
+    line-height: 1.15;
+    color: var(--auth-text);
+    letter-spacing: -0.01em;
 }
 
 .ntdst-auth-page .uk-form-label {
     font-weight: 500;
-    color: #666;
-    margin-bottom: 5px;
+    color: var(--auth-text-muted);
+    margin-bottom: 6px;
     display: block;
 }
 
 .ntdst-auth-page .uk-input,
 .ntdst-auth-page .uk-select {
-    border-radius: 4px;
-    border: 1px solid #e5e5e5;
+    border-radius: 8px;
+    border: 1px solid var(--auth-border);
+    background: var(--auth-card);
+    color: var(--auth-text);
+    height: 44px;
     transition: border-color 0.2s, box-shadow 0.2s;
 }
 
 .ntdst-auth-page .uk-input:focus,
 .ntdst-auth-page .uk-select:focus {
-    border-color: #1e87f0;
-    box-shadow: 0 0 0 3px rgba(30, 135, 240, 0.1);
+    border-color: var(--auth-primary);
+    box-shadow: 0 0 0 3px rgba(14, 110, 107, 0.12);
+    outline: none;
 }
 
 .ntdst-auth-page .uk-button-primary {
-    border-radius: 4px;
-    font-weight: 600;
+    background: var(--auth-primary);
+    color: #fff;
+    border-radius: var(--auth-radius);
+    font-weight: 700;
     text-transform: none;
     padding: 0 30px;
-    height: 44px;
+    height: 46px;
+    transition: background-color 0.15s;
+}
+
+.ntdst-auth-page .uk-button-primary:hover,
+.ntdst-auth-page .uk-button-primary:focus {
+    background: var(--auth-primary-hover);
+    color: #fff;
+}
+
+.ntdst-auth-page .uk-button-primary:active {
+    background: var(--auth-primary-dark);
+}
+
+.ntdst-auth-page a {
+    color: var(--auth-primary);
+}
+
+.ntdst-auth-page a:hover {
+    color: var(--auth-primary-hover);
 }
 
 .ntdst-auth-page .uk-alert {
-    border-radius: 4px;
+    border-radius: 8px;
     padding: 15px 20px;
 }
 
 .ntdst-auth-page .uk-checkbox {
     margin-right: 8px;
+    border-radius: 4px;
+}
+
+.ntdst-auth-page .uk-checkbox:checked,
+.ntdst-auth-page .uk-checkbox:indeterminate {
+    background-color: var(--auth-primary);
+    border-color: var(--auth-primary);
 }
 
 .ntdst-auth-page .uk-link-muted {
+    color: var(--auth-text-muted);
     transition: color 0.2s;
 }
 
 .ntdst-auth-page .uk-link-muted:hover {
-    color: #1e87f0;
+    color: var(--auth-primary);
 }
 
 /* Loading state */
