@@ -887,4 +887,72 @@ class EditionService extends AbstractService implements EditionQueryInterface
         // repository's per-request cache so stale rows can't be served.
         ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class)->clearCache();
     }
+
+    /**
+     * Header-meta aggregation for a course page: the next upcoming edition date,
+     * how many editions are upcoming, and the price range across those upcoming
+     * editions. Extracted from templates/course/header.php so the template stays
+     * pure presentation (Cluster 3 / B5).
+     *
+     * "Upcoming" = a published edition of this course whose start_date is today
+     * or later. The date boundary uses wp_date('Y-m-d') (the Belgian site tz),
+     * which is the correct calendar boundary for this audience.
+     *
+     * Optional-price semantics (INTENTIONAL flow, not error-swallowing): price is
+     * decorative in the header, so a getPrice() failure on a single edition must
+     * not blank the whole line — that edition is simply excluded from the range
+     * (per-edition try/catch) and the rest still aggregate. A 0/absent price is
+     * likewise excluded from min/max via the `> 0` guard.
+     *
+     * @return array{
+     *     next_edition_date: ?string,
+     *     upcoming_count: int,
+     *     price_min_cents: ?int,
+     *     price_max_cents: ?int,
+     * }
+     */
+    public function getCourseHeaderSummary(int $courseId): array
+    {
+        $nextEditionDate = null;
+        $upcomingCount   = 0;
+        $priceMinCents   = null;
+        $priceMaxCents   = null;
+
+        $today = wp_date('Y-m-d');
+
+        foreach ($this->repository->findByCourse($courseId) as $row) {
+            $eid = (int) ($row['id'] ?? $row['ID'] ?? 0);
+            if (!$eid) {
+                continue;
+            }
+
+            $start = (string) $this->repository->getField($eid, 'start_date', '');
+            if ($start === '' || $start < $today) {
+                continue;
+            }
+
+            $upcomingCount++;
+            if ($nextEditionDate === null || $start < $nextEditionDate) {
+                $nextEditionDate = $start;
+            }
+
+            try {
+                $cents = $this->getPrice($eid)->inCents();
+                if ($cents > 0) {
+                    $priceMinCents = $priceMinCents === null ? $cents : min($priceMinCents, $cents);
+                    $priceMaxCents = $priceMaxCents === null ? $cents : max($priceMaxCents, $cents);
+                }
+            } catch (\Throwable $e) {
+                // Intentional: price is optional decoration in the header. A
+                // failed lookup drops THIS edition from the range, never the line.
+            }
+        }
+
+        return [
+            'next_edition_date' => $nextEditionDate,
+            'upcoming_count'    => $upcomingCount,
+            'price_min_cents'   => $priceMinCents,
+            'price_max_cents'   => $priceMaxCents,
+        ];
+    }
 }

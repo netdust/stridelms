@@ -14,7 +14,6 @@ defined('ABSPATH') || exit;
 
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionService;
-use Stride\Modules\Edition\EditionRepository;
 
 $course_id   = $args['course_id'] ?? get_the_ID();
 $breadcrumbs = $args['breadcrumbs'] ?? [];
@@ -33,44 +32,21 @@ if ($is_online) {
     $module_count   = count(LearnDashHelper::getLessons($course_id));
 }
 
-// For in-person courses, compute a header meta line: next upcoming edition date,
-// upcoming count, price range. This matches the visual weight of the edition page's
-// meta line (date / venue / price) but with course-level info.
+// For in-person courses, the header shows a course-level meta line: next upcoming
+// edition date, upcoming count, price range. The aggregation policy (optional-price
+// semantics, the "upcoming" date boundary) lives in EditionService::getCourseHeaderSummary
+// (Cluster 3 / B5) — the template only renders the returned struct.
 $next_edition_date = null;
 $upcoming_count    = 0;
 $price_min_cents   = null;
 $price_max_cents   = null;
 
 if (!$is_online && !empty($editions)) {
-    $editionService = ntdst_get(EditionService::class);
-    $editionRepo    = ntdst_get(EditionRepository::class);
-    $today_ts       = strtotime(date('Y-m-d'));
-
-    foreach ($editions as $edition) {
-        $eid = (int) ($edition['id'] ?? $edition['ID'] ?? 0);
-        if (!$eid) {
-            continue;
-        }
-        $start = (string) $editionRepo->getField($eid, 'start_date', '');
-        $start_ts = $start ? strtotime($start) : 0;
-        if (!$start_ts || $start_ts < $today_ts) {
-            continue;
-        }
-        $upcoming_count++;
-        if ($next_edition_date === null || $start_ts < strtotime($next_edition_date)) {
-            $next_edition_date = $start;
-        }
-        try {
-            $price = $editionService->getPrice($eid);
-            $cents = $price ? $price->inCents() : 0;
-            if ($cents > 0) {
-                $price_min_cents = $price_min_cents === null ? $cents : min($price_min_cents, $cents);
-                $price_max_cents = $price_max_cents === null ? $cents : max($price_max_cents, $cents);
-            }
-        } catch (\Throwable $e) {
-            // Ignore — price is optional in header
-        }
-    }
+    $summary           = ntdst_get(EditionService::class)->getCourseHeaderSummary((int) $course_id);
+    $next_edition_date = $summary['next_edition_date'];
+    $upcoming_count    = $summary['upcoming_count'];
+    $price_min_cents   = $summary['price_min_cents'];
+    $price_max_cents   = $summary['price_max_cents'];
 }
 
 ?>
