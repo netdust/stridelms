@@ -52,7 +52,10 @@ final class EditionServiceCourseHeaderSummaryTest extends IntegrationTestCase
             '_ntdst_end_date'   => $start,
         ];
         if ($nonMemberPrice !== null) {
-            $meta['_ntdst_price_non_member'] = $nonMemberPrice;
+            // $nonMemberPrice is expressed in EUROS for readability at the call
+            // sites; the stored field is canonical CENTS (EditionService::getPrice
+            // reads _ntdst_price_non_member as cents). Convert here.
+            $meta['_ntdst_price_non_member'] = (int) round($nonMemberPrice * 100);
         }
 
         return $this->createTestEdition(['meta' => $meta]);

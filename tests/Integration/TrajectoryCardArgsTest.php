@@ -66,7 +66,9 @@ final class TrajectoryCardArgsTest extends IntegrationTestCase
         $this->assertSame('open', $args['status']);
         $this->assertSame(4, $args['course_count'], 'all four courses count');
         $this->assertSame(1, $args['elective_count'], 'one elective group');
-        $this->assertSame(450.0, $args['price']);
+        // Price is canonical CENTS as an int — trajectory-card.php casts to int,
+        // matching the editions convention; the fixture stores _ntdst_price=450.
+        $this->assertSame(450, $args['price']);
         $this->assertSame('2026-09-01', $args['deadline']);
         $this->assertNull($args['progress'] ?? null, 'no progress arg on the catalog path');
     }
