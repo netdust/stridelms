@@ -242,6 +242,32 @@ grep -rnE '0\.21|1\.21|21[[:space:]]*/[[:space:]]*100' --include="*.php" web/app
 
 ---
 
+## INV-9 — Anonymous-lead → real-account resolution is decided once, in `resolveLeadAccount()`
+
+**Convergence point:** `Modules/Enrollment/EnrollmentService::resolveLeadAccount(string $email, string $name): array{user_id:int, was_existing:bool}|WP_Error`. This is the single place a pre-account registration becomes a real WordPress account.
+
+**The rule.** Any path that turns an anonymous pre-account registration — `user_id` NULL/0, captured by the public interest/waitlist forms — into a real account does so through this method: `sanitize_email` → `is_email` validate (else `WP_Error('lead_no_email')`) → `get_user_by('email')` find-or-create. **No credentials are ever sent to a found existing account** (the existing-user branch returns before any `wp_new_user_notification`); only a genuinely new account may be mailed a welcome/login link, and that send is gated downstream on `was_existing===false`.
+
+**Meta-on-create reuses the existing convergence, and is NEVER written to a found existing account.** On `was_existing===false`, the captured personal/billing fields are mapped onto the new user via `EnrollmentService::updateUserProfile()` / `getUserMetaMapping()` — never a hand-rolled second mapping. On `was_existing===true` the promote path writes NOTHING to that account (not name, not roles, not `billing_*`/personal usermeta); the lead's captured values stay per-registration in `enrollment_data`. **This mirrors the enroll path's `$isExistingColleague` no-overwrite guard (`EnrollmentService.php:973–980`) — the two paths MUST NOT diverge on this rule** (writing a stranger's billing meta onto a real account is an invoice-integrity vector).
+
+**Sibling that must not drift:** the pre-existing `upgradeFromInterest()` self-enroll path. It also resolves an anonymous interest row to an account; when its resolution shape changes, `resolveLeadAccount()` must be reconciled against it (and vice versa) so the two anonymous-lead → account paths stay one decision.
+
+**Known bypass (tracked debt, user-confirmed deferred):** `resolveParticipant()` (colleague-enroll) still does inline find-or-create and calls `wp_new_user_notification($id, null, 'both')` for **every** resolved user including a pre-existing one — the collision-unsafe *mail* pattern that INV-9 exists to prevent spreading. `resolveLeadAccount()` was deliberately created as the *safe* sibling rather than reusing `resolveParticipant()`; the latter's mail unsafety is NOT fixed here (deferred). Its sibling no-overwrite guard for *meta* already exists at `:973–980`.
+
+**Audit move:**
+```bash
+# Every account-creation / credential-mail site. Each hit must be inside
+# resolveLeadAccount() (the safe convergence point) or the tracked
+# resolveParticipant() bypass. PartnerAPIController.php:644 is a pre-existing
+# separate-surface creation site, tracked as post-launch debt. A NEW third
+# site (anywhere else) is a finding — route it through resolveLeadAccount().
+grep -rn "wp_create_user\|wp_new_user_notification" --include="*.php" web/app/mu-plugins/stride-core
+# New-account meta must go through the mapping convergence, not ad-hoc keys:
+grep -rn "update_user_meta\|wp_update_user" --include="*.php" web/app/mu-plugins/stride-core/Modules/Enrollment
+```
+
+---
+
 ## Quick reference — convergence points
 
 | # | Property | Convergence point | Bypass signal |
@@ -254,3 +280,4 @@ grep -rnE '0\.21|1\.21|21[[:space:]]*/[[:space:]]*100' --include="*.php" web/app
 | 6 | LearnDash boundary | `LMSAdapterInterface` (writes) / `LearnDashHelper` (reads) | `learndash_*`/`sfwd_*` outside the adapter+helper |
 | 7 | Status | `EditionService::getEffectiveStatus()` | raw stored-status read for a gate/display |
 | 8 | VAT/totals | `QuoteCalculator::TAX_RATE` + `deriveTotalsFromCents()` | hardcoded `0.21` / re-derived totals outside the helper |
+| 9 | Anon-lead → account | `EnrollmentService::resolveLeadAccount()` | `wp_create_user`/`wp_new_user_notification` outside it (or the tracked `resolveParticipant`/PartnerAPI bypass); credentials or `billing_*` meta written to a found existing account |
