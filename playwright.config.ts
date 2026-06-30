@@ -13,7 +13,7 @@ export default defineConfig({
   reporter: 'html',
 
   use: {
-    baseURL: 'https://stride.ddev.site',
+    baseURL: process.env.PLAYWRIGHT_BASE_URL ?? 'https://stride.ddev.site',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'on-first-retry',
