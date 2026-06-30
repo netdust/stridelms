@@ -115,15 +115,16 @@ get_header();
             <div class="max-w-3xl space-y-12">
                 <?php
                 stridence_template_part('templates/course/content', null, [
-                    'course_id'    => $course_id,
-                    'is_online'    => $is_online,
-                    'editions'     => $editions,
-                    'lessons'      => $lessons,
-                    // Online-with-editions is an edition overview: the lesson
-                    // list ("Inhoud van de opleiding") belongs to the enrolled
-                    // experience, not the public chooser. Klassikaal keeps its
-                    // existing behaviour.
-                    'show_lessons' => !($is_online && $has_active_edition),
+                    'course_id'           => $course_id,
+                    'is_online'           => $is_online,
+                    'editions'            => $editions,
+                    'lessons'             => $lessons,
+                    // A course that HAS active editions is an edition overview
+                    // (online OR klassikaal): show only the LD course intro
+                    // (Overzicht) + the editions list. Programma, Sprekers and
+                    // Praktische informatie are the edition-specific / enrolled
+                    // experience and live on the edition page, not here.
+                    'is_edition_overview' => $has_active_edition,
                 ]);
             ?>
 
