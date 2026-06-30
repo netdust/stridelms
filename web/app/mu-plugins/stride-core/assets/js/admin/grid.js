@@ -221,22 +221,8 @@
         // Validate the bulk catalog against the server transition map (drift warn).
         validateTransitionDrift((window.StrideConfig || {}).transitions);
 
-        // Cold-landing deep-link: ?queue= (from the Vandaag queue click) and a
-        // direct ?status= both pre-filter on first load. The shell's extended
-        // switchView wrote ?queue=; we read it here (plan §5 / shell contract).
-        const p = new URLSearchParams(window.location.search);
-        const q = p.get('queue');
-        if (q) {
-          const qp = queueToParams(q);
-          if (qp.status) {
-            this.queue = q;
-            this.filters.status = qp.status;
-          }
-        }
-        const directStatus = p.get('status');
-        if (!this.filters.status && directStatus && STATUS_META[directStatus]) {
-          this.filters.status = directStatus;
-        }
+        // Cold-landing deep-link: ?queue=/?status= pre-filter on first load.
+        this.applyQueueDeepLink();
 
         // I-1: load the grid the FIRST time inschrijvingen becomes active (lazy),
         // not on mount. Deep-links from Vandaag land with view already =
@@ -247,6 +233,43 @@
           this.loadEditionOptions();
           this.load(1);
         });
+
+        // The lazyLoad latch fires its callback ONCE. But a queue deep-link from
+        // Vandaag can arrive on EVERY re-activation of this surface (?queue=
+        // rewritten, view switched back to inschrijvingen). Re-read the deep-link
+        // and reload on each re-activation so the 2nd+ queue click actually
+        // filters — without re-running the one-shot loadEditionOptions().
+        window.addEventListener('ws-view-changed', (e) => {
+          if (!e || !e.detail || e.detail.view !== 'inschrijvingen') return;
+          if (this.applyQueueDeepLink()) {
+            this.load(1);
+          }
+        });
+      },
+
+      /* Read ?queue=/?status= and apply them to the active filter. Returns true
+         when the resulting queue/status actually CHANGED, so the caller knows
+         whether a reload is warranted (a repeat activation with no new deep-link
+         must not stomp the user's in-grid filtering). The shell's extended
+         switchView wrote ?queue= (plan §5 / shell contract). */
+      applyQueueDeepLink() {
+        const p = new URLSearchParams(window.location.search);
+        const q = p.get('queue');
+        if (q) {
+          const qp = queueToParams(q);
+          if (qp.status && (this.queue !== q || this.filters.status !== qp.status)) {
+            this.queue = q;
+            this.filters.status = qp.status;
+            return true;
+          }
+          return false;
+        }
+        const directStatus = p.get('status');
+        if (!this.filters.status && directStatus && STATUS_META[directStatus]) {
+          this.filters.status = directStatus;
+          return true;
+        }
+        return false;
       },
 
       /* Fetch ONE server page (or grouped aggregates). The single place a
