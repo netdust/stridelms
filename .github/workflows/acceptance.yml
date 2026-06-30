@@ -96,8 +96,13 @@ jobs:
       run: |
         SVC=$(docker ps --filter "ancestor=selenium/standalone-chrome:latest" --format '{{.ID}}' | head -1)
         if [ -z "$SVC" ]; then echo "selenium container not found"; docker ps; exit 1; fi
-        HOST_GW=$(docker exec "$SVC" sh -c "ip route | awk '/default/ {print \$3}'")
-        if [ -z "$HOST_GW" ]; then echo "could not resolve gateway"; exit 1; fi
+        # Resolve the bridge gateway from the RUNNER via `docker inspect`, NOT
+        # from inside the selenium image — that image has no `ip`/iproute2
+        # (`sh: ip: not found`). The container's network .Gateway IS the address
+        # it uses to reach the runner host. The runner has docker access; the
+        # image needs no tooling.
+        HOST_GW=$(docker inspect "$SVC" --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}' | head -1)
+        if [ -z "$HOST_GW" ]; then echo "could not resolve gateway"; docker inspect "$SVC" --format '{{json .NetworkSettings.Networks}}'; exit 1; fi
         echo "host_gw=$HOST_GW" >> "$GITHUB_OUTPUT"
         # Persist the resolved container ID so the later reachability check
         # provably targets the SAME selenium container (CR I-2) instead of
@@ -187,9 +192,18 @@ jobs:
         HOST_GW='${{ steps.gw.outputs.host_gw }}'
         # Reuse the exact container the gateway was resolved from (CR I-2).
         SVC='${{ steps.gw.outputs.svc }}'
-        docker exec "$SVC" sh -c "curl -fsS -o /dev/null -w '%{http_code}\n' http://${HOST_GW}:8080/index.php?rest_route=/" \
-          || { echo "Selenium CANNOT reach php -S at ${HOST_GW}:8080 — networking premise failed"; cat /tmp/php-server.log; exit 1; }
-        echo "Selenium reaches php -S at ${HOST_GW}:8080 — networking OK"
+        # Tool-agnostic reachability probe: the selenium image is minimal (no
+        # iproute2; curl/wget presence is not guaranteed). Try curl, then wget,
+        # then a bash /dev/tcp connect — whichever the image has.
+        URL="http://${HOST_GW}:8080/index.php?rest_route=/"
+        if docker exec "$SVC" sh -c "command -v curl >/dev/null && curl -fsS -o /dev/null '$URL'" \
+           || docker exec "$SVC" sh -c "command -v wget >/dev/null && wget -q -O /dev/null '$URL'" \
+           || docker exec "$SVC" bash -c "exec 3<>/dev/tcp/${HOST_GW}/8080" ; then
+          echo "Selenium reaches php -S at ${HOST_GW}:8080 — networking OK"
+        else
+          echo "Selenium CANNOT reach php -S at ${HOST_GW}:8080 — networking premise failed"
+          cat /tmp/php-server.log; exit 1
+        fi
 
     # SMOKE SUBSET ONLY — explicit Cest list (self-seeding / install-admin; no
     # seeder). Expanding to all 27 + the seeder is Phase 4.
