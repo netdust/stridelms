@@ -26,11 +26,28 @@ wp core install --url=http://localhost:8080 --title=StrideCI \
   --admin_user=ciadmin --admin_password=ciadmin \
   --admin_email=ci@example.com --skip-email
 
+# Pretty permalinks. A bare `wp core install` leaves permalink_structure empty
+# (plain ?p= URLs); WP_Post_Type::add_rewrite_rules() only calls add_permastruct
+# when `is_admin() || permalink_structure`, so without this the front-end REST
+# worker never builds the /edities/%vad_edition% permastruct and get_permalink()
+# falls back to ?vad_edition=<slug>. Set the structure WITHOUT flushing here —
+# the CPT does not exist yet (it boots via the theme below), so a flush now would
+# persist rewrite_rules with no `edities` rules. DDEV provisions this for us; raw
+# CI install does not. Real-HTTP seam tests (CatalogEndpointTest) assert /edities/.
+wp option update permalink_structure '/%postname%/'
+
 # Plugins BEFORE theme: activating stridence first fatals — the theme boots
 # stride-core's feature services (ntdst/features_ready), which hard-depend on
 # plugin-provided services (e.g. ntdst-audit's AuditService).
 wp plugin activate sfwd-lms netdust-lti netdust-mail ntdst-assistant ntdst-audit ntdst-auth fluent-crm fluent-smtp
 wp theme activate stridence
+
+# Hard-flush AFTER the theme is active: stride-core registers vad_edition (and
+# its `edities` rewrite) only once the theme boots, so the persisted rewrite_rules
+# option must be rebuilt now — the front-end REST worker that renders catalog
+# cards reads those persisted rules (is_admin() is false there, so it cannot
+# rebuild the permastruct in-memory). Flushing before activation misses the CPT.
+wp rewrite flush --hard
 
 # LearnDash defers its user-activity table creation to an admin-screen data
 # upgrade; without these tables every course-access call spams "table doesn't
