@@ -179,6 +179,13 @@ final class StrideMailBridge extends AbstractService
     private $confirmMailGuard = null;
 
     /**
+     * Memoized static subject prefix of the confirmation template (null until
+     * first armed dispatch resolves it). Avoids a per-dispatch template lookup
+     * in a collision-heavy bulk batch.
+     */
+    private ?string $confirmSubjectPrefix = null;
+
+    /**
      * Arm a per-dispatch suppression of the seeded confirmation mail for the
      * anonymous-promote COLLISION case (M-NEW-USER-MAIL-ONLY / attack 6).
      *
@@ -220,10 +227,14 @@ final class StrideMailBridge extends AbstractService
         // Static prefix of the confirmation template's subject (before the first
         // SmartCode), so the match is template-specific without hardcoding the
         // rendered edition title. e.g. "Inschrijving bevestigd: {{edition.title}}"
-        // → "Inschrijving bevestigd:".
-        $template = get_page_by_path('stride-enrollment-confirmed', OBJECT, 'ndmail_template');
-        $rawSubject = $template ? (string) get_post_meta($template->ID, '_ndmail_subject', true) : '';
-        $subjectPrefix = trim((string) strstr($rawSubject, '{{', true)) ?: $rawSubject;
+        // → "Inschrijving bevestigd:". Memoized per-request — the template subject
+        // does not change within a single bulk-promote batch.
+        if ($this->confirmSubjectPrefix === null) {
+            $template = get_page_by_path('stride-enrollment-confirmed', OBJECT, 'ndmail_template');
+            $rawSubject = $template ? (string) get_post_meta($template->ID, '_ndmail_subject', true) : '';
+            $this->confirmSubjectPrefix = trim((string) strstr($rawSubject, '{{', true)) ?: $rawSubject;
+        }
+        $subjectPrefix = $this->confirmSubjectPrefix;
 
         $this->confirmMailGuard = function ($short, $atts) use ($target, $subjectPrefix) {
             $to = $atts['to'] ?? [];
@@ -237,6 +248,12 @@ final class StrideMailBridge extends AbstractService
             }
 
             $subject = (string) ($atts['subject'] ?? '');
+            // INTENTIONAL FAIL-SAFE: an empty/underivable prefix (template missing
+            // or edited to a prefix-less subject) means recipient-only matching —
+            // i.e. MORE suppression, never less. Do NOT "fix" this into a
+            // fail-open `false`: within the prio-5→15 arm window the confirm mail
+            // is the only send to this recipient, and biasing toward suppression
+            // is what keeps attack-6 (M-NEW-USER-MAIL-ONLY) leak-proof.
             $matchesSubject = $subjectPrefix === '' || str_starts_with($subject, $subjectPrefix);
 
             if ($matchesRecipient && $matchesSubject) {
