@@ -65,11 +65,19 @@ final class QuestionnaireHandlerWrapTest extends IntegrationTestCase
         $editionId = $this->createTestEdition();
         $handler = ntdst_get(QuestionnaireHandler::class);
 
+        // The waitlist path requires the native offer/invoice fields by default
+        // (feat: native offer/invoice fields on the waitlist form) — company,
+        // vat_number and invoice_email are enforced in handleSubmitWaitlist and
+        // map to billing_* usermeta on promote. Send them as the real form does.
         $result = $handler->handleSubmitWaitlist(null, [
             'edition_id' => $editionId,
             'name' => 'Mia',
             'email' => 'mia@example.com',
-            'extra_fields' => [],
+            'extra_fields' => [
+                'company' => 'Mia BV',
+                'vat_number' => 'BE0123456789',
+                'invoice_email' => 'facturatie@mia.example.com',
+            ],
         ]);
 
         $this->assertIsArray($result, 'expected success array, got: ' . (is_wp_error($result) ? $result->get_error_message() : 'unknown'));
