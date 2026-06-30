@@ -646,8 +646,30 @@ final class EnrollmentService extends AbstractService
                 $this->updateUserProfile($resolved['user_id'], $captured);
             }
 
-            $this->registrations->attachUserToWaitlistRow($registrationId, $resolved['user_id']);
-            $registration = $this->registrations->find($registrationId);
+            // M-PER-ROW: the relink is committed standalone BEFORE the capacity
+            // transaction. Guard its outcome — a failed re-link must become a
+            // per-row WP_Error, never a confirm against the stale user_id=0 row
+            // (which would orphan-grant access to user 0). `=== false` (not `!`)
+            // mirrors attachUserToWaitlistRow's own `$result !== false`: a 0-rows
+            // write is success, only a SQL error is failure (and M-IDEMPOTENT
+            // already gates re-entry on user_id===0, so the idempotent retry never
+            // reaches this branch at all).
+            if ($this->registrations->attachUserToWaitlistRow($registrationId, $resolved['user_id']) === false) {
+                ntdst_log('enrollment')->error('Failed to relink waitlist row to resolved account', [
+                    'registration_id' => $registrationId,
+                    'user_id' => $resolved['user_id'],
+                ]);
+
+                return new WP_Error(
+                    'relink_failed',
+                    __('De wachtlijst-aanmelding kon niet aan het account gekoppeld worden.', 'stride'),
+                );
+            }
+
+            // Only user_id changed; reflect it on the in-memory row (avoids an
+            // unguarded re-find + an extra query that could null-deref on a
+            // concurrently-deleted row).
+            $registration->user_id = $resolved['user_id'];
         }
 
         // Race-safe per-row capacity re-check + status transition under one

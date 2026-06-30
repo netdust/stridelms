@@ -381,4 +381,77 @@ class PromoteFromWaitlistTest extends IntegrationTestCase
         $this->assertSame('capacity_full', $retry->get_error_code());
         $this->assertSame($usersAfterFirst, $this->countUsersByEmail($email), 'retry creates no duplicate user');
     }
+
+    /**
+     * @test
+     * (e) CR-GATE1: the standalone relink write (attachUserToWaitlistRow) FAILS
+     * (e.g. $wpdb->update returns false on a SQL error) on a free-seat edition.
+     * The promote MUST surface a relink_failed WP_Error and bail BEFORE the
+     * capacity transaction — never proceed with the stale (user_id=0) row into
+     * confirmCore, which would orphan-grant against user 0 and confirm an
+     * account-less row.
+     *
+     * Pre-fix regression this catches: the code ignored the attach bool and did
+     * an unguarded re-find(); on a relink failure it would have continued with
+     * user_id=0 (orphan grant) or null-deref'd a concurrently-deleted row.
+     */
+    public function anonRowSurfacesRelinkFailureAndDoesNotConfirm(): void
+    {
+        $editionId = $this->createTestEdition(['meta' => ['_ntdst_capacity' => 5]]);
+
+        $email = 'relinkfail_' . wp_generate_password(6, false) . '@lead.test';
+        $regId = $this->seedAnonWaitlistRegistration($editionId, [
+            'name' => 'Relink Fail',
+            'email' => $email,
+        ]);
+
+        // Force ONLY the relink UPDATE (attachUserToWaitlistRow → $wpdb->update of
+        // user_id on this row) to fail with a SQL error, so it returns false.
+        // resolveLeadAccount's user creation and the capacity SELECTs use other
+        // statements and stay intact: the account IS created, only the re-link
+        // write fails. Rewrite to a guaranteed-error query for that one UPDATE.
+        $table = $GLOBALS['wpdb']->prefix . 'vad_registrations';
+        $filter = static function (string $query) use ($table): string {
+            if (stripos($query, "UPDATE `{$table}`") !== false
+                && stripos($query, 'SET `user_id`') !== false) {
+                return "UPDATE `{$table}` SET `user_id` = (SELECT 1 FROM nonexistent_relink_table_xyz)";
+            }
+
+            return $query;
+        };
+
+        $confirmedEvents = 0;
+        $listener = function (array $data) use (&$confirmedEvents, $regId): void {
+            if ((int) ($data['registration_id'] ?? 0) === $regId) {
+                $confirmedEvents++;
+            }
+        };
+        add_action('stride/registration/confirmed', $listener);
+
+        $suppressed = $GLOBALS['wpdb']->suppress_errors(true);
+        add_filter('query', $filter);
+        try {
+            $result = $this->enrollmentService->promoteFromWaitlist($regId);
+        } finally {
+            remove_filter('query', $filter);
+            $GLOBALS['wpdb']->suppress_errors($suppressed);
+            remove_action('stride/registration/confirmed', $listener);
+        }
+
+        // The created account is real; track it for teardown regardless of branch.
+        if (($u = get_user_by('email', $email)) !== false) {
+            $this->createdUserIds[] = (int) $u->ID;
+        }
+
+        $this->assertTrue(is_wp_error($result), 'relink failure must surface as a WP_Error');
+        $this->assertSame('relink_failed', $result->get_error_code());
+
+        // No confirm fired — the bail happened before the transaction.
+        $this->assertSame(0, $confirmedEvents, 'confirmed must NOT fire when the relink failed');
+
+        // Row stays on the waitlist (its status was never flipped).
+        $row = $this->registrations->find($regId);
+        $this->assertNotNull($row, 'row still exists');
+        $this->assertSame('waitlist', $row->status, 'row stays on the waitlist after a relink failure');
+    }
 }
