@@ -2,8 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use `superpowers:subagent-driven-development` (recommended) or `superpowers:executing-plans` to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking. Dispatch one `netdust-agent:implementer` per task.
 
+> ## ✅ COMPLETE — shipped + merged to local `main` 2026-06-30 (tip `07a24c08`)
+> All 8 tasks implemented, reviewed, and verified. **Unit 1150/0, integration PromoteFromWaitlist 13/13, PHPStan clean.** Gates passed: GATE 1 & 2 FULL (security-sentinel + `/security-review` clean, 0 drift), GATE 3–6 STANDARD, test-effectiveness 8/8 dangerous paths covered + 1 blind-spot fixed, live browser shake-out F0–F3 all `pass` (form renders the offer/invoice field set; promote creates account + maps billing meta + sends one mail; collision links without overwriting + zero mail to existing). Design pivots during execution: (1) field names = `getUserMetaMapping()` input-keys not `billing_*`; (2) welcome mail = SUPPRESS the existing seeded confirm-trigger on collision, not add a sender; (3) offer/invoice fields are NATIVE to the form (Task 8), not questionnaire-builder data. Anonymous-lead promote path = grid bulk-select → "Promoveer" (dossier button serves accounted rows; user-accepted). Follow-ups (non-blocking): dedup the 3 `bulkApi` JS copies; wire/disable the other dossier SMART_ACTION buttons; reconsider `vat_number` required on the public form (conversion).
+>
 > ## HANDOVER — read first (session-specific context not derivable from this file)
-> **Status: APPROVED + freshness-reviewed (2026-06-30), in execution.** Stage 1 (gated plan) complete; Class-B freshness review ground-truthed all premises and applied two plan-corrections: **BLOCKER-1** — waitlist field names must be `getUserMetaMapping()` INPUT-KEYS (`company`/`address`/`postal_code`/`city`/`vat_number`/…), NOT `billing_*` meta keys, or they silently never map; **BLOCKER-2** — the dossier single-promote button was presentational (no handler/route); user chose to WIRE it → new **Task 7 / GATE 5** (STANDARD). Begin at Stage 2 / GATE 1, Task 1. (DRIFT-3 note folded into Task 4: the welcome mail is a NEW `add_action` handler, guard against double-send vs the existing `confirmed` trigger template.)
+> **Status: ✅ COMPLETE (was: APPROVED + freshness-reviewed, in execution).** Stage 1 (gated plan) complete; Class-B freshness review ground-truthed all premises and applied two plan-corrections: **BLOCKER-1** — waitlist field names must be `getUserMetaMapping()` INPUT-KEYS (`company`/`address`/`postal_code`/`city`/`vat_number`/…), NOT `billing_*` meta keys, or they silently never map; **BLOCKER-2** — the dossier single-promote button was presentational (no handler/route); user chose to WIRE it → new **Task 7 / GATE 5** (STANDARD). Begin at Stage 2 / GATE 1, Task 1. (DRIFT-3 note folded into Task 4: the welcome mail is a NEW `add_action` handler, guard against double-send vs the existing `confirmed` trigger template.)
 >
 > **Entry path:** Invoke `netdust-agent:harnessed-development` (Class A, executing an existing written plan = Class B freshness review first), then run Stage 1.5 gate-check, then execute GATE 1 → 2 → 3 → 4 in order, HALTing at each `── REVIEW GATE ──` marker. GATE 1 & 2 are **FULL tier** → `security-sentinel` + `/security-review` mandatory.
 >
@@ -66,8 +69,8 @@ The waitlist form will collect the personal + invoice field set. **Exactly which
 
 ## Golden path: form / AJAX / write-flow (deviations must be named and justified)
 
-- [ ] Built to `netdust-wp:ntdst-patterns` → `golden-paths/form-data-flow.md` spine (entry-point authz → sanitize → validate → domain service → repository write → event) — read before task breakdown.
-- [ ] Deviations from the slice (each named + justified):
+- [x] Built to `netdust-wp:ntdst-patterns` → `golden-paths/form-data-flow.md` spine (entry-point authz → sanitize → validate → domain service → repository write → event) — read before task breakdown.
+- [x] Deviations from the slice (each named + justified):
   - **The public-form half REUSES an existing entry point, not a new one.** `stride_submit_waitlist` already registers on the `ntdst/api_data` registry (framework nonce + Origin/Referer, INV-2) with `nopriv` (anonymous join is intended). We add FIELDS to the `waitlist` questionnaire stage + ensure `handleSubmitWaitlist` sanitizes/persists them — we do NOT add a route. The sanitize+validate+persist spine already exists (`sanitizeExtraFields` → `QuestionnaireValidator` → `wrapStage` → `create/update`); the new fields ride it.
   - **The promote half adds no entry point.** Both promote surfaces already register on `ntdst/api_data/stride_bulk_promote_waitlist` with the `M2 current_user_can('stride_manage')` gate in `BulkRegistrationHandler::denyIfNotManager()`. We change only the **domain method** the handler calls.
   - **The promote-time untrusted input is data-at-rest, not request input.** The name/email/billing we consume at promote was captured by the *public, unauthenticated* waitlist form at submit time and stored in `enrollment_data.waitlist.data`. To the promote flow it is stored data we must NOT trust as already-clean (re-validate the email at promote time — see M-EMAIL-VALIDATE; the field values were sanitized at submit by `sanitizeExtraFields`/`QuestionnaireValidator`, and `updateUserProfile` re-`sanitize_text_field`s on write).
@@ -144,12 +147,12 @@ The waitlist form will collect the personal + invoice field set. **Exactly which
 
 > Pillars defined in `netdust-wp:wp-security`. One line per flow; n/a stated explicitly.
 
-- [ ] **Public `stride_submit_waitlist` (`handleSubmitWaitlist`, nopriv) — NEW fields.** authorize: anonymous by design (nopriv); framework nonce + Origin/Referer already gate it (INV-2). validate: `QuestionnaireValidator::validate($extraFields, $editionId, 'waitlist')` enforces the stage schema (required/type) — the new billing fields ride this. sanitize: `sanitizeExtraFields()` already sanitizes each `extra_fields` value before persist; confirm it covers the new field types. escape: n/a at submit (no output); escaped at every later sink (dossier/offer/mail). write: persisted via `wrapStage` → `RegistrationRepository::create/update` (INV-3).
-- [ ] **Domain `promoteFromWaitlist($id)` (via the gated bulk handlers).** authorize: `current_user_can('stride_manage')` upstream (INV-1); no second entry/nonce (INV-2). validate: `is_email()` on the lead email + status/edition guards. sanitize: `sanitize_email` on the email; `updateUserProfile` re-`sanitize_text_field`s the mapped meta. escape: n/a (no output).
-- [ ] **`resolveLeadAccount($email, $name)` → `wp_create_user` / `get_user_by`.** authorize: n/a (internal). validate: `is_email()` precondition. sanitize: `sanitize_email`, `sanitize_text_field`, `sanitize_user`. escape: n/a. Credentials: `wp_generate_password(16,true,true)`; never logged/returned.
-- [ ] **New-account meta map → `updateUserProfile($newUserId, $capturedData)`.** authorize: n/a (internal, new-account branch only). validate: only `getUserMetaMapping()` keys mapped; gated on `was_existing===false`. sanitize: `updateUserProfile` `sanitize_text_field`s each value. escape: n/a.
-- [ ] **`RegistrationRepository::attachUserToWaitlistRow($id, $userId)`.** authorize: n/a (internal). validate: caller guarantees `$userId>0`. sanitize: `%d` bind. write: `$wpdb->update` with format specifiers (INV-3).
-- [ ] **Enriched `stride/registration/confirmed` payload.** authorize: n/a. validate: name/email added only when present+valid. sanitize: name sanitized at resolve. escape: mail template escapes — n/a here.
+- [x] **Public `stride_submit_waitlist` (`handleSubmitWaitlist`, nopriv) — NEW fields.** authorize: anonymous by design (nopriv); framework nonce + Origin/Referer already gate it (INV-2). validate: `QuestionnaireValidator::validate($extraFields, $editionId, 'waitlist')` enforces the stage schema (required/type) — the new billing fields ride this. sanitize: `sanitizeExtraFields()` already sanitizes each `extra_fields` value before persist; confirm it covers the new field types. escape: n/a at submit (no output); escaped at every later sink (dossier/offer/mail). write: persisted via `wrapStage` → `RegistrationRepository::create/update` (INV-3).
+- [x] **Domain `promoteFromWaitlist($id)` (via the gated bulk handlers).** authorize: `current_user_can('stride_manage')` upstream (INV-1); no second entry/nonce (INV-2). validate: `is_email()` on the lead email + status/edition guards. sanitize: `sanitize_email` on the email; `updateUserProfile` re-`sanitize_text_field`s the mapped meta. escape: n/a (no output).
+- [x] **`resolveLeadAccount($email, $name)` → `wp_create_user` / `get_user_by`.** authorize: n/a (internal). validate: `is_email()` precondition. sanitize: `sanitize_email`, `sanitize_text_field`, `sanitize_user`. escape: n/a. Credentials: `wp_generate_password(16,true,true)`; never logged/returned.
+- [x] **New-account meta map → `updateUserProfile($newUserId, $capturedData)`.** authorize: n/a (internal, new-account branch only). validate: only `getUserMetaMapping()` keys mapped; gated on `was_existing===false`. sanitize: `updateUserProfile` `sanitize_text_field`s each value. escape: n/a.
+- [x] **`RegistrationRepository::attachUserToWaitlistRow($id, $userId)`.** authorize: n/a (internal). validate: caller guarantees `$userId>0`. sanitize: `%d` bind. write: `$wpdb->update` with format specifiers (INV-3).
+- [x] **Enriched `stride/registration/confirmed` payload.** authorize: n/a. validate: name/email added only when present+valid. sanitize: name sanitized at resolve. escape: mail template escapes — n/a here.
 
 ---
 
@@ -157,14 +160,14 @@ The waitlist form will collect the personal + invoice field set. **Exactly which
 
 > Same nine categories `ntdst-drift-reviewer` checks. Canonical defs in `netdust-wp:ntdst-architecture`. Only applicable rows kept.
 
-- [ ] Registration-table access through `RegistrationRepository` — `attachUserToWaitlistRow` lives in the repo; no new `$wpdb` in `EnrollmentService` (INV-3).
-- [ ] No pure pass-through Service method — `resolveLeadAccount` adds validate + find-or-create + no-credential-on-existing; the promote anon branch adds resolve + conditional meta-map. Neither is a pass-through.
-- [ ] No raw `wp_ajax_*` handler — both halves reuse existing `ntdst/api_data/*` filters (INV-2).
-- [ ] No swallowed `WP_Error` — new failure paths return `WP_Error`, logged on `enrollment` or bubbled (INV-4).
-- [ ] LearnDash grant stays inside `confirmCore` via `LMSAdapterInterface` — fix is "grant against a real user_id" (INV-6).
-- [ ] Meta write reuses `getUserMetaMapping()`/`updateUserProfile()` — no hardcoded `_ntdst_`/`billing_*` meta keys outside the existing mapping (INV-3 sub-rule).
-- [ ] Correct module layering — domain in `EnrollmentService`, table write in `RegistrationRepository`, form in `QuestionnaireHandler`/theme template, mail in `StrideMailBridge`. No logic added to thin handlers.
-- [ ] No new service class — existing services + the questionnaire stage config edited in place.
+- [x] Registration-table access through `RegistrationRepository` — `attachUserToWaitlistRow` lives in the repo; no new `$wpdb` in `EnrollmentService` (INV-3).
+- [x] No pure pass-through Service method — `resolveLeadAccount` adds validate + find-or-create + no-credential-on-existing; the promote anon branch adds resolve + conditional meta-map. Neither is a pass-through.
+- [x] No raw `wp_ajax_*` handler — both halves reuse existing `ntdst/api_data/*` filters (INV-2).
+- [x] No swallowed `WP_Error` — new failure paths return `WP_Error`, logged on `enrollment` or bubbled (INV-4).
+- [x] LearnDash grant stays inside `confirmCore` via `LMSAdapterInterface` — fix is "grant against a real user_id" (INV-6).
+- [x] Meta write reuses `getUserMetaMapping()`/`updateUserProfile()` — no hardcoded `_ntdst_`/`billing_*` meta keys outside the existing mapping (INV-3 sub-rule).
+- [x] Correct module layering — domain in `EnrollmentService`, table write in `RegistrationRepository`, form in `QuestionnaireHandler`/theme template, mail in `StrideMailBridge`. No logic added to thin handlers.
+- [x] No new service class — existing services + the questionnaire stage config edited in place.
 
 > **The convergence contract.** These blocks + the `## Threat model` are the convergence target for `/code-review` and `ntdst-drift-reviewer` at shake-out. Reviewers verify the diff against the named golden-path slice + pillars + categories + numbered mitigations — a gap is a one-line finding keyed to a named item, not a re-discovery.
 
@@ -207,11 +210,11 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 
 > Cross-cutting concern: the anonymous-lead → account paths AND the existing-account no-overwrite rule must not drift. Audit at plan-time AND at shake-out.
 
-- [ ] **`resolveParticipant()` (colleague-enroll) vs new `resolveLeadAccount()`.** Both find-or-create-by-email. `resolveParticipant` mails every user incl. pre-existing (collision-unsafe). `resolveLeadAccount` must NOT — safe sibling + INV-9 home. Reviewer confirms the divergence is intended (deferred debt), not an accidental copy.
-- [ ] **The enroll path's `$isExistingColleague` no-overwrite guard (EnrollmentService.php:973–980) vs the new promote `was_existing` meta guard.** BOTH must encode the same rule: *do not write profile/billing meta onto a pre-existing account; keep the values per-registration.* The promote path mirrors this for the waitlist lead. Reviewer confirms the two guards agree and neither is missing the billing-meta case (attack 10 / M-NO-OVERWRITE).
-- [ ] **`upgradeFromInterest()` vs new `attachUserToWaitlistRow()`.** `upgradeFromInterest` resets `registered_at` + forces status/path. The waitlist re-link must PRESERVE `registered_at` and NOT change status (the transaction owns the flip). Hence a separate minimal `attachUserToWaitlistRow($id,$userId)` setting only `user_id`. Reviewer confirms no `registered_at`/status reset.
-- [ ] **`interest_registered`/`waitlisted` events (carry name+email for anon) vs `confirmed` event (doesn't).** Task 3's enrichment makes the confirmed dispatch a sibling of the existing anon-aware stage events. Reviewer confirms the payload shape matches what `sendUserStageMail` expects (`name`, `email`, `user_id`, `edition_id`).
-- [ ] **JSON path `enrollment_data.waitlist.data.{name,email,billing_*}`.** The promote extractor must read the SAME path `handleSubmitWaitlist`/`wrapStage` writes and `findAnonymousForEmailAndEdition` reads (`$.waitlist.data.email`). Reviewer greps the write site (`wrapStage`), the email-find site, and the promote read site all agree on the path + the reserved field names (M-ROUNDTRIP).
+- [x] **`resolveParticipant()` (colleague-enroll) vs new `resolveLeadAccount()`.** Both find-or-create-by-email. `resolveParticipant` mails every user incl. pre-existing (collision-unsafe). `resolveLeadAccount` must NOT — safe sibling + INV-9 home. Reviewer confirms the divergence is intended (deferred debt), not an accidental copy.
+- [x] **The enroll path's `$isExistingColleague` no-overwrite guard (EnrollmentService.php:973–980) vs the new promote `was_existing` meta guard.** BOTH must encode the same rule: *do not write profile/billing meta onto a pre-existing account; keep the values per-registration.* The promote path mirrors this for the waitlist lead. Reviewer confirms the two guards agree and neither is missing the billing-meta case (attack 10 / M-NO-OVERWRITE).
+- [x] **`upgradeFromInterest()` vs new `attachUserToWaitlistRow()`.** `upgradeFromInterest` resets `registered_at` + forces status/path. The waitlist re-link must PRESERVE `registered_at` and NOT change status (the transaction owns the flip). Hence a separate minimal `attachUserToWaitlistRow($id,$userId)` setting only `user_id`. Reviewer confirms no `registered_at`/status reset.
+- [x] **`interest_registered`/`waitlisted` events (carry name+email for anon) vs `confirmed` event (doesn't).** Task 3's enrichment makes the confirmed dispatch a sibling of the existing anon-aware stage events. Reviewer confirms the payload shape matches what `sendUserStageMail` expects (`name`, `email`, `user_id`, `edition_id`).
+- [x] **JSON path `enrollment_data.waitlist.data.{name,email,billing_*}`.** The promote extractor must read the SAME path `handleSubmitWaitlist`/`wrapStage` writes and `findAnonymousForEmailAndEdition` reads (`$.waitlist.data.email`). Reviewer greps the write site (`wrapStage`), the email-find site, and the promote read site all agree on the path + the reserved field names (M-ROUNDTRIP).
 
 ---
 
@@ -248,11 +251,11 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 **Tier: A** — find-or-create + collision-safe credential decision + email validation. RED-first.
 **Test contract:** (a) unknown email → creates active user, `was_existing=false`, name set; (b) **existing email → returns that ID, `was_existing=true`, NO `wp_new_user_notification`** (denial-of-credential — M-COLLISION-SAFE/M6); (c) malformed/empty email → `WP_Error('lead_no_email')`, no user created (M-EMAIL-VALIDATE).
 
-- [ ] **Step 1: Write failing tests** (stub `wp_create_user`/`get_user_by`/`wp_new_user_notification`; assert the notification stub is called 0× on the existing-user + email-validate branches).
-- [ ] **Step 2: Run — expect FAIL** (`method not found`). `ddev exec vendor/bin/phpunit --filter ResolveLeadAccount --testsuite Unit`
-- [ ] **Step 3: Implement** `resolveLeadAccount`: `sanitize_email` → `is_email` guard (`WP_Error('lead_no_email', __('De wachtlijst-aanmelding heeft geen geldig e-mailadres.', 'stride'))`) → `get_user_by('email')` → if found return `['user_id'=>$u->ID,'was_existing'=>true]` (NO notification, NO meta write) → else unique `sanitize_user` username, `wp_generate_password`, `wp_create_user` (on `WP_Error` return `WP_Error('account_create_failed', ...)` logged on `enrollment`), `wp_update_user` first/last/display from `sanitize_text_field($name)`, return `['user_id'=>$id,'was_existing'=>false]`. **No mail, no billing meta here.**
-- [ ] **Step 4: Run — expect PASS** (full Unit suite green).
-- [ ] **Step 5: Commit** `feat(enrollment): collision-safe resolveLeadAccount (INV-9)`.
+- [x] **Step 1: Write failing tests** (stub `wp_create_user`/`get_user_by`/`wp_new_user_notification`; assert the notification stub is called 0× on the existing-user + email-validate branches).
+- [x] **Step 2: Run — expect FAIL** (`method not found`). `ddev exec vendor/bin/phpunit --filter ResolveLeadAccount --testsuite Unit`
+- [x] **Step 3: Implement** `resolveLeadAccount`: `sanitize_email` → `is_email` guard (`WP_Error('lead_no_email', __('De wachtlijst-aanmelding heeft geen geldig e-mailadres.', 'stride'))`) → `get_user_by('email')` → if found return `['user_id'=>$u->ID,'was_existing'=>true]` (NO notification, NO meta write) → else unique `sanitize_user` username, `wp_generate_password`, `wp_create_user` (on `WP_Error` return `WP_Error('account_create_failed', ...)` logged on `enrollment`), `wp_update_user` first/last/display from `sanitize_text_field($name)`, return `['user_id'=>$id,'was_existing'=>false]`. **No mail, no billing meta here.**
+- [x] **Step 4: Run — expect PASS** (full Unit suite green).
+- [x] **Step 5: Commit** `feat(enrollment): collision-safe resolveLeadAccount (INV-9)`.
 
 `Risk this test does NOT cover: the real wp_create_user duplicate-username race + the billing-meta no-overwrite (that lives in Task 3) — deferred to /integration (Task 3).`
 
@@ -268,8 +271,8 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 **Tier: A (contract)** — the preserve-`status`/`registered_at` guard is the sibling-drift risk; asserted at integration in Task 3.
 **Test contract (in Task 3):** after attach, `status` still `waitlist`, `registered_at` unchanged, `user_id` set.
 
-- [ ] **Step 1:** Add the method (mirror `updateCompletionTasks` shape: `$wpdb->update($this->table(), ['user_id'=>$userId], ['id'=>$registrationId], ['%d'], ['%d'])`, `clearCache()`, `emitRowEvent`).
-- [ ] **Step 2: Commit** `feat(enrollment): attachUserToWaitlistRow repo write`.
+- [x] **Step 1:** Add the method (mirror `updateCompletionTasks` shape: `$wpdb->update($this->table(), ['user_id'=>$userId], ['id'=>$registrationId], ['%d'], ['%d'])`, `clearCache()`, `emitRowEvent`).
+- [x] **Step 2: Commit** `feat(enrollment): attachUserToWaitlistRow repo write`.
 
 `no unit test: Tier B for the isolated write (pure $wpdb->update wrapper, no branching); its behavioral contract (preserves status/registered_at) is Tier A and asserted in Task 3. Risk deferred to /integration Task 3.`
 
@@ -290,11 +293,11 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 - (c) missing email → `WP_Error('lead_no_email')`, row stays `waitlist`, no user;
 - (d) half-state: anon row on a FULL edition → `capacity_full`, row stays `waitlist` carrying the created `user_id` (benign-idempotent), retry creates no duplicate user.
 
-- [ ] **Step 1: Write failing tests** (a)–(d). For (b), pre-create a user with set `billing_vat`/`invoice_email`, seed an anon waitlist row with that email + DIFFERENT billing values, promote, assert the existing user's meta is untouched.
-- [ ] **Step 2: Run — expect FAIL.** `ddev exec vendor/bin/phpunit -c phpunit-integration.xml.dist --filter PromoteFromWaitlist`
-- [ ] **Step 3: Implement** the anon branch AFTER the status/terminal guards and BEFORE `START TRANSACTION`: read `$d = $registration->enrollment_data['waitlist']['data'] ?? []`; `$resolved = $this->resolveLeadAccount($d['email'] ?? '', $d['name'] ?? '')`; `if is_wp_error return it`; **`if (!$resolved['was_existing']) { $this->updateUserProfile($resolved['user_id'], $d); }`** (maps reserved-name fields, sanitized, via the existing convergence — M-META-MAP; the existing-account branch writes NOTHING — M-NO-OVERWRITE); `$this->registrations->attachUserToWaitlistRow($registrationId, $resolved['user_id']); $registration = $this->registrations->find($registrationId);` stash `was_existing` for `confirmCore`. Transaction + `confirmCore` unchanged except they read a real `user_id`.
-- [ ] **Step 4: Run — expect PASS** (+ existing 4 tests green: race/full/invalid/terminal → M-RACE-HOLDS).
-- [ ] **Step 5: Commit** `feat(enrollment): resolve account + map captured billing meta on anonymous waitlist promote`.
+- [x] **Step 1: Write failing tests** (a)–(d). For (b), pre-create a user with set `billing_vat`/`invoice_email`, seed an anon waitlist row with that email + DIFFERENT billing values, promote, assert the existing user's meta is untouched.
+- [x] **Step 2: Run — expect FAIL.** `ddev exec vendor/bin/phpunit -c phpunit-integration.xml.dist --filter PromoteFromWaitlist`
+- [x] **Step 3: Implement** the anon branch AFTER the status/terminal guards and BEFORE `START TRANSACTION`: read `$d = $registration->enrollment_data['waitlist']['data'] ?? []`; `$resolved = $this->resolveLeadAccount($d['email'] ?? '', $d['name'] ?? '')`; `if is_wp_error return it`; **`if (!$resolved['was_existing']) { $this->updateUserProfile($resolved['user_id'], $d); }`** (maps reserved-name fields, sanitized, via the existing convergence — M-META-MAP; the existing-account branch writes NOTHING — M-NO-OVERWRITE); `$this->registrations->attachUserToWaitlistRow($registrationId, $resolved['user_id']); $registration = $this->registrations->find($registrationId);` stash `was_existing` for `confirmCore`. Transaction + `confirmCore` unchanged except they read a real `user_id`.
+- [x] **Step 4: Run — expect PASS** (+ existing 4 tests green: race/full/invalid/terminal → M-RACE-HOLDS).
+- [x] **Step 5: Commit** `feat(enrollment): resolve account + map captured billing meta on anonymous waitlist promote`.
 
 **Integration gate:** anon promote creates+maps-meta+links+grants+confirms end-to-end; collision links without overwriting existing meta; accounted-promote unchanged.
 
@@ -321,11 +324,11 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 **Tier: A** — recipient-resolution + the no-credential-to-existing-account guard (M-NEW-USER-MAIL-ONLY/M6/M7). RED-first.
 **Test contract:** (a) new-account promote → confirmation/welcome mail once to the NEW user's email (recipient present, not empty); (b) **existing-account collision promote → NO confirm/credential mail to the existing account** (denial — M-COLLISION-SAFE/attack 6); (c) accounted normal confirm (a logged-in user's own enrollment) → unchanged, mail still sent. **The bug-catching case is (b): exactly ZERO mail to the pre-existing account.**
 
-- [ ] **Step 1: Ground-truth netdust-mail's per-dispatch suppression seam** (read `MailService::send` + `activateTriggers` + any `ndmail_*` filters) and pick the minimal mechanism per the corrected note above.
-- [ ] **Step 2: Write failing integration tests** (a)/(b)/(c) — mail-capture via Mailpit or a `wp_mail`/`ndmail` stub that counts sends per recipient. (b) must assert 0 sends to the existing user's email. Run — expect FAIL.
-- [ ] **Step 3: Implement** the suppression keyed on `was_new_account===false` for the collision case; thread `was_new_account` into the `confirmed` payload from `confirmCore`. Do NOT add a competing sender for the new-account case (the trigger already covers it).
-- [ ] **Step 4: Run — expect PASS** (full suite + existing mail tests green; the normal logged-in confirm still mails).
-- [ ] **Step 5: Commit** `feat(mail): suppress confirmation mail to pre-existing account on waitlist-promote collision`.
+- [x] **Step 1: Ground-truth netdust-mail's per-dispatch suppression seam** (read `MailService::send` + `activateTriggers` + any `ndmail_*` filters) and pick the minimal mechanism per the corrected note above.
+- [x] **Step 2: Write failing integration tests** (a)/(b)/(c) — mail-capture via Mailpit or a `wp_mail`/`ndmail` stub that counts sends per recipient. (b) must assert 0 sends to the existing user's email. Run — expect FAIL.
+- [x] **Step 3: Implement** the suppression keyed on `was_new_account===false` for the collision case; thread `was_new_account` into the `confirmed` payload from `confirmCore`. Do NOT add a competing sender for the new-account case (the trigger already covers it).
+- [x] **Step 4: Run — expect PASS** (full suite + existing mail tests green; the normal logged-in confirm still mails).
+- [x] **Step 5: Commit** `feat(mail): suppress confirmation mail to pre-existing account on waitlist-promote collision`.
 
 **Integration gate:** Mailpit shows exactly one confirmation mail for a new-account promote, ZERO for an existing-account collision promote, and the normal logged-in-user confirm is unchanged (still one).
 
@@ -339,9 +342,9 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 **Tier: A** — the capability-deny path (M-CAP-GATE/M6) and per-row malformed isolation (M-PER-ROW/M10) are security/robustness predicates. RED-first.
 **Test contract:** (a) `stride_view`-only actor → `handleBulkPromoteWaitlist` returns the deny `WP_Error` before any row runs (A2); (b) a batch mixing one valid anon row + one malformed-email anon row → valid in `succeeded[]`, malformed in `failed[]` (`lead_no_email`), batch not aborted; (c) mixed accountless + already-accounted waitlist rows → both promote, only the accountless one creates a user.
 
-- [ ] **Step 1: Write failing tests** (mock `promoteFromWaitlist` per-row outcomes; assert `{succeeded, failed, summary}` + the deny short-circuit).
-- [ ] **Step 2: FAIL → implement → PASS.**
-- [ ] **Step 3: Commit** `test(enrollment): anonymous + denied + per-row bulk promote coverage`.
+- [x] **Step 1: Write failing tests** (mock `promoteFromWaitlist` per-row outcomes; assert `{succeeded, failed, summary}` + the deny short-circuit).
+- [x] **Step 2: FAIL → implement → PASS.**
+- [x] **Step 3: Commit** `test(enrollment): anonymous + denied + per-row bulk promote coverage`.
 
 **Integration gate:** bulk promote of a mixed selection produces the correct per-row report; deny blocks non-managers.
 
@@ -373,8 +376,8 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 
 **Tier: B** — documentation. `no unit test: Tier B, doc-only.`
 
-- [ ] **Step 1:** Add the INV-9 section (text in "Architecture invariants touched") + a Quick-reference row. Include the meta-on-create-only rule, the `$isExistingColleague` sibling reference, the `resolveParticipant` deferred-bypass note, and the audit-move grep.
-- [ ] **Step 2: Commit** `docs(invariants): INV-9 anonymous-lead → account resolution`.
+- [x] **Step 1:** Add the INV-9 section (text in "Architecture invariants touched") + a Quick-reference row. Include the meta-on-create-only rule, the `$isExistingColleague` sibling reference, the `resolveParticipant` deferred-bypass note, and the audit-move grep.
+- [x] **Step 2: Commit** `docs(invariants): INV-9 anonymous-lead → account resolution`.
 
 ### ── REVIEW GATE 5 ── (tier: STANDARD — frontend wiring of an existing presentational button to the already-gated bulk action; no new entry point, no new primitive) — Task 7
 
@@ -390,9 +393,9 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 
 **Tier: B (glue/wiring)** — connecting an existing button to an existing gated endpoint; the domain behavior is already integration-tested in Task 3. The load-bearing assertion is the F1 browser flow at shake-out, not a unit test.
 
-- [ ] **Step 1:** Give the dossier promote button a click handler that calls the bulk API with `ids:[id]` (mirror `grid.js:145` `stride_bulk_promote_waitlist` dispatch), shows the per-row result, refreshes the dossier. Confirm the capability gate still applies (no new path around `denyIfNotManager`).
-- [ ] **Step 2: Confirm** a `stride_view`-only actor's dossier either hides the button or the gated endpoint rejects (the endpoint gate is the security boundary; the button is presentational).
-- [ ] **Step 3: Commit** `feat(admin): wire dossier waitlist-promote button to the gated bulk action`.
+- [x] **Step 1:** Give the dossier promote button a click handler that calls the bulk API with `ids:[id]` (mirror `grid.js:145` `stride_bulk_promote_waitlist` dispatch), shows the per-row result, refreshes the dossier. Confirm the capability gate still applies (no new path around `denyIfNotManager`).
+- [x] **Step 2: Confirm** a `stride_view`-only actor's dossier either hides the button or the gated endpoint rejects (the endpoint gate is the security boundary; the button is presentational).
+- [x] **Step 3: Commit** `feat(admin): wire dossier waitlist-promote button to the gated bulk action`.
 
 `no unit test: Tier B, frontend glue to an already-tested + already-gated endpoint. Risk (the per-row report rendering + the deny path) → F1/F2 shake-out browser pass + the Task 4b handler deny test.`
 
@@ -411,10 +414,10 @@ Ground-truthed: `templates/forms/waitlist.php` already renders `getGroupsForStag
 
 **Tier: A** for the handler required-validation (RED-first: missing-required + invalid-`invoice_email` denial); **Tier B** for the template render (F0 browser flow at shake-out is the load-bearing render check).
 
-- [ ] **Step 1:** Render the 9 native fields in `waitlist.php` with Dutch labels under a "Gegevens voor offerte/facturatie" subheading; `company`/`vat_number`/`invoice_email` required (client), rest optional; init the keys in Alpine `init()`.
-- [ ] **Step 2:** Add the server-side required-check + `is_email(invoice_email)` to `handleSubmitWaitlist` after the questionnaire validate call, returning the existing `WP_Error('validation_error', …)` shape (Dutch). RED-first unit test (missing `company` → error; invalid email → error; all present → persist).
-- [ ] **Step 3:** Confirm the round-trip integration filter stays green (data path unchanged).
-- [ ] **Step 4: Commit** `feat(waitlist): native offer/invoice fields on the waitlist form by default`.
+- [x] **Step 1:** Render the 9 native fields in `waitlist.php` with Dutch labels under a "Gegevens voor offerte/facturatie" subheading; `company`/`vat_number`/`invoice_email` required (client), rest optional; init the keys in Alpine `init()`.
+- [x] **Step 2:** Add the server-side required-check + `is_email(invoice_email)` to `handleSubmitWaitlist` after the questionnaire validate call, returning the existing `WP_Error('validation_error', …)` shape (Dutch). RED-first unit test (missing `company` → error; invalid email → error; all present → persist).
+- [x] **Step 3:** Confirm the round-trip integration filter stays green (data path unchanged).
+- [x] **Step 4: Commit** `feat(waitlist): native offer/invoice fields on the waitlist form by default`.
 
 **Acceptance:** F0 (anonymous upfront capture) at shake-out now drives a form that ACTUALLY shows + collects the offer/invoice fields; the validation-reject edge (blank required) is the load-bearing F0 edge.
 
