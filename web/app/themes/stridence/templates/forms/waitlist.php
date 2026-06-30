@@ -17,9 +17,31 @@ $course_title = $course_id ? get_the_title($course_id) : ($edition ? $edition->p
 $questionnaireRepo = ntdst_get(QuestionnaireRepository::class);
 $field_groups = $questionnaireRepo->getGroupsForStage($edition_id, 'waitlist');
 
+// Prefill from the logged-in user so they don't re-type what we already hold.
+// Reuses the enrollment form's convergence point (getEnrollmentPrefill) — its
+// keys are the same getUserMetaMapping() input-keys the native fields bind to,
+// so a logged-in waitlister sees their name/email + offer/invoice data filled.
+// Anonymous visitors get an empty form (the public path is unchanged).
+$prefill = [];
+$prefill_name = '';
+$prefill_email = '';
+if (is_user_logged_in()) {
+    $current_user = wp_get_current_user();
+    $meta = ntdst_get(\Stride\Modules\User\UserDashboardService::class)->getEnrollmentPrefill($current_user->ID);
+    $prefill_name = trim(($meta['first_name'] ?? '') . ' ' . ($meta['last_name'] ?? '')) ?: $current_user->display_name;
+    $prefill_email = $current_user->user_email;
+    // Only the native-field input-keys (drop name-part keys consumed above).
+    foreach (['company', 'vat_number', 'invoice_email', 'address', 'postal_code', 'city', 'gln_number', 'organisation', 'department'] as $k) {
+        $prefill[$k] = (string) ($meta[$k] ?? '');
+    }
+}
+
 $alpine_config = json_encode([
     'editionId' => $edition_id,
     'fieldGroups' => $field_groups,
+    'prefill' => $prefill,
+    'prefillName' => $prefill_name,
+    'prefillEmail' => $prefill_email,
 ]);
 ?>
 
@@ -68,7 +90,7 @@ $alpine_config = json_encode([
                  * (address/postal_code/city) is helpful-but-optional at waitlist stage;
                  * gln_number, organisation and department are optional.
                  */
-                ?>
+?>
                 <fieldset class="grid gap-4 border-t border-border-subtle pt-4 mt-2">
                     <legend class="text-sm font-semibold text-text-default mb-1">
                         <?= esc_html__('Gegevens voor offerte/facturatie', 'stridence') ?>
@@ -155,12 +177,17 @@ function strideWaitlistForm(config) {
         submitted: false,
         error: '',
         init() {
-            // Seed the native offer/invoice keys so x-model binds cleanly. These
-            // mirror EnrollmentService::getUserMetaMapping() input-keys. The group
-            // loop runs AFTER and may overwrite a same-named questionnaire field —
+            // Prefill name/email from the logged-in user (empty for anonymous).
+            this.form.name = config.prefillName || '';
+            this.form.email = config.prefillEmail || '';
+            // Seed the native offer/invoice keys so x-model binds cleanly, filling
+            // from the logged-in user's stored values where present. These mirror
+            // EnrollmentService::getUserMetaMapping() input-keys. The group loop
+            // runs AFTER and may overwrite a same-named questionnaire field —
             // that's fine (last-writer-wins, no double-clobber of native defaults).
+            const prefill = config.prefill || {};
             ['company', 'vat_number', 'invoice_email', 'address', 'postal_code', 'city', 'gln_number', 'organisation', 'department'].forEach(key => {
-                this.form.extra_fields[key] = '';
+                this.form.extra_fields[key] = prefill[key] || '';
             });
             (config.fieldGroups || []).forEach(group => {
                 (group.fields || []).forEach(field => {
