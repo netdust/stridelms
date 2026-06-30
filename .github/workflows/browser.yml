@@ -1,0 +1,135 @@
+name: Browser
+
+# Mirrors integration.yml's WordPress standup, then runs the DB-safe Playwright
+# setContent-harness specs against the CI-served WordPress. These specs inject
+# their own markup (no seed DB needed) but DO need a real origin that loads the
+# committed dist/main.*.js (Alpine + the dashboard/inline-edit/enrollment
+# factories) so window.Alpine exists on page.goto('/'). No `npm run build` step:
+# web/app/themes/stridence/dist/ + dist/.vite/manifest.json are committed, and
+# AssetHooks::isDev() enqueues the built bundle whenever the manifest is present.
+#
+# Closes the gap where CI gated only Unit + Integration + lint — a rendered-page
+# / Alpine-init regression could not previously fail the build. Seed-dependent
+# specs (enrollment/*, trajectory, field-groups) are a follow-on once the seeder
+# runs in this job; see docs/plans/2026-06-30-browser-ci-and-notification-tests.md.
+
+on:
+  push:
+    branches: [main, staging, 'ci-seam-*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+
+    env:
+      # The standup mirrors integration.yml, whose bootstrap affirms a
+      # throwaway DB; declared here for parity even though the harness specs
+      # below inject their own markup and do not touch registrations.
+      STRIDE_TEST_DB_DISPOSABLE: '1'
+      PLAYWRIGHT_BASE_URL: 'http://127.0.0.1:8080'
+
+    services:
+      database:
+        image: mariadb:10.11
+        env:
+          MYSQL_DATABASE: wordpress
+          MYSQL_USER: wordpress
+          MYSQL_PASSWORD: password
+          MYSQL_ROOT_PASSWORD: password
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="healthcheck.sh --connect --innodb_initialized"
+          --health-interval=5s
+          --health-timeout=20s
+          --health-retries=10
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.3'
+        extensions: mysqli, gd, zip, intl
+        coverage: none
+        tools: wp-cli
+
+    - name: Cache Composer dependencies
+      id: composer-cache
+      run: echo "dir=$(composer config cache-files-dir)" >> $GITHUB_OUTPUT
+
+    - uses: actions/cache@v4
+      with:
+        path: ${{ steps.composer-cache.outputs.dir }}
+        key: ${{ runner.os }}-composer-${{ hashFiles('**/composer.lock') }}
+        restore-keys: ${{ runner.os }}-composer-
+
+    - name: Install Composer dependencies
+      run: composer install --no-progress --prefer-dist --optimize-autoloader
+
+    - name: Write .env
+      run: |
+        cat > .env <<'ENV'
+        DB_NAME=wordpress
+        DB_USER=wordpress
+        DB_PASSWORD=password
+        DB_HOST=127.0.0.1
+        DB_PREFIX=wp_
+        WP_ENV=development
+        WP_HOME=http://localhost:8080
+        WP_SITEURL=${WP_HOME}/wp
+        AUTH_KEY=ci-not-secret
+        SECURE_AUTH_KEY=ci-not-secret
+        LOGGED_IN_KEY=ci-not-secret
+        NONCE_KEY=ci-not-secret
+        AUTH_SALT=ci-not-secret
+        SECURE_AUTH_SALT=ci-not-secret
+        LOGGED_IN_SALT=ci-not-secret
+        NONCE_SALT=ci-not-secret
+        ENV
+
+    - name: Install WordPress + Stride stack
+      run: bash scripts/ci/install-wp.sh
+
+    - name: Serve WordPress over HTTP (php -S)
+      run: |
+        PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8080 -t web scripts/ci/router.php >/tmp/php-server.log 2>&1 &
+        for i in $(seq 1 30); do
+          if curl -fso /dev/null "http://localhost:8080/index.php?rest_route=/"; then
+            echo "server up after ${i}s"; exit 0
+          fi
+          sleep 1
+        done
+        echo "PHP built-in server failed to come up"; cat /tmp/php-server.log; exit 1
+
+    - name: Setup Node
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+
+    - name: Install Playwright + Chromium
+      run: |
+        npm ci
+        npx playwright install --with-deps chromium
+
+    # DB-safe setContent-harness specs ONLY: they inject their own markup and
+    # need just a served origin that loads Alpine. Chromium only in this first
+    # gate. Seed-dependent and mobile-project specs are tracked as follow-on.
+    - name: Run Playwright (DB-safe harness specs, chromium)
+      run: |
+        npx playwright test --project=chromium \
+          tests/frontend/stridence/dashboard-tabs.spec.ts \
+          tests/frontend/stridence/alpine-components.spec.ts \
+          tests/frontend/stridence/inline-edit.spec.ts \
+          tests/frontend/stridence/enrollment-form.spec.ts
+
+    - name: Upload Playwright report on failure
+      if: failure()
+      uses: actions/upload-artifact@v4
+      with:
+        name: playwright-report
+        path: playwright-report/
+        retention-days: 7
