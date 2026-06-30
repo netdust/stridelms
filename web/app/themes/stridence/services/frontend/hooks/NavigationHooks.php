@@ -80,7 +80,7 @@ final class NavigationHooks
         } elseif (is_singular(['sfwd-lessons', 'sfwd-topic']) && function_exists('learndash_get_course_id')) {
             $course_id = (int) learndash_get_course_id(get_the_ID());
         } elseif (is_singular('vad_edition')) {
-            $course_id = (int) get_post_meta(get_the_ID(), '_ntdst_course_id', true);
+            $course_id = (int) (ntdst_get(\Stride\Modules\Edition\EditionService::class)->getCourseId(get_the_ID()) ?? 0);
         }
 
         if (!$course_id) {
