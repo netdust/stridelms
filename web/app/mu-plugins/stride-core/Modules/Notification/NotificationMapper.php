@@ -129,7 +129,11 @@ final class NotificationMapper
             'certificate',
             sprintf('Je certificaat voor %s is beschikbaar', $courseTitle),
             '',
-            $context['certificate_link'] ?? get_permalink((int) ($context['course_id'] ?? 0)) ?: '',
+            // Link to the Certificaten dashboard tab — NOT the raw LearnDash
+            // certificate-PDF endpoint (the stored certificate_link), which is
+            // nonce/permission-gated and renders "Access to certificate page is
+            // disallowed". The overview tab is the user-facing surface.
+            home_url('/mijn-account/?tab=certificaten'),
         ];
     }
 
