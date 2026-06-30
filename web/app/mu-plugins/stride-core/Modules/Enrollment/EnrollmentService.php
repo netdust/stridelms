@@ -616,6 +616,40 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('edition_closed', 'Edition is closed');
         }
 
+        // INV-9 / M-SEQUENCE: an anonymous (public-form) waitlist lead carries no
+        // WP account. Resolve (find-or-create) a real account from the upfront-
+        // captured name/email, map the captured billing/personal fields onto a
+        // NEW account only (M-NO-OVERWRITE: never onto a pre-existing account),
+        // and re-link the row — all BEFORE the capacity transaction, which only
+        // flips status. A later transaction rollback leaves the row on the
+        // waitlist carrying a real user_id (benign-idempotent: this block is
+        // gated on user_id===0, so a retry resolves nothing new).
+        $wasExisting = true;
+        if ((int) $registration->user_id === 0) {
+            $captured = $registration->enrollment_data['waitlist']['data'] ?? [];
+
+            $resolved = $this->resolveLeadAccount(
+                (string) ($captured['email'] ?? ''),
+                (string) ($captured['name'] ?? ''),
+            );
+            if (is_wp_error($resolved)) {
+                return $resolved;
+            }
+
+            $wasExisting = $resolved['was_existing'];
+
+            // M-META-MAP — new account only: map the captured reserved-name fields
+            // onto the new user via the existing convergence (getUserMetaMapping /
+            // updateUserProfile, which re-sanitizes). M-NO-OVERWRITE — an existing
+            // account is left entirely untouched (no meta write at all).
+            if (!$wasExisting) {
+                $this->updateUserProfile($resolved['user_id'], $captured);
+            }
+
+            $this->registrations->attachUserToWaitlistRow($registrationId, $resolved['user_id']);
+            $registration = $this->registrations->find($registrationId);
+        }
+
         // Race-safe per-row capacity re-check + status transition under one
         // transaction, mirroring enroll(): lock confirmed rows FOR UPDATE so a
         // concurrent promote/enroll cannot both consume the final seat.
@@ -651,8 +685,16 @@ final class EnrollmentService extends AbstractService
         }
 
         // Status already transitioned to Confirmed inside the transaction; run the
-        // shared grant + event tail without re-writing the status.
-        return $this->confirmCore($registration, 'Registration promoted from waitlist', false);
+        // shared grant + event tail without re-writing the status. Thread the
+        // account-resolution outcome through so Task 4 can gate the welcome mail
+        // on a genuinely-new account (M-NEW-USER-MAIL-ONLY) — Task 3 itself does
+        // NOT change mail behavior, only makes the value available.
+        return $this->confirmCore(
+            $registration,
+            'Registration promoted from waitlist',
+            false,
+            !$wasExisting,
+        );
     }
 
     /**
@@ -662,13 +704,21 @@ final class EnrollmentService extends AbstractService
      * This is the ONE grant/event code path — both confirmRegistration() and
      * promoteFromWaitlist() route through here (lesson_pure_passthrough_is_drift).
      *
-     * @param object $registration  the (pre-transition) registration row.
-     * @param bool   $writeStatus   write status=Confirmed here; false when the
-     *                              caller already transitioned it under a lock.
+     * @param object $registration   the (pre-transition) registration row.
+     * @param bool   $writeStatus    write status=Confirmed here; false when the
+     *                               caller already transitioned it under a lock.
+     * @param bool   $wasNewAccount  true when this confirm resolved a brand-new
+     *                               account for an anonymous waitlist lead. Task 4
+     *                               consumes this to gate the welcome mail; Task 3
+     *                               only threads it (no mail behavior change yet).
      * @return true|WP_Error
      */
-    private function confirmCore(object $registration, string $logMessage, bool $writeStatus = true): true|WP_Error
-    {
+    private function confirmCore(
+        object $registration,
+        string $logMessage,
+        bool $writeStatus = true,
+        bool $wasNewAccount = false,
+    ): true|WP_Error {
         $registrationId = (int) $registration->id;
         $editionId = (int) $registration->edition_id;
 
