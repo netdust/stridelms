@@ -258,6 +258,16 @@ jobs:
           $cal = get_post_meta($id, "course_access_list", true);
           echo "course_access_list=" . var_export($cal, true) . "\n";
           echo "getCourseAction_label=" . (\Stride\Integrations\LearnDash\LearnDashHelper::getCourseAction($id,$sid)["label"] ?? "?") . "\n";
+          // What course is at the slug the test navigates to?
+          $bySlug = get_page_by_path("e-learning-beweegbeleid-ontwikkelen", OBJECT, "sfwd-courses");
+          $slugId = $bySlug->ID ?? 0;
+          echo "SLUG_course_id=$slugId title=" . ($bySlug->post_title ?? "?") . "\n";
+          echo "SLUG_getAccessMode=" . ($slugId ? \Stride\Integrations\LearnDash\LearnDashHelper::getAccessMode($slugId) : "?") . "\n";
+          echo "SLUG_has_access(student)=" . var_export($slugId ? sfwd_lms_has_access($slugId,$sid) : "?", true) . "\n";
+          echo "SLUG_getCourseAction_label=" . ($slugId ? (\Stride\Integrations\LearnDash\LearnDashHelper::getCourseAction($slugId,$sid)["label"] ?? "?") : "?") . "\n";
+          // How many Beweegbeleid courses exist?
+          $all = get_posts(["post_type"=>"sfwd-courses","s"=>"Beweegbeleid","numberposts"=>-1]);
+          foreach ($all as $c) { echo "  beweeg_course: id={$c->ID} name={$c->post_name} title={$c->post_title}\n"; }
         '
 
     # Synthesize tests/.env the suite + Acceptance helper read (%WP_URL%,
