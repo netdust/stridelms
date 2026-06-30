@@ -561,7 +561,7 @@ final class EnrollmentCompletion
         $registration = $repo->find($registrationId);
 
         if (!$registration) {
-            return ['tasks' => [], 'total' => 0, 'completed' => 0, 'percentage' => 0];
+            return ['tasks' => [], 'descriptions' => [], 'total' => 0, 'completed' => 0, 'percentage' => 0];
         }
 
         $tasks = $registration->completion_tasks ?? [];
