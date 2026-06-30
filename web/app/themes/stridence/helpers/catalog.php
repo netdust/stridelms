@@ -91,7 +91,91 @@ function stridence_catalog_klassikaal_items(): array
     $items = ntdst_get(EditionService::class)
         ->getCatalogItems('klassikaal', STRIDENCE_CATALOG_MAX_ITEMS);
 
+    // Attach a sort_date (next UPCOMING session date) to each edition so the
+    // band-ordering pass orders by the next session — an edition whose first
+    // day has passed but has a later session sorts by that next session, not
+    // its start_date — and breaks date ties deterministically by title (fixes
+    // the catalog refresh-shuffle).
+    $items = stridence_catalog_attach_sort_dates($items);
+
     return stridence_catalog_order_into_bands($items);
+}
+
+/**
+ * Attach `sort_date` (next upcoming in-person/webinar session date, >= today)
+ * to each edition item, for catalog ordering.
+ *
+ * sort_date falls back to the edition's start_date when it has no future dated
+ * session (so single-session and dateless editions keep their meaning). The
+ * next-session lookup is ONE batched query over all editions on the page — not
+ * per-edition — to avoid an N+1 in the catalog render. Online / assignment
+ * sessions are excluded: they are e-learning steps, not calendar dates that
+ * should drive catalog ordering.
+ *
+ * @param list<array<string,mixed>> $items
+ * @return list<array<string,mixed>>
+ */
+function stridence_catalog_attach_sort_dates(array $items): array
+{
+    global $wpdb;
+
+    $editionIds = [];
+    foreach ($items as $item) {
+        if (($item['kind'] ?? 'edition') === 'edition' && !empty($item['edition']['id'])) {
+            $editionIds[] = (int) $item['edition']['id'];
+        }
+    }
+
+    $nextByEdition = [];
+    if ($editionIds) {
+        $prefix = ntdst_get(\Stride\Modules\Edition\SessionRepository::class)->getMetaPrefix();
+        $today  = current_time('Y-m-d');
+        $in     = implode(',', array_fill(0, count($editionIds), '%d'));
+
+        // One query: per edition, the MIN session date that is today-or-later.
+        // Sessions are vad_session posts with edition_id + date meta. Online /
+        // assignment sessions are excluded — they are e-learning steps.
+        // Build args in placeholder order: 3 meta-key strings, the IN(...) ids,
+        // then the date. Pass as a single array so unpacking is never followed
+        // by a positional argument (PHP fatal otherwise).
+        $args = array_merge(
+            [$prefix . 'edition_id', $prefix . 'date', $prefix . 'type'],
+            $editionIds,
+            [$today],
+        );
+        $sql = $wpdb->prepare(
+            "SELECT ed.meta_value AS edition_id, MIN(dt.meta_value) AS next_date
+               FROM {$wpdb->posts} p
+               JOIN {$wpdb->postmeta} ed ON ed.post_id = p.ID AND ed.meta_key = %s
+               JOIN {$wpdb->postmeta} dt ON dt.post_id = p.ID AND dt.meta_key = %s
+               LEFT JOIN {$wpdb->postmeta} ty ON ty.post_id = p.ID AND ty.meta_key = %s
+              WHERE p.post_type = 'vad_session'
+                AND p.post_status = 'publish'
+                AND ed.meta_value IN ($in)
+                AND dt.meta_value >= %s
+                AND (ty.meta_value IS NULL OR ty.meta_value NOT IN ('online', 'assignment'))
+              GROUP BY ed.meta_value",
+            $args,
+        );
+
+        foreach ($wpdb->get_results($sql) as $row) {
+            $nextByEdition[(int) $row->edition_id] = (string) $row->next_date;
+        }
+    }
+
+    foreach ($items as &$item) {
+        if (($item['kind'] ?? 'edition') !== 'edition') {
+            continue;
+        }
+        $id = (int) ($item['edition']['id'] ?? 0);
+        $item['edition']['sort_date'] = $nextByEdition[$id]
+            ?? ($item['edition']['start_date'] ?? null);
+        // Ensure title is a string so the tiebreak comparator is total.
+        $item['edition']['title'] = (string) ($item['edition']['title'] ?? '');
+    }
+    unset($item);
+
+    return $items;
 }
 
 /**
@@ -148,22 +232,34 @@ function stridence_catalog_order_into_bands(array $items): array
             $a[] = $item;
             continue;
         }
-        $start = $item['edition']['start_date'] ?? null;
-        if ($start === null || $start === '') {
+        // Band classification + sorting use sort_date — the edition's next
+        // UPCOMING session date (caller-computed by attach_sort_dates), falling
+        // back to start_date. This keeps an edition whose first session has
+        // passed but has a later session in the dated-soon band, ordered by
+        // that next session.
+        $sort = $item['edition']['sort_date'] ?? ($item['edition']['start_date'] ?? null);
+        if ($sort === null || $sort === '') {
             $b[] = $item;
-        } elseif ($start >= $today) {
+        } elseif ($sort >= $today) {
             $a[] = $item;
         } else {
             $c[] = $item;
         }
     }
 
-    // Sort dated editions ASC by start_date; keep course items at the A tail
-    // in enumeration order.
+    // Sort dated editions ASC by next-session date; tie-break A->Z by title so
+    // editions sharing a date keep a STABLE order across requests. The eligible
+    // query has no orderby (to include dateless editions), so without a
+    // deterministic tiebreak tied dates shuffle on refresh. Course items stay
+    // at the A tail in enumeration order.
     $a_editions = array_values(array_filter($a, static fn($i) => ($i['kind'] ?? 'edition') === 'edition'));
     $a_courses  = array_values(array_filter($a, static fn($i) => ($i['kind'] ?? 'edition') === 'course'));
-    $cmp = static fn(array $x, array $y): int
-        => strcmp((string) ($x['edition']['start_date'] ?? ''), (string) ($y['edition']['start_date'] ?? ''));
+    $cmp = static function (array $x, array $y): int {
+        $sx = (string) ($x['edition']['sort_date'] ?? $x['edition']['start_date'] ?? '');
+        $sy = (string) ($y['edition']['sort_date'] ?? $y['edition']['start_date'] ?? '');
+        return strcmp($sx, $sy)
+            ?: strcmp((string) ($x['edition']['title'] ?? ''), (string) ($y['edition']['title'] ?? ''));
+    };
     usort($a_editions, $cmp);
     usort($c, $cmp);
     $a = [...$a_editions, ...$a_courses];

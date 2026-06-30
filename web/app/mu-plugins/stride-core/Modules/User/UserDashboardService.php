@@ -467,6 +467,51 @@ final class UserDashboardService
     }
 
     /**
+     * Resolve which enrolled edition a LearnDash lesson is being consumed
+     * through, so navigation (the LearnDash focus-mode "Terug" button) can
+     * return to the edition rather than the bare course.
+     *
+     * A lesson can belong to a course directly (pure e-learning) AND be pulled
+     * into an edition's online session (blended learning). When the user is
+     * enrolled in such an edition, the lesson is "part of" that edition and the
+     * return target should be the edition. Returns the user's MOST RECENT active
+     * enrolled edition whose online session links this lesson — findByUser()
+     * orders registered_at DESC, so the first match is the most recent — or null
+     * when the lesson is not reached through any enrolled edition.
+     */
+    public function findEnrolledEditionForLesson(int $userId, int $lessonId): ?int
+    {
+        if ($userId <= 0 || $lessonId <= 0) {
+            return null;
+        }
+
+        foreach ($this->registrationRepo->findByUser($userId) as $reg) {
+            $status = RegistrationStatus::tryFrom($reg->status ?? '');
+            if (!$status || !in_array($status, [RegistrationStatus::Pending, RegistrationStatus::Confirmed], true)) {
+                continue;
+            }
+
+            $editionId = (int) ($reg->edition_id ?? 0);
+            if (!$editionId) {
+                continue;
+            }
+
+            foreach ($this->sessionService->getSessionsForEdition($editionId) as $session) {
+                if (($session['type'] ?? '') !== 'online') {
+                    continue;
+                }
+
+                $lessonIds = array_map('intval', $session['lesson_ids'] ?? []);
+                if (in_array($lessonId, $lessonIds, true)) {
+                    return $editionId;
+                }
+            }
+        }
+
+        return null;
+    }
+
+    /**
      * Build edition registration data grouped by status.
      *
      * @return array{0: array, 1: array, 2: array} [active, completed, cancelled]

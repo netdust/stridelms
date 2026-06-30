@@ -181,7 +181,7 @@ defined('ABSPATH') || exit;
             </thead>
             <tbody>
                 <template x-for="r in rows" :key="r.id">
-                    <tr :class="isSelected(r.id) && 'is-selected'" @click="openRow(r)">
+                    <tr :class="{ 'is-selected': isSelected(r.id), 'is-anon': r.anonymous || r.user.id === 0 }" @click="openRow(r)">
                         <td class="ws-col-check" @click.stop>
                             <input type="checkbox" class="ws-check" :checked="isSelected(r.id)" @change="toggle(r.id)">
                         </td>
@@ -189,8 +189,12 @@ defined('ABSPATH') || exit;
                             <div class="ws-namecell">
                                 <div class="ws-namecell__avatar" :style="`background:${avatarColor(r.user.name)}`" x-text="initials(r.user.name)"></div>
                                 <div>
-                                    <div class="ws-namecell__name" x-text="r.user.name"></div>
-                                    <div class="ws-namecell__sub" x-text="r.user.email"></div>
+                                    <div class="ws-namecell__name">
+                                        <span x-text="r.user.name"></span>
+                                        <span class="ws-badge ws-badge--dotless ws-badge--lead"
+                                              x-show="r.anonymous || r.user.id === 0"><?php echo esc_html__('Lead', 'stride'); ?></span>
+                                    </div>
+                                    <div class="ws-namecell__sub" x-text="r.user.email || '—'"></div>
                                 </div>
                             </div>
                         </td>

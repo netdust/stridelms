@@ -21,6 +21,14 @@ jobs:
   integration:
     runs-on: ubuntu-latest
 
+    # The integration suite refuses to run unless the target DB is explicitly
+    # affirmed disposable (tests/Integration/bootstrap.php guard — it issues a
+    # table-wide DELETE on vad_registrations). The CI `database` service below
+    # is a throwaway MariaDB container with a fresh WP install created in this
+    # same job, so it IS disposable — declare the opt-in the guard requires.
+    env:
+      STRIDE_TEST_DB_DISPOSABLE: '1'
+
     services:
       database:
         image: mariadb:10.11

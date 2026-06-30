@@ -113,6 +113,31 @@ get_header('dashboard');
     <!-- Main Column -->
     <div class="flex-1 min-w-0 flex flex-col">
 
+        <!-- Dashboard top bar — restores continuity with the public site:
+             a "Terug" link to the previous page + the primary site nav, so
+             the dashboard is never a dead end. Desktop only; mobile keeps
+             its own nav-mobile bar below. -->
+        <div class="hidden lg:flex items-center justify-between gap-4 h-14 lg:px-10 border-b border-border-soft bg-surface-card/80 backdrop-blur sticky top-0 z-20">
+            <a href="<?php echo esc_url(wp_get_referer() ?: home_url('/')); ?>"
+               onclick="if (document.referrer && document.referrer !== location.href) { history.back(); return false; }"
+               class="inline-flex items-center gap-1.5 text-sm font-semibold text-text-muted hover:text-text transition-colors duration-fast">
+                <?php echo stridence_icon('arrow-left', 'w-4 h-4'); ?>
+                <?php esc_html_e('Terug', 'stridence'); ?>
+            </a>
+
+            <nav class="flex items-center gap-1">
+                <?php
+                wp_nav_menu([
+                    'theme_location' => 'primary',
+                    'container' => false,
+                    'menu_class' => 'flex items-center gap-1',
+                    'fallback_cb' => 'stridence_fallback_menu',
+                    'walker' => new Stridence_Nav_Walker(),
+                ]);
+?>
+            </nav>
+        </div>
+
         <!-- Mobile Navigation (internals owned by nav-mobile.php; rendered
              directly in the main column so its sticky top-0 can stick — a
              same-height wrapper div would pin it in place) -->

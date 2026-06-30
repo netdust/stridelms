@@ -10,6 +10,8 @@
     <a href="#concepten">Concepten</a>
     <a href="#cursus-vs-editie">Cursus vs Editie</a>
     <a href="#klassikaal-vs-online">Klassikaal vs Online</a>
+    <a href="#blended-sessies">Blended &amp; online sessies</a>
+    <a href="#deelnemer-dashboard">Het deelnemer-dashboard</a>
     <a href="#trajecten">Trajecten</a>
     <a href="#inschrijvingen">Inschrijvingen</a>
     <a href="#offertes-vouchers">Offertes &amp; Vouchers</a>
@@ -189,6 +191,202 @@
             onder <em>Cursuscategorie&euml;n</em>.
         </div>
     </div>
+</section>
+
+<!-- ─── Blended & online sessies ─── -->
+<section id="blended-sessies" class="stride-guide-section">
+    <h2>Blended &amp; online sessies</h2>
+    <p>
+        Een klassikale editie hoeft niet alleen fysieke lesdagen te bevatten.
+        Onder <strong>Sessies</strong> kun je naast lesdagen ook
+        <strong>webinars</strong>, <strong>online modules</strong> (e-learning) en
+        <strong>opdrachten</strong> toevoegen. Zo bouw je een <strong>blended</strong>
+        opleiding: deels klassikaal, deels online — gespreid in de tijd.
+    </p>
+
+    <h3>De twee lagen: cursus levert inhoud, editie plant inhoud</h3>
+    <p>
+        Online modules berusten op twee lagen die samenwerken. Het is belangrijk
+        het verschil te begrijpen, want je stelt op <strong>twee plaatsen</strong>
+        iets in.
+    </p>
+    <table class="widefat striped stride-guide-table">
+        <thead>
+            <tr>
+                <th style="width:30%"></th>
+                <th>Cursus <small>(LearnDash)</small></th>
+                <th>Editie <small>(Stride)</small></th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>Wat je hier doet</strong></td>
+                <td>Lessen aanmaken (de inhoud van de module)</td>
+                <td>Een online sessie maken die naar één les verwijst</td>
+            </tr>
+            <tr>
+                <td><strong>Datuminstelling</strong></td>
+                <td>Optionele <em>beschikbaarheid</em> per les (drip-feed)</td>
+                <td><em>Sessiedatum</em> ("Beschikbaar vanaf …")</td>
+            </tr>
+            <tr>
+                <td><strong>Effect</strong></td>
+                <td><strong>Vergrendelt</strong> de les tot de datum (harde toegang)</td>
+                <td><strong>Toont &amp; nudget</strong> de les op het dashboard (zacht)</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h3>Stap voor stap: een gespreide online module opzetten</h3>
+    <ol class="stride-guide-steps">
+        <li>
+            <strong>Maak de lessen aan in de cursus.</strong>
+            Ga naar <em>LearnDash &rarr; Cursussen</em>, open de cursus en voeg de
+            lessen toe (bijv. "Module 1", "Module 2"). De cursus is de bron van de
+            inhoud — je maakt elke les hier maar één keer aan.
+        </li>
+        <li>
+            <strong>(Optioneel) Stel de beschikbaarheid per les in.</strong>
+            Wil je dat een les pas écht toegankelijk is vanaf een bepaald moment?
+            Open de les in LearnDash en zet onder <em>Lesinstellingen &rarr;
+            Beschikbaarheid</em> de drip-feed: "beschikbaar X dagen na inschrijving"
+            of "beschikbaar op een specifieke datum". Zonder deze instelling is de
+            les toegankelijk zodra de inschrijving bevestigd is.
+        </li>
+        <li>
+            <strong>Voeg per les een online sessie toe in de editie.</strong>
+            Open de editie, ga naar <em>Sessies &rarr; Sessie toevoegen</em>, kies
+            type <strong>Online</strong>, en selecteer in het dropdownmenu
+            <em>"Les"</em> de juiste les. Het dropdownmenu toont automatisch alle
+            lessen van de gekoppelde cursus.
+        </li>
+        <li>
+            <strong>Geef elke online sessie een datum.</strong>
+            Die datum verschijnt bij de deelnemer als "Beschikbaar vanaf …" en stuurt
+            wanneer de module als actie op het dashboard naar voren komt. Spreid zo
+            de modules: Module 1 op 30 juni, Module 2 op 6 augustus.
+        </li>
+    </ol>
+
+    <div class="stride-guide-tip">
+        <span class="dashicons dashicons-info"></span>
+        <div>
+            <strong>Waarom kies ik per sessie één les en niet de hele cursus?</strong>
+            Een sessie is één moment in de planning. Door per sessie één les te
+            koppelen, kun je de lessen van een cursus <em>spreiden</em> in de tijd —
+            elk met een eigen datum. De cursus levert de inhoud; de editie bepaalt
+            wanneer elke les aan bod komt.
+        </div>
+    </div>
+
+    <h3 id="twee-datums">Belangrijk: sessiedatum vergrendelt niet</h3>
+    <p>
+        Dit is het meest verwarrende punt, dus expliciet:
+        <strong>de sessiedatum in de editie en de beschikbaarheidsdatum in LearnDash
+        zijn twee aparte instellingen.</strong>
+    </p>
+    <table class="widefat striped stride-guide-table">
+        <tbody>
+            <tr>
+                <td style="width:42%"><strong>Sessiedatum</strong> (Stride, in de editie)</td>
+                <td>
+                    Toont "Beschikbaar vanaf &lt;datum&gt;" en bepaalt wanneer de
+                    module als actie op het dashboard verschijnt. <strong>Blokkeert
+                    de toegang niet</strong> — een ingeschreven deelnemer kan de les
+                    technisch al openen.
+                </td>
+            </tr>
+            <tr>
+                <td><strong>Beschikbaarheid / drip-feed</strong> (LearnDash, in de les)</td>
+                <td>
+                    <strong>Vergrendelt</strong> de les écht tot de ingestelde datum.
+                    Pas als deze datum verstreken is, verschijnt de module als
+                    actie én is ze te openen.
+                </td>
+            </tr>
+        </tbody>
+    </table>
+    <div class="stride-guide-tip">
+        <span class="dashicons dashicons-lightbulb"></span>
+        <div>
+            <strong>Vuistregel:</strong> wil je alleen <em>plannen en aankondigen</em>
+            ("deze module komt eraan op 6 augustus"), dan volstaat de
+            <strong>sessiedatum</strong>. Wil je de les ook echt
+            <em>vergrendelen</em> tot die dag, zet dan <strong>dezelfde datum ook als
+            drip-feed in LearnDash</strong>. Stel je alleen de sessiedatum in, dan
+            staat er wel "Beschikbaar vanaf …", maar kan de deelnemer de les al openen.
+        </div>
+    </div>
+</section>
+
+<!-- ─── Het deelnemer-dashboard ─── -->
+<section id="deelnemer-dashboard" class="stride-guide-section">
+    <h2>Het deelnemer-dashboard</h2>
+    <p>
+        Na inschrijving landt de deelnemer op <em>Mijn account</em>. Belangrijk om te
+        weten als beheerder: wat jij in de editie plant (sessies, online modules,
+        afrondingstaken) bepaalt wat de deelnemer hier als <strong>actie</strong> ziet.
+    </p>
+
+    <table class="widefat striped stride-guide-table">
+        <thead>
+            <tr>
+                <th style="width:28%">Onderdeel</th>
+                <th>Wat het toont</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <td><strong>"Actie vereist"</strong> <small>(groene balk)</small></td>
+                <td>
+                    De <strong>één</strong> belangrijkste volgende stap. Prioriteit:
+                    eerst een sessie van vandaag/morgen, anders de eerstvolgende
+                    openstaande taak. Er staat altijd maar één item in deze balk.
+                </td>
+            </tr>
+            <tr>
+                <td><strong>"Acties nodig"</strong> <small>(lijst)</small></td>
+                <td>
+                    <strong>Alle</strong> openstaande taken samen — afrondingstaken,
+                    sessiekeuzes én elke nog niet afgeronde online module. Heeft een
+                    editie twee online modules, dan staan beide hier (elk met "Ga
+                    verder"). De groene balk licht er telkens de bovenste van uit.
+                </td>
+            </tr>
+            <tr>
+                <td><strong>"Binnenkort"</strong></td>
+                <td>De eerstvolgende geplande sessies (datum, tijd, locatie), met export naar agenda.</td>
+            </tr>
+            <tr>
+                <td><strong>Opleidingen / online programma</strong></td>
+                <td>
+                    De cursussen waarvoor de deelnemer is ingeschreven, met voortgang
+                    per les. Toekomstige modules staan hier vermeld met hun
+                    beschikbaarheidsdatum.
+                </td>
+            </tr>
+        </tbody>
+    </table>
+
+    <div class="stride-guide-tip">
+        <span class="dashicons dashicons-lightbulb"></span>
+        <div>
+            <strong>Waarom zie ik dezelfde module twee keer?</strong> Dat klopt: een
+            online module verschijnt zowel in de groene balk (als het de bovenste
+            actie is) als in de volledige lijst "Acties nodig". Het is één taak die op
+            twee plaatsen getoond wordt — de balk is de snelkoppeling naar de
+            belangrijkste, de lijst is het volledige overzicht.
+        </div>
+    </div>
+
+    <h3>Waar komt een deelnemer uit na het klikken?</h3>
+    <p>
+        "Ga verder" op een online module opent de les in LearnDash. De
+        <strong>"Terug"</strong>-knop daar brengt de deelnemer terug naar de
+        <strong>editie</strong> waar de module bij hoort (niet naar de kale cursus),
+        zodat de context van die uitvoering behouden blijft. Een afrondingstaak opent
+        de afrondingspagina van de editie (<em>evaluatie, documenten</em>).
+    </p>
 </section>
 
 <!-- ─── Trajecten ─── -->
@@ -410,6 +608,43 @@
                 Als "Goedkeuring vereist" aanstaat voor een editie, komen nieuwe inschrijvingen
                 binnen als "In afwachting". Een beheerder kan ze goedkeuren of afwijzen
                 in het Deelnemers-paneel van de editie.
+            </p>
+        </details>
+
+        <details>
+            <summary>Hoe verspreid ik online modules over de tijd binnen één editie?</summary>
+            <p>
+                Voeg per module een <strong>online sessie</strong> toe onder "Sessies"
+                in de editie, koppel er de juiste les aan en geef elke sessie een
+                eigen <strong>datum</strong>. De deelnemer ziet elke module rond zijn
+                datum als actie op het dashboard ("Beschikbaar vanaf …"). Zie
+                <a href="#blended-sessies">Blended &amp; online sessies</a> voor de
+                stappen.
+            </p>
+        </details>
+
+        <details>
+            <summary>Er staat "Beschikbaar vanaf …", maar de deelnemer kan de les nu al openen. Klopt dat?</summary>
+            <p>
+                Ja, dat kan kloppen. De <strong>sessiedatum</strong> (in de editie)
+                stuurt enkel de weergave en de nudge op het dashboard — ze
+                <strong>vergrendelt de les niet</strong>. Een ingeschreven deelnemer
+                heeft via LearnDash al toegang tot de cursus. Wil je de les écht
+                blokkeren tot die datum, stel dan dezelfde datum óók in als
+                <strong>drip-feed in de LearnDash-lesinstellingen</strong>. Het zijn
+                twee aparte instellingen — zie
+                <a href="#twee-datums">Sessiedatum vergrendelt niet</a>.
+            </p>
+        </details>
+
+        <details>
+            <summary>Waarom staat een online module twee keer op het dashboard van de deelnemer?</summary>
+            <p>
+                De groene <strong>"Actie vereist"</strong>-balk toont altijd één item:
+                de belangrijkste volgende stap. De lijst <strong>"Acties nodig"</strong>
+                toont álle openstaande taken. Een module die bovenaan staat,
+                verschijnt dus in beide — het is één taak op twee plaatsen, geen
+                dubbele inschrijving.
             </p>
         </details>
 

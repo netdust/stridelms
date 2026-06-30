@@ -31,7 +31,18 @@
                     // existing selections render as selected. Sanitizer absint's
                     // on save, so round-tripping is safe.
                     assignments: (g.assignments || []).map(v => String(v)),
-                    fields: (g.fields || []).map(f => ({ help: '', ...f })),
+                    // Stored fields carry no `id` (the server persists
+                    // label/name/type/help/description only). The template keys
+                    // the field x-for on `field.id` and every field operation
+                    // matches on it, so a missing id makes all rows share the
+                    // `undefined` key → Alpine "Duplicate key" → the list never
+                    // renders. Assign a client id on hydrate, same shape as
+                    // addField()'s _newId('tmp_f'), preserving any existing one.
+                    fields: (g.fields || []).map(f => ({
+                        help: '',
+                        ...f,
+                        id: f.id || ('tmp_f_' + Math.random().toString(36).slice(2, 9)),
+                    })),
                 }));
                 this.fieldTypes = seed.fieldTypes || {};
                 this.stages = seed.stages || {};

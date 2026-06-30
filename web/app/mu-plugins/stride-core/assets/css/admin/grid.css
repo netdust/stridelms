@@ -261,6 +261,8 @@
 
 .ws-table tbody td { padding: 0 var(--ws-4); height: 52px; border-bottom: 1px solid var(--ws-border); vertical-align: middle; color: var(--ws-text-2); }
 .ws-table tbody tr { transition: background var(--ws-ease); cursor: pointer; }
+/* Anonymous lead rows have no dossier to open — drop the clickable affordance. */
+.ws-table tbody tr.is-anon { cursor: default; }
 .ws-table tbody tr:hover { background: var(--ws-primary-subtle); }
 .ws-table tbody tr.is-selected { background: var(--ws-primary-light); }
 .ws-table tbody tr.is-selected:hover { background: #c7dbfd; }
