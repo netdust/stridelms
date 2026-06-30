@@ -69,7 +69,15 @@ final class EditionCPT
         ];
     }
 
-    private static function getFields(): array
+    /**
+     * Edition field schema.
+     *
+     * Public so schema-contract unit tests can assert field keys/types
+     * directly (mirrors MailTemplateCPT::getFields()).
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function getFields(): array
     {
         return [
             'course_id' => [
@@ -183,6 +191,11 @@ final class EditionCPT
                 'label' => 'Documenten vereist',
                 'description' => 'Enrollment requires document upload',
             ],
+            'documents_instruction' => [
+                'type' => 'textarea',
+                'label' => __('Instructie documenten', 'stride'),
+                'description' => __('Toelichting die de deelnemer ziet bij de taak "Documenten uploaden". Leeg = standaardtekst.', 'stride'),
+            ],
             'requires_session_selection' => [
                 'type' => 'boolean',
                 'label' => 'Sessiekeuze vereist',
@@ -202,6 +215,11 @@ final class EditionCPT
                 'type' => 'boolean',
                 'label' => 'Documenten vereist na afloop',
                 'description' => 'Post-course document upload required',
+            ],
+            'post_documents_instruction' => [
+                'type' => 'textarea',
+                'label' => __('Instructie documenten na afloop', 'stride'),
+                'description' => __('Toelichting bij de upload-taak na afloop. Leeg = standaardtekst.', 'stride'),
             ],
             'post_requires_approval' => [
                 'type' => 'boolean',
