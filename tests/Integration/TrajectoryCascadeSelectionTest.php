@@ -304,9 +304,14 @@ final class TrajectoryCascadeSelectionTest extends IntegrationTestCase
      */
     private function createPaidEdition(float $euros): int
     {
+        // $euros is expressed in EUROS for readable call sites; the stored price
+        // fields are canonical CENTS (EditionService::getPrice reads them as
+        // cents). Convert so a €50.00 edition stores 5000.
+        $cents = (int) round($euros * 100);
+
         return $this->createTestEdition(['meta' => [
-            '_ntdst_price' => $euros,
-            '_ntdst_price_non_member' => $euros,
+            '_ntdst_price' => $cents,
+            '_ntdst_price_non_member' => $cents,
         ]]);
     }
 
