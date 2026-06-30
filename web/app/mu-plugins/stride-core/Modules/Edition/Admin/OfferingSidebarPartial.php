@@ -46,7 +46,7 @@ final class OfferingSidebarPartial
             'post_requires_approval'   => __('Aftekenen door beheerder', 'stride'),
         ];
         ?>
-        <div class="stride-sidebar-section stride-classroom-only">
+        <div class="stride-sidebar-section">
             <h4><?php esc_html_e('Vóór inschrijving', 'stride'); ?></h4>
 
             <label style="font-size: 11px; color: #646970; display: block; margin-bottom: 2px;">
@@ -79,7 +79,7 @@ final class OfferingSidebarPartial
             </div>
         </div>
 
-        <div class="stride-sidebar-section stride-classroom-only">
+        <div class="stride-sidebar-section">
             <h4><?php esc_html_e('Tijdens inschrijving', 'stride'); ?></h4>
             <p class="description" style="margin-bottom: 8px; font-size: 11px;">
                 <?php esc_html_e('Taken die deelnemers moeten voltooien na inschrijving.', 'stride'); ?>
@@ -115,7 +115,7 @@ final class OfferingSidebarPartial
             <?php endif; ?>
         </div>
 
-        <div class="stride-sidebar-section stride-classroom-only">
+        <div class="stride-sidebar-section">
             <h4><?php esc_html_e('Na afloop', 'stride'); ?></h4>
             <p class="description" style="margin-bottom: 8px; font-size: 11px;">
                 <?php esc_html_e('Taken die deelnemers moeten voltooien na de opleiding.', 'stride'); ?>

@@ -114,7 +114,10 @@
                 $('.stride-tab[data-tab="deelnemers"]').trigger('click');
             }
 
-            // Toggle classroom-only elements (dates, venue, informatie tab)
+            // Toggle classroom-only elements (the Informatie tab — venue/practical
+            // info). Enrollment-lifecycle sections (form/gates) are format-agnostic
+            // and intentionally NOT in this bucket: an online "op aanvraag" edition
+            // still needs its enrollment form + approval gate.
             $('.stride-classroom-only').toggle(!isOnline);
 
             // Toggle online-only tab button (content hidden by tab system)
