@@ -83,8 +83,12 @@ get_header();
         <?php
         // Helder Tij: the online detail page is a single focused scroll
         // (intro + lesson list + sidebar) — no tab nav. Klassikaal keeps it.
+        // On an edition overview the tab set is trimmed to the sections that
+        // actually render (Overzicht + Edities) so tabs can't point at removed
+        // Programma/Sprekers/Praktisch anchors.
         stridence_template_part('templates/course/tabs', null, [
-            'is_online' => $is_online,
+            'is_online'           => $is_online,
+            'is_edition_overview' => $has_active_edition,
         ]);
         ?>
     <?php endif; ?>
