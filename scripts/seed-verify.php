@@ -311,6 +311,61 @@ if (!empty($regIds)) {
 $check('>=1 pending seed registration approval-ready (user tasks complete, approval open)', $approvalReady >= 1);
 
 // ---------------------------------------------------------------------------
+// 4. Demo persona (seed_completed_user) — every dashboard surface populated.
+//    Drives the SAME reads the dashboard tabs use, so a PASS here means the
+//    rendered surface will populate (premise ground-truth: trajectory needs a
+//    PARENT row, certificate needs a genuine LD completion + assigned cert).
+// ---------------------------------------------------------------------------
+$demo = get_user_by('email', 'seed_completed_user@seed.test');
+$check('demo persona user exists', $demo instanceof WP_User);
+if ($demo instanceof WP_User) {
+    $uid = (int) $demo->ID;
+
+    // F3 Meldingen: >=1 notification, >=1 unread (real product read)
+    $notif = ntdst_get(\Stride\Modules\Notification\NotificationService::class);
+    $all   = $notif->getNotifications($uid);
+    $check('demo persona has >=1 notification', count($all) >= 1);
+    $check('demo persona has >=1 UNREAD notification', $notif->getUnreadCount($uid) >= 1);
+
+    // F2 Certificaten: >=1 completed edition reg whose course yields a cert link
+    $regRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+    $edSvc   = ntdst_get(\Stride\Modules\Edition\EditionService::class);
+    $hasCertLink = false;
+    foreach ($regRepo->findByUser($uid) as $r) {
+        if (($r->status ?? '') !== 'completed' || empty($r->edition_id)) {
+            continue;
+        }
+        $cid = (int) $edSvc->getCourseId((int) $r->edition_id);
+        if ($cid && \Stride\Integrations\LearnDash\LearnDashHelper::getCertificateLink($cid, $uid) !== '') {
+            $hasCertLink = true;
+            break;
+        }
+    }
+    $check('demo persona has a downloadable certificate link', $hasCertLink);
+
+    // F4 Offertes: >=1 quote tied to the demo persona (vad_quote user_id meta is BARE)
+    $quoteCount = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->postmeta} pm
+         JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_quote'
+         WHERE pm.meta_key = 'user_id' AND pm.meta_value = %d",
+        $uid,
+    ));
+    $check('demo persona has >=1 quote', $quoteCount >= 1);
+
+    // F5 Trajecten: >=1 PARENT trajectory enrollment (the corrected premise)
+    $trajEnrollments = $regRepo->findTrajectoryEnrollmentsByUser($uid);
+    $check('demo persona has >=1 parent trajectory enrollment (tab-trajecten read)', count($trajEnrollments) >= 1);
+
+    // F1 Dashboard pending task: >=1 pending reg with open completion_tasks
+    $pendingWithTasks = (int) $wpdb->get_var($wpdb->prepare(
+        "SELECT COUNT(*) FROM {$wpdb->prefix}vad_registrations
+         WHERE user_id = %d AND status = 'pending' AND completion_tasks IS NOT NULL",
+        $uid,
+    ));
+    $check('demo persona has >=1 pending registration with a completion task', $pendingWithTasks >= 1);
+}
+
+// ---------------------------------------------------------------------------
 echo "\n" . (empty($failures) ? "ALL DIMENSIONS COVERED\n" : count($failures) . " FAILURES\n");
 // NOTE: `ddev exec bash -c '...; echo $?'` always shows 0 — ddev expands `$?`
 // in its own wrapper shell. Check the HOST-side `$?` after `ddev exec` instead.

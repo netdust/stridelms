@@ -1203,6 +1203,56 @@ final class StrideSeedBuilders
     }
 
     /**
+     * Create a PARENT trajectory enrollment (trajectory_id set, edition_id NULL)
+     * — the shape tab-trajecten.php reads via findTrajectoryEnrollmentsByUser().
+     * A path:trajectory EDITION registration does NOT appear there (premise
+     * ground-truth fact 4). Idempotent via findByUserAndTrajectory.
+     *
+     * @param array<string,mixed> $spec
+     * @param array<string,int>   $userMap
+     * @return int|null registration id
+     */
+    public function buildTrajectoryEnrollment(array $spec, array $userMap): ?int
+    {
+        $repo   = ntdst_get(RegistrationRepository::class);
+        $userId = (int) ($userMap[$spec['user']] ?? 0);
+        if (!$userId) {
+            echo "  ! Trajectory enrollment: unknown user '{$spec['user']}'\n";
+
+            return null;
+        }
+        $trajectoryId = $this->findIdByTitle('vad_trajectory', $spec['trajectory_title']);
+        if (!$trajectoryId) {
+            echo "  ! Trajectory enrollment: trajectory not found '{$spec['trajectory_title']}'\n";
+
+            return null;
+        }
+
+        $existing = $repo->findByUserAndTrajectory($userId, $trajectoryId);
+        if ($existing) {
+            echo "  - Trajectory enrollment {$spec['user']} → {$spec['trajectory_title']} exists (ID: {$existing->id})\n";
+
+            return (int) $existing->id;
+        }
+
+        $regId = $repo->create([
+            'user_id'         => $userId,
+            'trajectory_id'   => $trajectoryId,   // parent: NO edition_id
+            'status'          => $spec['status'] ?? 'confirmed',
+            'enrollment_path' => RegistrationRepository::PATH_TRAJECTORY,
+            'notes'           => 'Seed: demo persona trajectory enrollment',
+        ]);
+        if (is_wp_error($regId)) {
+            echo "  ! Trajectory enrollment failed: {$regId->get_error_message()}\n";
+
+            return null;
+        }
+        echo "  + Trajectory enrollment: {$spec['user']} → {$spec['trajectory_title']} (ID: {$regId})\n";
+
+        return (int) $regId;
+    }
+
+    /**
      * Resolve the edition a trajectory course entry should bind to: the
      * course's OPEN seeded edition, falling back to any seeded edition.
      * Returns 0 when the course has no edition (pure-LD).
