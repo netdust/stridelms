@@ -204,6 +204,111 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
+     * Homepage-teaser classroom strip edition IDs (archive-sfwd-courses.php,
+     * Cluster 3 / Task 3.3 — moved verbatim out of the theme). DISTINCT from
+     * findCatalogEligibleIds: the SEO teaser deliberately filters on ACTIVE
+     * STATUS ONLY (NO date window — a past-end active classroom edition still
+     * shows) and excludes editions of online-format courses. The start_date
+     * orderby forces an EXISTS join that drops fully-dateless editions — also
+     * deliberate (the interest anchors live on /klassikaal, not the teaser).
+     *
+     * This is a PRODUCT RULING (Stefan, 2026-06-30), not a refactor: the teaser
+     * is NOT converged to the canonical date-window rule. Behaviour-preserving
+     * lift of the inline WP_Query so no raw query lives in the theme (INV-3).
+     *
+     * @param array<int> $excludeCourseIds Editions of these courses are dropped
+     *                                     (the online-format course set).
+     * @return list<int>
+     */
+    public function findArchiveClassroomTeaserIds(array $excludeCourseIds = [], int $limit = 6): array
+    {
+        $prefix = $this->getMetaPrefix();
+
+        $metaQuery = [
+            [
+                'key'     => $prefix . 'status',
+                'value'   => OfferingStatus::activeValues(),
+                'compare' => 'IN',
+            ],
+        ];
+
+        $excludeIds = array_values(array_unique(array_filter(array_map('intval', $excludeCourseIds))));
+        if (!empty($excludeIds)) {
+            $metaQuery[] = [
+                'relation' => 'OR',
+                [
+                    'key'     => $prefix . 'course_id',
+                    'value'   => $excludeIds,
+                    'compare' => 'NOT IN',
+                ],
+                [
+                    'key'     => $prefix . 'course_id',
+                    'compare' => 'NOT EXISTS',
+                ],
+            ];
+        }
+
+        return $this->teaserQuery($metaQuery, $limit);
+    }
+
+    /**
+     * Homepage-teaser online strip edition IDs (archive-sfwd-courses.php,
+     * Cluster 3 / Task 3.3). Unlike the classroom strip, the online strip IS
+     * date-windowed — it reuses the CANONICAL eligibility predicate
+     * (catalogDateWindowMetaQuery) scoped to the online-format course set. Like
+     * the classroom strip, the start_date orderby drops dateless editions (the
+     * teaser shows only dated-soon enrollables; dateless always-on online cards
+     * live on /online). Behaviour-preserving lift of the inline WP_Query.
+     *
+     * @param array<int> $courseIds The online-format course set to scope to.
+     * @return list<int>
+     */
+    public function findArchiveOnlineTeaserIds(array $courseIds, int $limit = 6): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $courseIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        $metaQuery = $this->catalogDateWindowMetaQuery();
+        $metaQuery[] = [
+            'key'     => $this->getMetaPrefix() . 'course_id',
+            'value'   => $ids,
+            'compare' => 'IN',
+        ];
+
+        return $this->teaserQuery($metaQuery, $limit);
+    }
+
+    /**
+     * Shared teaser WP_Query: published editions matching $metaQuery, capped to
+     * $limit, ordered by start_date ASC. The meta_value orderby forces an
+     * EXISTS join on start_date — which is exactly why dateless editions drop
+     * out of both teaser strips (deliberate, product ruling). The full catalog
+     * (findCatalogEligibleIds) avoids this orderby precisely to KEEP dateless.
+     *
+     * @param array<int, array<string, mixed>> $metaQuery
+     * @return list<int>
+     */
+    private function teaserQuery(array $metaQuery, int $limit): array
+    {
+        $query = new \WP_Query([
+            'post_type'      => $this->postType,
+            'posts_per_page' => max(1, $limit),
+            'post_status'    => 'publish',
+            'fields'         => 'ids',
+            'no_found_rows'  => true,
+            'meta_query'     => $metaQuery,
+            // start_date EXISTS-join → dateless editions excluded (teaser only).
+            'orderby'        => 'meta_value',
+            'meta_key'       => $this->getMetaPrefix() . 'start_date',
+            'order'          => 'ASC',
+        ]);
+
+        return array_map('intval', $query->posts);
+    }
+
+    /**
      * Published sfwd-courses IDs tagged with an online stride_format
      * (online / e-learning / webinar) — the online-course enumeration the
      * /online catalog path used to run inline. The diff against

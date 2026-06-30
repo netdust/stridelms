@@ -524,6 +524,92 @@ class EditionService extends AbstractService implements EditionQueryInterface
         return $items;
     }
 
+    /** Default item cap per homepage-teaser strip (archive-sfwd-courses.php). */
+    public const ARCHIVE_TEASER_LIMIT = 6;
+
+    /**
+     * Homepage SEO teaser strip items (archive-sfwd-courses.php) — Cluster 3 /
+     * Task 3.3. DISTINCT from getCatalogItems(): the teaser is a 6-item homepage
+     * strip, NOT the full catalog. Its behaviour is PRESERVED, not converged to
+     * the canonical date-window rule (Stefan, 2026-06-30 — product ruling):
+     *
+     *   - 'classroom': ACTIVE-status-ONLY editions (NO date window — a past-end
+     *     active classroom edition still shows), editions of online-format
+     *     courses EXCLUDED, dateless EXCLUDED (start_date EXISTS-join), capped.
+     *   - 'online': the CANONICAL date-window applies (past-grace dropped),
+     *     online-format-course-scoped, dateless EXCLUDED for the teaser, capped,
+     *     then pure-LD online courses top up the remainder (kind 'course').
+     *
+     * Returns the exact prepass struct getCatalogItems() returns, so the INV-7
+     * batch prepass + pure-renderer partials are untouched. INV-3: every query
+     * is a repo call. INV-5: no theme symbol referenced (the cap is passed in,
+     * theme slugs are read via the taxonomy here).
+     *
+     * @param string $strip 'classroom' or 'online'.
+     * @return list<array<string, mixed>>
+     */
+    public function getArchiveTeaserItems(string $strip, int $limit = self::ARCHIVE_TEASER_LIMIT): array
+    {
+        // The online-format course set drives both strips: the classroom strip
+        // EXCLUDES editions of these courses; the online strip is SCOPED to them.
+        $onlineCourseIds = $this->repository->findOnlineFormatCourseIds(self::CATALOG_MAX_ITEMS);
+
+        if ($strip === 'online') {
+            return $this->getArchiveOnlineTeaserItems($onlineCourseIds, $limit);
+        }
+
+        $ids = $this->repository->findArchiveClassroomTeaserIds($onlineCourseIds, $limit);
+
+        return $this->hydrateEditionItems($ids);
+    }
+
+    /**
+     * 'online' teaser strip: date-windowed editions of online-format courses,
+     * dateless-excluded, capped, then pure-LD online courses topping up the
+     * remainder — the exact behaviour of the inline archive query (Task 3.3).
+     *
+     * @param list<int> $onlineCourseIds
+     * @return list<array<string, mixed>>
+     */
+    private function getArchiveOnlineTeaserItems(array $onlineCourseIds, int $limit): array
+    {
+        if (empty($onlineCourseIds)) {
+            return [];
+        }
+
+        $editionIds = $this->repository->findArchiveOnlineTeaserIds($onlineCourseIds, $limit);
+        $items = $this->hydrateEditionItems($editionIds);
+
+        // Top up with pure-LD online courses (never had an edition at all). A
+        // course with only past editions is off-catalog until a new one is
+        // scheduled, so courseIdsWithAnyEdition() is the right exclusion.
+        $remaining = $limit - count($items);
+        if ($remaining <= 0) {
+            return $items;
+        }
+
+        $withEditions = $this->repository->courseIdsWithAnyEdition($onlineCourseIds);
+        $pureLdIds    = array_values(array_diff($onlineCourseIds, $withEditions));
+        if (empty($pureLdIds)) {
+            return $items;
+        }
+
+        $pureLdIds = array_slice($pureLdIds, 0, $remaining);
+        _prime_post_caches($pureLdIds, true, true);
+        foreach ($pureLdIds as $courseId) {
+            if (get_post_status($courseId) !== 'publish') {
+                continue;
+            }
+            $items[] = [
+                'kind'      => 'course',
+                'course_id' => $courseId,
+                'themes'    => $this->courseThemeSlugs($courseId),
+            ];
+        }
+
+        return $items;
+    }
+
     /**
      * Hydrate eligible edition IDs into the light item structs the prepass
      * expects. Batches post/meta/term caches first. Preserves the INF-1
