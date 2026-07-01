@@ -33,9 +33,11 @@ use WP_Error;
  * INV-4: WP_Error from setReminderState()/ndmail_send() is logged and the
  * ledger is NOT marked, so the mail is retried on the next cron tick.
  *
- * Forward-dep (Phase 5 not built yet): 'gate_reminder_days' is not in
- * ActionQueueService::DEFAULTS yet, so getReminderDays() falls back to 7 when
- * the key is absent. Once Phase 5 adds it, this reads live with no change here.
+ * Task 5.1: 'gate_reminder_days' now lives in ActionQueueService::DEFAULTS
+ * (enabled=true, value=7) and remindersEnabled() gates the entire run() on
+ * its 'enabled' flag — an admin can turn reminders off entirely. Fails open
+ * (treated as enabled) if the key/flag is somehow absent, matching the
+ * pre-5.1 fallback-to-7 behavior for getReminderDays().
  */
 final class GateReminderService extends AbstractService
 {
@@ -91,6 +93,10 @@ final class GateReminderService extends AbstractService
      */
     public function run(): void
     {
+        if (!$this->remindersEnabled()) {
+            return;
+        }
+
         $today = current_time('Y-m-d');
         $reminderDays = $this->getReminderDays();
 
@@ -108,9 +114,21 @@ final class GateReminderService extends AbstractService
     }
 
     /**
-     * Resolve gate_reminder_days from settings, falling back to 7 while
-     * Phase 5 hasn't added the key to ActionQueueService::DEFAULTS yet.
-     * Clamped defensively to [1, 365].
+     * Whether the gate reminder cron is enabled at all. Fails OPEN (true)
+     * when the key/'enabled' flag is absent, so an admin must explicitly
+     * set enabled=false to stop reminders — matching the pre-5.1 behavior
+     * where reminders always ran.
+     */
+    private function remindersEnabled(): bool
+    {
+        $rules = StrideSettingsService::getNotificationRules();
+
+        return $rules['gate_reminder_days']['enabled'] ?? true;
+    }
+
+    /**
+     * Resolve gate_reminder_days from settings, falling back to 7 when the
+     * key is absent. Clamped defensively to [1, 365].
      */
     private function getReminderDays(): int
     {

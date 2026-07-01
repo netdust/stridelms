@@ -322,4 +322,49 @@ final class GateReminderServiceTest extends IntegrationTestCase
         $state = $this->repo->getReminderState($regId);
         $this->assertNotNull($state['enroll']['reminder'] ?? null, 'State must be marked once the retry succeeds');
     }
+
+    /** @test */
+    public function noSendWhenGateReminderDaysDisabledThenSendsOnceReEnabled(): void
+    {
+        $today = $this->today();
+        $deadline = $today->modify('+20 days');
+        $registeredAt = $today->modify('-7 days'); // reminderDays default fallback = 7
+
+        $edition = $this->createTestEdition(['meta' => [
+            '_ntdst_gate_deadline' => $deadline->format('Y-m-d'),
+            '_ntdst_requires_questionnaire' => true,
+        ]]);
+        $regId = $this->createReg($edition);
+        $this->setRegisteredAt($regId, $registeredAt->format('Y-m-d') . ' 00:00:00');
+        $this->setCompletionTasks($regId, [
+            'questionnaire' => ['status' => 'pending', 'phase' => 'enrollment'],
+        ]);
+
+        update_option('stride_notification_rules', [
+            'gate_reminder_days' => ['enabled' => false, 'value' => 7],
+        ]);
+
+        try {
+            $this->service->run();
+
+            $this->assertCount(0, $this->mailSpy->calls, 'No mail may be sent while gate_reminder_days is disabled');
+
+            $state = $this->repo->getReminderState($regId);
+            $this->assertArrayNotHasKey('enroll', $state, 'State must NOT be marked when the reminder gate is disabled');
+
+            update_option('stride_notification_rules', [
+                'gate_reminder_days' => ['enabled' => true, 'value' => 7],
+            ]);
+
+            $this->service->run();
+
+            $this->assertCount(1, $this->mailSpy->calls, 'Re-enabling the reminder gate must allow the send to fire');
+            $this->assertSame('stride-gate-reminder', $this->mailSpy->calls[0]['slug']);
+
+            $state = $this->repo->getReminderState($regId);
+            $this->assertNotNull($state['enroll']['reminder'] ?? null, 'reminder state must be marked after the enabled-run sends');
+        } finally {
+            delete_option('stride_notification_rules');
+        }
+    }
 }
