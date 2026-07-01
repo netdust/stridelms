@@ -26,6 +26,15 @@ final class RegistrationRepository
      */
     public const GROUP_BY_ALLOWLIST = ['edition_id', 'status', 'company_id'];
 
+    /**
+     * Max composed child rows returned PER GROUP by queryForGridGrouped (the
+     * accordion body). The cap bounds the grouped response; the FULL per-group
+     * id set (group_reg_ids, used by the offerte tally) stays UNCAPPED so the
+     * tally is never desynced from the aggregate count. The "toon alle N"
+     * affordance surfaces the full set via the flat, paginated grid.
+     */
+    public const GROUP_ROW_CAP = 8;
+
     /** @var array<string, array<object>> Per-request cache for findByUser results */
     private array $findByUserCache = [];
 
@@ -1849,7 +1858,13 @@ final class RegistrationRepository
      *  - 'agg_rows'      => array<object>  — one row per distinct group_value
      *                                         (cols: group_value, cnt, completed_count)
      *  - 'group_reg_ids' => array<string,array<int>>  — group_value => [regId, ...]
-     *                                         for the visible page groups only
+     *                                         the FULL (uncapped) id set per visible
+     *                                         group; drives the offerte tally.
+     *  - 'group_rows'    => array<string,array<object>>  — group_value => up to
+     *                                         GROUP_ROW_CAP FULL child-row objects
+     *                                         (same column set as queryForGrid),
+     *                                         ordered registered_at DESC. The cap
+     *                                         applies ONLY here, never to the tally.
      *  - 'total'         => int  — total number of ROWS (not groups) matching filters
      *  - 'page'          => int
      *  - 'per_page'      => int
@@ -1860,7 +1875,7 @@ final class RegistrationRepository
      *
      * @param  array<string,mixed> $filters  Same key-set as queryForGrid.
      * @param  string              $groupBy  Validated allowlisted column name.
-     * @return array{agg_rows:array<object>,group_reg_ids:array<string,array<int>>,total:int,page:int,per_page:int}
+     * @return array{agg_rows:array<object>,group_reg_ids:array<string,array<int>>,group_rows:array<string,array<object>>,total:int,page:int,per_page:int}
      */
     public function queryForGridGrouped(array $filters, string $groupBy): array
     {
@@ -1912,6 +1927,7 @@ final class RegistrationRepository
             return [
                 'agg_rows'      => [],
                 'group_reg_ids' => [],
+                'group_rows'    => [],
                 'total'         => $total,
                 'page'          => $page,
                 'per_page'      => $perPage,
@@ -1973,9 +1989,63 @@ final class RegistrationRepository
             $groupRegIds[$gv][] = (int) $row->id;
         }
 
+        // --- Capped per-group FULL-column child rows (the accordion body) ---
+        // ONE window-function query (MariaDB 10.11): ROW_NUMBER() partitioned by
+        // the group column, ordered registered_at DESC, filtered <= GROUP_ROW_CAP
+        // in the outer WHERE — no N+1. Reuses the SAME $activeJoin + $fullWhere
+        // (the visible-page group filter) + $params as the id set above, so the
+        // composed rows are scoped IDENTICALLY (active-scope, company, status,
+        // trajectory-parent exclusion). The cap applies ONLY here; group_reg_ids
+        // stays the FULL unbounded set for the offerte tally.
+        //
+        // Column set is byte-identical to queryForGrid's $dataSql (M5: structured
+        // columns only; enrollment_data solely for the anon-lead name fallback).
+        // enrollment_data participates in NO filter/sort, only SELECT.
+        //
+        // PARAM ORDER (M4): the inner subquery text consumes $idsParams
+        // (JOIN %d before WHERE params) in the SAME order as $idsSql above; the
+        // outer `_rn <= %d` placeholder follows all of them, so GROUP_ROW_CAP is
+        // appended LAST.
+        $rowsSql = "SELECT id, user_id, edition_id, trajectory_id,
+                           parent_registration_id, status, enrollment_path,
+                           company_id, registered_at, completed_at,
+                           cancelled_at, quote_id, enrolled_by, notes,
+                           enrollment_data, group_val
+                    FROM (
+                        SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
+                               r.parent_registration_id, r.status, r.enrollment_path,
+                               r.company_id, r.registered_at, r.completed_at,
+                               r.cancelled_at, r.quote_id, r.enrolled_by, r.notes,
+                               r.enrollment_data,
+                               r.{$groupBy} AS group_val,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY r.{$groupBy}
+                                   ORDER BY r.registered_at DESC, r.id DESC
+                               ) AS _rn
+                        FROM {$regTable} r
+                        LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                        {$activeJoin}
+                        {$fullWhere}
+                    ) AS _ranked
+                    WHERE _rn <= %d";
+
+        $rowsParams = array_merge($params, $groupFilterArgs, [self::GROUP_ROW_CAP]);
+        $rankedRows = $wpdb->get_results($wpdb->prepare($rowsSql, ...$rowsParams));
+
+        $groupRows = [];
+        foreach ($rankedRows as $row) {
+            $gv = $row->group_val;
+            unset($row->group_val); // keep the shape byte-identical to queryForGrid rows
+            if (!isset($groupRows[$gv])) {
+                $groupRows[$gv] = [];
+            }
+            $groupRows[$gv][] = $row;
+        }
+
         return [
             'agg_rows'      => $aggRows,
             'group_reg_ids' => $groupRegIds,
+            'group_rows'    => $groupRows,
             'total'         => $total,
             'page'          => $page,
             'per_page'      => $perPage,

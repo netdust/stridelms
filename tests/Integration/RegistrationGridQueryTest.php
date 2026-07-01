@@ -61,6 +61,9 @@ class RegistrationGridQueryTest extends IntegrationTestCase
     // Registration IDs to clean up
     private static array $regIds = [];
 
+    // Extra users created by the cap-group test (Task 2) — cleaned up in teardown.
+    private static array $capUserIds = [];
+
     public static function setUpBeforeClass(): void
     {
         parent::setUpBeforeClass();
@@ -297,10 +300,10 @@ class RegistrationGridQueryTest extends IntegrationTestCase
             }
         }
 
-        foreach ([
+        foreach (array_merge([
             self::$user1Id, self::$user2Id, self::$user3Id,
             self::$trajUser1Id, self::$trajUser2Id, self::$trajUser3Id,
-        ] as $uid) {
+        ], self::$capUserIds) as $uid) {
             if ($uid) {
                 require_once ABSPATH . 'wp-admin/includes/user.php';
                 wp_delete_user($uid);
@@ -1003,6 +1006,113 @@ class RegistrationGridQueryTest extends IntegrationTestCase
             $this->assertSame('confirmed', $row->status, 'status param must bind — only confirmed rows');
             $this->assertContains((int) $row->id, $allowedConfirmed, 'Only T1 confirmed children may appear');
         }
+    }
+
+    // =========================================================================
+    // Task 2: capped-per-group child-row fetch (group_rows) — cap + leak + tally.
+    // =========================================================================
+
+    /**
+     * @test
+     * The grouped read-model returns a NEW `group_rows` key: up to GROUP_ROW_CAP
+     * FULL child rows per visible group, scoped by the SAME buildGridFilters WHERE
+     * as the aggregate + the id set. Contract:
+     *  (a) 'group_rows' key present,
+     *  (b) every group's child rows count <= GROUP_ROW_CAP,
+     *  (c) NO child row has edition_id NULL (trajectory-parent leak/denial path),
+     *  (d) group_reg_ids stays UNBOUNDED — at least one group has MORE reg_ids than
+     *      composed child rows (proves the cap bit while the tally stays complete).
+     *
+     * Seeds >GROUP_ROW_CAP confirmed rows under a dedicated company so the over-cap
+     * group is deterministic and isolated from the shared test-DB corpus.
+     */
+    public function groupedChildRowsAreCappedAndScoped(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        // Dedicated company + edition so the confirmed group deterministically
+        // exceeds GROUP_ROW_CAP regardless of other suites' shared-DB fixtures.
+        $capCompanyId = 88899;
+        $capEdition   = self::createEditionWithDates(
+            'GridTest CapGroup ' . time(),
+            date('Y-m-d', strtotime('+30 days')),
+            date('Y-m-d', strtotime('+31 days')),
+            'open',
+        );
+
+        // GROUP_ROW_CAP + 1 confirmed rows (distinct users — create() dedups on
+        // user+edition), all under $capCompanyId / $capEdition.
+        $overCap = RegistrationRepository::GROUP_ROW_CAP + 1;
+        for ($i = 0; $i < $overCap; $i++) {
+            $uid = wp_create_user('grid_cap_u' . $i . '_' . uniqid(), 'pass123', 'gcu' . $i . '_' . uniqid() . '@test.local');
+            self::assertFalse(is_wp_error($uid), 'cap-group user create');
+            self::$capUserIds[] = (int) $uid;
+
+            $reg = $repo->create([
+                'user_id'    => (int) $uid,
+                'edition_id' => $capEdition,
+                'company_id' => $capCompanyId,
+                'status'     => RegistrationStatus::Confirmed->value,
+            ]);
+            self::assertValidRegId($reg, "cap-row-{$i}");
+            self::$regIds[] = (int) $reg;
+        }
+
+        $result = $repo->queryForGridGrouped(
+            ['company_id' => $capCompanyId, 'edition_scope' => 'all', 'per_page' => 50],
+            'status',
+        );
+
+        // (a) the new key exists.
+        $this->assertArrayHasKey('group_rows', $result, "grouped response must carry the additive 'group_rows' key");
+
+        // (b) + (c): every group is capped, and no trajectory-parent (edition_id NULL) leaks.
+        foreach ($result['group_rows'] as $gv => $rows) {
+            $this->assertLessThanOrEqual(
+                RegistrationRepository::GROUP_ROW_CAP,
+                count($rows),
+                "group '{$gv}' child rows must be capped at GROUP_ROW_CAP",
+            );
+            foreach ($rows as $r) {
+                $this->assertNotNull(
+                    $r->edition_id,
+                    'no trajectory-parent (edition_id NULL) row may appear as a child',
+                );
+            }
+        }
+
+        // group_rows must be shaped by the SAME full column set as the flat path.
+        $confirmed = RegistrationStatus::Confirmed->value;
+        $this->assertArrayHasKey($confirmed, $result['group_rows'], 'confirmed group must be present');
+        $this->assertNotEmpty($result['group_rows'][$confirmed], 'confirmed group must carry composed rows');
+        $sample = $result['group_rows'][$confirmed][0];
+        foreach (['id', 'user_id', 'edition_id', 'trajectory_id', 'parent_registration_id',
+            'status', 'enrollment_path', 'company_id', 'registered_at', 'completed_at',
+            'cancelled_at', 'quote_id', 'enrolled_by', 'notes', 'enrollment_data'] as $col) {
+            $this->assertObjectHasProperty($col, $sample, "child row must carry the full '{$col}' column");
+        }
+
+        // (d) group_reg_ids (the FULL set for the tally) is unbounded — at least one
+        // group has MORE reg_ids than composed child rows, proving the cap bit while
+        // the tally stayed complete.
+        $capped = array_filter(
+            $result['group_reg_ids'],
+            fn($ids, $gv) => count($ids) > count($result['group_rows'][$gv] ?? []),
+            ARRAY_FILTER_USE_BOTH,
+        );
+        $this->assertNotEmpty($capped, 'at least one group must exceed the row cap to prove bounding (tally stays unbounded)');
+
+        // Specifically the confirmed group: >CAP ids, exactly CAP composed rows.
+        $this->assertGreaterThan(
+            RegistrationRepository::GROUP_ROW_CAP,
+            count($result['group_reg_ids'][$confirmed]),
+            'confirmed group_reg_ids must exceed the cap (unbounded tally set)',
+        );
+        $this->assertSame(
+            RegistrationRepository::GROUP_ROW_CAP,
+            count($result['group_rows'][$confirmed]),
+            'confirmed group_rows must be exactly capped',
+        );
     }
 
     // =========================================================================
