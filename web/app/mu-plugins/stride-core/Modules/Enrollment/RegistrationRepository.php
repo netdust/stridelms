@@ -1718,6 +1718,66 @@ final class RegistrationRepository
         return $this->updateStatus($id, RegistrationStatus::Cancelled);
     }
 
+    // === Reminder state (Phase 2 Task 2.2) ===
+
+    /**
+     * Get the reminder-state ledger for a registration.
+     *
+     * Shape-agnostic: this method faithfully round-trips whatever array was
+     * stored via setReminderState() — it does not validate/interpret the
+     * reminder/deadline keys (that logic lives in Phase 4).
+     *
+     * @return array<string, mixed> Decoded reminder_state, or `[]` when the
+     *                               column is NULL/empty or the row doesn't
+     *                               exist. Never returns null/false.
+     */
+    public function getReminderState(int $registrationId): array
+    {
+        global $wpdb;
+
+        $raw = $wpdb->get_var($wpdb->prepare(
+            "SELECT reminder_state FROM {$this->table()} WHERE id = %d",
+            $registrationId,
+        ));
+
+        if (!$raw) {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Set the reminder-state ledger for a registration.
+     *
+     * @param array<string, mixed> $state
+     * @return bool|WP_Error True on success; WP_Error('db_error', ...) on a
+     *                       DB failure (INV-4) — never returns false.
+     */
+    public function setReminderState(int $registrationId, array $state): bool|WP_Error
+    {
+        global $wpdb;
+
+        $result = $wpdb->update(
+            $this->table(),
+            ['reminder_state' => wp_json_encode($state)],
+            ['id' => $registrationId],
+            ['%s'],
+            ['%d'],
+        );
+
+        if ($result === false) {
+            return new WP_Error('db_error', 'Failed to update reminder state');
+        }
+
+        $this->clearCache();
+        $this->emitRowEvent('row_updated', $registrationId, ['reminder_state' => $state], 'set_reminder_state');
+
+        return true;
+    }
+
     // === Cache management ===
 
     /**
