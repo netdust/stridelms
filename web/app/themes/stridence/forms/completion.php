@@ -110,8 +110,9 @@ $is_post_course = ($active_phase === 'post_course');
     <div class="space-y-4">
         <?php foreach ($phase_tasks as $taskType => $task): ?>
             <?php
-            $state  = $phase_availability[$taskType]['state'] ?? 'available';
-            $reason = $phase_availability[$taskType]['reason'] ?? '';
+            $state   = $phase_availability[$taskType]['state'] ?? 'available';
+            $reason  = $phase_availability[$taskType]['reason'] ?? '';
+            $overdue = $phase_availability[$taskType]['overdue'] ?? false;
             $isLocked    = $state === 'locked';
             $isCompleted = $state === 'completed';
             $isAvailable = $state === 'available';
@@ -146,7 +147,7 @@ $is_post_course = ($active_phase === 'post_course');
                                 <?= esc_html($reason) ?>
                             </span>
                         <?php elseif ($isAvailable && $reason): ?>
-                            <span class="text-xs text-status-warning ml-2">
+                            <span class="text-xs <?= $overdue ? 'text-status-error font-semibold' : 'text-status-warning' ?> ml-2">
                                 <?= esc_html($reason) ?>
                             </span>
                         <?php endif; ?>
