@@ -84,6 +84,7 @@
 > **P4-gate tracked follow-ups (2026-07-01, security-sentinel + reviewers; none block this feature):**
 > 1. **[cross-plugin, hand to mail-broadcast]** Recipient `is_email()` validation lives in the CALLER (`GateReminderService::resolveEmail`), not the shared `MailService::send()` seam in netdust-mail. This feature is safe (it validates), but a future `ndmail_send` caller that skips validation passes an unvalidated `to` to `wp_mail`. Harden `MailService::send()` to reject non-`is_email()` `to` as defense-in-depth — belongs to the mail-broadcast feature ([[project_mail_broadcast_feature]]), NOT here. Same theme: `Mailer::to()/cc()/bcc()` lack CRLF-strip (subject() has it).
 > 2. **[tuning]** The reminder cron acquires the per-registration advisory lock with the 5s selection-write timeout; a failed acquire here just means 'skip, retry tomorrow', so a 1s timeout is safer against pathological contention eating the cron time budget. Non-urgent.
+> 4. **[theoretical]** `findWithActiveDeadline` orders by `registered_at ASC` with no `id` tiebreaker + the chunk loop holds no cross-chunk cursor; a write racing the cron exactly at a 500-row boundary could skip/reprocess a row. Harmless (decideAndSend is idempotent per-tick); a keyset `WHERE id > :lastId ORDER BY id` would close it if ever revisited.
 > 3. **[cosmetic]** `acquireSelectionLock`/`releaseSelectionLock` now guards reminder writes too — a scope-neutral rename (`acquireRegistrationLock`) is a future cleanup. Correctness-safe as-is (per-registration mutex, no deadlock).
 
 
@@ -417,6 +418,9 @@ The 1a scheduled surface + the NEW invariant (INV-10). FULL.
 Settings input (threat-model A3) + mail templates/sends. FULL.
 
 ### Task 5.1: `gate_reminder_days` in `ActionQueueService::DEFAULTS`
+
+> **P4-gate requirement carried into P5 (line-by-line finder):** `GateReminderService::getReminderDays()` reads `$rules['gate_reminder_days']['value']` but does NOT check `['enabled']`. When 5.1 adds the key with the `{enabled,value}` shape, the reminder cadence MUST honor `enabled=false` as 'reminders off' — add a `remindersEnabled()` gate in `GateReminderService::run()` (early-return when the rule is disabled) and cover it with a test (disabled → zero sends). Otherwise an admin toggling the cadence off is silently ignored. This is a P5 acceptance criterion, not optional.
+
 
 **Files:**
 - Modify: `web/app/mu-plugins/stride-core/Admin/ActionQueueService.php` (`:16` DEFAULTS)
