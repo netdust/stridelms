@@ -183,18 +183,20 @@ final class OfferingSidebarPartial
             $('input[name="ntdst_fields[post_requires_documents]"][type=checkbox]').on('change', function() {
                 $('#stride-post-documents-instruction').toggle(this.checked);
             });
-            function toggleGateDeadline() {
-                var enabled = $('input[name="ntdst_fields[requires_questionnaire]"][type=checkbox]').is(':checked')
-                    || $('input[name="ntdst_fields[requires_documents]"][type=checkbox]').is(':checked');
-                $('#stride-gate-deadline').toggle(enabled);
+            function toggleGateGroup(checkboxSelector, targetSelector) {
+                var $checkboxes = $(checkboxSelector);
+                $checkboxes.on('change', function() {
+                    $(targetSelector).toggle($checkboxes.is(':checked'));
+                });
             }
-            $('input[name="ntdst_fields[requires_questionnaire]"][type=checkbox], input[name="ntdst_fields[requires_documents]"][type=checkbox]').on('change', toggleGateDeadline);
-            function togglePostGateDeadline() {
-                var enabled = $('input[name="ntdst_fields[post_requires_evaluation]"][type=checkbox]').is(':checked')
-                    || $('input[name="ntdst_fields[post_requires_documents]"][type=checkbox]').is(':checked');
-                $('#stride-post-gate-deadline').toggle(enabled);
-            }
-            $('input[name="ntdst_fields[post_requires_evaluation]"][type=checkbox], input[name="ntdst_fields[post_requires_documents]"][type=checkbox]').on('change', togglePostGateDeadline);
+            toggleGateGroup(
+                'input[name="ntdst_fields[requires_questionnaire]"][type=checkbox], input[name="ntdst_fields[requires_documents]"][type=checkbox]',
+                '#stride-gate-deadline'
+            );
+            toggleGateGroup(
+                'input[name="ntdst_fields[post_requires_evaluation]"][type=checkbox], input[name="ntdst_fields[post_requires_documents]"][type=checkbox]',
+                '#stride-post-gate-deadline'
+            );
         });
         </script>
         <?php

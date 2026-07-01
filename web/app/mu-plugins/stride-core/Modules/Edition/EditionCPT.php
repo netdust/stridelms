@@ -198,8 +198,8 @@ final class EditionCPT
             ],
             'gate_deadline' => [
                 'type' => 'text',
-                'label' => 'Deadline taken (vragenlijst & documenten)',
-                'description' => 'Deadline for questionnaire/documents gate tasks (YYYY-MM-DD)',
+                'label' => __('Deadline taken (vragenlijst & documenten)', 'stride'),
+                'description' => __('Deadline for questionnaire/documents gate tasks (YYYY-MM-DD)', 'stride'),
             ],
             'requires_session_selection' => [
                 'type' => 'boolean',
@@ -228,8 +228,8 @@ final class EditionCPT
             ],
             'post_gate_deadline' => [
                 'type' => 'text',
-                'label' => 'Deadline afronding (evaluatie & documenten)',
-                'description' => 'Deadline for post-course evaluation/documents gate tasks (YYYY-MM-DD)',
+                'label' => __('Deadline afronding (evaluatie & documenten)', 'stride'),
+                'description' => __('Deadline for post-course evaluation/documents gate tasks (YYYY-MM-DD)', 'stride'),
             ],
             'post_requires_approval' => [
                 'type' => 'boolean',
