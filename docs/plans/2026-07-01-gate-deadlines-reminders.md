@@ -81,6 +81,11 @@
 
 ### Out of scope (explicit deferrals)
 
+> **P3-gate tracked follow-ups (2026-07-01, non-blocking, NOT this feature's scope):**
+> 1. `strtotime($deadline) < time()` in both `deadlineInfo()` (new) and the `session_selection` block (pre-existing) coerces `false`→`0` for a non-empty *unparseable* deadline string, falsely marking overdue. Empty/null is already guarded; only a garbage non-empty string bites, and values come from an admin date field. A both-call-sites hardening (`$ts=strtotime(...); $ts!==false && $ts<time()`) is a separate consistency pass — do NOT fix only the new site (would desync from the sibling).
+> 2. Two independent readers of `_ntdst_gate_deadline`/`_ntdst_post_gate_deadline` now exist by design: `findWithActiveDeadline` (P2, cron existence-check) and `deadlineInfo` (P3, overdue computation) — different purposes, not a convergence bypass. Note only if a future single-source-of-truth refactor is considered.
+
+
 - **Auto-cancel / auto-lock on deadline** — rejected (D3); overdue is flag-only.
 - **Many-recipient / batch broadcast layer** (`ndmail_recipient_sources` filter) — separate netdust-mail feature; the filter does NOT exist and is NOT created here. Reminders are single-recipient only.
 - **Per-user opt-out** (the inert `stride_notify_reminders` preference) — left inert for v1; not wired. Revisit if requested.
