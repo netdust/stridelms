@@ -17,8 +17,8 @@ use WP_REST_Request;
  * (no parallel strtotime re-derive) — this test pins the observable contract,
  * not the internal sourcing, but a future refactor that stops calling
  * getTaskAvailability() would still need to reproduce the same overdue
- * boundary, which is what the fixture below exercises (deadline exactly
- * today reads as NOT overdue per deadlineInfo()'s strict `<` comparison).
+ * boundary: a deadline exactly today reads as OVERDUE (days_overdue = 0),
+ * because midnight-today is already in the past for the rest of the day.
  *
  * Run: ddev exec vendor/bin/phpunit -c phpunit-integration.xml.dist --filter PendingApprovalsDaysLeftTest
  */

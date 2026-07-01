@@ -125,6 +125,33 @@
     return `sinds ${days}d`;
   }
 
+  /* ---- gate-deadline badge for a stale_user row (Task 6.2) --------------
+     Reads the days_left / days_overdue keys Task 6.1 derives server-side
+     (buildDeadlineCountdown() in AdminAPIController — the SAME convergence
+     point). Display-only (D3): no action is taken here, just a badge.
+       - days_overdue a non-negative number → red "overdue" badge
+       - else days_left a non-negative number → neutral "due soon" badge
+       - else (no activeDeadline on the item)  → no badge (return null)
+     Read defensively: Number(...) + explicit >= 0 checks so a missing/absent
+     key renders no badge, never "NaN dagen" or "undefined dagen". */
+  function deadlineBadge(item) {
+    const overdue = Number(item && item.days_overdue);
+    if (!isNaN(overdue) && overdue >= 0) {
+      return {
+        kind: 'overdue',
+        label: overdue === 0 ? 'vandaag verlopen' : `${overdue} ${overdue === 1 ? 'dag' : 'dagen'} te laat`,
+      };
+    }
+    const left = Number(item && item.days_left);
+    if (!isNaN(left) && left >= 0) {
+      return {
+        kind: 'due-soon',
+        label: `nog ${left} ${left === 1 ? 'dag' : 'dagen'}`,
+      };
+    }
+    return null;
+  }
+
   /* ---- Acties-nodig: bucket pending-approvals items into mij/gebruiker --
      LIFTED from admin-dashboard.js: items with type ∈ {approval,post_approval}
      are admin-action ("Wacht op mij"); type === 'stale_user' is waiting-on-the
@@ -144,6 +171,9 @@
       age: item.type === 'stale_user'
         ? (Number(item.days_idle) >= 0 ? `sinds ${item.days_idle}d` : ageSince(item.registered_at))
         : ageSince(item.registered_at),
+      // Gate-deadline badge (Task 6.2) — stale_user rows only; other types
+      // (approval/post_approval) have no gate-deadline concept.
+      deadline: item.type === 'stale_user' ? deadlineBadge(item) : null,
     });
 
     const mij = items
@@ -296,5 +326,6 @@
     avatarColor,
     initials,
     ageSince,
+    deadlineBadge,
   };
 });
