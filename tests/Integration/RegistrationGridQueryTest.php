@@ -58,6 +58,9 @@ class RegistrationGridQueryTest extends IntegrationTestCase
     private static ?int $trajUser2Id = null;
     private static ?int $trajUser3Id = null;
 
+    // Anonymous (user_id NULL) interest lead — Task 5 parity anon-decode coverage.
+    private static ?int $anonInterestRegId = null;
+
     // Registration IDs to clean up
     private static array $regIds = [];
 
@@ -161,6 +164,25 @@ class RegistrationGridQueryTest extends IntegrationTestCase
         ]);
         self::assertValidRegId($r5, 'R5');
         self::$regIds[] = (int) $r5;
+
+        // R6: ANONYMOUS interest lead (user_id NULL), dateless edition, captured
+        // name/email in enrollment_data. Exercises the resolveAnonymousIdentity
+        // decode on the grouped child-row path (Task 5 parity: anon name must
+        // survive into the composed row, same as the flat path).
+        $r6 = $repo->create([
+            'edition_id'      => self::$datelessEditionId,
+            'company_id'      => self::$companyId,
+            'status'          => RegistrationStatus::Interest->value,
+            'enrollment_data' => [
+                'interest' => RegistrationRepository::wrapStage([
+                    'name'  => 'Anon Interest Lead',
+                    'email' => 'anon.lead@test.local',
+                ]),
+            ],
+        ]);
+        self::assertValidRegId($r6, 'R6-anon-interest');
+        self::$anonInterestRegId = (int) $r6;
+        self::$regIds[]          = (int) $r6;
 
         // --- Task 1.4b: trajectory grid-filter fixtures ---
         self::seedTrajectoryFixtures($repo);
@@ -1172,6 +1194,90 @@ class RegistrationGridQueryTest extends IntegrationTestCase
                     'grouped child row shape must equal the flat row shape (no fuller/leaked fields)',
                 );
             }
+        }
+    }
+
+    // =========================================================================
+    // Task 5: server parity — grouped child rows === flat rows for the same filter.
+    // =========================================================================
+
+    /**
+     * @test
+     * The SAFETY property for the whole group-by-accordion feature: a grouped
+     * group's composed child rows must be BYTE-IDENTICAL to the flat rows of the
+     * same id — same identity (incl. anonymous enrollment_data decode), same
+     * company.id/company.name independence, same status AS RECEIVED, same
+     * offerteStatus. No leak, no drift, no fuller shape. Guaranteed by
+     * construction (both paths compose via the shared composeFromRows()), and
+     * PINNED here so any future divergence between the two paths goes RED.
+     *
+     * Driven at the status=interest axis, which surfaces anonymous leads (R6):
+     * the anon row's identity must come from the enrollment_data decode on the
+     * grouped path exactly as on the flat path.
+     */
+    public function groupedChildRowsMatchFlatRowsForSameFilter(): void
+    {
+        $service = ntdst_get(AdminRegistrationQueryService::class);
+
+        // Flat rows for status=interest (the axis that surfaces anonymous leads).
+        $flat = $service->getGridPage(['status' => 'interest', 'per_page' => 50]);
+        $this->assertNotInstanceOf(\WP_Error::class, $flat, 'flat interest page must not error');
+
+        $flatById = [];
+        foreach ($flat['items'] as $r) {
+            $flatById[$r['id']] = $r;
+        }
+
+        // Grouped by status → the 'interest' group's child rows.
+        $grouped = $service->getGridPage(['group_by' => 'status', 'per_page' => 50]);
+        $this->assertNotInstanceOf(\WP_Error::class, $grouped, 'grouped page must not error');
+
+        $interestGroup = null;
+        foreach ($grouped['items'] as $g) {
+            if ($g['group_value'] === RegistrationStatus::Interest->value) {
+                $interestGroup = $g;
+                break;
+            }
+        }
+        $this->assertNotNull($interestGroup, 'interest group present in grouped-by-status response');
+        $this->assertNotEmpty($interestGroup['rows'], 'interest group must carry composed child rows');
+
+        // PARITY: every composed child row is byte-identical to the flat row of
+        // the same id — identity/company/status/offerte, whole array assertSame.
+        foreach ($interestGroup['rows'] as $childRow) {
+            $this->assertArrayHasKey(
+                $childRow['id'],
+                $flatById,
+                "child row {$childRow['id']} must exist in the flat set (same scope — no row the flat grid wouldn't show)",
+            );
+            $this->assertSame(
+                $flatById[$childRow['id']],
+                $childRow,
+                "grouped child row {$childRow['id']} must EQUAL the flat row (identity/company/status/offerte parity — no drift, no fuller shape)",
+            );
+        }
+
+        // The seeded anonymous interest lead (R6) must be present as a child row,
+        // and its name must have come from the enrollment_data decode (not a
+        // wp_users join — it has no user record).
+        $anonRows = array_values(array_filter(
+            $interestGroup['rows'],
+            static fn($r) => $r['anonymous'] === true,
+        ));
+        $this->assertNotEmpty($anonRows, 'interest group must include at least one anonymous child row (R6)');
+        foreach ($anonRows as $anon) {
+            $this->assertNotSame(
+                '',
+                $anon['user']['name'],
+                'anonymous child row must resolve a captured name from the enrollment_data decode',
+            );
+        }
+
+        // Company independence: company.id (FK) and company.name (billing) are
+        // TWO separate keys on every child row — never merged.
+        foreach ($interestGroup['rows'] as $r) {
+            $this->assertArrayHasKey('id', $r['company'], 'company.id (FK) must be present as a separate key');
+            $this->assertArrayHasKey('name', $r['company'], 'company.name (billing) must be present as a separate key');
         }
     }
 
