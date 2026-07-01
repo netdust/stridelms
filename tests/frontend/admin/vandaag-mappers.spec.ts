@@ -82,6 +82,15 @@ test.describe('mapActionBuckets — deadline badge (Task 6.2)', () => {
     const { mij } = mappers.mapActionBuckets(payload, 0);
     expect(mij[0].deadline).toBeNull();
   });
+
+  test('explicit days_overdue: null (future-contract drift) → no badge, not "vandaag verlopen"', () => {
+    const payload = {
+      items: [{ id: 206, type: 'stale_user', user_id: 26, user_name: 'Freya', days_idle: 4, days_overdue: null, days_left: null }],
+      counts: { stale_user: 1 },
+    };
+    const { gebruiker } = mappers.mapActionBuckets(payload, 0);
+    expect(gebruiker[0].deadline).toBeNull();
+  });
 });
 
 test.describe('mapActionBuckets', () => {

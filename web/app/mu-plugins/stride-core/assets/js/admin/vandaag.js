@@ -132,18 +132,21 @@
        - days_overdue a non-negative number → red "overdue" badge
        - else days_left a non-negative number → neutral "due soon" badge
        - else (no activeDeadline on the item)  → no badge (return null)
-     Read defensively: Number(...) + explicit >= 0 checks so a missing/absent
-     key renders no badge, never "NaN dagen" or "undefined dagen". */
+     Read defensively: `!= null` guards (loose — catches both null and
+     undefined while allowing 0) + Number(...) + explicit >= 0 checks, so a
+     missing/absent/explicit-null key renders no badge, never "NaN dagen",
+     "undefined dagen", or a false-positive "vandaag verlopen" from
+     Number(null) === 0. */
   function deadlineBadge(item) {
     const overdue = Number(item && item.days_overdue);
-    if (!isNaN(overdue) && overdue >= 0) {
+    if (item && item.days_overdue != null && !isNaN(overdue) && overdue >= 0) {
       return {
         kind: 'overdue',
         label: overdue === 0 ? 'vandaag verlopen' : `${overdue} ${overdue === 1 ? 'dag' : 'dagen'} te laat`,
       };
     }
     const left = Number(item && item.days_left);
-    if (!isNaN(left) && left >= 0) {
+    if (item && item.days_left != null && !isNaN(left) && left >= 0) {
       return {
         kind: 'due-soon',
         label: `nog ${left} ${left === 1 ? 'dag' : 'dagen'}`,
