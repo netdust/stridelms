@@ -1740,7 +1740,7 @@ final class RegistrationRepository
             $registrationId,
         ));
 
-        if (!$raw) {
+        if ($raw === null || $raw === '') {
             return [];
         }
 
@@ -1769,6 +1769,11 @@ final class RegistrationRepository
         );
 
         if ($result === false) {
+            ntdst_log('enrollment')->error('failed to update reminder state', [
+                'registration_id' => $registrationId,
+                'error' => $wpdb->last_error,
+            ]);
+
             return new WP_Error('db_error', 'Failed to update reminder state');
         }
 
@@ -1788,7 +1793,10 @@ final class RegistrationRepository
      * (mitigation 8) — status values + limit/offset all go through
      * $wpdb->prepare; the two meta_key literals are hardcoded constants (not
      * user input), matching the findForExport precedent for inline meta-key
-     * literals in this repo.
+     * literals in this repo. GROUP BY r.id dedupes any fan-out from the two
+     * LEFT JOINs against wp_postmeta, so a registration row is never counted
+     * twice against the LIMIT/OFFSET pagination even if duplicate postmeta
+     * rows for the same key existed on an edition.
      *
      * @return array<object> Full row objects (SELECT *), matching the return
      *                       shape of the other find* methods on this repo.
@@ -1810,6 +1818,7 @@ final class RegistrationRepository
                    (pm_gate.meta_value IS NOT NULL AND pm_gate.meta_value <> '')
                    OR (pm_post_gate.meta_value IS NOT NULL AND pm_post_gate.meta_value <> '')
                )
+             GROUP BY r.id
              ORDER BY r.registered_at ASC
              LIMIT %d OFFSET %d",
             RegistrationStatus::Confirmed->value,
