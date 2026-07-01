@@ -81,6 +81,12 @@
 
 ### Out of scope (explicit deferrals)
 
+> **P4-gate tracked follow-ups (2026-07-01, security-sentinel + reviewers; none block this feature):**
+> 1. **[cross-plugin, hand to mail-broadcast]** Recipient `is_email()` validation lives in the CALLER (`GateReminderService::resolveEmail`), not the shared `MailService::send()` seam in netdust-mail. This feature is safe (it validates), but a future `ndmail_send` caller that skips validation passes an unvalidated `to` to `wp_mail`. Harden `MailService::send()` to reject non-`is_email()` `to` as defense-in-depth — belongs to the mail-broadcast feature ([[project_mail_broadcast_feature]]), NOT here. Same theme: `Mailer::to()/cc()/bcc()` lack CRLF-strip (subject() has it).
+> 2. **[tuning]** The reminder cron acquires the per-registration advisory lock with the 5s selection-write timeout; a failed acquire here just means 'skip, retry tomorrow', so a 1s timeout is safer against pathological contention eating the cron time budget. Non-urgent.
+> 3. **[cosmetic]** `acquireSelectionLock`/`releaseSelectionLock` now guards reminder writes too — a scope-neutral rename (`acquireRegistrationLock`) is a future cleanup. Correctness-safe as-is (per-registration mutex, no deadlock).
+
+
 > **P3-gate tracked follow-ups (2026-07-01, non-blocking, NOT this feature's scope):**
 > 1. `strtotime($deadline) < time()` in both `deadlineInfo()` (new) and the `session_selection` block (pre-existing) coerces `false`→`0` for a non-empty *unparseable* deadline string, falsely marking overdue. Empty/null is already guarded; only a garbage non-empty string bites, and values come from an admin date field. A both-call-sites hardening (`$ts=strtotime(...); $ts!==false && $ts<time()`) is a separate consistency pass — do NOT fix only the new site (would desync from the sibling).
 > 2. Two independent readers of `_ntdst_gate_deadline`/`_ntdst_post_gate_deadline` now exist by design: `findWithActiveDeadline` (P2, cron existence-check) and `deadlineInfo` (P3, overdue computation) — different purposes, not a convergence bypass. Note only if a future single-source-of-truth refactor is considered.
