@@ -121,11 +121,39 @@ final class AdminRegistrationQueryService
             return $this->paginationEnvelope([], $total, $page, $perPage);
         }
 
+        // Two-step offerte resolver over this page's reg ids.
+        $regIds       = array_map(static fn($row) => (int) $row->id, $rows);
+        $offerteByReg = $this->resolveOfferteStatuses($regIds);
+
+        $items = $this->composeFromRows($rows, $offerteByReg);
+
+        return $this->paginationEnvelope($items, $total, $page, $perPage);
+    }
+
+    /**
+     * Collect ids from a batch of raw rows, run the batch resolves, and compose
+     * the read-model items — the resolve+compose half shared by the flat path and
+     * the grouped child-row path so there is no second copy of the batch-resolve
+     * or the row composition (INV-3: one composer, one resolve shape).
+     *
+     * The offerte map is passed IN (already resolved by the caller) because the
+     * grouped path resolves it once over the FULL group id set; composeRows reads
+     * it per-regId, so a map keyed by a superset of these rows' ids is fine.
+     *
+     * @param  array             $rows          Raw registration row objects.
+     * @param  array<int,string> $offerteByReg  regId => offerte label (may be a superset).
+     * @return array
+     */
+    private function composeFromRows(array $rows, array $offerteByReg): array
+    {
+        if (empty($rows)) {
+            return [];
+        }
+
         // --- Collect IDs for batch resolution ---
-        $userIds      = [];
-        $editionIds   = [];
+        $userIds       = [];
+        $editionIds    = [];
         $trajectoryIds = [];
-        $regIds       = [];
 
         foreach ($rows as $row) {
             $userId = (int) $row->user_id;
@@ -138,7 +166,6 @@ final class AdminRegistrationQueryService
             if (!empty($row->trajectory_id)) {
                 $trajectoryIds[] = (int) $row->trajectory_id;
             }
-            $regIds[] = (int) $row->id;
         }
 
         $userIds       = array_unique($userIds);
@@ -172,10 +199,7 @@ final class AdminRegistrationQueryService
             $attendanceByEdition[$editionId] = BatchQueryHelper::batchGetAttendance($editionId);
         }
 
-        // Two-step offerte resolver
-        $offerteByReg = $this->resolveOfferteStatuses($regIds);
-
-        $items = $this->composeRows(
+        return $this->composeRows(
             $rows,
             $users,
             $editions,
@@ -184,8 +208,6 @@ final class AdminRegistrationQueryService
             $attendanceByEdition,
             $offerteByReg,
         );
-
-        return $this->paginationEnvelope($items, $total, $page, $perPage);
     }
 
     /**
@@ -392,6 +414,7 @@ final class AdminRegistrationQueryService
         $result      = $this->registrations->queryForGridGrouped($params, $groupBy);
         $aggRows     = $result['agg_rows'];
         $groupRegIds = $result['group_reg_ids'];
+        $groupRows   = $result['group_rows'];
         $total       = $result['total'];
         $page        = $result['page'];
         $perPage     = $result['per_page'];
@@ -404,7 +427,21 @@ final class AdminRegistrationQueryService
         $allRegIds    = array_merge(...array_values($groupRegIds));
         $offerteByReg = !empty($allRegIds) ? $this->resolveOfferteStatuses($allRegIds) : [];
 
-        // Compose aggregate items.
+        // Compose the capped child rows ONCE over the UNION of every group's
+        // (≤ GROUP_ROW_CAP) rows, via the SHARED composer — same identity/company/
+        // status/trajectory/offerte assembly as the flat grid, so grouped child
+        // rows can expose no row and no field the flat grid does not (INV-3/INV-7).
+        // The offerte map above is keyed by the FULL id set; composeRows reads it
+        // per-regId, so no second offerte resolve is needed.
+        $composedByRegId = [];
+        $cappedUnion     = $groupRows ? array_merge(...array_values($groupRows)) : [];
+        if (!empty($cappedUnion)) {
+            foreach ($this->composeFromRows($cappedUnion, $offerteByReg) as $item) {
+                $composedByRegId[$item['id']] = $item;
+            }
+        }
+
+        // Compose aggregate items, attaching each group's composed child rows.
         $items = [];
         foreach ($aggRows as $row) {
             $count       = (int) $row->cnt;
@@ -414,12 +451,24 @@ final class AdminRegistrationQueryService
             $groupRids    = $groupRegIds[$row->group_value] ?? [];
             $offerteTally = $this->tallyOfferteStatuses($groupRids, $offerteByReg);
 
+            // Bucket the composed rows back to this group, preserving the repo's
+            // registered_at DESC order (group_rows is already ordered + capped).
+            $rows = [];
+            foreach ($groupRows[$row->group_value] ?? [] as $rawRow) {
+                $regId = (int) $rawRow->id;
+                if (isset($composedByRegId[$regId])) {
+                    $rows[] = $composedByRegId[$regId];
+                }
+            }
+
             $items[] = [
                 'group_value'        => $row->group_value,
                 'count'              => $count,
                 'pct_afgerond'       => $pctAfgerond,
                 'avg_attendance_pct' => null,  // Deferred: cross-edition avg requires per-row resolution
                 'offerte_verdeling'  => $offerteTally,
+                'rows'               => $rows,   // ≤ GROUP_ROW_CAP composed child rows
+                'row_total'          => $count,  // full group size — client shows "Toon alle N" when > count($rows)
             ];
         }
 

@@ -1116,6 +1116,66 @@ class RegistrationGridQueryTest extends IntegrationTestCase
     }
 
     // =========================================================================
+    // Task 3: service composes capped child rows into the grouped response.
+    // =========================================================================
+
+    /**
+     * @test
+     * The grouped read-model (service) attaches, per group aggregate item, the
+     * composed child rows AND the full group size — the accordion body contract.
+     *  (a) every group carries a 'rows' array and a 'row_total' int,
+     *  (b) rows count <= row_total (rows are capped, row_total is the true size),
+     *  (c) each child row has EXACTLY the flat row key set — no fuller/leaked
+     *      shape in grouped mode (composed via the SHARED composeRows(), so the
+     *      grouped child rows can expose no field the flat grid does not).
+     *
+     * Uses the class fixture company (confirmed×2 + waitlist×1 + interest×1 +
+     * trajectory children) grouped by status under edition_scope=all so multiple
+     * status groups, each with real child rows, are deterministically present.
+     */
+    public function groupedResponseCarriesComposedChildRows(): void
+    {
+        $service = ntdst_get(AdminRegistrationQueryService::class);
+
+        $dto = $service->getGridPage([
+            'group_by'      => 'status',
+            'company_id'    => self::$companyId,
+            'edition_scope' => 'all',
+            'per_page'      => 50,
+        ]);
+
+        $this->assertNotInstanceOf(\WP_Error::class, $dto, 'grouped page must not error');
+        $this->assertNotEmpty($dto['items'], 'fixture company must yield at least one status group');
+
+        foreach ($dto['items'] as $group) {
+            $this->assertArrayHasKey('rows', $group, 'each group must carry composed child rows');
+            $this->assertArrayHasKey('row_total', $group, 'each group must carry its full size (row_total)');
+            $this->assertIsArray($group['rows']);
+            $this->assertIsInt($group['row_total']);
+            $this->assertSame(
+                $group['count'],
+                $group['row_total'],
+                'row_total must equal the group count (full group size)',
+            );
+            $this->assertLessThanOrEqual(
+                $group['row_total'],
+                count($group['rows']),
+                'composed rows are capped — never more than the full group size',
+            );
+
+            foreach ($group['rows'] as $row) {
+                // Shape-parity is the denial-of-leak path: a grouped child row must
+                // expose EXACTLY the flat row's nested key set — no fuller shape.
+                $this->assertSame(
+                    ['id', 'user', 'anonymous', 'edition', 'status', 'offerteStatus', 'attendancePct', 'company', 'trajectory'],
+                    array_keys($row),
+                    'grouped child row shape must equal the flat row shape (no fuller/leaked fields)',
+                );
+            }
+        }
+    }
+
+    // =========================================================================
     // Task 3.3 Part B: per-status funnel counts (statusCounts) in the grid DTO
     // =========================================================================
 
