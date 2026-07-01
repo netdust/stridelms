@@ -299,7 +299,6 @@
 
 /* Grouped sections — each <tbody> is a visually banded block */
 .ws-table--grouped .ws-group + .ws-group .ws-grouprow td { border-top: 3px solid var(--ws-bg); }
-.ws-table--grouped .ws-group.is-expanded tbody tr:last-child td,
 .ws-table--grouped .ws-group.is-expanded > tr:last-child td { border-bottom-color: var(--ws-border-strong); }
 
 /* Group header row */
