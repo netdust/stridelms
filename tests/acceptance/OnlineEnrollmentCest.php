@@ -272,10 +272,18 @@ class OnlineEnrollmentCest
 
     /**
      * @test
+     *
+     * An online course that HAS an active edition renders the edition-overview
+     * surface at its course permalink: the LD intro + editions list, NO
+     * self-enroll sidebar. Enrollment happens on the edition permalink
+     * (/edities/<slug>/), reached via the editions list — not via an
+     * "Inschrijven" sidebar CTA on this page. (The self-enroll sidebar with
+     * "Inschrijven" is the PURE-LD, edition-less surface, covered by
+     * CourseSidebarStatusCest.) See memory gotcha-course-permalink-edition-vs-pureld.
      */
-    public function closedOnlineCourseCTAShowsEnrollButton(AcceptanceTester $I): void
+    public function onlineCourseWithEditionShowsEditionOverview(AcceptanceTester $I): void
     {
-        $I->wantTo('verify closed online course shows Inschrijven CTA');
+        $I->wantTo('verify an online course with an edition shows the edition overview, not a sidebar CTA');
 
         $courseSlug = $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'post_name', [
             'ID' => $this->courseData['default']['course_id'],
@@ -284,7 +292,10 @@ class OnlineEnrollmentCest
         $this->loginAsStudent($I, '/opleidingen/' . $courseSlug . '/');
         $I->waitForElement('body', 10);
 
-        $I->see('Inschrijven');
+        // Edition-overview surface: an "Edities" section listing edition rows,
+        // each linking to the edition permalink where enrollment happens.
+        $I->see('Edities');
+        $I->seeElement("a[href*='/edities/']");
         $I->dontSee('Fatal error');
     }
 

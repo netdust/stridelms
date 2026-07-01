@@ -36,7 +36,6 @@ class CourseSidebarStatusCest
     private string $pureLdCourseUrl;
 
     private int $editionCourseId;
-    private string $editionCourseUrl;
 
     /** The edition under test (seeded status: open) + its detail URL. */
     private int $editionId;
@@ -55,7 +54,6 @@ class CourseSidebarStatusCest
         $this->pureLdCourseUrl = $this->courseUrl($I, $this->pureLdCourseId);
 
         $this->editionCourseId = $this->grabCourseIdByTitlePrefix($I, self::EDITION_COURSE_PREFIX);
-        $this->editionCourseUrl = $this->courseUrl($I, $this->editionCourseId);
 
         // Snapshot every edition status of the course, then park all but the
         // seeded-open one as draft so the page's "primary edition" is
@@ -85,11 +83,15 @@ class CourseSidebarStatusCest
         $slug = (string) $I->grabFromDatabase($I->grabPrefixedTableNameFor('posts'), 'post_name', ['ID' => $this->editionId]);
         $this->editionUrl = '/edities/' . $slug . '/';
 
-        $priceEuros = (float) $I->grabFromDatabase($I->grabPrefixedTableNameFor('postmeta'), 'meta_value', [
+        // `_ntdst_price` is stored in CENTS (editions' canonical unit). The page
+        // renders it via stride_format_money() = '€ ' . number_format($cents/100,
+        // 2, ',', '.'). Mirror that exactly here (the helper lives in the theme
+        // and isn't loaded in this test process, so inline the same format).
+        $priceCents = (int) $I->grabFromDatabase($I->grabPrefixedTableNameFor('postmeta'), 'meta_value', [
             'post_id'  => $this->editionId,
             'meta_key' => '_ntdst_price',
         ]);
-        $this->editionPriceFormatted = '€ ' . number_format($priceEuros, 2, ',', '.');
+        $this->editionPriceFormatted = '€ ' . number_format($priceCents / 100, 2, ',', '.');
 
         // Snapshot the pure-LD course's LearnDash settings row.
         $raw = $I->grabFromDatabase($I->grabPrefixedTableNameFor('postmeta'), 'meta_value', [
@@ -120,75 +122,12 @@ class CourseSidebarStatusCest
     }
 
     // =========================================================================
-    // ONLINE COURSE PAGE — edition status drives the sidebar CTA
-    // =========================================================================
-
-    /**
-     * @test
-     */
-    public function openEditionShowsEnrollCtaWithEditionPrice(AcceptanceTester $I): void
-    {
-        $I->wantTo('see Inschrijven CTA and edition price for an open edition on the course page');
-
-        $this->setEditionStatus($I, $this->editionId, 'open');
-        $I->amOnPage($this->editionCourseUrl);
-        $I->waitForElement('aside', 10);
-
-        $I->see($this->editionPriceFormatted, 'aside');
-        $I->see('Inschrijven', 'aside a');
-        $I->dontSee('Niet beschikbaar', 'aside');
-    }
-
-    /**
-     * @test
-     */
-    public function announcementEditionShowsInterestCta(AcceptanceTester $I): void
-    {
-        $I->wantTo('see Interesse melden CTA when the edition status is announcement');
-
-        $this->setEditionStatus($I, $this->editionId, 'announcement');
-        $I->amOnPage($this->editionCourseUrl);
-        $I->waitForElement('aside', 10);
-
-        $I->see('Interesse melden', 'aside a');
-        $I->see('nog in voorbereiding', 'aside');
-        $I->dontSee('Op wachtlijst plaatsen', 'aside');
-    }
-
-    /**
-     * @test
-     */
-    public function fullEditionShowsWaitlistCta(AcceptanceTester $I): void
-    {
-        $I->wantTo('see waitlist CTA when the edition status is full');
-
-        $this->setEditionStatus($I, $this->editionId, 'full');
-        $I->amOnPage($this->editionCourseUrl);
-        $I->waitForElement('aside', 10);
-
-        $I->see('Op wachtlijst plaatsen', 'aside a');
-        $I->see('volzet', 'aside');
-        $I->dontSee('Interesse melden', 'aside');
-    }
-
-    /**
-     * @test
-     */
-    public function inProgressEditionShowsNotAvailable(AcceptanceTester $I): void
-    {
-        $I->wantTo('see a disabled Niet beschikbaar button when the edition is in progress');
-
-        $this->setEditionStatus($I, $this->editionId, 'in_progress');
-        $I->amOnPage($this->editionCourseUrl);
-        $I->waitForElement('aside', 10);
-
-        $I->see('Niet beschikbaar', 'aside button');
-        $I->dontSee('Interesse melden', 'aside');
-        $I->dontSee('Op wachtlijst plaatsen', 'aside');
-    }
-
-    // =========================================================================
     // EDITION DETAIL PAGE — status header, badge and CTA
+    //
+    // Per-edition-status CTAs live on the edition permalink (/edities/<slug>/),
+    // NOT on the course permalink: a course WITH an active edition renders the
+    // edition-OVERVIEW (editions list, no sidebar) at its course permalink.
+    // See memory gotcha-course-permalink-edition-vs-pureld.
     // =========================================================================
 
     /**
@@ -204,6 +143,22 @@ class CourseSidebarStatusCest
 
         $I->see('Schrijf je in');
         $I->see($this->editionPriceFormatted);
+    }
+
+    /**
+     * @test
+     */
+    public function announcementEditionPageShowsInterestCta(AcceptanceTester $I): void
+    {
+        $I->wantTo('see Interesse melden CTA on an announcement edition detail page');
+
+        $this->setEditionStatus($I, $this->editionId, 'announcement');
+        $I->amOnPage($this->editionUrl);
+        $I->waitForElement('body', 10);
+
+        $I->see('Interesse melden');
+        $I->see('nog in voorbereiding');
+        $I->dontSee('Schrijf je in');
     }
 
     /**
