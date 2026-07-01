@@ -61,6 +61,7 @@ return [
         \Stride\Admin\AdminUserService::class,
         \Stride\Admin\AdminTrajectoryService::class,
         \Stride\Admin\AdminEditionRosterService::class,
+        \Stride\Modules\Reminder\GateReminderService::class,
     ],
 
     /**
