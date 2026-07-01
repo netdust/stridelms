@@ -1778,6 +1778,47 @@ final class RegistrationRepository
         return true;
     }
 
+    /**
+     * Enumeration query for the daily reminder cron (Phase 2 Task 2.3,
+     * threat-model A2): registrations whose edition has an active gate
+     * deadline (enroll-phase gate_deadline OR post-phase post_gate_deadline).
+     *
+     * Bounded (mitigation 5) — explicit LIMIT/OFFSET, $limit clamped to
+     * [1, 1000] so a caller can never request an unbounded scan. Prepared
+     * (mitigation 8) — status values + limit/offset all go through
+     * $wpdb->prepare; the two meta_key literals are hardcoded constants (not
+     * user input), matching the findForExport precedent for inline meta-key
+     * literals in this repo.
+     *
+     * @return array<object> Full row objects (SELECT *), matching the return
+     *                       shape of the other find* methods on this repo.
+     */
+    public function findWithActiveDeadline(int $limit = 500, int $offset = 0): array
+    {
+        global $wpdb;
+        $table = $this->table();
+
+        $limit = max(1, min($limit, 1000));
+        $offset = max(0, $offset);
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT r.* FROM {$table} r
+             LEFT JOIN {$wpdb->postmeta} pm_gate ON r.edition_id = pm_gate.post_id AND pm_gate.meta_key = '_ntdst_gate_deadline'
+             LEFT JOIN {$wpdb->postmeta} pm_post_gate ON r.edition_id = pm_post_gate.post_id AND pm_post_gate.meta_key = '_ntdst_post_gate_deadline'
+             WHERE r.status IN (%s, %s)
+               AND (
+                   (pm_gate.meta_value IS NOT NULL AND pm_gate.meta_value <> '')
+                   OR (pm_post_gate.meta_value IS NOT NULL AND pm_post_gate.meta_value <> '')
+               )
+             ORDER BY r.registered_at ASC
+             LIMIT %d OFFSET %d",
+            RegistrationStatus::Confirmed->value,
+            RegistrationStatus::Pending->value,
+            $limit,
+            $offset,
+        ));
+    }
+
     // === Cache management ===
 
     /**
