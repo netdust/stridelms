@@ -133,8 +133,17 @@ class StrideSettingsService
     public static function getNotificationRules(): array
     {
         $saved = get_option(self::OPTION_NOTIFICATIONS, []);
+        $rules = array_merge(ActionQueueService::DEFAULTS, is_array($saved) ? $saved : []);
 
-        return array_merge(ActionQueueService::DEFAULTS, is_array($saved) ? $saved : []);
+        // Defensive clamp: a value written before the clamp existed, or edited
+        // directly in the DB, must still read back within [1,365].
+        // Uses (int) rather than absint() so negative values floor to the
+        // minimum instead of flipping sign into range (absint(-5) === 5).
+        if (isset($rules['gate_reminder_days']['value'])) {
+            $rules['gate_reminder_days']['value'] = max(1, min(365, (int) $rules['gate_reminder_days']['value']));
+        }
+
+        return $rules;
     }
 
     // =========================================================================
@@ -393,7 +402,7 @@ class StrideSettingsService
      */
     private function saveNotificationSettings(array $params): array
     {
-        $ruleKeys = ['capacity_threshold', 'session_approaching', 'stale_quote', 'edition_starting', 'incomplete_tasks'];
+        $ruleKeys = ['capacity_threshold', 'session_approaching', 'stale_quote', 'edition_starting', 'incomplete_tasks', 'gate_reminder_days'];
         $rules = [];
 
         foreach ($ruleKeys as $key) {
@@ -411,6 +420,13 @@ class StrideSettingsService
             $rules[$key]['value'] = $rawValue > 0
                 ? max(1, min(365, $rawValue))
                 : (ActionQueueService::DEFAULTS[$key]['value'] ?? 7);
+
+            // gate_reminder_days additionally clamps negative raw input that
+            // absint() would otherwise flip into a valid positive range
+            // (absint(-5) === 5). (int) preserves sign so max(1, ...) floors it.
+            if ($key === 'gate_reminder_days' && array_key_exists($valueKey, $params)) {
+                $rules[$key]['value'] = max(1, min(365, (int) $params[$valueKey]));
+            }
         }
 
         update_option(self::OPTION_NOTIFICATIONS, $rules);
