@@ -175,7 +175,44 @@ final class AdminRegistrationQueryService
         // Two-step offerte resolver
         $offerteByReg = $this->resolveOfferteStatuses($regIds);
 
-        // --- Compose items ---
+        $items = $this->composeRows(
+            $rows,
+            $users,
+            $editions,
+            $trajectories,
+            $sessionCountByEdition,
+            $attendanceByEdition,
+            $offerteByReg,
+        );
+
+        return $this->paginationEnvelope($items, $total, $page, $perPage);
+    }
+
+    /**
+     * Compose the per-row read-model items from a resolved batch of rows.
+     *
+     * The per-row assembly (identity/status/attendance/company/trajectory/offerte)
+     * shared by the flat and grouped-child-row paths. Takes the already-resolved
+     * batch maps as params; issues no queries of its own.
+     *
+     * @param array                    $rows                  Raw registration row objects.
+     * @param array                    $users                 userId => WP_User.
+     * @param array                    $editions              editionId => WP_Post.
+     * @param array                    $trajectories          trajectoryId => WP_Post.
+     * @param array<int,int>           $sessionCountByEdition editionId => session count.
+     * @param array                    $attendanceByEdition   editionId => attendance map.
+     * @param array<int,string>        $offerteByReg          regId => offerte status.
+     * @return array
+     */
+    private function composeRows(
+        array $rows,
+        array $users,
+        array $editions,
+        array $trajectories,
+        array $sessionCountByEdition,
+        array $attendanceByEdition,
+        array $offerteByReg,
+    ): array {
         $items = [];
         foreach ($rows as $row) {
             $userId    = (int) $row->user_id;
@@ -266,7 +303,7 @@ final class AdminRegistrationQueryService
             ];
         }
 
-        return $this->paginationEnvelope($items, $total, $page, $perPage);
+        return $items;
     }
 
     /**
