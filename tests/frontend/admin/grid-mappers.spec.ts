@@ -121,3 +121,115 @@ test.describe('gridFilterPayload', () => {
     expect(grid.gridFilterPayload(undefined)).toEqual({});
   });
 });
+
+/**
+ * gridStateToParams / gridStateFromParams — the URL round-trip (Tier A).
+ *
+ * The grid syncs its full view state (filters, search, sort, page, per_page,
+ * group_by) into the browser URL via replaceState, so a filtered view is
+ * bookmarkable / reload-safe / shareable. shell.js already owns ?view=/?queue=
+ * /?user=/?reg= — these two mappers are the grid's HALF of the same URL, and
+ * the contract that keeps the two halves from clobbering each other is:
+ *
+ *   toParams   — emits ONLY non-default state (a pristine grid → {}), so the
+ *                URL stays clean and the omit-empty rule matches the fetch.
+ *   fromParams — coerces numerics, and on a malformed / unknown value falls
+ *                back to the default instead of setting NaN or an arbitrary
+ *                group_by (the denial branch: a bogus ?group_by=x must never
+ *                become an active grouping the server never allow-listed).
+ *
+ * Round-trip identity: fromParams(new URLSearchParams(toParams(s))) reproduces
+ * the meaningful subset of s.
+ */
+test.describe('gridStateToParams', () => {
+  const pristine = () => ({
+    filters: { status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' },
+    sortKey: '', sortDir: 'asc', groupBy: '', page: 1, perPage: 25,
+  });
+
+  test('pristine state → {} (a default grid writes NOTHING to the URL)', () => {
+    expect(grid.gridStateToParams(pristine())).toEqual({});
+    expect(grid.gridStateToParams(undefined)).toEqual({});
+  });
+
+  test('emits only the set filters + search (omits zero/empty, string-coerces ids)', () => {
+    const s = { ...pristine(), filters: { status: 'confirmed', edition_id: 42, company_id: 0, trajectory_id: 3, q: 'anna' } };
+    expect(grid.gridStateToParams(s)).toEqual({
+      status: 'confirmed', edition_id: '42', trajectory_id: '3', q: 'anna',
+    });
+  });
+
+  test('sort emits sort+order ONLY when a sortKey is set', () => {
+    expect(grid.gridStateToParams({ ...pristine(), sortKey: 'name', sortDir: 'desc' }))
+      .toEqual({ sort: 'name', order: 'desc' });
+    // no sortKey → neither sort nor order, even if sortDir drifted from default
+    expect(grid.gridStateToParams({ ...pristine(), sortKey: '', sortDir: 'desc' })).toEqual({});
+  });
+
+  test('page emits ONLY when > 1; per_page ONLY when ≠ default 25; group_by when set', () => {
+    expect(grid.gridStateToParams({ ...pristine(), page: 3 })).toEqual({ page: '3' });
+    expect(grid.gridStateToParams({ ...pristine(), page: 1 })).toEqual({});
+    expect(grid.gridStateToParams({ ...pristine(), perPage: 50 })).toEqual({ per_page: '50' });
+    expect(grid.gridStateToParams({ ...pristine(), perPage: 25 })).toEqual({});
+    expect(grid.gridStateToParams({ ...pristine(), groupBy: 'edition_id' })).toEqual({ group_by: 'edition_id' });
+  });
+});
+
+test.describe('gridStateFromParams', () => {
+  const from = (qs) => grid.gridStateFromParams(new URLSearchParams(qs));
+
+  test('parses filters + search back, coercing ids to numbers', () => {
+    const s = from('status=confirmed&edition_id=42&trajectory_id=3&q=anna');
+    expect(s.filters).toEqual({ status: 'confirmed', edition_id: 42, company_id: 0, trajectory_id: 3, q: 'anna' });
+  });
+
+  test('parses sort/order, page, per_page, group_by', () => {
+    const s = from('sort=name&order=desc&page=4&per_page=50&group_by=status');
+    expect(s.sortKey).toBe('name');
+    expect(s.sortDir).toBe('desc');
+    expect(s.page).toBe(4);
+    expect(s.perPage).toBe(50);
+    expect(s.groupBy).toBe('status');
+  });
+
+  test('empty URL → default state patch (no filters set, page 1)', () => {
+    const s = from('');
+    expect(s.filters).toEqual({ status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' });
+    expect(s.page).toBe(1);
+    expect(s.sortKey).toBe('');
+    expect(s.groupBy).toBe('');
+  });
+
+  test('DENIAL: malformed numerics fall back to default, never NaN', () => {
+    const s = from('page=abc&per_page=notanumber&edition_id=xyz');
+    expect(s.page).toBe(1);           // not NaN
+    expect(s.perPage).toBe(25);       // not NaN
+    expect(s.filters.edition_id).toBe(0);
+    expect(Number.isNaN(s.page)).toBe(false);
+    expect(Number.isNaN(s.perPage)).toBe(false);
+  });
+
+  test('DENIAL: unknown group_by / bogus order → default, never an arbitrary grouping', () => {
+    // group_by is server-allow-listed to edition_id|status|company_id — a bogus
+    // value must NOT become an active grouping (it would send an un-allow-listed
+    // group_by to the server and render a broken grouped view).
+    expect(from('group_by=DROP').groupBy).toBe('');
+    expect(from('group_by=trajectory_id').groupBy).toBe('');
+    // order is asc|desc only; a bogus order coerces to the default asc.
+    expect(from('sort=name&order=sideways').sortDir).toBe('asc');
+  });
+
+  test('round-trip identity: fromParams(toParams(s)) reproduces the state', () => {
+    const s = {
+      filters: { status: 'confirmed', edition_id: 42, company_id: 7, trajectory_id: 3, q: 'anna' },
+      sortKey: 'name', sortDir: 'desc', groupBy: 'status', page: 4, perPage: 50,
+    };
+    const round = grid.gridStateFromParams(new URLSearchParams(grid.gridStateToParams(s)));
+    expect(round.filters).toEqual(s.filters);
+    expect(round.sortKey).toBe(s.sortKey);
+    expect(round.sortDir).toBe(s.sortDir);
+    expect(round.groupBy).toBe(s.groupBy);
+    expect(round.page).toBe(s.page);
+    expect(round.perPage).toBe(s.perPage);
+  });
+});
