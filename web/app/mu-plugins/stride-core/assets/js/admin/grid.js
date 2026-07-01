@@ -170,7 +170,10 @@
       out.order = s.sortDir === 'desc' ? 'desc' : 'asc';
     }
     if (s.groupBy && GROUP_BY_ALLOWLIST.includes(s.groupBy)) out.group_by = s.groupBy;
-    if (s.page && Number(s.page) > 1) out.page = String(s.page);
+    // The grid's pagination URL key is `p`, NOT `page` — `page` is WordPress
+    // admin's routing param (?page=stride-dashboard). Writing/deleting `page`
+    // here would destroy WP's routing and blank the whole dashboard on reload.
+    if (s.page && Number(s.page) > 1) out.p = String(s.page);
     if (s.perPage && Number(s.perPage) !== DEFAULT_PER_PAGE) out.per_page = String(s.perPage);
     return out;
   }
@@ -198,7 +201,7 @@
       sortKey: p.get('sort') || '',
       sortDir: order === 'desc' ? 'desc' : 'asc',
       groupBy: GROUP_BY_ALLOWLIST.includes(gb) ? gb : '',
-      page: toInt(p.get('page'), 1),
+      page: toInt(p.get('p'), 1),   // `p` — NOT `page` (WP admin routing param)
       perPage: toInt(p.get('per_page'), DEFAULT_PER_PAGE),
     };
   }
@@ -428,7 +431,9 @@
         if (typeof window === 'undefined' || !window.history || !window.history.replaceState) return;
         const url = new URL(window.location.href);
         // Clear only the keys THIS grid owns (leave shell/WP params untouched).
-        ['status', 'edition_id', 'company_id', 'trajectory_id', 'q', 'sort', 'order', 'group_by', 'page', 'per_page']
+        // Pagination is `p`, NEVER `page` — `page` is WP admin's routing param
+        // (?page=stride-dashboard); deleting it here blanks the dashboard on reload.
+        ['status', 'edition_id', 'company_id', 'trajectory_id', 'q', 'sort', 'order', 'group_by', 'p', 'per_page']
           .forEach((k) => url.searchParams.delete(k));
         const gridParams = gridStateToParams(this);
         Object.keys(gridParams).forEach((k) => url.searchParams.set(k, gridParams[k]));

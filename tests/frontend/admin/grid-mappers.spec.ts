@@ -166,12 +166,22 @@ test.describe('gridStateToParams', () => {
     expect(grid.gridStateToParams({ ...pristine(), sortKey: '', sortDir: 'desc' })).toEqual({});
   });
 
-  test('page emits ONLY when > 1; per_page ONLY when ≠ default 25; group_by when set', () => {
-    expect(grid.gridStateToParams({ ...pristine(), page: 3 })).toEqual({ page: '3' });
+  test('page emits as `p` (NOT `page`) ONLY when > 1; per_page ONLY when ≠ default 25; group_by when set', () => {
+    // `p`, never `page` — `page` is WP admin's routing key (?page=stride-dashboard).
+    expect(grid.gridStateToParams({ ...pristine(), page: 3 })).toEqual({ p: '3' });
     expect(grid.gridStateToParams({ ...pristine(), page: 1 })).toEqual({});
     expect(grid.gridStateToParams({ ...pristine(), perPage: 50 })).toEqual({ per_page: '50' });
     expect(grid.gridStateToParams({ ...pristine(), perPage: 25 })).toEqual({});
     expect(grid.gridStateToParams({ ...pristine(), groupBy: 'edition_id' })).toEqual({ group_by: 'edition_id' });
+  });
+
+  test('REGRESSION: never emits a `page` key (would collide with WP admin routing)', () => {
+    // The grid's pagination MUST NOT serialize to ?page= — WordPress routes the
+    // whole admin screen on ?page=stride-dashboard, so a grid `page` key deletes
+    // WP's and blanks the dashboard on reload. Assert `page` is never produced.
+    const s = { ...pristine(), page: 5, perPage: 50, filters: { status: 'pending', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' } };
+    expect(grid.gridStateToParams(s)).not.toHaveProperty('page');
+    expect(grid.gridStateToParams(s).p).toBe('5');
   });
 });
 
@@ -183,13 +193,22 @@ test.describe('gridStateFromParams', () => {
     expect(s.filters).toEqual({ status: 'confirmed', edition_id: 42, company_id: 0, trajectory_id: 3, q: 'anna' });
   });
 
-  test('parses sort/order, page, per_page, group_by', () => {
-    const s = from('sort=name&order=desc&page=4&per_page=50&group_by=status');
+  test('parses sort/order, page (from `p`), per_page, group_by', () => {
+    const s = from('sort=name&order=desc&p=4&per_page=50&group_by=status');
     expect(s.sortKey).toBe('name');
     expect(s.sortDir).toBe('desc');
     expect(s.page).toBe(4);
     expect(s.perPage).toBe(50);
     expect(s.groupBy).toBe('status');
+  });
+
+  test('REGRESSION: a WP `page=stride-dashboard` in the URL is IGNORED (not read as grid page)', () => {
+    // The grid reads pagination from `p`, so WordPress's own ?page= must not be
+    // mis-parsed as the grid's page (it would coerce the slug to page 1 anyway,
+    // but the contract is: grid pagination lives in `p`, WP routing in `page`).
+    const s = from('page=stride-dashboard&status=pending');
+    expect(s.page).toBe(1);              // WP's page= did not become the grid page
+    expect(s.filters.status).toBe('pending');
   });
 
   test('empty URL → default state patch (no filters set, page 1)', () => {

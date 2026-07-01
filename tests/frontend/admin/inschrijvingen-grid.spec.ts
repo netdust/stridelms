@@ -134,4 +134,56 @@ test.describe('Inschrijvingen grid — cold landing', () => {
     const emptyHeading = grid.locator('.ws-empty h3').filter({ hasText: 'zzz-no-such-person-zzz' });
     await expect(emptyHeading).toBeVisible({ timeout: 15000 });
   });
+
+  test('URL sync: filtering rewrites the address bar, and a reload restores the filtered view', async ({ page }) => {
+    await loginAndLand(page, 'view=inschrijvingen');
+    const grid = page.locator(GRID);
+    await expect(grid).toBeVisible({ timeout: 15000 });
+    await expect(grid.locator('table.ws-table:not(.ws-table--grouped) tbody tr').first()).toBeVisible({ timeout: 15000 });
+
+    // On the pristine landing, the grid has written NO filter keys to the URL
+    // (the omit-empty contract) — only the shell's ?view= is present.
+    expect(page.url()).not.toContain('status=');
+
+    // Drive a real in-grid filter: click the "pending" (In afwachting) funnel chip.
+    await grid.locator('.ws-stage-chip--pending').click();
+
+    // The server-filtered page settles AND the address bar now carries ?status=pending
+    // (syncStateToUrl ran through the real replaceState) while the shell ?view= survives.
+    await expect(grid.locator('.ws-stage-chip--pending')).toHaveClass(/is-active/, { timeout: 15000 });
+    await expect.poll(() => new URL(page.url()).searchParams.get('status'), { timeout: 15000 }).toBe('pending');
+    expect(new URL(page.url()).searchParams.get('view')).toBe('inschrijvingen');
+
+    // The active filter chip reflects the applied status (proven AF-2 assertion —
+    // waits for the filtered page to settle without a flaky row-visibility race).
+    await expect(grid.locator('.ws-chip').filter({ hasText: 'In afwachting' })).toBeVisible({ timeout: 15000 });
+
+    // Guard the ORIGINAL bug directly: the grid's pagination must live in `p`,
+    // and WordPress's ?page=stride-dashboard must be INTACT after the sync — else
+    // the reload below lands on a blank admin screen.
+    expect(new URL(page.url()).searchParams.get('page')).toBe('stride-dashboard');
+
+    // RELOAD the exact URL — hydrateStateFromUrl must restore the pending filter,
+    // not drop back to the unfiltered default (the whole point of the feature),
+    // AND the dashboard must still render (WP routing param survived).
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    const grid2 = page.locator(GRID);
+    await expect(grid2).toBeVisible({ timeout: 15000 });
+    // The restored filter is active on the fresh load — hydrateStateFromUrl read
+    // ?status=pending back off the URL and re-applied it.
+    await expect(grid2.locator('.ws-stage-chip--pending')).toHaveClass(/is-active/, { timeout: 15000 });
+    await expect(grid2.locator('.ws-chip').filter({ hasText: 'In afwachting' })).toBeVisible({ timeout: 15000 });
+    // And the server actually filtered on that restored state: rows rendered and
+    // every one is pending. Assert on the rows themselves (stable), not a badge
+    // sub-element whose first-match can be transiently hidden mid-render.
+    const rows2 = grid2.locator('table.ws-table:not(.ws-table--grouped) tbody tr');
+    await expect(rows2.first()).toBeVisible({ timeout: 15000 });
+    const n = await rows2.count();
+    expect(n).toBeGreaterThan(0);
+    for (let i = 0; i < n; i++) {
+      // Each restored row carries the pending status label (the server filtered
+      // on the hydrated ?status=pending).
+      await expect(rows2.nth(i)).toContainText('In afwachting');
+    }
+  });
 });

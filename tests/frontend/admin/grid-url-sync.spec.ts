@@ -49,12 +49,16 @@ test.describe('syncStateToUrl (write half, un-mocked history)', () => {
     g.syncStateToUrl();
 
     const out = new URL(win.location.href).searchParams;
-    // shell + WP params SURVIVE (the clobber bug this guards against)
-    expect(out.get('page')).toBe('3');          // grid's own page (not WP's ?page=)
+    // WP's routing param SURVIVES INTACT — assert the SLUG, not just "some page=".
+    // (The original bug: the grid wrote its own page to `page`, so `page=`
+    // existed but pointed at `3`, silently destroying WP's ?page=stride-dashboard
+    // and blanking the whole admin screen on reload.)
+    expect(out.get('page')).toBe('stride-dashboard');
+    // shell params survive
     expect(out.get('view')).toBe('inschrijvingen');
     expect(out.get('queue')).toBe('pending');
-    // WP admin page param is untouched (it is not one the grid manages)
-    expect(win.location.href).toContain('page=');
+    // the grid's OWN pagination lives in `p`, never `page`
+    expect(out.get('p')).toBe('3');
     // grid state landed
     expect(out.get('status')).toBe('confirmed');
     expect(out.get('edition_id')).toBe('42');
@@ -63,6 +67,20 @@ test.describe('syncStateToUrl (write half, un-mocked history)', () => {
     expect(out.get('order')).toBe('desc');
     expect(out.get('group_by')).toBe('status');
     expect(out.get('per_page')).toBe('50');
+  });
+
+  test('REGRESSION: WP ?page=stride-dashboard survives even at grid page 1 (the clobber bug)', () => {
+    // The exact failing path: grid on page 1 (so pagination is OMITTED), a filter
+    // applied. The delete-then-set must NOT remove WP's `page` — reload depends on it.
+    const win = fakeWindow('http://x/wp/wp-admin/admin.php?page=stride-dashboard&view=inschrijvingen');
+    const g = makeGrid(win);
+    g.filters = { status: 'pending', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' };
+    g.sortKey = ''; g.page = 1; g.perPage = 25; g.groupBy = '';
+    g.syncStateToUrl();
+    const out = new URL(win.location.href).searchParams;
+    expect(out.get('page')).toBe('stride-dashboard');  // WP routing INTACT
+    expect(out.get('status')).toBe('pending');
+    expect(out.get('p')).toBeNull();                   // page 1 omitted, no stray `p`
   });
 
   test('NEGATIVE: clearing a filter DROPS its URL key (does not linger)', () => {
@@ -83,7 +101,7 @@ test.describe('syncStateToUrl (write half, un-mocked history)', () => {
 
 test.describe('hydrateStateFromUrl (read half) + full round-trip through the real methods', () => {
   test('restores the full grid state from a bookmarked URL', () => {
-    const win = fakeWindow('http://x/?view=inschrijvingen&status=waitlist&edition_id=7&sort=date&order=desc&page=2&per_page=50&group_by=edition_id');
+    const win = fakeWindow('http://x/?view=inschrijvingen&status=waitlist&edition_id=7&sort=date&order=desc&p=2&per_page=50&group_by=edition_id');
     const g = makeGrid(win);
 
     g.hydrateStateFromUrl();
