@@ -184,31 +184,60 @@ defined('ABSPATH') || exit;
             </tbody>
         </table>
 
-        <!-- GROUPED — aggregate rows (different shape: group_value/count/pct_afgerond/…) -->
+        <!-- GROUPED — accordion: one collapsible <tbody> per group. The group
+             header shows the aggregates; expanding reveals up to 8 composed child
+             rows (reusing the shared _reg-row.php partial). "Toon alle N" drops
+             the grouping and re-loads the full flat paginated set for the group. -->
         <table class="ws-table ws-table--grouped" x-show="!loading && !error && groupBy && total > 0">
             <thead>
                 <tr>
-                    <th><?php echo esc_html__('Groep', 'stride'); ?></th>
-                    <th><?php echo esc_html__('Aantal', 'stride'); ?></th>
-                    <th><?php echo esc_html__('% afgerond', 'stride'); ?></th>
-                    <th><?php echo esc_html__('Gem. aanwezigheid', 'stride'); ?></th>
-                    <th><?php echo esc_html__('Offerte-verdeling', 'stride'); ?></th>
+                    <th class="ws-col-check"></th>
+                    <th><?php echo esc_html__('Naam', 'stride'); ?></th>
+                    <th><?php echo esc_html__('Editie', 'stride'); ?></th>
+                    <th class="ws-col-status"><?php echo esc_html__('Status', 'stride'); ?></th>
+                    <th class="ws-col-offerte"><?php echo esc_html__('Offerte', 'stride'); ?></th>
+                    <th class="ws-col-att"><?php echo esc_html__('Aanwezigheid', 'stride'); ?></th>
+                    <th><?php echo esc_html__('Organisatie', 'stride'); ?></th>
+                    <th class="ws-col-traject"><?php echo esc_html__('Traject', 'stride'); ?></th>
                 </tr>
             </thead>
-            <tbody>
-                <template x-for="g in groups" :key="g.group_value">
+            <template x-for="g in groupsView" :key="g.key">
+                <tbody class="ws-group" :class="!collapsed[g.key] && 'is-expanded'">
+                    <!-- group header row (click to toggle) -->
                     <tr class="ws-grouprow">
-                        <td>
-                            <span class="ws-grouphead__kind" x-text="groupKindLabel"></span>
-                            <span class="ws-grouphead__title" x-text="groupLabel(g)"></span>
+                        <td :colspan="8">
+                            <div class="ws-grouphead" :class="collapsed[g.key] && 'is-collapsed'"
+                                 @click="toggleGroup(g.key)" role="button" :aria-expanded="!collapsed[g.key]">
+                                <span class="ws-grouphead__chev" x-html="icon('chevDown')"></span>
+                                <span class="ws-grouphead__kind" x-text="groupKindLabel"></span>
+                                <span class="ws-grouphead__title">
+                                    <span x-text="groupLabel(g)"></span>
+                                    <span class="ws-grouphead__count" x-text="g.count + (g.count===1 ? ' <?php echo esc_js(__('inschrijving', 'stride')); ?>' : ' <?php echo esc_js(__('inschrijvingen', 'stride')); ?>')"></span>
+                                </span>
+                                <div class="ws-grouphead__aggs">
+                                    <div class="ws-agg"><span class="ws-agg__label"><?php echo esc_html__('% afgerond', 'stride'); ?></span><span class="ws-agg__val" x-text="g.pct_afgerond + '%'"></span></div>
+                                    <div class="ws-agg"><span class="ws-agg__label"><?php echo esc_html__('gem. aanwezigheid', 'stride'); ?></span><span class="ws-agg__val" x-text="g.avg_attendance_pct != null ? g.avg_attendance_pct + '%' : '—'"></span></div>
+                                    <div class="ws-agg ws-agg--dist">
+                                        <span class="ws-agg__label"><?php echo esc_html__('offerte-verdeling', 'stride'); ?></span>
+                                        <span class="ws-distlegend" x-text="distSummary(g.offerte_verdeling)"></span>
+                                    </div>
+                                </div>
+                            </div>
                         </td>
-                        <td><b x-text="g.count"></b> <span x-text="g.count===1 ? '<?php echo esc_js(__('inschrijving', 'stride')); ?>' : '<?php echo esc_js(__('inschrijvingen', 'stride')); ?>'"></span></td>
-                        <td><span class="ws-agg__val" x-text="g.pct_afgerond + '%'"></span></td>
-                        <td><span class="ws-agg__val" x-text="g.avg_attendance_pct != null ? g.avg_attendance_pct + '%' : '—'"></span></td>
-                        <td><span class="ws-distlegend" x-text="distSummary(g.offerte_verdeling)"></span></td>
                     </tr>
-                </template>
-            </tbody>
+                    <!-- child rows: collapsed groups iterate an EMPTY array (no x-show
+                         needed on the shared partial, keeping it flat/grouped-agnostic). -->
+                    <template x-for="r in (collapsed[g.key] ? [] : g.rows)" :key="r.id"><?php require __DIR__ . '/_reg-row.php'; ?></template>
+                    <!-- "Toon alle N" — only when the server capped the child rows -->
+                    <tr class="ws-grouprow ws-grouprow--more" x-show="g.hasMore && !collapsed[g.key]">
+                        <td :colspan="8">
+                            <button class="ws-btn ws-btn--subtle ws-btn--sm" @click="showAllInGroup(g)">
+                                <?php echo esc_html__('Toon alle', 'stride'); ?> <span x-text="g.rowTotal"></span>
+                            </button>
+                        </td>
+                    </tr>
+                </tbody>
+            </template>
         </table>
 
         <!-- EMPTY STATE -->

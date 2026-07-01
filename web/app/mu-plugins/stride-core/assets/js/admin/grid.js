@@ -206,6 +206,40 @@
     };
   }
 
+  /* ---- accordion per-group mapper (PURE, Tier-A) ------------------------
+     Task 6: the grouped endpoint item now carries its own composed child rows
+     ({ group_value, count, rows[≤8], row_total, pct_afgerond, avg_attendance_pct,
+     offerte_verdeling }). This maps ONE server group into the shape the accordion
+     template iterates (groupsView). It is PURE — it deliberately does NOT compute
+     the display label (that depends on `this.editionOptions`); the template calls
+     the instance-bound groupLabel(g) instead, which reads .group_value, so we pass
+     group_value through untouched.
+
+     Two load-bearing jobs:
+       key     — a STABLE String for collapsed[key] / toggleGroup(key). A null
+                 group_value (the "Geen editie / Geen organisatie" bucket) MUST
+                 coerce to a stable string ('' via String(v ?? '')) — never
+                 undefined, or collapsed[undefined] would alias every null-value
+                 group into a single toggle.
+       hasMore — true exactly when the true row_total exceeds the number of rows
+                 the server actually shipped (capped at 8). Drives "Toon alle N". */
+  function groupRowsFrom(group) {
+    const g = group || {};
+    const rows = g.rows || [];
+    const rowTotal = g.row_total || 0;
+    return {
+      key: String(g.group_value ?? ''),
+      group_value: g.group_value,      // passthrough so groupLabel(g) still resolves
+      rows,
+      count: g.count,
+      rowTotal,
+      hasMore: rowTotal > rows.length,
+      pct_afgerond: g.pct_afgerond,
+      avg_attendance_pct: g.avg_attendance_pct,
+      offerte_verdeling: g.offerte_verdeling,
+    };
+  }
+
   /* ---- the §2.1 transition mirror for the state-aware bulk bar -----------
      Lifted verbatim from the god-component STRIDE_SMART_ACTIONS. The bulk bar
      offers the SAFE INTERSECTION of actions across the selected rows' statuses.
@@ -528,6 +562,28 @@
         return v || '—';
       },
       toggleGroup(key) { this.collapsed[key] = !this.collapsed[key]; },
+
+      /* The accordion iterates this: each server group mapped through the pure
+         groupRowsFrom (stable key + hasMore + child rows). groupRowsFrom passes
+         group_value through, so the template still calls groupLabel(g) for the
+         instance-dependent display label. */
+      get groupsView() { return this.groups.map(groupRowsFrom); },
+
+      /* "Toon alle N" — drop the grouping and re-fetch the FULL flat, paginated
+         set for this one group, by pinning the group's dimension as a filter.
+         Reuses the server-paged flat grid (NO client-side corpus append). The raw
+         group_value (g.group_value / g.key) is the filter value. */
+      showAllInGroup(g) {
+        const raw = g.group_value;
+        if (this.groupBy === 'status') this.filters.status = raw || '';
+        else if (this.groupBy === 'edition_id') this.filters.edition_id = Number(raw) || 0;
+        else if (this.groupBy === 'company_id') this.filters.company_id = Number(raw) || 0;
+        this.groupBy = '';
+        this.collapsed = {};      // match onGroupChange()'s collapse reset
+        this.clearSelection();
+        this.load(1);
+      },
+
       distSummary(verdeling) {
         if (!verdeling) return 'geen offertes';
         const parts = Object.entries(verdeling).filter(([, n]) => n > 0).map(([label, n]) => `${n} ${String(label).toLowerCase()}`);
@@ -704,6 +760,7 @@
     gridFilterPayload,
     gridStateToParams,
     gridStateFromParams,
+    groupRowsFrom,
     actionsForStates,
     avatarColor,
     initials,

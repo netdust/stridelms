@@ -123,6 +123,80 @@ test.describe('gridFilterPayload', () => {
 });
 
 /**
+ * groupRowsFrom(group) — the accordion per-group mapper (Tier A).
+ *
+ * Task 6: the grouped endpoint item now carries its own child rows
+ * ({ group_value, count, rows, row_total, pct_afgerond, avg_attendance_pct,
+ * offerte_verdeling }). This PURE mapper turns each server group into the shape
+ * the accordion template iterates. Its two load-bearing jobs:
+ *
+ *   - a STABLE String `key` — collapsed[key] / toggleGroup(key) are keyed by it,
+ *     so a null group_value (the "Geen editie / Geen organisatie" bucket) must
+ *     coerce to a stable, non-crashing string, NOT `null`/`undefined` (which
+ *     would make collapsed[undefined] alias every null-value group together).
+ *   - `hasMore` — the server caps `rows` at 8 but reports the true `row_total`;
+ *     hasMore drives the "Toon alle N" affordance and MUST be true exactly when
+ *     row_total exceeds the number of composed rows shipped.
+ *
+ * It stays PURE (no `this`) so the template still calls the instance-bound
+ * groupLabel(g) for the display label — group_value is passed through so that
+ * call still resolves.
+ */
+test.describe('groupRowsFrom', () => {
+  test('maps a grouped item to {key,rows,hasMore,rowTotal,count} carrying its child rows', () => {
+    const rows = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    const g = {
+      group_value: 42,
+      count: 12,
+      rows,
+      row_total: 12,
+      pct_afgerond: 50,
+      avg_attendance_pct: 88,
+      offerte_verdeling: { Verzonden: 3 },
+    };
+    const out = grid.groupRowsFrom(g);
+    expect(out.key).toBe('42');            // stable String key for collapsed[]/toggleGroup()
+    expect(out.rows).toBe(rows);           // the child rows ride through unchanged
+    expect(out.count).toBe(12);
+    expect(out.rowTotal).toBe(12);
+    expect(out.group_value).toBe(42);      // passthrough so groupLabel(g) still resolves
+    expect(out.pct_afgerond).toBe(50);
+    expect(out.avg_attendance_pct).toBe(88);
+    expect(out.offerte_verdeling).toEqual({ Verzonden: 3 });
+  });
+
+  test('hasMore is TRUE when row_total exceeds the shipped rows (the capped case)', () => {
+    // Server caps rows at 8 but reports the real total → "Toon alle N" must show.
+    const g = { group_value: 7, count: 30, rows: new Array(8).fill(0).map((_, i) => ({ id: i })), row_total: 30 };
+    expect(grid.groupRowsFrom(g).hasMore).toBe(true);
+    expect(grid.groupRowsFrom(g).rowTotal).toBe(30);
+  });
+
+  test('hasMore is FALSE when every row is shipped (row_total === rows.length)', () => {
+    const g = { group_value: 7, count: 3, rows: [{ id: 1 }, { id: 2 }, { id: 3 }], row_total: 3 };
+    expect(grid.groupRowsFrom(g).hasMore).toBe(false);
+  });
+
+  test('EDGE: a null group_value coerces to a stable string key without crashing', () => {
+    // The "Geen editie" / "Geen organisatie" bucket has group_value === null.
+    // If key were left null/undefined, collapsed[undefined] would alias EVERY
+    // null-value group into one toggle — the key MUST be a stable string.
+    const g = { group_value: null, count: 4, rows: [], row_total: 4 };
+    const out = grid.groupRowsFrom(g);
+    expect(typeof out.key).toBe('string');
+    expect(out.key).toBe('');              // String(null ?? '') → ''
+    expect(out.rows).toEqual([]);          // missing/empty rows → [] (never undefined)
+    expect(out.hasMore).toBe(true);        // 4 total, 0 shipped
+  });
+
+  test('EDGE: a group with no rows array at all → rows:[], hasMore from row_total', () => {
+    const out = grid.groupRowsFrom({ group_value: 'x', count: 0, row_total: 0 });
+    expect(out.rows).toEqual([]);
+    expect(out.hasMore).toBe(false);       // 0 total, 0 shipped
+  });
+});
+
+/**
  * gridStateToParams / gridStateFromParams — the URL round-trip (Tier A).
  *
  * The grid syncs its full view state (filters, search, sort, page, per_page,

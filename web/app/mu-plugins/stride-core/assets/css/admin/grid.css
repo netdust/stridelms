@@ -317,6 +317,9 @@
 .ws-grouphead__title > span:first-child { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ws-grouphead__count { font-size: var(--ws-fs-xs); font-weight: 600; color: var(--ws-text-2); background: #fff; border: 1px solid var(--ws-border); padding: 1px 8px; border-radius: 999px; flex-shrink: 0; white-space: nowrap; }
 .ws-grouphead__aggs { margin-left: auto; display: flex; align-items: center; gap: var(--ws-6); flex-shrink: 0; }
+/* "Toon alle N" footer row — the affordance to drop grouping and load the full set */
+.ws-grouprow--more td { background: var(--ws-surface); border-top: 1px dashed var(--ws-border); }
+.ws-grouprow--more td > button { margin: var(--ws-2) var(--ws-5); }
 .ws-agg { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
 .ws-agg__label { font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--ws-text-3); font-weight: 600; }
 .ws-agg__val { font-size: var(--ws-fs); font-weight: 600; color: var(--ws-text); font-variant-numeric: tabular-nums; }
