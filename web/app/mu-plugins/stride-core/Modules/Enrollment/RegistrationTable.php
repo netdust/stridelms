@@ -21,8 +21,10 @@ final class RegistrationTable
      * Bump when ALTERing the table; add the matching step in migrate().
      *
      * v2: enrollment_path ENUM gains 'partner' (audit M-4).
+     * v3: reminder_state JSON column added (Phase 2 Task 2.1 — reminder
+     *     idempotency ledger, consumed by later reminder-send tasks).
      */
-    public const SCHEMA_VERSION = 2;
+    public const SCHEMA_VERSION = 3;
 
     private const SCHEMA_VERSION_OPTION = 'stride_registrations_schema_version';
 
@@ -67,6 +69,7 @@ final class RegistrationTable
             notes TEXT NULL,
             completion_tasks JSON NULL,
             enrollment_data JSON NULL,
+            reminder_state JSON NULL,
             INDEX idx_user (user_id),
             INDEX idx_edition (edition_id),
             INDEX idx_trajectory (trajectory_id),
@@ -152,6 +155,31 @@ final class RegistrationTable
             set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
 
             return;
+        }
+
+        // v3 (Phase 2 Task 2.1): add reminder_state JSON column, used by later
+        // reminder-send tasks as a per-registration idempotency ledger.
+        // Guarded via SHOW COLUMNS (same style as exists()'s SHOW TABLES
+        // probe) — unlike the v2 MODIFY above, ADD COLUMN errors if the
+        // column already exists, and the >= guard at the top of this method
+        // makes a v2 DB re-enter migrate() once SCHEMA_VERSION is bumped, so
+        // this step must tolerate running again on an already-v3 table.
+        $hasReminderStateColumn = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'reminder_state'");
+
+        if ($hasReminderStateColumn === null) {
+            $reminderStateAltered = $wpdb->query("ALTER TABLE {$table} ADD COLUMN reminder_state JSON NULL");
+
+            if ($reminderStateAltered === false) {
+                ntdst_log('enrollment')->error('registrations schema v3 migration failed', [
+                    'step' => 'add_reminder_state_column',
+                    'error' => $wpdb->last_error,
+                ]);
+
+                // Don't stamp the version: retried once the backoff lapses (step is idempotent).
+                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
+                return;
+            }
         }
 
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
