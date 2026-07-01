@@ -81,6 +81,12 @@
 
 ### Out of scope (explicit deferrals)
 
+> **P6-gate decisions (2026-07-02) — 2 simplicity Minors DECLINED with reason (not oversights):**
+> 1. `buildDeadlineCountdown()` returns `activeDeadline` + `overdue` keys the JS doesn't read (JS derives from `days_left`/`days_overdue`). DECLINED trimming: an explicit server-side `overdue` bool is a better, honest contract than making a client infer overdue-ness from a magnitude's sign — a future/alt consumer reading `overdue` directly is the robustness we want. Keeping the small explicit contract beats optimizing for today's single consumer.
+> 2. `buildDeadlineCountdown()` re-reads the deadline via `getField` although `getTaskAvailability` already read it internally. DECLINED: the reviewer's fix (expose the raw date from `getTaskAvailability`) would change the Phase-3 convergence-point RETURN SHAPE — a bigger, riskier change than the one duplicate meta-read it saves, on a display-only low-volume admin path. Not worth destabilizing the convergence contract.
+> APPLIED instead: the tracer's `!= null` defensive guard in `deadlineBadge()` (cheap hardening vs future contract drift).
+
+
 > **⚠️ DEPLOYMENT NOTE (P5-gate, 2026-07-01 — MUST do on any env that seeded before the fix):** `seedTemplates()` skips slugs that already exist, so the `trigger=''` fix for `stride-gate-todo` does NOT retroactively correct a DB that already seeded it with `trigger='stride/registration/created'` (dev, staging, prod after first deploy). Symptom if missed: mail #1 double-sends on gated editions + sends unconditionally on non-gated ones. Fix on each such env: `wp eval "\$p=get_page_by_path('stride-gate-todo',OBJECT,'ndmail_template'); if(\$p) update_post_meta(\$p->ID,'_ndmail_trigger','');"` (or bump the seed to force a re-seed path that updates existing rows — but seedTemplates currently doesn't update, so the meta patch is the reliable one). Add to LAUNCH-CHECKLIST deploy steps.
 
 
