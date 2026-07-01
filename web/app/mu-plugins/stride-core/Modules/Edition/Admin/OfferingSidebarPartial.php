@@ -108,6 +108,19 @@ final class OfferingSidebarPartial
                     </div>
                 <?php endif; ?>
             <?php endforeach; ?>
+            <?php
+            $questionnaireEnabled = (bool) $model->getMeta($post->ID, 'requires_questionnaire');
+        $documentsEnabled     = (bool) $model->getMeta($post->ID, 'requires_documents');
+        $gateDeadline         = (string) ($model->getMeta($post->ID, 'gate_deadline') ?: '');
+        ?>
+            <div id="stride-gate-deadline" style="margin: 4px 0 8px 0; <?= ($questionnaireEnabled || $documentsEnabled) ? '' : 'display:none;' ?>">
+                <label style="font-size: 11px; color: #646970; display: block; margin-bottom: 2px;">
+                    <?php esc_html_e('Deadline taken (vragenlijst & documenten)', 'stride'); ?>
+                </label>
+                <input type="date" name="ntdst_fields[gate_deadline]"
+                       style="width: 100%; font-size: 12px;"
+                       value="<?= esc_attr($gateDeadline) ?>">
+            </div>
             <?php if ($duringHint !== ''): ?>
                 <p class="description" style="margin-top: 8px; font-size: 11px; color: #646970;">
                     <?= esc_html($duringHint) ?>
@@ -144,6 +157,19 @@ final class OfferingSidebarPartial
                     </div>
                 <?php endif; ?>
             <?php endforeach; ?>
+            <?php
+            $postEvaluationEnabled = (bool) $model->getMeta($post->ID, 'post_requires_evaluation');
+        $postDocumentsEnabled  = (bool) $model->getMeta($post->ID, 'post_requires_documents');
+        $postGateDeadline      = (string) ($model->getMeta($post->ID, 'post_gate_deadline') ?: '');
+        ?>
+            <div id="stride-post-gate-deadline" style="margin: 4px 0 8px 0; <?= ($postEvaluationEnabled || $postDocumentsEnabled) ? '' : 'display:none;' ?>">
+                <label style="font-size: 11px; color: #646970; display: block; margin-bottom: 2px;">
+                    <?php esc_html_e('Deadline afronding (evaluatie & documenten)', 'stride'); ?>
+                </label>
+                <input type="date" name="ntdst_fields[post_gate_deadline]"
+                       style="width: 100%; font-size: 12px;"
+                       value="<?= esc_attr($postGateDeadline) ?>">
+            </div>
         </div>
 
         <script>
@@ -157,6 +183,18 @@ final class OfferingSidebarPartial
             $('input[name="ntdst_fields[post_requires_documents]"][type=checkbox]').on('change', function() {
                 $('#stride-post-documents-instruction').toggle(this.checked);
             });
+            function toggleGateDeadline() {
+                var enabled = $('input[name="ntdst_fields[requires_questionnaire]"][type=checkbox]').is(':checked')
+                    || $('input[name="ntdst_fields[requires_documents]"][type=checkbox]').is(':checked');
+                $('#stride-gate-deadline').toggle(enabled);
+            }
+            $('input[name="ntdst_fields[requires_questionnaire]"][type=checkbox], input[name="ntdst_fields[requires_documents]"][type=checkbox]').on('change', toggleGateDeadline);
+            function togglePostGateDeadline() {
+                var enabled = $('input[name="ntdst_fields[post_requires_evaluation]"][type=checkbox]').is(':checked')
+                    || $('input[name="ntdst_fields[post_requires_documents]"][type=checkbox]').is(':checked');
+                $('#stride-post-gate-deadline').toggle(enabled);
+            }
+            $('input[name="ntdst_fields[post_requires_evaluation]"][type=checkbox], input[name="ntdst_fields[post_requires_documents]"][type=checkbox]').on('change', togglePostGateDeadline);
         });
         </script>
         <?php
