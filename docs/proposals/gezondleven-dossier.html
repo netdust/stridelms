@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Stride voor Gezond Leven — Voorstel</title>
+<style>
+  :root{
+    --green:#2f7d4f;        /* Gezond Leven-achtig groen — pas aan naar hun exacte huisstijl */
+    --green-dark:#245f3d;
+    --green-soft:#eaf4ec;
+    --ink:#1f2a24;
+    --muted:#5b6b62;
+    --line:#e2e8e4;
+    --paper:#ffffff;
+    --sand:#f7f6f1;
+    --accent:#d98a3d;       /* warm accent, spaarzaam */
+  }
+  *{box-sizing:border-box}
+  html{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+  body{
+    margin:0;color:var(--ink);background:var(--sand);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    line-height:1.6;font-size:16px;
+  }
+  .page{max-width:820px;margin:0 auto;background:var(--paper);}
+  .wrap{padding:56px 64px;}
+  h1,h2,h3{font-weight:650;line-height:1.2;color:var(--ink);margin:0}
+  h1{font-size:40px;letter-spacing:-.5px}
+  h2{font-size:26px;letter-spacing:-.3px}
+  h3{font-size:18px}
+  p{margin:0 0 14px}
+  a{color:var(--green-dark)}
+  .muted{color:var(--muted)}
+  .small{font-size:14px}
+  .lede{font-size:19px;color:var(--muted);line-height:1.55}
+
+  /* Cover */
+  .cover{background:linear-gradient(155deg,var(--green) 60%,var(--green-dark) 60%);color:#fff;padding:72px 64px 64px}
+  .cover .kicker{text-transform:uppercase;letter-spacing:.18em;font-size:12px;opacity:.85;margin-bottom:22px}
+  .cover h1{color:#fff;font-size:46px;max-width:15ch}
+  .cover .sub{color:#eafff0;font-size:20px;margin-top:18px;max-width:44ch;opacity:.95}
+  .cover .meta{margin-top:40px;font-size:13px;opacity:.85;border-top:1px solid rgba(255,255,255,.25);padding-top:16px;display:flex;gap:28px;flex-wrap:wrap}
+
+  /* Section rhythm */
+  section{border-top:1px solid var(--line);padding-top:34px;margin-top:40px}
+  section:first-of-type{border-top:0;margin-top:0}
+  .num{display:inline-flex;align-items:center;justify-content:center;width:30px;height:30px;border-radius:50%;
+       background:var(--green-soft);color:var(--green-dark);font-size:14px;font-weight:700;margin-right:12px;flex:0 0 auto}
+  .h-row{display:flex;align-items:center;margin-bottom:16px}
+
+  /* Callout / editor note */
+  .note{background:#fff8ec;border:1px solid #f0d9ad;border-left:4px solid var(--accent);padding:14px 18px;border-radius:8px;margin:18px 0;font-size:14px}
+  .note strong{color:#9a5a12}
+  .fill{background:var(--green-soft);border-radius:4px;padding:0 6px;color:var(--green-dark);font-weight:600}
+
+  /* Cards */
+  .cards{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:18px 0}
+  .card{border:1px solid var(--line);border-radius:12px;padding:18px 20px;background:#fff}
+  .card h3{margin-bottom:6px}
+  .card p{margin:0;font-size:14.5px;color:var(--muted)}
+  .ico{font-size:20px;margin-bottom:8px;display:block}
+
+  /* Steps */
+  ol.flow{counter-reset:s;list-style:none;padding:0;margin:18px 0}
+  ol.flow li{position:relative;padding:2px 0 16px 42px;border-left:2px solid var(--green-soft);margin-left:14px}
+  ol.flow li:last-child{border-left-color:transparent}
+  ol.flow li::before{counter-increment:s;content:counter(s);position:absolute;left:-15px;top:0;
+     width:28px;height:28px;background:var(--green);color:#fff;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700}
+  ol.flow b{display:block}
+
+  /* Benefit strip */
+  .strip{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;margin:20px 0}
+  .strip .b{background:var(--green-soft);border-radius:12px;padding:18px}
+  .strip .b .t{font-weight:700;color:var(--green-dark);margin-bottom:4px}
+  .strip .b .d{font-size:13.5px;color:var(--muted)}
+
+  ul.clean{margin:6px 0 14px;padding-left:20px}
+  ul.clean li{margin:5px 0}
+
+  /* Budget table */
+  table{width:100%;border-collapse:collapse;margin:14px 0;font-size:15px}
+  th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line)}
+  th{background:var(--sand);font-size:13px;text-transform:uppercase;letter-spacing:.05em;color:var(--muted)}
+  td.amt{text-align:right;white-space:nowrap;font-variant-numeric:tabular-nums}
+
+  .quote{font-size:20px;line-height:1.45;color:var(--green-dark);border-left:3px solid var(--green);padding-left:18px;margin:22px 0;font-weight:500}
+
+  footer{background:var(--green-dark);color:#eafff0;padding:40px 64px}
+  footer a{color:#fff}
+  footer .cta{font-size:22px;font-weight:650;color:#fff;margin-bottom:8px}
+
+  @media (max-width:640px){
+    .wrap,.cover,footer{padding-left:26px;padding-right:26px}
+    .cards,.strip{grid-template-columns:1fr}
+    h1,.cover h1{font-size:32px}
+  }
+  @media print{
+    body{background:#fff;font-size:12.5px}
+    .page{max-width:none}
+    .wrap{padding:32px 40px}
+    .cover{padding:48px 40px}
+    section{page-break-inside:avoid}
+    .note{background:#fff8ec !important}
+    footer{padding:28px 40px}
+  }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- COVER -->
+  <div class="cover">
+    <div class="kicker">Voorstel &middot; Vertrouwelijk</div>
+    <h1>Een leerplatform op maat voor Gezond Leven</h1>
+    <div class="sub">Stride — het vormingsplatform dat al draait bij VAD, klaargemaakt voor jullie aanbod.</div>
+    <div class="meta">
+      <span>Opgesteld door Netdust</span>
+      <span>Voor: Vlaams Instituut Gezond Leven</span>
+      <span>Juli 2026</span>
+    </div>
+  </div>
+
+  <div class="wrap">
+
+    <!-- INTRO -->
+    <section>
+      <p class="lede">Na ons gesprek zetten we hier op een rij waarom Stride goed bij Gezond Leven past:
+      waar het platform vandaan komt, hoe het verbonden is met VAD, hoe we jullie zorg wegnemen,
+      en wat het jullie concreet oplevert — voor de deelnemer én voor het team dat de vormingen beheert.</p>
+    </section>
+
+    <!-- 1. HISTORIEK -->
+    <section>
+      <div class="h-row"><span class="num">1</span><h2>Waar Stride vandaan komt</h2></div>
+      <p>Stride is geen prototype. Het is de moderne, van nul herschreven opvolger van het
+      vormingsbeheer dat VAD jarenlang gebruikte (&ldquo;VAD Vormingen v3&rdquo;). Waar het oude systeem
+      vastliep op complexiteit, is Stride gebouwd rond drie principes: <b>eenvoud, betere UX en
+      onderhoudbare code</b>.</p>
+      <p>Het draait op een beproefde, open standaard-stack — WordPress met LearnDash als
+      cursusmotor — met daarbovenop een eigen laag (&ldquo;stride-core&rdquo;) voor alles wat een
+      vormingsorganisatie echt nodig heeft: geplande edities, sessies, aanwezigheid, attesten,
+      offertes en trajecten. Geen dichtgetimmerde black box, maar een systeem dat meegroeit.</p>
+      <div class="cards">
+        <div class="card"><span class="ico">🏗️</span><h3>Bewezen in productie</h3><p>Dagelijks in gebruik bij VAD voor het volledige vormingsaanbod — geen bèta.</p></div>
+        <div class="card"><span class="ico">🧩</span><h3>Open fundament</h3><p>WordPress + LearnDash. Geen exotische technologie, geen leverancierslot.</p></div>
+      </div>
+    </section>
+
+    <!-- 2. VAD-CONNECTIE -->
+    <section>
+      <div class="h-row"><span class="num">2</span><h2>De connectie met VAD</h2></div>
+      <p>VAD en Gezond Leven bewegen in hetzelfde landschap: beide partnerorganisaties binnen
+      het Vlaamse preventie- en gezondheidsbeleid, beide met een sterk <b>vormingsaanbod</b> voor
+      professionals — trainers, leerkrachten, hulpverleners, lokale besturen.</p>
+      <p>Dat is precies waarom de fit zo natuurlijk is. Stride is niet bedacht voor &ldquo;een klant in
+      het algemeen&rdquo;, maar geboren uit exact de context die jullie herkennen: <b>klassikale
+      vormingen met inschrijvingen, meerdaagse trajecten, aanwezigheid op locatie, attesten en
+      facturatie</b>. De use-cases zijn dezelfde; alleen de inhoud verschilt.</p>
+      <div class="quote">&ldquo;Wat vandaag werkt voor het vormingsaanbod van VAD, past — met jullie
+      huisstijl en jullie cursussen — meteen bij Gezond Leven.&rdquo;</div>
+    </section>
+
+    <!-- 3. HET "BUS"-PROBLEEM -->
+    <section>
+      <div class="h-row"><span class="num">3</span><h2>Jullie zekerheid: geen afhankelijkheid, geen lock-in</h2></div>
+
+      <div class="note">
+        <strong>⚠ Stefan — even bevestigen:</strong> ik heb &ldquo;het busprobleem&rdquo; ingevuld als de
+        <em>continuïteits-/afhankelijkheidsvraag</em> (&ldquo;wat als de bouwer wegvalt, zitten we dan vast?&rdquo;) —
+        de klassieke zorg die een instituut heeft bij een kleine leverancier. Bedoelde Gezond Leven iets anders
+        (bv. de letterlijke <em>vormingsbus</em> / mobiele vormingen op locatie), zeg het en ik vervang deze
+        sectie — Stride's editie-/sessiemodel dekt dat scenario trouwens óók (elke stop = een sessie met eigen
+        datum, locatie, capaciteit en aanwezigheid).
+      </div>
+
+      <p>Een terechte vraag bij elk platform: <b>wat als het misloopt met de leverancier?</b>
+      Zitten we dan vast aan één persoon, één black box, onze data gegijzeld? Bij Stride is het
+      antwoord bewust ingebouwd:</p>
+      <ul class="clean">
+        <li><b>Jullie data blijft van jullie.</b> Deelnemers, inschrijvingen, aanwezigheid en attesten
+        staan in een standaard WordPress-database — exporteerbaar, leesbaar, nooit opgesloten in een
+        gesloten formaat.</li>
+        <li><b>Open, gangbare technologie.</b> WordPress en LearnDash worden wereldwijd door duizenden
+        ontwikkelaars onderhouden. Wie het overneemt, hoeft geen geheime taal te leren.</li>
+        <li><b>Gedocumenteerde code, geen hoofdenkennis.</b> De volledige codebasis is gestructureerd
+        en gedocumenteerd. De kennis zit in het project, niet enkel in één hoofd.</li>
+        <li><b>Hosting-onafhankelijk.</b> Het draait waar jullie willen — bij ons, of overgedragen aan
+        een andere partij. Geen gouden kooi.</li>
+      </ul>
+      <div class="quote">Je kiest voor het platform en voor de rust dat je er nooit aan vastzit.</div>
+    </section>
+
+    <!-- 4. STRIDE IN HET KORT -->
+    <section>
+      <div class="h-row"><span class="num">4</span><h2>Stride in het kort</h2></div>
+      <p>Eén platform voor <b>klassikale, online én hybride</b> vormingen. Zeldzaam: de meeste
+      LMS'en doen enkel e-learning. Stride beheert net zo goed de dingen die bij een
+      vormingsinstituut het meeste tijd kosten — planning, aanwezigheid, attesten en offertes.</p>
+      <div class="cards">
+        <div class="card"><span class="ico">📅</span><h3>Edities &amp; sessies</h3><p>Plan meerdaagse vormingen met datums, locaties en capaciteit. Wachtlijsten inbegrepen.</p></div>
+        <div class="card"><span class="ico">🎓</span><h3>Trajecten</h3><p>Meerdere cursussen tot één leerpad, met voortgang en deadlines per deelnemer.</p></div>
+        <div class="card"><span class="ico">✅</span><h3>Aanwezigheid &amp; attesten</h3><p>Aanwezigheid per sessie, automatisch naar attest en certificaat.</p></div>
+        <div class="card"><span class="ico">🧾</span><h3>Offertes &amp; facturatie</h3><p>Automatische offertes, kortingscodes en export richting de boekhouding.</p></div>
+      </div>
+    </section>
+
+    <!-- 5. INSCHRIJFFLOW -->
+    <section>
+      <div class="h-row"><span class="num">5</span><h2>Highlight: de inschrijfflow</h2></div>
+      <p class="muted">Voor de deelnemer moet inschrijven vanzelfsprekend voelen. Volledig in het
+      Nederlands, werkt ook zonder JavaScript, en op elk toestel.</p>
+      <ol class="flow">
+        <li><b>Ontdekken</b>Bezoeker vindt de vorming in de publieke catalogus en kiest een edittie met datum en locatie.</li>
+        <li><b>Inschrijven</b>Een helder formulier in stappen: type (zichzelf of een collega), persoonsgegevens, facturatiegegevens, bevestiging.</li>
+        <li><b>Bevestigen</b>Directe bevestiging op het scherm en per e-mail. Bij een betalende klassikale vorming volgt automatisch een offerte.</li>
+        <li><b>Toegang</b>De deelnemer belandt op zijn persoonlijk dashboard met zijn vormingen, voortgang en attesten.</li>
+      </ol>
+      <p class="small muted">Extra ingebouwd: kortingscodes/vouchers, wachtlijsten, inschrijven-voor-een-collega,
+      en voor online cursussen een vereenvoudigd formulier met enkel de nodige velden (bv. toestemming).</p>
+    </section>
+
+    <!-- 6. ADMIN -->
+    <section>
+      <div class="h-row"><span class="num">6</span><h2>Highlight: het beheer — overzicht, controle, tijdwinst</h2></div>
+      <p>Het beheersscherm is waar de echte winst zit. Eén werkomgeving in vijf tabbladen
+      (Dashboard, Edities, Offertes, Trajecten, Gebruikers) in plaats van losse tools en Excel-lijsten.</p>
+
+      <div class="strip">
+        <div class="b"><div class="t">Overzicht</div><div class="d">Eén dashboard toont in één oogopslag komende sessies, inschrijvingen, openstaande offertes en wat vandaag aandacht vraagt.</div></div>
+        <div class="b"><div class="t">Controle</div><div class="d">Een slimme actielijst wijst proactief op bijna-volle groepen, sessies zonder ingevulde aanwezigheid of offertes die blijven liggen.</div></div>
+        <div class="b"><div class="t">Tijdwinst</div><div class="d">Aanwezigheid in één klik, offertes rechtstreeks versturen, deelnemerslijsten als ZIP/Excel exporteren.</div></div>
+      </div>
+
+      <ul class="clean">
+        <li><b>Actielijst die meedenkt.</b> Stride zegt zelf wat er moet gebeuren — niets valt tussen de mazen.</li>
+        <li><b>Aanwezigheid per sessie</b> aftikken en meteen doorstromen naar attesten.</li>
+        <li><b>Offertes</b> bekijken, aanpassen en met één klik versturen; export naar de boekhouding.</li>
+        <li><b>Gebruikersbeheer</b> met zoekfunctie, volledig profiel (inschrijvingen, offertes, aanwezigheid, historiek) en &ldquo;bekijk als gebruiker&rdquo; om te zien wat de deelnemer ziet.</li>
+        <li><b>Activiteitenlog</b> zodat je altijd weet wie wat wanneer deed.</li>
+      </ul>
+      <div class="quote">Minder Excel, minder handwerk, meer zicht. Dat is de kern van wat Stride jullie team teruggeeft: tijd.</div>
+    </section>
+
+    <!-- 7. BUDGET -->
+    <section>
+      <div class="h-row"><span class="num">7</span><h2>Budget</h2></div>
+      <p>Enterprise-LMS'en voor dit soort beheer starten al snel boven <b>€30.000</b>. Stride zit daar
+      bewust ver onder: je krijgt een bewezen platform zonder de enterprise-prijskaart, met een prijs
+      op maat van jullie omvang en wensen.</p>
+
+      <div class="note">
+        <strong>Stefan — bedragen invullen.</strong> Hieronder een voorgestelde structuur; vervang de
+        <span class="fill">€&nbsp;___</span>-velden door de cijfers die jij wil hanteren (of laat me ze invullen).
+      </div>
+
+      <table>
+        <thead><tr><th>Onderdeel</th><th>Wat</th><th class="amt">Richtprijs</th></tr></thead>
+        <tbody>
+          <tr><td>Eenmalige opstart</td><td>Installatie, huisstijl van Gezond Leven, migratie &amp; oplevering</td><td class="amt"><span class="fill">€&nbsp;___</span></td></tr>
+          <tr><td>Platform (jaarlijks)</td><td>Hosting, onderhoud, updates &amp; support</td><td class="amt"><span class="fill">€&nbsp;___&nbsp;/ jaar</span></td></tr>
+          <tr><td>Optioneel maatwerk</td><td>Specifieke uitbreidingen op aanvraag</td><td class="amt"><span class="fill">op maat</span></td></tr>
+        </tbody>
+      </table>
+      <p class="small muted">Elke organisatie is anders — we maken een definitief voorstel op basis van
+      het aantal gebruikers en jullie concrete wensen.</p>
+    </section>
+
+  </div><!-- /wrap -->
+
+  <!-- FOOTER / CTA -->
+  <footer>
+    <div class="cta">Klaar voor een demo op jullie eigen aanbod?</div>
+    <p style="margin:0 0 4px">We tonen graag het platform met een voorbeeld uit jullie context en bespreken de volgende stap.</p>
+    <p class="small" style="opacity:.85;margin:0">Netdust &middot; stefan@netdust.be &middot; StrideLMS.be</p>
+  </footer>
+
+</div><!-- /page -->
+</body>
+</html>
