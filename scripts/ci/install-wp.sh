@@ -36,6 +36,17 @@ wp core install --url=http://localhost:8080 --title=StrideCI \
 # CI install does not. Real-HTTP seam tests (CatalogEndpointTest) assert /edities/.
 wp option update permalink_structure '/%postname%/'
 
+# Site language = nl_BE. Stride's UI is Dutch and the acceptance suite asserts
+# Dutch strings (e.g. AuthPluginCest expects "Link ongeldig" / "E-mailadres" /
+# "inloglink"). A bare `wp core install` defaults to en_US, so plugin/theme .mo
+# files (committed, e.g. ntdst-auth/languages/ntdst-auth-nl_BE.mo) are never
+# loaded and the English SOURCE strings render → those Cests fail. DDEV runs
+# nl_BE, which is why this is green-local / red-CI. Install the core language
+# pack (non-fatal if the download is unavailable) then pin the locale so
+# load_plugin_textdomain() resolves the nl_BE .mo files.
+wp language core install nl_BE || true
+wp site switch-language nl_BE || wp option update WPLANG nl_BE
+
 # Plugins BEFORE theme: activating stridence first fatals — the theme boots
 # stride-core's feature services (ntdst/features_ready), which hard-depend on
 # plugin-provided services (e.g. ntdst-audit's AuditService).
