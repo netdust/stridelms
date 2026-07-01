@@ -176,6 +176,8 @@ jobs:
     #   - mijn-account → page-mijn-account.php template (dashboard/profile/trajectory Cests)
     #   - interesse    → [stride_interest] shortcode  (PreEnrollmentFlowCest)
     #   - wachtlijst   → [stride_waitlist] shortcode  (PreEnrollmentFlowCest)
+    #   - klassikaal   → page-klassikaal.php template  (CatalogShakeoutCest)
+    #   - online       → page-online.php template      (CatalogShakeoutCest)
     # Idempotent: skip any that already exist.
     - name: Create the manual content pages
       run: |
@@ -193,6 +195,8 @@ jobs:
         create_page mijn-account "Mijn account" template page-mijn-account.php
         create_page interesse    "Interesse"    content  "[stride_interest]"
         create_page wachtlijst   "Wachtlijst"   content  "[stride_waitlist]"
+        create_page klassikaal   "Klassikaal"   template page-klassikaal.php
+        create_page online       "Online"       template page-online.php
         wp rewrite flush --hard
 
     # Route wp_mail through fluent-smtp → Mailpit SMTP (127.0.0.1:1025). The app's
