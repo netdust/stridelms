@@ -1784,13 +1784,13 @@ final class AdminAPIController
             // contacts the user or cancels.
             if (!$userTasksDone && $row->registered_at && $row->registered_at <= $staleThreshold) {
                 $openTask = $completionService->getFirstOpenUserTask($tasks);
-                $matches[] = [$row, $tasks, 'stale_user', [
+                $matches[] = [$row, $tasks, 'stale_user', array_merge([
                     'open_task' => $openTask,
                     'open_task_label' => $openTask
                         ? \Stride\Modules\Enrollment\EnrollmentCompletion::taskTypeLabel($openTask)
                         : null,
                     'days_idle' => (int) floor((time() - strtotime($row->registered_at)) / DAY_IN_SECONDS),
-                ]];
+                ], $this->buildDeadlineCountdown($completionService, $tasks, $openTask, (int) ($row->edition_id ?? 0)))];
                 $counts['stale_user']++;
             }
         }
@@ -1840,6 +1840,73 @@ final class AdminAPIController
             'perPage' => $perPage,
             'totalPages' => (int) ceil($total / $perPage),
         ]);
+    }
+
+    /**
+     * Task 6.1 (gate deadlines & reminders): derive the countdown to the
+     * active gate deadline for a stale_user row's open task. Display-only
+     * (D3) — never used to lock/cancel.
+     *
+     * Convergence rule: the OVERDUE decision comes from
+     * EnrollmentCompletion::getTaskAvailability()'s 'overdue' flag for the
+     * open task (the same read Task 6.2's badge will use) — never a parallel
+     * strtotime() compare. The raw deadline DATE (for the day-count
+     * magnitude) is read via the same EditionRepository::getField() call
+     * getTaskAvailability() itself uses internally (INV-3: repository-owned
+     * read, no ad hoc $wpdb/meta access here).
+     *
+     * questionnaire/documents → gate_deadline (enrollment phase).
+     * post_evaluation/post_documents → post_gate_deadline (post-course phase).
+     * session_selection (and any task with no gate-deadline concept) →
+     * neither key, overdue false — getTaskAvailability() carries no 'overdue'
+     * entry for it, which this method treats as "no deadline applies".
+     *
+     * @return array{activeDeadline?: ?string, overdue?: bool, days_left?: int, days_overdue?: int}
+     */
+    private function buildDeadlineCountdown(
+        \Stride\Modules\Enrollment\EnrollmentCompletion $completionService,
+        array $tasks,
+        ?string $openTask,
+        int $editionId,
+    ): array {
+        if (!$openTask || !$editionId) {
+            return ['activeDeadline' => null, 'overdue' => false];
+        }
+
+        $availability = $completionService->getTaskAvailability($tasks, $editionId);
+        $taskAvailability = $availability[$openTask] ?? null;
+
+        // Tasks with no gate-deadline concept (e.g. session_selection) never
+        // carry an 'overdue' key in getTaskAvailability()'s result — that
+        // absence IS the "no deadline applies" signal, sourced from the same
+        // convergence point rather than re-derived here.
+        if ($taskAvailability === null || !array_key_exists('overdue', $taskAvailability)) {
+            return ['activeDeadline' => null, 'overdue' => false];
+        }
+
+        $overdue = (bool) $taskAvailability['overdue'];
+
+        $deadlineField = match ($openTask) {
+            'questionnaire', 'documents' => 'gate_deadline',
+            'post_evaluation', 'post_documents' => 'post_gate_deadline',
+            default => null,
+        };
+
+        $deadline = $deadlineField ? $this->editionRepository->getField($editionId, $deadlineField) : null;
+
+        if (!$deadline) {
+            return ['activeDeadline' => null, 'overdue' => false];
+        }
+
+        $result = ['activeDeadline' => $deadline, 'overdue' => $overdue];
+
+        if ($overdue) {
+            $result['days_overdue'] = (int) floor((time() - strtotime($deadline)) / DAY_IN_SECONDS);
+        } else {
+            $result['days_left'] = max(0, (int) floor((strtotime($deadline) - time()) / DAY_IN_SECONDS));
+        }
+
+        return $result;
     }
 
     /**
