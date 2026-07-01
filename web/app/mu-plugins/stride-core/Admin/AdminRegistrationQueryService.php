@@ -199,42 +199,10 @@ final class AdminRegistrationQueryService
             $attendanceByEdition[$editionId] = BatchQueryHelper::batchGetAttendance($editionId);
         }
 
-        return $this->composeRows(
-            $rows,
-            $users,
-            $editions,
-            $trajectories,
-            $sessionCountByEdition,
-            $attendanceByEdition,
-            $offerteByReg,
-        );
-    }
-
-    /**
-     * Compose the per-row read-model items from a resolved batch of rows.
-     *
-     * The per-row assembly (identity/status/attendance/company/trajectory/offerte)
-     * shared by the flat and grouped-child-row paths. Takes the already-resolved
-     * batch maps as params; issues no queries of its own.
-     *
-     * @param array                    $rows                  Raw registration row objects.
-     * @param array                    $users                 userId => WP_User.
-     * @param array                    $editions              editionId => WP_Post.
-     * @param array                    $trajectories          trajectoryId => WP_Post.
-     * @param array<int,int>           $sessionCountByEdition editionId => session count.
-     * @param array                    $attendanceByEdition   editionId => attendance map.
-     * @param array<int,string>        $offerteByReg          regId => offerte status.
-     * @return array
-     */
-    private function composeRows(
-        array $rows,
-        array $users,
-        array $editions,
-        array $trajectories,
-        array $sessionCountByEdition,
-        array $attendanceByEdition,
-        array $offerteByReg,
-    ): array {
+        // --- Per-row assembly (no queries below this point) ---
+        // The identity/status/attendance/company/trajectory/offerte shape shared by
+        // BOTH the flat and grouped-child-row paths — the single row-composer. All
+        // reads are against the already-resolved batch maps above.
         $items = [];
         foreach ($rows as $row) {
             $userId    = (int) $row->user_id;
@@ -453,11 +421,11 @@ final class AdminRegistrationQueryService
 
             // Bucket the composed rows back to this group, preserving the repo's
             // registered_at DESC order (group_rows is already ordered + capped).
-            $rows = [];
+            $groupChildRows = [];
             foreach ($groupRows[$row->group_value] ?? [] as $rawRow) {
                 $regId = (int) $rawRow->id;
                 if (isset($composedByRegId[$regId])) {
-                    $rows[] = $composedByRegId[$regId];
+                    $groupChildRows[] = $composedByRegId[$regId];
                 }
             }
 
@@ -467,8 +435,8 @@ final class AdminRegistrationQueryService
                 'pct_afgerond'       => $pctAfgerond,
                 'avg_attendance_pct' => null,  // Deferred: cross-edition avg requires per-row resolution
                 'offerte_verdeling'  => $offerteTally,
-                'rows'               => $rows,   // ≤ GROUP_ROW_CAP composed child rows
-                'row_total'          => $count,  // full group size — client shows "Toon alle N" when > count($rows)
+                'rows'               => $groupChildRows,  // ≤ GROUP_ROW_CAP composed child rows
+                'row_total'          => $count,           // full group size — client shows "Toon alle N" when > count(rows)
             ];
         }
 
