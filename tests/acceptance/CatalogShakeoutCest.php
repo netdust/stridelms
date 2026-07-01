@@ -112,34 +112,33 @@ class CatalogShakeoutCest
     }
 
     /**
-     * AF-1 + AF-2 (dateless-editions-catalog plan, 2026-06-14): a dateless
-     * KLASSIKAAL edition (no sessions → effective status Announcement) lists on
-     * /klassikaal under the "Binnenkort — toon interesse" band, rendered as the
-     * interest-variant card ("Geen datum — toon interesse" meta + "Toon
-     * interesse" CTA).
+     * AF-2 (dateless-editions-catalog plan, 2026-06-14): a dateless KLASSIKAAL
+     * edition (no sessions → effective status Announcement) lists on /klassikaal
+     * as the interest-variant card ("Geen datum — toon interesse" meta + "Toon
+     * interesse" CTA). The card renders INLINE among the other editions, set
+     * apart by a tinted card surface — there is NO separate band header. The
+     * "Binnenkort — toon interesse" band divider was removed; band-ordering only
+     * guarantees the interest cards land on page 1 (see partials/card-edition.php
+     * $is_interest + helpers/catalog.php stridence_catalog_order_into_bands).
      *
      * Fixture: scripts/seed.php seeds one dateless klassikaal edition on the
      * "Gratis Introductie: Werken bij BWEEG" course (cover tag
-     * date:dateless_klassikaal). The band header is a page-1 server-render-only
-     * concern, so it must be present in the initial HTML of /klassikaal.
+     * date:dateless_klassikaal), rendered in the page-1 server HTML.
      *
      *   GIVEN: a seeded dateless klassikaal edition (Announcement)
      *   WHEN:  loading /klassikaal
-     *   THEN:  the "Binnenkort — toon interesse" band header renders, and a
-     *          card under it shows "Geen datum — toon interesse" + "Toon interesse".
+     *   THEN:  a tinted interest-variant card shows "Geen datum — toon interesse"
+     *          + "Toon interesse" (inline, no band header).
      */
-    public function datelessKlassikaalListsUnderBinnenkortBand(AcceptanceTester $I): void
+    public function datelessKlassikaalRendersInterestCard(AcceptanceTester $I): void
     {
-        $I->wantTo('verify a dateless klassikaal edition lists under the Binnenkort band with the interest variant (AF-1, AF-2)');
+        $I->wantTo('verify a dateless klassikaal edition renders the inline interest-variant card (AF-2)');
 
         $I->amOnPage('/klassikaal');
         $I->waitForElement('[x-ref="grid"]', 10);
         $I->dontSee('Fatal error');
 
-        // AF-1: the band header is present (page-1 server render).
-        $I->see('Binnenkort — toon interesse');
-
-        // AF-2: the interest-variant card meta + CTA are present.
+        // AF-2: the interest-variant card meta + CTA are present in page-1 HTML.
         $I->see('Geen datum — toon interesse');
         $I->see('Toon interesse');
     }

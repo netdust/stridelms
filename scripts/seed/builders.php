@@ -347,13 +347,21 @@ final class StrideSeedBuilders
             update_post_meta($courseId, StrideSeedRunner::SEED_META_KEY, true);
 
             // --- LearnDash course settings ---
-            $ldSettings = ['course_price_type' => $courseData['ld_price_type'] ?? 'open'];
+            // NB: LD reads the _sfwd-courses array under POST-TYPE-PREFIXED keys
+            // (sfwd-courses_<setting>), NOT bare keys. learndash_get_setting() and
+            // learndash_get_course_price() both look for sfwd-courses_course_price_type;
+            // a bare 'course_price_type' key is invisible to them — the closed online
+            // course then resolves as 'free' and the catalog CTA reads "Start" instead
+            // of "Inschrijven" (acceptance: closedOnlineCourseCTAShowsEnrollButton).
+            $ldSettings = [];
             if (!empty($courseData['ld_expire_access'])) {
-                $ldSettings['expire_access'] = $courseData['ld_expire_access'];
-                $ldSettings['expire_access_days'] = $courseData['ld_expire_access_days'] ?? 0;
-                $ldSettings['expire_access_delete_progress'] = '';
+                $ldSettings['sfwd-courses_expire_access'] = $courseData['ld_expire_access'];
+                $ldSettings['sfwd-courses_expire_access_days'] = $courseData['ld_expire_access_days'] ?? 0;
+                $ldSettings['sfwd-courses_expire_access_delete_progress'] = '';
             }
-            update_post_meta($courseId, '_sfwd-courses', $ldSettings);
+            if (!empty($ldSettings)) {
+                update_post_meta($courseId, '_sfwd-courses', $ldSettings);
+            }
 
             // --- Taxonomies ---
             $formats = $courseData['format'] ?? [];
@@ -373,6 +381,16 @@ final class StrideSeedBuilders
             // source of truth. The matrix 'type' key is human intent only.
 
             echo "  + Course: {$courseData['title']} (ID: {$courseId}) [format: " . implode(',', $formats) . "] [themes: " . implode(',', $themes) . "]\n";
+        }
+
+        // --- LearnDash price type (canonical write, both paths, idempotent) ---
+        // Written via learndash_update_setting() — the same API the course-edit
+        // screen uses — so it lands in BOTH the prefixed _sfwd-courses key AND the
+        // _ld_price_type meta that learndash_get_course_price() reads. Applied on
+        // the existing-course path too so an already-seeded DB self-heals on reseed
+        // (the create branch above never re-runs for an existing course).
+        if (function_exists('learndash_update_setting')) {
+            learndash_update_setting($courseId, 'course_price_type', $courseData['ld_price_type'] ?? 'open');
         }
 
         $out['created']['courses'][] = (int) $courseId;
