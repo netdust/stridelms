@@ -379,6 +379,9 @@ The 1a scheduled surface + the NEW invariant (INV-10). FULL.
 
 ### Task 4.3: `GateReminderService` — enumerate → decide → idempotent check-and-mark → send
 
+> **P2-gate carry-forward (2026-07-01, security-sentinel):** the read-decide-write on `reminder_state` is the racy step. WP-Cron is not truly single-threaded — a double-tick can make two runs both read the same pre-mark state, both send, last-write-wins → a DUPLICATE reminder email. Task 4.3 MUST guard the read-modify-write: reuse the existing `RegistrationRepository::acquireSelectionLock()`/`releaseSelectionLock()` advisory-lock idiom (a `reminder_state` lock analogous to the selections lock), OR rely on WP-Cron's own `_transient_doing_cron` overlap guard — decide explicitly and test the double-tick case. This is why the idempotency test contract already names "double cron tick" — the lock is how it's actually made safe.
+
+
 **Files:**
 - Create: `web/app/mu-plugins/stride-core/Modules/Reminder/GateReminderService.php`
 - Modify: `web/app/mu-plugins/stride-core/plugin-config.php` (register the service)
