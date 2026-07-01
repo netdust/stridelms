@@ -990,7 +990,16 @@ final class StrideMailBridge extends AbstractService
             'stride-gate-todo' => [
                 'title' => 'Je moet nog taken afronden',
                 'subject' => 'Nog te doen: {{edition.title}}',
-                'trigger' => 'stride/registration/created',
+                // No auto-trigger: this template is dispatched manually by the
+                // deadline-gated handlers onRegistrationCreatedGateTodoMail /
+                // onCompletionCompletedGateTodoMail (see init(), above). A
+                // non-empty trigger here would ALSO get auto-bound by
+                // netdust-mail's MailService::activateTriggers() with no
+                // deadline guard, causing a double-send on gated editions and
+                // an unconditional send on editions with no gate_deadline at
+                // all. Keep this '' like the sibling stride-gate-reminder /
+                // stride-gate-deadline-tomorrow templates (both cron-sent).
+                'trigger' => '',
                 'category' => 'transactional',
                 'body' => '<p>Beste {{user.first_name|klant}},</p>'
                     . '<p>Voor <strong>{{edition.title}}</strong> moet je nog enkele taken afronden (zoals de vragenlijst of het opladen van documenten) voordat de deadline verstrijkt.</p>'

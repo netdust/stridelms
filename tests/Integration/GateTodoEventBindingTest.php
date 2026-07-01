@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Stride\Tests\Integration;
 
 use IntegrationTestCase;
-use Netdust\Mail\MailService;
 use Stride\Modules\Enrollment\EnrollmentService;
-use WP_Error;
 
 /**
  * Task 5.3 — mail #1 ("je moet nog...") event binding.
@@ -17,16 +15,35 @@ use WP_Error;
  * shape testing-workflow calls out — short conditional dispatch is still
  * Tier A, not "just wiring".
  *
- * ndmail_send() interception mirrors GateReminderServiceTest: rebind
- * MailService::class in the real DI container to a spy double via
- * ntdst_set() — the actual seam StrideMailBridge's handlers resolve
- * through via ndmail_send().
+ * CRITICAL (review finding, 2026-07-01): the original version of this test
+ * swapped MailService::class in the DI container for a spy via ntdst_set().
+ * That is BLIND to netdust-mail's activateTriggers() auto-trigger path:
+ * activateTriggers() runs on `init` priority 20 and its add_action() closure
+ * captures the REAL MailService instance (`$this`) at bind time — long
+ * before any test's ntdst_set() call. So when the `stride-gate-todo`
+ * template itself carried a non-empty `trigger` (the bug), the auto-trigger
+ * called the REAL send() directly, bypassing the spy entirely, while the
+ * explicit onRegistrationCreatedGateTodoMail handler's ndmail_send() (which
+ * resolves MailService::class fresh from the container on each call) WAS
+ * seen by the spy. Net effect: the spy only ever saw 1 call (the explicit
+ * handler), so "no-deadline -> 0" and "with-deadline -> 1" both passed green
+ * while the auto-trigger silently double-sent / unconditionally sent in the
+ * background.
+ *
+ * Fix: intercept the REAL, unbypassable send path instead — `pre_wp_mail`,
+ * which every send (auto-trigger OR explicit handler) funnels through via
+ * MailService::send() -> ntdst_mail()->send() -> wp_mail(). This is the same
+ * pattern MailServiceIntegrationTest already uses. We identify gate-todo
+ * sends by the template's unique rendered subject prefix ("Nog te doen: ").
  *
  * Run: ddev exec "vendor/bin/phpunit -c phpunit-integration.xml.dist --filter GateTodoEventBindingTest"
  */
 final class GateTodoEventBindingTest extends IntegrationTestCase
 {
-    private object $mailSpy;
+    /** @var array<int, array{to: mixed, subject: string}> */
+    private array $sentMails = [];
+
+    private $preWpMailFilter;
 
     /** @var array<int> */
     private array $createdRegistrationIds = [];
@@ -35,24 +52,18 @@ final class GateTodoEventBindingTest extends IntegrationTestCase
     {
         parent::setUp();
 
-        $this->mailSpy = new class {
-            /** @var array<int, array{slug: string, context: array, options: array}> */
-            public array $calls = [];
+        $this->sentMails = [];
+        $this->preWpMailFilter = function ($null, $atts) {
+            $this->sentMails[] = ['to' => $atts['to'] ?? null, 'subject' => $atts['subject'] ?? ''];
 
-            public function send(string $slug, array $context, array $options = []): bool|WP_Error
-            {
-                $this->calls[] = ['slug' => $slug, 'context' => $context, 'options' => $options];
-
-                return true;
-            }
+            return true; // Short-circuit: prevent an actual send attempt.
         };
-
-        ntdst_set(MailService::class, $this->mailSpy);
+        add_filter('pre_wp_mail', $this->preWpMailFilter, 10, 2);
     }
 
     protected function tearDown(): void
     {
-        ntdst_container()->set(MailService::class, MailService::class);
+        remove_filter('pre_wp_mail', $this->preWpMailFilter, 10);
 
         foreach ($this->createdRegistrationIds as $regId) {
             $this->deleteTestRegistration($regId);
@@ -62,11 +73,14 @@ final class GateTodoEventBindingTest extends IntegrationTestCase
         parent::tearDown();
     }
 
+    /**
+     * @return array<int, array{to: mixed, subject: string}>
+     */
     private function gateTodoCalls(): array
     {
         return array_values(array_filter(
-            $this->mailSpy->calls,
-            static fn(array $call) => $call['slug'] === 'stride-gate-todo',
+            $this->sentMails,
+            static fn(array $call) => str_starts_with($call['subject'], 'Nog te doen: '),
         ));
     }
 
@@ -84,9 +98,9 @@ final class GateTodoEventBindingTest extends IntegrationTestCase
         $this->createdRegistrationIds[] = $registrationId;
 
         $gateTodoCalls = $this->gateTodoCalls();
-        $this->assertCount(1, $gateTodoCalls, 'stride-gate-todo must fire once when the edition has a gate_deadline');
-        $this->assertSame(self::$testUserId, $gateTodoCalls[0]['context']['user_id'] ?? null);
-        $this->assertSame($editionId, $gateTodoCalls[0]['context']['edition_id'] ?? null);
+        $this->assertCount(1, $gateTodoCalls, 'stride-gate-todo must fire exactly once when the edition has a gate_deadline (not zero, not twice)');
+        $recipient = is_array($gateTodoCalls[0]['to']) ? $gateTodoCalls[0]['to'][0] : $gateTodoCalls[0]['to'];
+        $this->assertSame(get_userdata(self::$testUserId)->user_email, $recipient);
     }
 
     /** @test */
@@ -120,9 +134,9 @@ final class GateTodoEventBindingTest extends IntegrationTestCase
         ]);
 
         $gateTodoCalls = $this->gateTodoCalls();
-        $this->assertCount(1, $gateTodoCalls, 'stride-gate-todo must fire on completion when the edition has a post_gate_deadline');
-        $this->assertSame(self::$testUserId, $gateTodoCalls[0]['context']['user_id'] ?? null);
-        $this->assertSame($editionId, $gateTodoCalls[0]['context']['edition_id'] ?? null);
+        $this->assertCount(1, $gateTodoCalls, 'stride-gate-todo must fire exactly once on completion when the edition has a post_gate_deadline');
+        $recipient = is_array($gateTodoCalls[0]['to']) ? $gateTodoCalls[0]['to'][0] : $gateTodoCalls[0]['to'];
+        $this->assertSame(get_userdata(self::$testUserId)->user_email, $recipient);
     }
 
     /** @test */

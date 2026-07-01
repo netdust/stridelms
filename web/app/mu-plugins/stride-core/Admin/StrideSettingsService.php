@@ -415,18 +415,15 @@ class StrideSettingsService
             $rules[$key] = [
                 'enabled' => $enabled,
             ];
+            // (int) rather than absint(): absint() flips a negative raw value's
+            // sign into a valid positive range (absint(-5) === 5), silently
+            // bypassing the clamp below for every key. (int) preserves the
+            // sign, so max(1, ...) floors negatives to the minimum instead.
             $valueKey = $key . '_value';
-            $rawValue = array_key_exists($valueKey, $params) ? absint($params[$valueKey]) : 0;
-            $rules[$key]['value'] = $rawValue > 0
-                ? max(1, min(365, $rawValue))
+            $rawValue = array_key_exists($valueKey, $params)
+                ? (int) $params[$valueKey]
                 : (ActionQueueService::DEFAULTS[$key]['value'] ?? 7);
-
-            // gate_reminder_days additionally clamps negative raw input that
-            // absint() would otherwise flip into a valid positive range
-            // (absint(-5) === 5). (int) preserves sign so max(1, ...) floors it.
-            if ($key === 'gate_reminder_days' && array_key_exists($valueKey, $params)) {
-                $rules[$key]['value'] = max(1, min(365, (int) $params[$valueKey]));
-            }
+            $rules[$key]['value'] = max(1, min(365, $rawValue));
         }
 
         update_option(self::OPTION_NOTIFICATIONS, $rules);

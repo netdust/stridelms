@@ -88,7 +88,7 @@ defined('ABSPATH') || exit;
             <th scope="row">
                 <label>
                     <input type="checkbox" x-model="notifications.gate_reminder_days.enabled">
-                    Herinnering
+                    Herinnering na inschrijving
                 </label>
             </th>
             <td>
