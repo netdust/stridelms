@@ -47,9 +47,15 @@ final class NTDST_Rest_Registrar
 
     /**
      * Per-route body-size/JSON-depth caps, keyed by the fully-qualified
-     * route string ('/' . namespace . route) exactly as
-     * WP_REST_Request::get_route() returns it — populated by registerOne()
-     * for any route that configured 'max_body_bytes' and/or
+     * registration-time route string ('/' . namespace . route). Because
+     * route syntax is WP-native regex (D5), each key is itself a regex
+     * fragment (e.g. '/stride/v1/orders/(?P<id>\d+)') — NOT necessarily the
+     * literal path WP_REST_Request::get_route() carries at dispatch time
+     * (that is the CONCRETE request path, e.g. '/stride/v1/orders/42', set
+     * once in the request constructor from the URL,
+     * class-wp-rest-request.php:127). The lookup in capsForConcretePath()
+     * is therefore regex-aware, mirroring core's own matching. Populated by
+     * registerOne() for any route that configured 'max_body_bytes' and/or
      * 'max_json_depth', consulted by enforceBodyLimitsBeforeDispatch().
      *
      * @var array<string, array{max_body_bytes: int|null, max_json_depth: int|null}>
@@ -263,16 +269,20 @@ final class NTDST_Rest_Registrar
      * request — so this is the earliest point this registrar's own code can
      * enforce a cap, strictly before core's own default-depth parse.
      *
-     * Scoped to ONLY this registrar's own route table (exact route-string
-     * match against $this->routeCaps, keyed the same way as registerOne()
-     * populates it) — a request for any route not in that table is passed
-     * through UNCHANGED (mitigation-7 analog: never a global filter, same
-     * posture as NTDST_Cors_Policy::applyCorsHeaders()). Unlike
-     * NTDST_Cors_Policy's prefix match (a policy can guard a whole
-     * namespace), this is an EXACT match: the caps are configured per
-     * individual route, not per namespace/prefix, and this registrar
-     * already holds the full concrete route table, so there is no need for
-     * (and no correctness benefit to) prefix matching here.
+     * Scoped to ONLY this registrar's own route table (regex-aware match
+     * against $this->routeCaps via capsForConcretePath()) — a request for
+     * any route not in that table is passed through UNCHANGED (mitigation-7
+     * analog: never a global filter, same posture as
+     * NTDST_Cors_Policy::applyCorsHeaders()). Unlike NTDST_Cors_Policy's
+     * prefix match (a policy can guard a whole namespace), the caps are
+     * configured per individual route — and the match must be REGEX-aware,
+     * not exact-string (3.3-review Finding 1, CRITICAL): at
+     * rest_pre_dispatch time the request carries the CONCRETE path
+     * ('/stride/v1/orders/42') while the table is keyed by the
+     * registration-time WP-native regex ('/stride/v1/orders/(?P<id>\d+)');
+     * an exact string compare NEVER matches a parameterized route, so its
+     * caps silently never applied — fail-open. See capsForConcretePath()
+     * for the core-mirrored matching.
      *
      * Ported and generalized from todai-client-form-intake's
      * SubmissionIntakeService::enforceBodyLimitsBeforeDispatch() (same
@@ -286,7 +296,7 @@ final class NTDST_Rest_Registrar
      */
     public function enforceBodyLimitsBeforeDispatch(mixed $result, mixed $server, WP_REST_Request $request): mixed
     {
-        $caps = $this->routeCaps[$request->get_route()] ?? null;
+        $caps = $this->capsForConcretePath($request->get_route());
 
         if ($caps === null) {
             return $result;
@@ -302,17 +312,22 @@ final class NTDST_Rest_Registrar
             return new WP_Error('payload_too_large', 'Request could not be processed.', ['status' => 413]);
         }
 
-        // Depth cap is enforced for ANY non-empty body, not gated on the
-        // request's Content-Type — this INTENTIONALLY diverges from WP
-        // core's own parse_json_params(), which only attempts a JSON decode
-        // at all when is_json_content_type() is true (class-wp-rest-request.php
-        // line 693). Mirrors the reference implementation's own choice
-        // (SubmissionIntakeService, same method): a route that opted into a
-        // depth cap wants every non-empty body bounded-depth-decoded
-        // regardless of the caller-supplied Content-Type header, since that
-        // header is attacker-controlled and core's own gate on it must not
-        // be trusted to decide whether OUR bound applies.
-        if ($caps['max_json_depth'] !== null && $rawBody !== '') {
+        // Depth cap is gated on the request declaring a JSON Content-Type,
+        // mirroring WP core's own parse_json_params(): core only attempts a
+        // JSON decode at all when is_json_content_type() is true
+        // (class-wp-rest-request.php:693 — public method since WP 5.6,
+        // delegating to wp_is_json_media_type(), wp-includes/load.php:1962,
+        // which also accepts application/*+json suffix types). The depth cap
+        // exists precisely to pre-empt THAT default-depth-512 parse, so it
+        // applies exactly when that parse would run. A non-JSON body (form-
+        // encoded, multipart) is never JSON-decoded by core, so running
+        // json_decode() on it here only manufactured wrongful invalid_json
+        // 400s on legitimate requests (3.3-review Finding 2 — the earlier
+        // "bound every body regardless of Content-Type" stance was wrong:
+        // an attacker who LIES about the Content-Type to dodge this check
+        // also dodges core's parse, so nothing unbounded ever runs). The
+        // body-BYTES cap above stays content-agnostic — bytes are bytes.
+        if ($caps['max_json_depth'] !== null && $rawBody !== '' && $request->is_json_content_type()) {
             json_decode($rawBody, true, $caps['max_json_depth']);
             if (json_last_error() !== JSON_ERROR_NONE) {
                 return new WP_Error('invalid_json', 'Request could not be processed.', ['status' => 400]);
@@ -320,6 +335,47 @@ final class NTDST_Rest_Registrar
         }
 
         return $result;
+    }
+
+    /**
+     * Resolves the caps entry for a CONCRETE request path by matching it
+     * against this registrar's registration-time route patterns, exactly
+     * the way WP core matches a request to a handler —
+     * WP_REST_Server::match_request_to_handler()
+     * (class-wp-rest-server.php:1171) does
+     * `preg_match('@^' . $route . '$@i', $path)`: the stored route string
+     * IS the regex ('(?P<id>\d+)' is literal regex, D5), wrapped in '@'
+     * delimiters, anchored '^…$', case-insensitive. Same delimiters, same
+     * anchors, same flag here.
+     *
+     * Exact string match is kept as a fast path — a literal route (no
+     * capture group) is its own concrete path, and every pre-existing
+     * literal-route cap hits it without a preg_match call. It is an
+     * optimization only; the regex pass is the correctness requirement
+     * (3.3-review Finding 1).
+     *
+     * Ambiguity (two registered patterns both matching one concrete path)
+     * resolves by ORDERED FIRST-MATCH in registration order — mirroring
+     * core, whose match_request_to_handler() iterates the routes array
+     * (registration-ordered per namespace) and returns on the first
+     * pattern that preg_matches. $this->routeCaps insertion order is
+     * registration order, so iteration order matches core's.
+     *
+     * @return array{max_body_bytes: int|null, max_json_depth: int|null}|null
+     */
+    private function capsForConcretePath(string $path): ?array
+    {
+        if (isset($this->routeCaps[$path])) {
+            return $this->routeCaps[$path];
+        }
+
+        foreach ($this->routeCaps as $pattern => $caps) {
+            if (preg_match('@^' . $pattern . '$@i', $path) === 1) {
+                return $caps;
+            }
+        }
+
+        return null;
     }
 
     /**

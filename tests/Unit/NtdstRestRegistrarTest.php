@@ -523,6 +523,11 @@ final class NtdstRestRegistrarTest extends TestCase
         $body = json_encode(['a' => ['a' => ['a' => 1]]]);
 
         $request = new \WP_REST_Request('POST', '/stride/v1/depth-limited');
+        // A real JSON request carries a JSON Content-Type — core's own
+        // parse_json_params() would only decode this body because
+        // is_json_content_type() is true (class-wp-rest-request.php:693),
+        // and the depth cap is gated the same way (3.3 review, Finding 2).
+        $request->set_header('Content-Type', 'application/json');
         $request->set_body($body);
 
         $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
@@ -547,6 +552,9 @@ final class NtdstRestRegistrarTest extends TestCase
         $body = json_encode(['a' => ['a' => ['a' => 1]]]);
 
         $request = new \WP_REST_Request('POST', '/stride/v1/depth-ok');
+        // Realistic JSON request — see testJsonDeeperThanMaxDepth… for why
+        // the Content-Type now matters (depth cap gated on JSON, Finding 2).
+        $request->set_header('Content-Type', 'application/json');
         $request->set_body($body);
 
         $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
@@ -660,5 +668,143 @@ final class NtdstRestRegistrarTest extends TestCase
 
         self::assertInstanceOf(\WP_Error::class, $result, 'apply_filters(\'rest_pre_dispatch\', ...) must yield our WP_Error, proving the short-circuit contract at the real filter call site.');
         self::assertTrue(is_wp_error($result));
+    }
+
+    /**
+     * 3.3-review Finding 1 (CRITICAL, fail-open): the cap lookup was an
+     * EXACT string match against the registration-time route string
+     * (`/ns/v1/orders/(?P<id>\d+)`), but at rest_pre_dispatch time real
+     * WP's WP_REST_Request::get_route() returns the CONCRETE request path
+     * (`/ns/v1/orders/42`) — set once in the constructor from the literal
+     * URL (class-wp-rest-request.php:127) and never resolved back to the
+     * registered regex (core only pattern-matches later, in
+     * match_request_to_handler(), which has not run yet at
+     * rest_pre_dispatch). So a cap on ANY route with a capture group never
+     * matched → $caps === null → the request passed UNCAPPED.
+     *
+     * Contract: the lookup must be regex-aware, mirroring core's own
+     * matching (class-wp-rest-server.php:1171 —
+     * `preg_match('@^' . $route . '$@i', $path)`, ordered first-match).
+     */
+    public function testParameterizedCappedRouteEnforcesBodyCapOnConcretePath(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/orders/(?P<id>\d+)', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_body_bytes' => 10,
+        ]);
+
+        do_action('rest_api_init');
+
+        // The concrete path a real request carries — NOT the regex the
+        // route was registered under.
+        $request = new \WP_REST_Request('POST', '/stride/v1/orders/42');
+        $request->set_body(str_repeat('x', 11));
+
+        $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
+
+        self::assertInstanceOf(\WP_Error::class, $result, 'An over-cap body on a parameterized capped route must be rejected — exact-string lookup fails open here.');
+        self::assertSame('payload_too_large', $result->get_error_code());
+        self::assertSame(413, $result->get_error_data()['status']);
+    }
+
+    public function testConcretePathNotMatchingParameterizedPatternPassesThroughUntouched(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/orders/(?P<id>\d+)', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_body_bytes' => 10,
+        ]);
+
+        do_action('rest_api_init');
+
+        // Same namespace, different resource — must NOT match the
+        // /orders/(?P<id>\d+) pattern, so the oversized body passes through
+        // untouched (sentinel preserved, mirroring an earlier filter's value).
+        $sentinel = new \WP_REST_Response(['already' => 'handled']);
+        $request = new \WP_REST_Request('POST', '/stride/v1/customers/42');
+        $request->set_body(str_repeat('x', 999));
+
+        $result = apply_filters('rest_pre_dispatch', $sentinel, new \stdClass(), $request);
+
+        self::assertSame($sentinel, $result, 'A concrete path that does not match any capped pattern must be passed through untouched.');
+    }
+
+    /**
+     * 3.3-review Finding 2 (IMPORTANT, false positive): the depth check ran
+     * json_decode() on ANY non-empty body regardless of Content-Type, so a
+     * legitimate form-encoded body (`a=1&b=2&c=3`) — a JSON syntax error —
+     * was wrongfully rejected with invalid_json 400. Core only attempts a
+     * JSON parse when is_json_content_type() is true
+     * (class-wp-rest-request.php:693 gates parse_json_params()), and the
+     * depth cap exists precisely to bound THAT parse — so it must be gated
+     * the same way. (The body-BYTES cap stays content-agnostic — see
+     * testParameterizedCappedRouteEnforcesBodyCapOnConcretePath.)
+     */
+    public function testFormEncodedBodyOnDepthCappedRoutePassesThrough(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/form-intake', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_json_depth' => 3,
+        ]);
+
+        do_action('rest_api_init');
+
+        $request = new \WP_REST_Request('POST', '/stride/v1/form-intake');
+        $request->set_header('Content-Type', 'application/x-www-form-urlencoded');
+        $request->set_body('a=1&b=2&c=3');
+
+        $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
+
+        self::assertNull($result, 'A non-JSON body on a depth-capped route must skip the depth check entirely — not be 400ed as invalid_json.');
+    }
+
+    public function testMissingContentTypeOnDepthCappedRouteSkipsDepthCheck(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/no-ct', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_json_depth' => 1,
+        ]);
+
+        do_action('rest_api_init');
+
+        // No Content-Type header at all: core's parse_json_params() would
+        // never JSON-decode this body (is_json_content_type() false), so
+        // there is no default-depth-512 parse for the cap to pre-empt —
+        // skipping mirrors core exactly.
+        $request = new \WP_REST_Request('POST', '/stride/v1/no-ct');
+        $request->set_body(json_encode(['a' => ['a' => ['a' => 1]]]));
+
+        $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
+
+        self::assertNull($result, 'Without a JSON Content-Type, core never JSON-parses the body — the depth cap must not fire either.');
+    }
+
+    public function testJsonSuffixContentTypeIsStillDepthChecked(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/ld-json', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_json_depth' => 3,
+        ]);
+
+        do_action('rest_api_init');
+
+        // application/ld+json is a JSON media type per core's
+        // wp_is_json_media_type() (wp-includes/load.php:1962 — the
+        // `([\w!#\$&-\^\.\+]+\+)?json` suffix alternative), so the depth cap
+        // must still bite — the gate is "JSON media type", not a naive
+        // string-equality check against 'application/json'.
+        $request = new \WP_REST_Request('POST', '/stride/v1/ld-json');
+        $request->set_header('Content-Type', 'application/ld+json');
+        $request->set_body(json_encode(['a' => ['a' => ['a' => ['a' => 1]]]]));
+
+        $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
+
+        self::assertInstanceOf(\WP_Error::class, $result, '+json suffix media types are JSON per core — the depth cap must apply to them.');
+        self::assertSame('invalid_json', $result->get_error_code());
+        self::assertSame(400, $result->get_error_data()['status']);
     }
 }

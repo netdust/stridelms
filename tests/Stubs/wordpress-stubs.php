@@ -169,6 +169,18 @@ if (!function_exists('is_wp_error')) {
     }
 }
 
+if (!function_exists('wp_is_json_media_type')) {
+    /**
+     * Mirrors real WP (wp-includes/load.php:1962) — the regex is copied
+     * verbatim so `application/json`, `application/*+json` suffix types,
+     * and `application/json+oembed` all match, and nothing else does.
+     */
+    function wp_is_json_media_type(string $media_type): bool
+    {
+        return (bool) preg_match('/(^|\s|,)application\/([\w!#\$&-\^\.\+]+\+)?json(\+oembed)?($|\s|;|,)/i', $media_type);
+    }
+}
+
 if (!function_exists('__')) {
     function __(string $text, string $domain = 'default'): string
     {
@@ -1083,6 +1095,50 @@ if (!class_exists('WP_REST_Request')) {
         public function set_header(string $key, string|array $value): void
         {
             $this->headers[self::canonicalize_header_name($key)] = (array) $value;
+        }
+
+        /**
+         * Mirrors real WP (class-wp-rest-request.php:314): splits the
+         * Content-Type header on ';' into value/parameters, lowercases,
+         * requires a '/', and returns the value/type/subtype/parameters map
+         * (or null when the header is absent/invalid).
+         *
+         * @return array{value: string, type: string, subtype: string, parameters: string}|null
+         */
+        public function get_content_type(): ?array
+        {
+            $value = $this->get_header('Content-Type');
+            if (empty($value)) {
+                return null;
+            }
+
+            $parameters = '';
+            if (strpos($value, ';')) {
+                [$value, $parameters] = explode(';', $value, 2);
+            }
+
+            $value = strtolower($value);
+            if (!str_contains($value, '/')) {
+                return null;
+            }
+
+            [$type, $subtype] = explode('/', $value, 2);
+
+            $data = compact('value', 'type', 'subtype', 'parameters');
+
+            return array_map('trim', $data);
+        }
+
+        /**
+         * Mirrors real WP (class-wp-rest-request.php:346, public since
+         * WP 5.6): true iff the Content-Type value is a JSON media type per
+         * wp_is_json_media_type().
+         */
+        public function is_json_content_type(): bool
+        {
+            $content_type = $this->get_content_type();
+
+            return isset($content_type['value']) && wp_is_json_media_type($content_type['value']);
         }
 
         public function get_json_params(): array
