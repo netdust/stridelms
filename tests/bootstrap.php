@@ -68,6 +68,8 @@ $ntdstCoreFiles = [
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Bootstrap.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Router.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/Endpoints.php',
+    // Task 2.3 moves this to the loader — required directly here until then.
+    dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/CorsPolicy.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Theme.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/MetaboxGenerator.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/services/Mailer.php',
