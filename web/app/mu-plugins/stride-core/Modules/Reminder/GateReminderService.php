@@ -100,16 +100,22 @@ final class GateReminderService extends AbstractService
         $today = current_time('Y-m-d');
         $reminderDays = $this->getReminderDays();
 
-        $offset = 0;
+        // Keyset pagination (scalability audit finding #7): advance by the
+        // last-seen registration id, never OFFSET. findWithActiveDeadline
+        // orders by r.id ASC and returns r.id > $afterId, so each chunk seeks
+        // straight to the cursor on the PK instead of re-walking skipped rows.
+        $afterId = 0;
 
         do {
-            $rows = $this->registrations->findWithActiveDeadline(self::CHUNK_SIZE, $offset);
+            $rows = $this->registrations->findWithActiveDeadline(self::CHUNK_SIZE, $afterId);
 
             foreach ($rows as $row) {
                 $this->processRegistration($row, $reminderDays, $today);
             }
 
-            $offset += self::CHUNK_SIZE;
+            if ($rows) {
+                $afterId = (int) end($rows)->id;
+            }
         } while (count($rows) === self::CHUNK_SIZE);
     }
 
