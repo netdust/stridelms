@@ -142,8 +142,12 @@ final class RegistrationRegisteredAtIndexMigrationTest extends IntegrationTestCa
 
         $table = $wpdb->prefix . RegistrationTable::TABLE_NAME;
 
+        // SHOW INDEX does not accept an ORDER BY clause in MariaDB (syntax error →
+        // empty result, which would mask the parity assertion). It already returns
+        // rows in (Key_name, Seq_in_index) order, so filtering to one Key_name
+        // yields the columns in Seq_in_index order without an explicit sort.
         $rows = $wpdb->get_results(
-            "SHOW INDEX FROM {$table} WHERE Key_name = 'idx_registered_at' ORDER BY Seq_in_index",
+            "SHOW INDEX FROM {$table} WHERE Key_name = 'idx_registered_at'",
         );
 
         return array_map(static fn($row) => (string) $row->Column_name, $rows ?: []);

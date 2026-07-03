@@ -92,9 +92,53 @@ final class RegistrationTable
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta($sql);
 
+        // dbDelta cannot reliably ADD a newly-declared index to an already-existing
+        // table (perf audit #8 / review-gate 3B.1): on any install whose table
+        // predates v3 and then re-runs create() (re-activation, tests), the
+        // idx_registered_at line in the DDL above is silently NOT applied. Converge
+        // the fresh-create path onto the SAME guarded, idempotent index-ensuring
+        // routine migrate() uses, so both paths land on identical index shape
+        // regardless of dbDelta's index quirks — this is the fresh-vs-migrated
+        // parity the schema-version contract depends on.
+        self::ensureRegisteredAtIndex();
+
         // Fresh tables are created at the latest schema — stamp the version so
         // migrate() doesn't re-run historical steps.
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
+    }
+
+    /**
+     * Idempotently ensure idx_registered_at (registered_at) exists on the table.
+     *
+     * Shared convergence point for BOTH the fresh-create path (create()) and the
+     * v2→v3 upgrade path (migrate()) — dbDelta is unreliable for adding an index
+     * to a pre-existing table, and a bare ADD INDEX throws "Duplicate key name"
+     * when the index is already present, so the SHOW INDEX guard makes this safe
+     * to call unconditionally on every path.
+     *
+     * @return bool true when the index is present after the call (already there or
+     *              just added), false when the ADD INDEX failed (DB error logged by
+     *              the caller's context — migrate() sets the retry backoff).
+     */
+    private static function ensureRegisteredAtIndex(): bool
+    {
+        global $wpdb;
+
+        $table = self::getTableName();
+
+        $indexExists = $wpdb->get_var(
+            "SHOW INDEX FROM {$table} WHERE Key_name = 'idx_registered_at'",
+        );
+
+        if ($indexExists !== null) {
+            return true;
+        }
+
+        $indexed = $wpdb->query(
+            "ALTER TABLE {$table} ADD INDEX idx_registered_at (registered_at)",
+        );
+
+        return $indexed !== false;
     }
 
     /**
@@ -166,30 +210,21 @@ final class RegistrationTable
 
         // v3 (perf audit #8): add idx_registered_at — the default grid sort has
         // no index, so every filtered page is a top-N filesort. Purely additive.
-        // Idempotent: fresh v3 tables get the index from create() directly and
-        // then may still enter migrate() (option unset on an old install path),
-        // and a lapsed-backoff retry re-enters here — so add only when absent to
-        // avoid the "Duplicate key name" error a bare ADD INDEX would throw.
-        $indexExists = $wpdb->get_var(
-            "SHOW INDEX FROM {$table} WHERE Key_name = 'idx_registered_at'",
-        );
+        // Idempotent via the shared ensureRegisteredAtIndex() SHOW INDEX guard:
+        // fresh v3 tables get the index from create() directly and then may still
+        // enter migrate() (option unset on an old install path), and a lapsed-backoff
+        // retry re-enters here — the guard skips the ADD when present, avoiding the
+        // "Duplicate key name" error a bare ADD INDEX would throw.
+        if (!self::ensureRegisteredAtIndex()) {
+            ntdst_log('enrollment')->error('registrations schema v3 migration failed', [
+                'step' => 'add_registered_at_index',
+                'error' => $wpdb->last_error,
+            ]);
 
-        if ($indexExists === null) {
-            $indexed = $wpdb->query(
-                "ALTER TABLE {$table} ADD INDEX idx_registered_at (registered_at)",
-            );
+            // Don't stamp the version: retried once the backoff lapses (step is idempotent).
+            set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
 
-            if ($indexed === false) {
-                ntdst_log('enrollment')->error('registrations schema v3 migration failed', [
-                    'step' => 'add_registered_at_index',
-                    'error' => $wpdb->last_error,
-                ]);
-
-                // Don't stamp the version: retried once the backoff lapses (step is idempotent).
-                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
-
-                return;
-            }
+            return;
         }
 
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
