@@ -2,6 +2,8 @@
 
 declare(strict_types=1);
 
+namespace Stride\Tests\Unit;
+
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -13,30 +15,30 @@ use PHPUnit\Framework\TestCase;
  */
 final class NtdstEndpointsEnvelopeCharacterizationTest extends TestCase
 {
-    private NTDST_Endpoints $endpoints;
+    private \NTDST_Endpoints $endpoints;
 
     protected function setUp(): void
     {
         parent::setUp();
-        $this->endpoints = ntdst_endpoints();
+        $this->endpoints = \ntdst_endpoints();
     }
 
     public function testGetNonceSuccessWireShapeIsPinned(): void
     {
-        $request = new WP_REST_Request();
+        $request = new \WP_REST_Request();
         $request->set_param('action', 'search_posts');
 
         $result = $this->endpoints->handle_get_nonce($request);
 
-        self::assertSame(['success', 'data'], array_keys($result));
-        self::assertTrue($result['success']);
-        self::assertSame(['nonce'], array_keys($result['data']));
-        self::assertIsString($result['data']['nonce']);
+        self::assertSame(
+            ['success' => true, 'data' => ['nonce' => 'test_nonce_' . md5('search_posts')]],
+            $result,
+        );
     }
 
     public function testMissingActionErrorWireShapeIsPinned(): void
     {
-        $result = $this->endpoints->handle_get_nonce(new WP_REST_Request());
+        $result = $this->endpoints->handle_get_nonce(new \WP_REST_Request());
 
         self::assertSame(
             ['success' => false, 'data' => ['message' => 'No action specified', 'code' => 'missing_action']],
@@ -46,7 +48,7 @@ final class NtdstEndpointsEnvelopeCharacterizationTest extends TestCase
 
     public function testHandleActionMissingParamsErrorWireShapeIsPinned(): void
     {
-        $result = $this->endpoints->handle_action(new WP_REST_Request());
+        $result = $this->endpoints->handle_action(new \WP_REST_Request());
 
         self::assertSame(
             ['success' => false, 'data' => ['message' => 'Missing action or nonce', 'code' => 'missing_params']],

@@ -29,7 +29,12 @@ use PHPUnit\Framework\TestCase;
  * Each test uses a fresh NTDST_Router() instance (matching
  * NtdstRouterTest's convention) rather than the ntdst_router() singleton,
  * so route registrations in one test cannot leak into another via the
- * shared static instance.
+ * shared static instance. Note, however, that each `new NTDST_Router()`
+ * still registers global `template_include`/`redirect_canonical` filter
+ * closures in the stub's process-global `$_test_filters` — inert today
+ * because these tests call handleTemplateInclude() directly, but a future
+ * test that dispatches via apply_filters() would see stale closures from
+ * prior instances.
  */
 final class NtdstRouterDispatchCharacterizationTest extends TestCase
 {
@@ -50,27 +55,21 @@ final class NtdstRouterDispatchCharacterizationTest extends TestCase
         parent::tearDown();
     }
 
-    public function testMatchedRouteReturningExistingFilePathIsReturnedAsTemplate(): void
+    /**
+     * Sets $_SERVER['REQUEST_URI']/['REQUEST_METHOD'] for the duration of
+     * $fn(), restoring the previous values (including the unset case) in
+     * a finally block regardless of how $fn() completes.
+     */
+    private function withServerRequest(string $uri, string $method, callable $fn): mixed
     {
         $previousUri = $_SERVER['REQUEST_URI'] ?? null;
         $previousMethod = $_SERVER['REQUEST_METHOD'] ?? null;
 
         try {
-            $_SERVER['REQUEST_URI'] = '/projects/foo';
-            $_SERVER['REQUEST_METHOD'] = 'GET';
+            $_SERVER['REQUEST_URI'] = $uri;
+            $_SERVER['REQUEST_METHOD'] = $method;
 
-            $this->fixtureFile = tempnam(sys_get_temp_dir(), 'ntdst_router_fixture_');
-            $this->assertNotFalse($this->fixtureFile, 'tempnam() must produce a real file for the contract');
-
-            $this->router->get('projects/:slug', fn() => $this->fixtureFile);
-
-            $result = $this->router->handleTemplateInclude('/original/template.php');
-
-            $this->assertSame(
-                $this->fixtureFile,
-                $result,
-                'an existing file path returned by the matched callback must be returned as the template',
-            );
+            return $fn();
         } finally {
             if ($previousUri !== null) {
                 $_SERVER['REQUEST_URI'] = $previousUri;
@@ -83,69 +82,59 @@ final class NtdstRouterDispatchCharacterizationTest extends TestCase
                 unset($_SERVER['REQUEST_METHOD']);
             }
         }
+    }
+
+    public function testMatchedRouteReturningExistingFilePathIsReturnedAsTemplate(): void
+    {
+        $this->fixtureFile = tempnam(sys_get_temp_dir(), 'ntdst_router_fixture_');
+        $this->assertNotFalse($this->fixtureFile, 'tempnam() must produce a real file for the contract');
+
+        $this->router->get('projects/:slug', fn() => $this->fixtureFile);
+
+        $result = $this->withServerRequest(
+            '/projects/foo',
+            'GET',
+            fn() => $this->router->handleTemplateInclude('/original/template.php'),
+        );
+
+        $this->assertSame(
+            $this->fixtureFile,
+            $result,
+            'an existing file path returned by the matched callback must be returned as the template',
+        );
     }
 
     public function testMatchedRouteReturningFalseFallsThroughToOriginalTemplate(): void
     {
-        $previousUri = $_SERVER['REQUEST_URI'] ?? null;
-        $previousMethod = $_SERVER['REQUEST_METHOD'] ?? null;
+        $this->router->get('projects/:slug', fn() => false);
 
-        try {
-            $_SERVER['REQUEST_URI'] = '/projects/foo';
-            $_SERVER['REQUEST_METHOD'] = 'GET';
+        $result = $this->withServerRequest(
+            '/projects/foo',
+            'GET',
+            fn() => $this->router->handleTemplateInclude('/original/template.php'),
+        );
 
-            $this->router->get('projects/:slug', fn() => false);
-
-            $result = $this->router->handleTemplateInclude('/original/template.php');
-
-            $this->assertSame(
-                '/original/template.php',
-                $result,
-                'a callback returning false must fall through and leave the original template untouched',
-            );
-        } finally {
-            if ($previousUri !== null) {
-                $_SERVER['REQUEST_URI'] = $previousUri;
-            } else {
-                unset($_SERVER['REQUEST_URI']);
-            }
-            if ($previousMethod !== null) {
-                $_SERVER['REQUEST_METHOD'] = $previousMethod;
-            } else {
-                unset($_SERVER['REQUEST_METHOD']);
-            }
-        }
+        $this->assertSame(
+            '/original/template.php',
+            $result,
+            'a callback returning false must fall through and leave the original template untouched',
+        );
     }
 
     public function testNoRouteMatchReturnsOriginalTemplate(): void
     {
-        $previousUri = $_SERVER['REQUEST_URI'] ?? null;
-        $previousMethod = $_SERVER['REQUEST_METHOD'] ?? null;
+        $this->router->get('projects/:slug', fn() => '/should-not-be-reached.php');
 
-        try {
-            $_SERVER['REQUEST_URI'] = '/nowhere/matches';
-            $_SERVER['REQUEST_METHOD'] = 'GET';
+        $result = $this->withServerRequest(
+            '/nowhere/matches',
+            'GET',
+            fn() => $this->router->handleTemplateInclude('/original/template.php'),
+        );
 
-            $this->router->get('projects/:slug', fn() => '/should-not-be-reached.php');
-
-            $result = $this->router->handleTemplateInclude('/original/template.php');
-
-            $this->assertSame(
-                '/original/template.php',
-                $result,
-                'when no route matches the URL, the original template must be returned unchanged',
-            );
-        } finally {
-            if ($previousUri !== null) {
-                $_SERVER['REQUEST_URI'] = $previousUri;
-            } else {
-                unset($_SERVER['REQUEST_URI']);
-            }
-            if ($previousMethod !== null) {
-                $_SERVER['REQUEST_METHOD'] = $previousMethod;
-            } else {
-                unset($_SERVER['REQUEST_METHOD']);
-            }
-        }
+        $this->assertSame(
+            '/original/template.php',
+            $result,
+            'when no route matches the URL, the original template must be returned unchanged',
+        );
     }
 }
