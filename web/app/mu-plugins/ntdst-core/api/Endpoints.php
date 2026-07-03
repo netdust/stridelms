@@ -7,8 +7,14 @@ declare(strict_types=1);
  *
  * Super-fast alternative to WordPress AJAX using REST API + direct DB access.
  *
+ * SCOPE: the same-origin, nonce-gated generic-action dispatcher
+ * (`ntdst/api_data/{action}`). NOT a general REST route registrar and NOT for
+ * cross-origin callers — an anonymous WP nonce is a shared, non-origin-bound
+ * token that authenticates nothing for a cookie-less cross-origin caller. For
+ * new REST routes (incl. cross-origin/CORS) use `ntdst_router()->rest()` +
+ * `NTDST_Cors_Policy`.
+ *
  * Requirements:
- * - Define `ALLOW_RESTAPI_AJAX` as true in wp-config.php
  * - Use with ntdstAPI client (endpoints-client.js)
  *
  * Endpoints:

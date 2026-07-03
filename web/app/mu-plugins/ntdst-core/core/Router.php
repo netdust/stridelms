@@ -23,6 +23,12 @@ declare(strict_types=1);
  * ntdst_router()->when(fn() => is_singular('project'), function($post) {
  *     // Custom handling
  * });
+ *
+ * // Namespaced REST route (incl. cross-origin/CORS) — use rest(), not register()
+ * ntdst_router()->rest('myproject/v1')->post('/things', $handler, [
+ *     'permission' => fn(WP_REST_Request $request) => current_user_can('edit_posts'),
+ *     'cors' => new NTDST_Cors_Policy(['origins' => ['https://example.com']]),
+ * ]);
  */
 
 defined('ABSPATH') || exit;
