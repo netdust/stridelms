@@ -184,9 +184,7 @@ class NTDST_Response
         http_response_code($this->status);
         header('Content-Type: application/json');
 
-        $payload = $this->error
-            ? ['success' => false, 'error' => $this->error]
-            : ['success' => true, 'data' => $this->data];
+        $payload = $this->jsonPayload();
 
         $body = json_encode($payload);
         if ($body === false) {
@@ -198,6 +196,30 @@ class NTDST_Response
 
         echo $body;
         exit;
+    }
+
+    /** API envelope builders — the ONE place the {success,…} wire shapes are decided (INV-10 companion). */
+    public static function apiSuccess(array $data): array
+    {
+        return ['success' => true, 'data' => $data];
+    }
+
+    public static function apiError(string $message, string $code = 'error'): array
+    {
+        return ['success' => false, 'data' => ['message' => $message, 'code' => $code]];
+    }
+
+    /** json()'s payload without the exit — for the REST dispatch path. */
+    public function toRestResponse(): WP_REST_Response
+    {
+        return new WP_REST_Response($this->jsonPayload(), $this->status);
+    }
+
+    private function jsonPayload(): array
+    {
+        return $this->error
+            ? ['success' => false, 'error' => $this->error]
+            : ['success' => true, 'data' => $this->data];
     }
 
     /**
