@@ -14,6 +14,9 @@ use PHPUnit\Framework\TestCase;
  * already fired) and the required-permission denial path (mitigation 6).
  * Memoization (3.2), body caps (3.3), and normalization/facade/CORS wiring
  * (3.4) are explicitly out of scope here.
+ *
+ * Task 3.3 additions: rest_pre_dispatch body-size/JSON-depth caps (WP-core
+ * quirk 3) — see the dedicated block of tests near the end of this file.
  */
 final class NtdstRestRegistrarTest extends TestCase
 {
@@ -23,6 +26,7 @@ final class NtdstRestRegistrarTest extends TestCase
 
         global $_test_rest_routes, $_test_rest_route_calls, $_test_actions;
         global $_test_did_action_counts, $_test_doing_it_wrong_calls, $_test_log_entries;
+        global $_test_filters;
 
         $_test_rest_routes = [];
         $_test_rest_route_calls = [];
@@ -30,6 +34,7 @@ final class NtdstRestRegistrarTest extends TestCase
         $_test_did_action_counts = [];
         $_test_doing_it_wrong_calls = [];
         $_test_log_entries = [];
+        $_test_filters = [];
     }
 
     public function testRouteQueuedPreRestApiInitRegistersOnFlushWithFullShape(): void
@@ -436,5 +441,224 @@ final class NtdstRestRegistrarTest extends TestCase
 
         self::assertSame($callsAfterLoop + 1, $calls, 'A brand-new request object must trigger a fresh evaluation, never replay a stale entry from a GC-reused id.');
         self::assertSame($firstOnFresh, $secondOnFresh, 'The fresh object must still memoize correctly against itself on the second call.');
+    }
+
+    /**
+     * Task 3.3 — body size / JSON depth caps enforced on rest_pre_dispatch
+     * (WP-core quirk 3).
+     *
+     * Ground-truthed against web/wp/wp-includes/rest-api/class-wp-rest-server.php:
+     * dispatch() (line 1062) calls apply_filters('rest_pre_dispatch', null,
+     * $this, $request) as the very FIRST thing it does (line 1078) — before
+     * match_request_to_handler() (line 1095) and before
+     * $request->has_valid_params() (line 1114). has_valid_params()
+     * (class-wp-rest-request.php:885) calls parse_json_params() (line 685),
+     * which — for a JSON-content-typed body — runs json_decode($body, true)
+     * at PHP's default depth (512) at line 702. A non-empty return from a
+     * rest_pre_dispatch filter short-circuits dispatch() entirely (the
+     * `if ( ! empty( $result ) )` branch at line 1080 returns before
+     * match_request_to_handler() or has_valid_params() ever run), so this is
+     * the only point our own code can enforce caps before core's own
+     * default-depth parse.
+     *
+     * json_decode depth semantics (empirically verified — depth counts one
+     * level PER nesting boundary, not per array/object encountered
+     * one-for-one with "levels" of user-visible nesting): for N levels of
+     * nesting (`{"a": {"a": ... <scalar> } }`, N `"a"` wrappers), decoding
+     * SUCCEEDS at depth >= N+1 and FAILS (json_last_error() ===
+     * JSON_ERROR_DEPTH, "Maximum stack depth exceeded") at depth <= N. E.g.
+     * a flat array `[1,2,3]` (1 level of nesting) fails at depth=1, passes
+     * at depth=2.
+     */
+    public function testBodyOverMaxBytesReturnsPayloadTooLargeWpError(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/limited', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_body_bytes' => 10,
+        ]);
+
+        do_action('rest_api_init');
+
+        $request = new \WP_REST_Request('POST', '/stride/v1/limited');
+        $request->set_body(str_repeat('x', 11));
+
+        $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
+
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame('payload_too_large', $result->get_error_code());
+        self::assertSame(413, $result->get_error_data()['status']);
+    }
+
+    public function testBodyExactlyAtMaxBytesPassesThrough(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/limited-exact', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_body_bytes' => 10,
+        ]);
+
+        do_action('rest_api_init');
+
+        $request = new \WP_REST_Request('POST', '/stride/v1/limited-exact');
+        $request->set_body(str_repeat('x', 10));
+
+        $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
+
+        self::assertNull($result, 'A body exactly at the cap must pass through untouched (null, matching the filter default).');
+    }
+
+    public function testJsonDeeperThanMaxDepthReturnsInvalidJsonWpError(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/depth-limited', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_json_depth' => 3,
+        ]);
+
+        do_action('rest_api_init');
+
+        // 3 levels of nesting — per the empirical depth semantics documented
+        // above, this requires depth >= 4 to decode; depth=3 must reject it.
+        $body = json_encode(['a' => ['a' => ['a' => 1]]]);
+
+        $request = new \WP_REST_Request('POST', '/stride/v1/depth-limited');
+        $request->set_body($body);
+
+        $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
+
+        self::assertInstanceOf(\WP_Error::class, $result);
+        self::assertSame('invalid_json', $result->get_error_code());
+        self::assertSame(400, $result->get_error_data()['status']);
+    }
+
+    public function testJsonAtMaxDepthPassesThrough(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/depth-ok', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_json_depth' => 4,
+        ]);
+
+        do_action('rest_api_init');
+
+        // Same 3-level-nested body — decodes cleanly at depth=4 per the
+        // empirical semantics (N=3 levels needs depth >= N+1 = 4).
+        $body = json_encode(['a' => ['a' => ['a' => 1]]]);
+
+        $request = new \WP_REST_Request('POST', '/stride/v1/depth-ok');
+        $request->set_body($body);
+
+        $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
+
+        self::assertNull($result, 'JSON at exactly the configured depth must pass through untouched.');
+    }
+
+    public function testEmptyBodyPassesThroughRegardlessOfCaps(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/empty-body', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_body_bytes' => 5,
+            'max_json_depth' => 1,
+        ]);
+
+        do_action('rest_api_init');
+
+        // get_body() is nullable in real WP core until set_body() is called
+        // (class-wp-rest-request.php: `protected $body = null`) — never
+        // call set_body() here, mirroring a request built via params only.
+        $request = new \WP_REST_Request('POST', '/stride/v1/empty-body');
+
+        $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
+
+        self::assertNull($result, 'An empty/null body must pass through — nothing to size-check or decode.');
+    }
+
+    public function testForeignRouteNotInThisRegistrarsTableIsPassedThroughUntouched(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/capped', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_body_bytes' => 5,
+        ]);
+
+        do_action('rest_api_init');
+
+        // A route this registrar never queued — even though it's oversized,
+        // this filter must not touch it (mitigation-7 analog: scoped, not
+        // global enforcement). $result starts as some arbitrary sentinel
+        // (mimicking an earlier filter on the chain already having produced
+        // a value) to prove it is passed through UNCHANGED, not just "null
+        // stays null".
+        $sentinel = new \WP_REST_Response(['already' => 'handled']);
+        $request = new \WP_REST_Request('POST', '/some/other/v1/route');
+        $request->set_body(str_repeat('x', 999));
+
+        $result = apply_filters('rest_pre_dispatch', $sentinel, new \stdClass(), $request);
+
+        self::assertSame($sentinel, $result, 'A request for a route not in this registrar\'s table must be passed through untouched.');
+    }
+
+    public function testNoRouteConfiguresCapsNeverAddsTheFilterAtAll(): void
+    {
+        global $_test_filters;
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get('/no-caps', fn() => 'ok', ['permission' => fn() => true]);
+
+        do_action('rest_api_init');
+
+        self::assertArrayNotHasKey(
+            'rest_pre_dispatch',
+            $_test_filters,
+            'rest_pre_dispatch must never be hooked at all when no queued route configures max_body_bytes or max_json_depth.',
+        );
+    }
+
+    public function testAtLeastOneRouteWithCapsAddsTheFilterLazily(): void
+    {
+        global $_test_filters;
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get('/still-no-caps', fn() => 'ok', ['permission' => fn() => true]);
+        $registrar->post('/has-caps', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_body_bytes' => 100,
+        ]);
+
+        do_action('rest_api_init');
+
+        self::assertArrayHasKey(
+            'rest_pre_dispatch',
+            $_test_filters,
+            'rest_pre_dispatch must be hooked exactly when at least one queued route configures a cap.',
+        );
+        self::assertCount(1, $_test_filters['rest_pre_dispatch'], 'The filter must be added exactly once regardless of how many capped routes are queued.');
+    }
+
+    public function testWpErrorReturnedFromFilterReachesTheApplyFiltersCaller(): void
+    {
+        // Filter-return-contract proof: apply_filters() itself returns
+        // whatever the last filter in the chain returns — WP core's real
+        // dispatch() relies on exactly this to short-circuit at line 1080
+        // (`if ( ! empty( $result ) )`). This proves our filter's WP_Error
+        // return value actually propagates through the apply_filters() call
+        // site, not just that our own method returns it when called directly.
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->post('/short-circuit', fn() => 'ok', [
+            'permission' => fn() => true,
+            'max_body_bytes' => 1,
+        ]);
+
+        do_action('rest_api_init');
+
+        $request = new \WP_REST_Request('POST', '/stride/v1/short-circuit');
+        $request->set_body('too big');
+
+        $result = apply_filters('rest_pre_dispatch', null, new \stdClass(), $request);
+
+        self::assertInstanceOf(\WP_Error::class, $result, 'apply_filters(\'rest_pre_dispatch\', ...) must yield our WP_Error, proving the short-circuit contract at the real filter call site.');
+        self::assertTrue(is_wp_error($result));
     }
 }

@@ -1009,12 +1009,27 @@ if (!class_exists('WP_REST_Request')) {
         private array $headers = [];
         private string $method = 'GET';
         private string $route = '';
+        private ?string $body = null;
 
         public function __construct(string $method = 'GET', string $route = '', array $params = [])
         {
             $this->method = $method;
             $this->route = $route;
             $this->params = $params;
+        }
+
+        /**
+         * Matches real WP (class-wp-rest-request.php): `protected $body =
+         * null` — nullable, not an empty string, until set_body() is called.
+         */
+        public function get_body()
+        {
+            return $this->body;
+        }
+
+        public function set_body($data): void
+        {
+            $this->body = $data;
         }
 
         public function get_param(string $key)

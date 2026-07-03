@@ -8,7 +8,7 @@ declare(strict_types=1);
  * This is the Phase 3 convergence point being built up in stages:
  *  - 3.1 (this file): registration core + required-permission enforcement.
  *  - 3.2: permission_callback memoization (WP-core quirk 2).
- *  - 3.3: request-body size caps.
+ *  - 3.3 (this file): request-body size / JSON-depth caps (WP-core quirk 3).
  *  - 3.4: handler-return normalization + Router::rest() facade + CORS wiring.
  *
  * Route syntax is WP-native regex (D5) — routes/methods are passed straight
@@ -44,6 +44,26 @@ final class NTDST_Rest_Registrar
      * registers immediately in that case and never needs the hook).
      */
     private bool $hooked = false;
+
+    /**
+     * Per-route body-size/JSON-depth caps, keyed by the fully-qualified
+     * route string ('/' . namespace . route) exactly as
+     * WP_REST_Request::get_route() returns it — populated by registerOne()
+     * for any route that configured 'max_body_bytes' and/or
+     * 'max_json_depth', consulted by enforceBodyLimitsBeforeDispatch().
+     *
+     * @var array<string, array{max_body_bytes: int|null, max_json_depth: int|null}>
+     */
+    private array $routeCaps = [];
+
+    /**
+     * Whether the rest_pre_dispatch filter has already been hooked for this
+     * instance — guards against adding it more than once, and is the
+     * mechanism behind "lazy": the filter is only ever added the first time
+     * a route with at least one cap is registered (task 3.3), never
+     * unconditionally in the constructor.
+     */
+    private bool $bodyLimitFilterHooked = false;
 
     public function __construct(string $namespace)
     {
@@ -184,7 +204,122 @@ final class NTDST_Rest_Registrar
             $args['args'] = $options['args'];
         }
 
+        $maxBodyBytes = $options['max_body_bytes'] ?? null;
+        $maxJsonDepth = $options['max_json_depth'] ?? null;
+
+        if ($maxBodyBytes !== null || $maxJsonDepth !== null) {
+            $routeKey = '/' . trim($this->namespace, '/') . $entry['route'];
+            $this->routeCaps[$routeKey] = [
+                'max_body_bytes' => $maxBodyBytes,
+                'max_json_depth' => $maxJsonDepth,
+            ];
+
+            $this->ensureBodyLimitFilterHooked();
+        }
+
         register_rest_route($this->namespace, $entry['route'], $args);
+    }
+
+    /**
+     * Lazily hooks enforceBodyLimitsBeforeDispatch() onto rest_pre_dispatch
+     * — added ONCE per instance, and ONLY the first time a route with at
+     * least one cap ('max_body_bytes' and/or 'max_json_depth') is
+     * registered. A registrar whose routes carry no caps at all never adds
+     * this filter (task 3.3 Step 1(g)).
+     *
+     * Priority 5 (earlier than the default 10, and earlier than
+     * CorsPolicy's rest_pre_serve_request priority 20 — different hook
+     * entirely, noted only for contrast): rest_pre_dispatch fires only
+     * once, so priority here just needs to be lower than any OTHER
+     * rest_pre_dispatch consumer that might expect to inspect params later
+     * in the chain; there is no WP-core default callback on this hook to
+     * out-race (unlike rest_pre_serve_request, where core's own
+     * rest_send_cors_headers() runs at priority 10 on rest_api_init and
+     * CorsPolicy deliberately runs after it).
+     */
+    private function ensureBodyLimitFilterHooked(): void
+    {
+        if ($this->bodyLimitFilterHooked) {
+            return;
+        }
+
+        $this->bodyLimitFilterHooked = true;
+        add_filter('rest_pre_dispatch', [$this, 'enforceBodyLimitsBeforeDispatch'], 5, 3);
+    }
+
+    /**
+     * Runs on rest_pre_dispatch — ground-truthed against
+     * web/wp/wp-includes/rest-api/class-wp-rest-server.php: dispatch()
+     * (line 1062) calls apply_filters('rest_pre_dispatch', null, $this,
+     * $request) as the very FIRST thing it does (line 1078), strictly
+     * before match_request_to_handler() (line 1095) and before
+     * $request->has_valid_params() (line 1114). has_valid_params()
+     * (class-wp-rest-request.php:885) calls parse_json_params() (line 685),
+     * which for a JSON-content-typed, non-empty body runs
+     * json_decode($body, true) at PHP's DEFAULT depth (512) at line 702. A
+     * non-empty return here short-circuits dispatch() entirely — the
+     * `if ( ! empty( $result ) )` branch at line 1080 returns before
+     * match_request_to_handler() or has_valid_params() ever run for this
+     * request — so this is the earliest point this registrar's own code can
+     * enforce a cap, strictly before core's own default-depth parse.
+     *
+     * Scoped to ONLY this registrar's own route table (exact route-string
+     * match against $this->routeCaps, keyed the same way as registerOne()
+     * populates it) — a request for any route not in that table is passed
+     * through UNCHANGED (mitigation-7 analog: never a global filter, same
+     * posture as NTDST_Cors_Policy::applyCorsHeaders()). Unlike
+     * NTDST_Cors_Policy's prefix match (a policy can guard a whole
+     * namespace), this is an EXACT match: the caps are configured per
+     * individual route, not per namespace/prefix, and this registrar
+     * already holds the full concrete route table, so there is no need for
+     * (and no correctness benefit to) prefix matching here.
+     *
+     * Ported and generalized from todai-client-form-intake's
+     * SubmissionIntakeService::enforceBodyLimitsBeforeDispatch() (same
+     * ground-truthed call-order reasoning), generalized from a single
+     * hardcoded namespace/route/cap to this registrar's own per-route
+     * table.
+     *
+     * @param mixed $result Passed through unchanged for every route not in
+     *                       this registrar's own capped-route table, and for
+     *                       any capped route whose body/depth is in bounds.
+     */
+    public function enforceBodyLimitsBeforeDispatch(mixed $result, mixed $server, WP_REST_Request $request): mixed
+    {
+        $caps = $this->routeCaps[$request->get_route()] ?? null;
+
+        if ($caps === null) {
+            return $result;
+        }
+
+        // get_body() is nullable in WP core (class-wp-rest-request.php:
+        // `protected $body = null`) until set_body() has been called — cast
+        // before strlen(), the same way the reference implementation does
+        // (SubmissionIntakeService::enforceBodyLimitsBeforeDispatch()).
+        $rawBody = (string) $request->get_body();
+
+        if ($caps['max_body_bytes'] !== null && strlen($rawBody) > $caps['max_body_bytes']) {
+            return new WP_Error('payload_too_large', 'Request could not be processed.', ['status' => 413]);
+        }
+
+        // Depth cap is enforced for ANY non-empty body, not gated on the
+        // request's Content-Type — this INTENTIONALLY diverges from WP
+        // core's own parse_json_params(), which only attempts a JSON decode
+        // at all when is_json_content_type() is true (class-wp-rest-request.php
+        // line 693). Mirrors the reference implementation's own choice
+        // (SubmissionIntakeService, same method): a route that opted into a
+        // depth cap wants every non-empty body bounded-depth-decoded
+        // regardless of the caller-supplied Content-Type header, since that
+        // header is attacker-controlled and core's own gate on it must not
+        // be trusted to decide whether OUR bound applies.
+        if ($caps['max_json_depth'] !== null && $rawBody !== '') {
+            json_decode($rawBody, true, $caps['max_json_depth']);
+            if (json_last_error() !== JSON_ERROR_NONE) {
+                return new WP_Error('invalid_json', 'Request could not be processed.', ['status' => 400]);
+            }
+        }
+
+        return $result;
     }
 
     /**
