@@ -45,9 +45,63 @@ final class NTDST_Rest_Registrar
      */
     private bool $hooked = false;
 
+    /**
+     * Per-real-request memoization of a wrapped permission_callback's
+     * result, keyed by WP_REST_Request object identity (task 3.2 — WP-core
+     * quirk 2).
+     *
+     * WordPress core's own rest_send_allow_header() (hooked on
+     * rest_post_dispatch, ground-truthed against
+     * web/wp/wp-includes/rest-api.php:854-886) calls a matched route's
+     * permission_callback a SECOND time for every dispatched request
+     * (success or denial), to compute the response's Allow header — see
+     * that file's call_user_func($_handler['permission_callback'],
+     * $request) around line 871. WordPress reuses the SAME
+     * WP_REST_Request object for both invocations within one real HTTP
+     * request (dispatch() and respond_to_request() thread the same
+     * $request through), so object identity correctly identifies "the
+     * same real request". A permission callable with a side effect (e.g.
+     * a rate-limit counter, ported from the reference
+     * SubmissionIntakeService::checkWritePermission()) would otherwise
+     * double-count on every dispatched request.
+     *
+     * WeakMap (not a plain array keyed by spl_object_id()) is required
+     * here: spl_object_id() is a slot index PHP reuses IMMEDIATELY once an
+     * object is garbage-collected — ground-truthed (per the reference
+     * implementation's own docblock) with a minimal repro: a tight loop
+     * creating/discarding objects yielded ids 1,2,1,2,1,.... A plain-array
+     * cache keyed by that id would let a later, unrelated
+     * WP_REST_Request (a genuinely different real request) collide with a
+     * stale cache entry left by an earlier, already-freed request object
+     * that happened to get the same id — silently returning a wrong,
+     * stale permission result for a distinct request. WeakMap keys by
+     * actual object identity (never collides across distinct objects) and
+     * auto-evicts its entry the moment the key object is garbage
+     * collected, so the cache can never outlive or misattribute across
+     * requests.
+     *
+     * Rejected alternative: WP_REST_Request::set_attributes()/
+     * get_attributes() (the route-match attributes array — methods,
+     * callback, args schema — used by sanitize_params()/
+     * has_valid_params()) would corrupt the request's own param-validation
+     * state if repurposed to stash an unrelated memoized value. Also
+     * rejected: ArrayAccess/offsetSet, which maps to set_param() and would
+     * pollute the app-facing params namespace / get_json_params() results.
+     *
+     * Shared per registrar instance (not per route) — every wrapped
+     * permission callable produced by this instance's wrapPermission()
+     * reads/writes the same map, keyed by the request object each
+     * evaluation actually received, so entries for different routes never
+     * collide (distinct request objects per dispatched request).
+     *
+     * @var \WeakMap<WP_REST_Request, bool|WP_Error>
+     */
+    private \WeakMap $permissionResultCache;
+
     public function __construct(string $namespace)
     {
         $this->namespace = $namespace;
+        $this->permissionResultCache = new \WeakMap();
     }
 
     public function get(string $route, callable $handler, array $options = []): self
@@ -177,7 +231,7 @@ final class NTDST_Rest_Registrar
         $args = [
             'methods' => $entry['methods'],
             'callback' => $entry['handler'],
-            'permission_callback' => $permission,
+            'permission_callback' => $this->wrapPermission($permission),
         ];
 
         if (array_key_exists('args', $options)) {
@@ -185,5 +239,30 @@ final class NTDST_Rest_Registrar
         }
 
         register_rest_route($this->namespace, $entry['route'], $args);
+    }
+
+    /**
+     * Wraps a caller-supplied permission callable so it is evaluated
+     * EXACTLY ONCE per WP_REST_Request object, replaying the memoized
+     * result (bool or WP_Error, by identity for WP_Error) on any
+     * subsequent call with the SAME request object — see
+     * $permissionResultCache's docblock for the WP-core quirk this exists
+     * to neutralize.
+     *
+     * Split into this thin memoizing wrapper plus the caller's own
+     * $permission callable (analogous to the reference
+     * checkWritePermission()/evaluateWritePermission() split) so the
+     * memoization concern lives in exactly one place regardless of how
+     * many return points the wrapped callable has.
+     */
+    private function wrapPermission(callable $permission): callable
+    {
+        return function (WP_REST_Request $request) use ($permission): bool|WP_Error {
+            if (isset($this->permissionResultCache[$request])) {
+                return $this->permissionResultCache[$request];
+            }
+
+            return $this->permissionResultCache[$request] = $permission($request);
+        };
     }
 }
