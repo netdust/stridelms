@@ -21,6 +21,17 @@ if (!defined('WEEK_IN_SECONDS')) {
     define('WEEK_IN_SECONDS', 604800);
 }
 
+// wpdb output-format constants
+if (!defined('ARRAY_A')) {
+    define('ARRAY_A', 'ARRAY_A');
+}
+if (!defined('ARRAY_N')) {
+    define('ARRAY_N', 'ARRAY_N');
+}
+if (!defined('OBJECT')) {
+    define('OBJECT', 'OBJECT');
+}
+
 if (!class_exists('WP_Post')) {
     /**
      * WordPress Post Class Stub
@@ -442,6 +453,15 @@ if (!function_exists('current_user_can')) {
         global $current_user_caps;
         // If caps are explicitly set, use them; otherwise allow everything
         if (isset($current_user_caps) && is_array($current_user_caps)) {
+            // Object-scoped meta caps (e.g. current_user_can('edit_post', 123))
+            // can be granted per-object via an "edit_post:123" key so tests can
+            // model per-edition object scope; falls back to the bare cap.
+            if (!empty($args) && is_scalar($args[0])) {
+                $scopedKey = $capability . ':' . $args[0];
+                if (array_key_exists($scopedKey, $current_user_caps)) {
+                    return (bool) $current_user_caps[$scopedKey];
+                }
+            }
             return $current_user_caps[$capability] ?? false;
         }
         return true; // Allow everything in tests by default
@@ -973,6 +993,53 @@ if (!interface_exists('NTDST_Service_Meta')) {
     interface NTDST_Service_Meta
     {
         public static function metadata(): array;
+    }
+}
+
+/**
+ * Thrown by the wp_send_json_* stubs so a test can observe the terminal AJAX
+ * response (data + HTTP status) instead of the real functions exiting the
+ * process. Lets authorization-guard tests assert the exact denial status.
+ */
+if (!class_exists('StrideJsonResponse')) {
+    class StrideJsonResponse extends \RuntimeException
+    {
+        public bool $success;
+        /** @var mixed */
+        public $data;
+        public int $status;
+
+        public function __construct(bool $success, $data, int $status)
+        {
+            $this->success = $success;
+            $this->data = $data;
+            $this->status = $status;
+            parent::__construct('wp_send_json_' . ($success ? 'success' : 'error'), $status);
+        }
+    }
+}
+
+if (!function_exists('wp_send_json_error')) {
+    function wp_send_json_error($data = null, int $status_code = 0): void
+    {
+        throw new StrideJsonResponse(false, $data, $status_code);
+    }
+}
+
+if (!function_exists('wp_send_json_success')) {
+    function wp_send_json_success($data = null, int $status_code = 0): void
+    {
+        throw new StrideJsonResponse(true, $data, $status_code);
+    }
+}
+
+if (!function_exists('check_ajax_referer')) {
+    function check_ajax_referer($action = -1, $query_arg = false, $stop = true)
+    {
+        global $_test_check_ajax_referer_result;
+        // Default to a valid nonce so tests focus on the capability gate;
+        // set the global to false to simulate an invalid token.
+        return $_test_check_ajax_referer_result ?? true;
     }
 }
 
