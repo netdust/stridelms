@@ -180,6 +180,18 @@ if (!function_exists('is_wp_error')) {
     }
 }
 
+if (!function_exists('wp_is_json_media_type')) {
+    /**
+     * Mirrors real WP (wp-includes/load.php:1962) — the regex is copied
+     * verbatim so `application/json`, `application/*+json` suffix types,
+     * and `application/json+oembed` all match, and nothing else does.
+     */
+    function wp_is_json_media_type(string $media_type): bool
+    {
+        return (bool) preg_match('/(^|\s|,)application\/([\w!#\$&-\^\.\+]+\+)?json(\+oembed)?($|\s|;|,)/i', $media_type);
+    }
+}
+
 if (!function_exists('__')) {
     function __(string $text, string $domain = 'default'): string
     {
@@ -592,10 +604,15 @@ if (!function_exists('add_action')) {
 if (!function_exists('do_action')) {
     function do_action($hook, ...$args)
     {
-        global $_test_actions, $_test_action_calls;
+        global $_test_actions, $_test_action_calls, $_test_did_action_counts;
 
         // Track action calls for assertions
         $_test_action_calls[$hook][] = $args;
+
+        // Mirror WP core's $wp_actions counter so did_action() reflects
+        // whether $hook has actually fired in this test (e.g.
+        // did_action('rest_api_init') after do_action('rest_api_init')).
+        $_test_did_action_counts[$hook] = ($_test_did_action_counts[$hook] ?? 0) + 1;
 
         if (!isset($_test_actions[$hook])) {
             return;
@@ -1071,12 +1088,27 @@ if (!class_exists('WP_REST_Request')) {
         private array $headers = [];
         private string $method = 'GET';
         private string $route = '';
+        private ?string $body = null;
 
         public function __construct(string $method = 'GET', string $route = '', array $params = [])
         {
             $this->method = $method;
             $this->route = $route;
             $this->params = $params;
+        }
+
+        /**
+         * Matches real WP (class-wp-rest-request.php): `protected $body =
+         * null` — nullable, not an empty string, until set_body() is called.
+         */
+        public function get_body()
+        {
+            return $this->body;
+        }
+
+        public function set_body($data): void
+        {
+            $this->body = $data;
         }
 
         public function get_param(string $key)
@@ -1104,14 +1136,91 @@ if (!class_exists('WP_REST_Request')) {
             return $this->route;
         }
 
-        public function get_header(string $key): ?string
+        /**
+         * Matches real WP: canonicalize_header_name() lowercases AND maps
+         * '-' to '_' (class-wp-rest-request.php), so 'Content-Type' and
+         * 'content_type' address the same slot.
+         */
+        public static function canonicalize_header_name(string $key): string
         {
-            return $this->headers[strtolower($key)] ?? null;
+            return str_replace('-', '_', strtolower($key));
         }
 
-        public function set_header(string $key, string $value): void
+        public function get_header(string $key): ?string
         {
-            $this->headers[strtolower($key)] = $value;
+            $key = self::canonicalize_header_name($key);
+
+            if (!isset($this->headers[$key])) {
+                return null;
+            }
+
+            // Real WP stores each header as a list of values and joins with
+            // a bare comma (implode(',', …)) — no space.
+            return implode(',', $this->headers[$key]);
+        }
+
+        public function set_header(string $key, string|array $value): void
+        {
+            $this->headers[self::canonicalize_header_name($key)] = (array) $value;
+        }
+
+        /**
+         * Mirrors real WP (class-wp-rest-request.php:314): splits the
+         * Content-Type header on ';' into value/parameters, lowercases,
+         * requires a '/', and returns the value/type/subtype/parameters map
+         * (or null when the header is absent/invalid).
+         *
+         * @return array{value: string, type: string, subtype: string, parameters: string}|null
+         */
+        public function get_content_type(): ?array
+        {
+            $value = $this->get_header('Content-Type');
+            if (empty($value)) {
+                return null;
+            }
+
+            $parameters = '';
+            if (strpos($value, ';')) {
+                [$value, $parameters] = explode(';', $value, 2);
+            }
+
+            $value = strtolower($value);
+            if (!str_contains($value, '/')) {
+                return null;
+            }
+
+            [$type, $subtype] = explode('/', $value, 2);
+
+            $data = compact('value', 'type', 'subtype', 'parameters');
+
+            return array_map('trim', $data);
+        }
+
+        /**
+         * Mirrors real WP (class-wp-rest-request.php:346, public since
+         * WP 5.6): true iff the Content-Type value is a JSON media type per
+         * wp_is_json_media_type().
+         */
+        public function is_json_content_type(): bool
+        {
+            $content_type = $this->get_content_type();
+
+            return isset($content_type['value']) && wp_is_json_media_type($content_type['value']);
+        }
+
+        public function get_json_params(): array
+        {
+            return [];
+        }
+
+        public function get_body_params(): array
+        {
+            return [];
+        }
+
+        public function get_file_params(): array
+        {
+            return [];
         }
     }
 }
@@ -1239,12 +1348,51 @@ if (!class_exists('WP_User_Query')) {
 if (!function_exists('register_rest_route')) {
     function register_rest_route(string $namespace, string $route, array $args): bool
     {
-        global $_test_rest_routes;
+        global $_test_rest_routes, $_test_rest_route_calls;
         if (!isset($_test_rest_routes)) {
             $_test_rest_routes = [];
         }
+        if (!isset($_test_rest_route_calls)) {
+            $_test_rest_route_calls = [];
+        }
         $_test_rest_routes[$namespace . $route] = $args;
+        // Ordered call log (unlike the keyed map above, this never
+        // overwrites on a repeat namespace+route) so tests can assert
+        // per-call detail (e.g. every method variant queued via route()).
+        $_test_rest_route_calls[] = [
+            'namespace' => $namespace,
+            'route' => $route,
+            'args' => $args,
+        ];
         return true;
+    }
+}
+
+// did_action()/_doing_it_wrong() capture for testing. Mirrors WP core's
+// $wp_actions counter (did_action) and adds an assertable log of
+// _doing_it_wrong() calls (WP core just fires a filtered user error; tests
+// need to observe that it fired without triggering a real PHP error).
+global $_test_did_action_counts, $_test_doing_it_wrong_calls;
+$_test_did_action_counts = [];
+$_test_doing_it_wrong_calls = [];
+
+if (!function_exists('did_action')) {
+    function did_action($hook_name): int
+    {
+        global $_test_did_action_counts;
+        return $_test_did_action_counts[$hook_name] ?? 0;
+    }
+}
+
+if (!function_exists('_doing_it_wrong')) {
+    function _doing_it_wrong($function_name, $message, $version): void
+    {
+        global $_test_doing_it_wrong_calls;
+        $_test_doing_it_wrong_calls[] = [
+            'function_name' => $function_name,
+            'message' => $message,
+            'version' => $version,
+        ];
     }
 }
 

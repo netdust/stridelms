@@ -15,6 +15,7 @@ web/app/mu-plugins/*
 !web/app/mu-plugins/stride-coreloader.php
 !web/app/mu-plugins/stride-client-vad/
 !web/app/mu-plugins/test-login-helper.php
+!web/app/mu-plugins/test-cors-fixture.php
 !web/app/mu-plugins/bedrock-autoloader.php
 web/app/themes/*
 !web/app/themes/stridence/

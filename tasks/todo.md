@@ -264,3 +264,20 @@ Goal: trajectory enrolled-state works like editions on BOTH catalog card + detai
 - [x] 5. Verify live (catalog+detail, enrolled+guest) + unit + trajectory integration green.
 
 Committed already: basic enrolled CTA on detail + trajectory price in enrollment form (from fix/trajectory-detail-form).
+
+---
+
+## Output-layer reshape — Phase 0 baseline (2026-07-03)
+
+Branch: `feat/ntdst-output-layer` (worktree at `~/Sites/stride-output-reshape`, cut from `main` @ 733d920e). Plan: `docs/plans/2026-07-03-ntdst-core-output-layer-reshape.md`.
+
+**Task 0.1 — Worktree + green baseline:**
+
+- Worktree already existed at task start (controller pre-created it) — not re-created here.
+- `composer install` in the worktree required `--ignore-platform-req=ext-mysqli` (host CLI PHP has no mysqli) to resolve at all; even then, git-source fallback downloads for ~25 packages hit `Could not authenticate against github.com` (rate-limit/auth flake, not a real credential problem — a global GH token IS configured). Resolved by copying the identical `vendor/` (composer.lock diff = none) from the already-installed `~/Sites/stride` checkout — read-only source, no modification to that checkout — then re-running `composer install` to regenerate the autoloader for the worktree's own paths.
+- **Unit suite: 1160 tests, 3001 assertions, all green.** This is the authoritative baseline going forward — the plan's ~706 estimate is stale (this worktree/branch already carries substantially more unit coverage than when the plan was drafted, e.g. the acceptance-suite CI wiring in `021016eb`). Every later phase's "suite must stay green" claim is measured against **1160**, not 706.
+- `composer lint:stan`: clean, no errors.
+- **Integration suite: deferred, not run.** The only running DDEV project is named `stride`, mounted at `~/Sites/stride` (dirty, 51 uncommitted paths, on unrelated in-flight branch `feat/admin-url-filter-state`). The worktree's own `.ddev/config.yaml` uses the same project name `stride`, so `ddev describe`/`ddev start` from the worktree correctly refuses ("a project (web container) in running state already exists for stride that was created at /home/ntdst/Sites/stride"). Running the integration suite against the already-running DDEV project would exercise the OTHER branch's code, not this reshape branch's — not a valid baseline. Per the task brief's explicit fallback, this is recorded as **deferred to phase gates** rather than forced. `~/Sites/stride` was left completely untouched (verified: 51 dirty paths before and after).
+- `~/Sites/stride` main checkout: confirmed untouched throughout (git status diff = none).
+
+Full detail: `.superpowers/sdd/task-0.1-report.md`.

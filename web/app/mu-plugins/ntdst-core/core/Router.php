@@ -23,6 +23,12 @@ declare(strict_types=1);
  * ntdst_router()->when(fn() => is_singular('project'), function($post) {
  *     // Custom handling
  * });
+ *
+ * // Namespaced REST route (incl. cross-origin/CORS) — use rest(), not register()
+ * ntdst_router()->rest('myproject/v1')->post('/things', $handler, [
+ *     'permission' => fn(WP_REST_Request $request) => current_user_can('edit_posts'),
+ *     'cors' => new NTDST_Cors_Policy(['origins' => ['https://example.com']]),
+ * ]);
  */
 
 defined('ABSPATH') || exit;
@@ -31,6 +37,15 @@ class NTDST_Router
 {
     protected array $routes = [];
     protected array $template_hooks = [];
+
+    /**
+     * Per-namespace REST registrars, cached so every caller for a given
+     * namespace shares one NTDST_Rest_Registrar instance (its queue, caps,
+     * and per-wrapper memoization must be shared, not re-created per call).
+     *
+     * @var array<string, NTDST_Rest_Registrar>
+     */
+    protected array $rest_registrars = [];
 
     public function __construct()
     {
@@ -80,10 +95,12 @@ class NTDST_Router
      *
      * Return contract:
      *  - string (existing file path) → used as the resolved template
+     *  - NTDST_Response → rendered (request exits) — parity with when()/template()
      *  - null  → callback handled output itself; the request is exited
      *  - true  → same as null
      *  - false → fall through to the next matching route
-     *  - anything else → ignored, original $template is returned
+     *  - anything else → ignored, scanning continues; original $template is
+     *    returned if no later route handles the request
      *
      * @param string $pattern URL pattern (/path/:param/:id)
      * @param callable $callback Handler function
@@ -120,6 +137,22 @@ class NTDST_Router
     }
 
     /**
+     * The REST registration facade — get (or lazily create) the
+     * NTDST_Rest_Registrar for a namespace.
+     *
+     * `ntdst_router()->rest('stride/v1')->get('/orders', $handler, [...])` is
+     * the ONE entry point for namespaced REST routes (INV-10). Cached per
+     * namespace: repeated calls for the same namespace return the SAME
+     * registrar (so its route queue, per-route caps, and per-wrapper
+     * permission memoization are shared), while a different namespace gets its
+     * own instance.
+     */
+    public function rest(string $namespace): NTDST_Rest_Registrar
+    {
+        return $this->rest_registrars[$namespace] ??= new NTDST_Rest_Registrar($namespace);
+    }
+
+    /**
      * Hook into specific WordPress template type
      * Smart wrapper around {$type}_template filters
      *
@@ -153,12 +186,12 @@ class NTDST_Router
                 return $result;
             }
 
-            // If Response object, render it
+            // If Response object, render it through the shared seam.
+            // renderResponse() never returns when a template is set (render()
+            // exits); with no template it returns void and the explicit exit
+            // below fires — identical to the previous inline block.
             if ($result instanceof NTDST_Response) {
-                $template_name = $result->getTemplate();
-                if ($template_name) {
-                    $result->render($template_name);
-                }
+                $this->renderResponse($result);
                 exit;
             }
 
@@ -235,12 +268,11 @@ class NTDST_Router
                 return $result;
             }
 
-            // Handle Response object
+            // Handle Response object through the shared seam — same exit
+            // semantics as template() above (render() exits when a template
+            // is set; otherwise the explicit exit below fires).
             if ($result instanceof NTDST_Response) {
-                $template_name = $result->getTemplate();
-                if ($template_name) {
-                    $result->render($template_name);
-                }
+                $this->renderResponse($result);
                 exit;
             }
 
@@ -281,24 +313,70 @@ class NTDST_Router
                 // Execute callback
                 $result = call_user_func($route['callback'], $params, $template);
 
-                // If string, use as template
-                if (is_string($result) && file_exists($result)) {
-                    return $result;
-                }
-
-                // If null/true, assume callback handled output
-                if ($result === null || $result === true) {
+                $resolved = $this->resolveRouteResult($result, $template);
+                if ($resolved === null) {
                     exit;
                 }
-
-                // Continue to next route if false
-                if ($result === false) {
+                if ($resolved === false) {
                     continue;
                 }
+                return $resolved;
             }
         }
 
         return $template;
+    }
+
+    /**
+     * Decide what a route callback's return value means.
+     *
+     *  - string (existing file) → use as the template path
+     *  - NTDST_Response → render it + handled (null; caller exits) — mirrors
+     *    when()/template()'s Response contract exactly, incl. exiting on a
+     *    Response with no template set (documented, deliberate parity)
+     *  - null/true → handled (null; caller exits)
+     *  - false OR any unrecognized type → try next route (false). Parity
+     *    with the pre-refactor if-chain, where an unrecognized return fell
+     *    off the end and the route loop kept scanning — a later matching
+     *    route must still win (pinned by the characterization tests).
+     *
+     * $template (the incoming template_include value) is part of the seam
+     * contract for subclasses even though the base resolution ignores it.
+     */
+    protected function resolveRouteResult(mixed $result, string $template): string|false|null
+    {
+        // Branches are mutually exclusive by type (an NTDST_Response never
+        // satisfies is_string / === null / === true) — but do not assume the
+        // order is reorderable if a future type could satisfy two branches.
+        if ($result instanceof NTDST_Response) {
+            $this->renderResponse($result);
+            return null;
+        }
+
+        if (is_string($result) && file_exists($result)) {
+            return $result;
+        }
+
+        if ($result === null || $result === true) {
+            return null;
+        }
+
+        return false;
+    }
+
+    /**
+     * Render a Response returned by a pattern-route callback.
+     *
+     * Production behavior: render() never returns (it exits). A Response
+     * with no template set renders nothing — the caller still exits, in
+     * parity with when()/template(). Protected so tests can seam it.
+     */
+    protected function renderResponse(NTDST_Response $response): void
+    {
+        $template_name = $response->getTemplate();
+        if ($template_name) {
+            $response->render($template_name); // never returns
+        }
     }
 
     /**
