@@ -43,7 +43,7 @@ grep -rn "add_cap\|'stride_manage'\|'stride_view'" --include="*.php" web/app/mu-
 
 ## INV-2 — Frontend AJAX nonce is verified once, by the framework
 
-**Convergence point:** `ntdst-core/api/Endpoints.php:343` — `if (!wp_verify_nonce($nonce, $action))` — gates **every** `ntdst/api_data/{action}` dispatch before the filter fires (`:353`).
+**Convergence point:** `ntdst-core/api/Endpoints.php:349` — `if (!wp_verify_nonce($nonce, $action))` — gates **every** `ntdst/api_data/{action}` dispatch before the filter fires (`:359`).
 
 **The rule.** Frontend write/read actions register as `add_filter('ntdst/api_data/<action>', $cb, 10, 2)` (or via `Theme.php:536`'s wrapper). The handler receives already-nonce-verified input; it MUST NOT re-verify, and MUST NOT be reachable by any path that skips Endpoints.php. New frontend AJAX = a new `ntdst/api_data/*` filter, never a raw `add_action('wp_ajax_*')` that hand-rolls its own nonce.
 
@@ -289,7 +289,7 @@ grep -rn "update_user_meta\|wp_update_user" --include="*.php" web/app/mu-plugins
 
 A "unify the two shapes" refactor would silently break one of these consumer sets (existing `ntdstAPI` JS callers expect `data.message`/`data.code`; REST consumers of the registrar expect `error`). Keep them separate; if a true unification is ever wanted, it needs a versioned migration on both sides, not a drive-by rename.
 
-**Known accepted baseline (pre-existing — do NOT re-flag):** `Modules/PartnerAPI/PartnerAPIController`, `Admin/AdminAPIController`, `Modules/Assistant/ReadAbilityRegistrar` / `WriteAbilityRegistrar`, and `ntdst-core/api/Endpoints.php` itself — all predate the registrar and use raw `register_rest_route()` / their own permission checks. Migrating them onto the registrar is optional future work, not debt created by this reshape.
+**Known accepted baseline (pre-existing — do NOT re-flag):** `Modules/PartnerAPI/PartnerAPIController` and `Admin/AdminAPIController` call raw `register_rest_route()` with their own permission checks; `Modules/Assistant/ReadAbilityRegistrar` / `WriteAbilityRegistrar` register via WordPress's Abilities API (`wp_register_ability()`) with per-ability `permission_callback`s, not `register_rest_route()` at all (excluded on the `AbilityRegistrar` filename token); and `ntdst-core/api/Endpoints.php` is the same-origin `api_data` dispatcher. All predate the registrar — migrating them onto it is optional future work, not debt created by this reshape.
 
 **Audit move (verified ZERO out-of-baseline hits across Phases 2-4 of the 2026-07 output-layer reshape):**
 ```bash
@@ -304,7 +304,7 @@ grep -rn "register_rest_route\|Access-Control-\|rest_pre_serve_request" --includ
 | # | Property | Convergence point | Bypass signal |
 |---|---|---|---|
 | 1 | Authorization | `AdminAPIController::canView/canManageAdmin`, `PartnerAPIController::checkPermission`, per-ability registrars | route with no / inline `permission_callback`; new custom cap; partner query not via `findByCompany` |
-| 2 | Frontend AJAX nonce | `ntdst-core/api/Endpoints.php:343` (framework) | raw `wp_ajax_*` handler with no nonce |
+| 2 | Frontend AJAX nonce | `ntdst-core/api/Endpoints.php:349` (framework) | raw `wp_ajax_*` handler with no nonce |
 | 3 | Data access | `AbstractRepository`→`ntdst_data()`; `RegistrationRepository`/`AttendanceRepository` own their tables | `$wpdb`/`ntdst_data()` outside a repo; `post_title` keys; hardcoded `_ntdst_*` |
 | 4 | Error handling | `WP_Error` everywhere + `ntdst_log('chan')` | `return null/false` on failure; swallowed `is_wp_error`; raw `error_log` |
 | 5 | Rendering | `NTDST_Template_Loader` / `ntdst_response()->html()`; plugin never calls theme | `stridence_*` in stride-core; unescaped `echo $var` |
