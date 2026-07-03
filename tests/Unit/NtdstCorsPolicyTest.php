@@ -290,4 +290,67 @@ final class NtdstCorsPolicyTest extends TestCase
         self::assertSame(20, $registered['priority']);
         self::assertSame(4, $registered['accepted_args']);
     }
+
+    // -------------------------------------------------------------------
+    // register() prefix validation — review finding (P2): an empty string
+    // trivially satisfies str_starts_with($route, ''), which would turn
+    // this policy into a de facto GLOBAL CORS filter across every REST
+    // route (including /wp/v2/*), directly contradicting the "never a
+    // global filter" invariant documented on the class and enforced by
+    // applyCorsHeaders()'s route-prefix check. A prefix missing its
+    // leading slash is a silent no-op instead (get_route() always returns
+    // a leading-slash form), which is its own trap — it never matches,
+    // so the policy appears registered but emits nothing, ever.
+    // -------------------------------------------------------------------
+
+    public function testRegisterRejectsEmptyPrefixToPreventBecomingAGlobalCorsFilter(): void
+    {
+        $policy = $this->makePolicyWithCapture();
+
+        $this->expectException(InvalidArgumentException::class);
+        $policy->register('');
+    }
+
+    public function testRegisterRejectsPrefixMissingLeadingSlashAsASilentNoOpTrap(): void
+    {
+        $policy = $this->makePolicyWithCapture();
+
+        $this->expectException(InvalidArgumentException::class);
+        $policy->register('stride/v1');
+    }
+
+    public function testRegisterAcceptsAValidLeadingSlashPrefix(): void
+    {
+        $policy = $this->makePolicyWithCapture();
+
+        $policy->register('/stride-test/v1/echo');
+
+        self::assertTrue(has_filter('rest_pre_serve_request'));
+    }
+
+    // -------------------------------------------------------------------
+    // Null-origin emission pin — review finding (P2 minor): the sandboxed
+    // -iframe literal Origin: null must never make it through the
+    // emission layer. allowsOrigin() already guards this, but pin it here
+    // too so a future refactor of applyCorsHeaders()'s branch structure
+    // can't unhook the guard without a test noticing.
+    // -------------------------------------------------------------------
+
+    public function testNullOriginEmitsNoAccessControlHeadersAndRemovesCredentialsAndAllowOrigin(): void
+    {
+        $policy = $this->makePolicyWithCapture();
+        $policy->register('/stride/v1/widgets');
+
+        $request = new \WP_REST_Request('GET', '/stride/v1/widgets');
+        $request->set_header('origin', 'null');
+
+        $served = $policy->applyCorsHeaders(true, null, $request, null);
+
+        self::assertTrue($served);
+        self::assertContains('Access-Control-Allow-Credentials', $this->capturedRemoved);
+        self::assertContains('Access-Control-Allow-Origin', $this->capturedRemoved);
+        foreach ($this->capturedSent as $header) {
+            self::assertStringNotContainsStringIgnoringCase('access-control-', $header);
+        }
+    }
 }

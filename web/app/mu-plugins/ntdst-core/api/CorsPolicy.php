@@ -143,6 +143,30 @@ final class NTDST_Cors_Policy
      */
     public function register(string $routePrefix): void
     {
+        if ($routePrefix === '') {
+            // str_starts_with($route, '') is always true — an empty
+            // prefix would apply this policy's headers (and the
+            // credentials strip) to EVERY REST route, including
+            // /wp/v2/*. That directly contradicts this class's "never a
+            // global filter" invariant (threat-model mitigation 5), so
+            // it must be refused here rather than silently accepted.
+            throw new InvalidArgumentException(
+                'NTDST_Cors_Policy::register() route prefix must not be empty — an empty prefix would match every REST route and turn this into a global CORS filter.',
+            );
+        }
+
+        if (!str_starts_with($routePrefix, '/')) {
+            // WP_REST_Request::get_route() always returns a leading-slash
+            // form, so a prefix like 'ntdst/v1' (missing the slash) can
+            // NEVER match in applyCorsHeaders()'s str_starts_with() check
+            // — register() would appear to succeed while the policy
+            // silently never fires. Same trap family as the empty-string
+            // case above, just the opposite failure mode.
+            throw new InvalidArgumentException(
+                'NTDST_Cors_Policy::register() route prefix must start with "/" — WP_REST_Request::get_route() always returns a leading-slash form, so a relative prefix would never match and this policy would silently never fire.',
+            );
+        }
+
         $this->routePrefix = $routePrefix;
 
         add_filter('rest_pre_serve_request', [$this, 'applyCorsHeaders'], 20, 4);
