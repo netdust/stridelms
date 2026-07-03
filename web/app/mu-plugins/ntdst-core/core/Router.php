@@ -32,6 +32,15 @@ class NTDST_Router
     protected array $routes = [];
     protected array $template_hooks = [];
 
+    /**
+     * Per-namespace REST registrars, cached so every caller for a given
+     * namespace shares one NTDST_Rest_Registrar instance (its queue, caps,
+     * and per-wrapper memoization must be shared, not re-created per call).
+     *
+     * @var array<string, NTDST_Rest_Registrar>
+     */
+    protected array $rest_registrars = [];
+
     public function __construct()
     {
         add_filter('redirect_canonical', [$this, 'preventRedirectForRoutes'], 10, 2);
@@ -119,6 +128,22 @@ class NTDST_Router
     public function post(string $pattern, callable $callback): self
     {
         return $this->register($pattern, $callback, 'POST');
+    }
+
+    /**
+     * The REST registration facade — get (or lazily create) the
+     * NTDST_Rest_Registrar for a namespace.
+     *
+     * `ntdst_router()->rest('stride/v1')->get('/orders', $handler, [...])` is
+     * the ONE entry point for namespaced REST routes (INV-10). Cached per
+     * namespace: repeated calls for the same namespace return the SAME
+     * registrar (so its route queue, per-route caps, and per-wrapper
+     * permission memoization are shared), while a different namespace gets its
+     * own instance.
+     */
+    public function rest(string $namespace): NTDST_Rest_Registrar
+    {
+        return $this->rest_registrars[$namespace] ??= new NTDST_Rest_Registrar($namespace);
     }
 
     /**

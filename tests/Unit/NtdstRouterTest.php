@@ -170,6 +170,40 @@ final class NtdstRouterTest extends TestCase
     }
 
     // ---------------------------------------------------------------------
+    // rest() facade (Task 3.4) — per-namespace cached NTDST_Rest_Registrar
+    // ---------------------------------------------------------------------
+
+    public function testRestReturnsARestRegistrar(): void
+    {
+        $registrar = $this->router->rest('stride/v1');
+        $this->assertInstanceOf(\NTDST_Rest_Registrar::class, $registrar);
+    }
+
+    public function testRestReturnsSameInstanceForSameNamespace(): void
+    {
+        $first = $this->router->rest('stride/v1');
+        $second = $this->router->rest('stride/v1');
+
+        $this->assertSame(
+            $first,
+            $second,
+            'rest() must cache per namespace — a second call for the same namespace returns the same registrar.',
+        );
+    }
+
+    public function testRestReturnsDistinctInstancesForDifferentNamespaces(): void
+    {
+        $a = $this->router->rest('stride/v1');
+        $b = $this->router->rest('other/v1');
+
+        $this->assertNotSame(
+            $a,
+            $b,
+            'rest() must return a distinct registrar per namespace — different namespaces never share an instance.',
+        );
+    }
+
+    // ---------------------------------------------------------------------
     // helpers
     // ---------------------------------------------------------------------
 

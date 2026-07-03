@@ -5,23 +5,67 @@ declare(strict_types=1);
 /**
  * NTDST REST Registrar — namespaced REST route registration (INV-10).
  *
- * This is the Phase 3 convergence point being built up in stages:
- *  - 3.1 (this file): registration core + required-permission enforcement.
+ * This is the Phase 3 convergence point — THE single place a namespaced REST
+ * route is registered, its permission enforced, its body/depth capped, its
+ * handler return normalized, and (optionally) its CORS policy wired. Reach it
+ * through the facade: `ntdst_router()->rest('stride/v1')->get(...)`.
+ *
+ * Built up in stages:
+ *  - 3.1: registration core + required-permission enforcement.
  *  - 3.2: permission_callback memoization (WP-core quirk 2).
- *  - 3.3 (this file): request-body size / JSON-depth caps (WP-core quirk 3).
- *  - 3.4: handler-return normalization + Router::rest() facade + CORS wiring.
+ *  - 3.3: request-body size / JSON-depth caps (WP-core quirk 3).
+ *  - 3.4 (this file): handler-return normalization + Router::rest() facade +
+ *    CORS-policy option wiring.
  *
- * Route syntax is WP-native regex (D5) — routes/methods are passed straight
- * through to register_rest_route(), never translated or reinterpreted.
+ * ── Route syntax (D5) ───────────────────────────────────────────────────
+ * Routes/methods are WP-native — passed straight through to
+ * register_rest_route(), never translated or reinterpreted. A route string
+ * IS a regex fragment ('/orders/(?P<id>\d+)' is literal WP regex), so capture
+ * groups, anchors, and character classes all work exactly as WP core matches
+ * them.
  *
- * `permission` is a REQUIRED option with NO default (threat-model mitigation
- * 6). A route queued without a callable `permission` is never registered —
- * register_rest_route() is not called for it at all, _doing_it_wrong() fires,
- * and the failure is logged via ntdst_log('api')->error(). There is no
- * "public route" fallback baked in here: a caller that genuinely wants an
- * unauthenticated route must pass an explicit always-true permission
- * callable, so the intent is visible in the call site rather than implied by
- * a missing option.
+ * ── Required-permission / public-route pattern (mitigation 6) ────────────
+ * `permission` is a REQUIRED option with NO default. A route queued without a
+ * callable `permission` is never registered — register_rest_route() is not
+ * called for it at all, _doing_it_wrong() fires, and the failure is logged
+ * via ntdst_log('api')->error(). There is no "public route" fallback baked
+ * in: a caller that genuinely wants an unauthenticated route must pass an
+ * explicit always-true permission callable (e.g. `'permission' => '__return_true'`),
+ * so the intent is VISIBLE at the call site rather than implied by a missing
+ * option — fail-closed, never fail-open.
+ *
+ * ── Handler-return normalization (D6) ────────────────────────────────────
+ * Each handler is wrapped at registration so it may return any of:
+ *   - WP_REST_Response  → passed through unchanged.
+ *   - WP_Error          → passed through unchanged. ⚠ WARNING (mitigation 10):
+ *                         a WP_Error's message is serialized by WP core
+ *                         straight to the HTTP response body — it REACHES THE
+ *                         WIRE. Never place internal detail (SQL, stack, PII,
+ *                         secret state) in a WP_Error message returned from a
+ *                         handler; log the detail via ntdst_log() and return a
+ *                         GENERIC client-facing message.
+ *   - array             → wrapped as NTDST_Response::apiSuccess($array), i.e.
+ *                         {success:true,data:…}, status 200. NOT bare data.
+ *   - NTDST_Response    → serialized via toRestResponse() (its stored envelope
+ *                         + status; no exit).
+ *   - anything else (scalar/object/null) → NOT leaked. Replaced with a generic
+ *                         WP_Error('invalid_handler_return', …, ['status'=>500])
+ *                         and logged via ntdst_log('api')->error() with the
+ *                         offending type — the raw value never reaches the wire.
+ *
+ * ── Three WP-core quirks this class + NTDST_Cors_Policy absorb ────────────
+ *  1. permission_callback is invoked TWICE per request by core's
+ *     rest_send_allow_header() (Allow-header computation) — memoized
+ *     per-request, per-wrapper, so a side-effectful permission callable never
+ *     double-counts and never leaks one route's verdict to another (3.2).
+ *  2. core parses a JSON body at its DEFAULT depth (512) inside
+ *     has_valid_params() before a handler runs — pre-empted on
+ *     rest_pre_dispatch by the per-route body-size / JSON-depth caps (3.3).
+ *  3. core's own rest_send_cors_headers() reflects ANY Origin and sets
+ *     Access-Control-Allow-Credentials: true at priority 10 — NTDST_Cors_Policy
+ *     runs at priority 20 on rest_pre_serve_request to override that
+ *     reflect-and-credential default with an exact-origin decision, scoped to
+ *     the wired route prefix only (never a global wildcard).
  */
 
 defined('ABSPATH') || exit;
@@ -202,7 +246,7 @@ final class NTDST_Rest_Registrar
 
         $args = [
             'methods' => $entry['methods'],
-            'callback' => $entry['handler'],
+            'callback' => $this->wrapHandler($entry['handler']),
             'permission_callback' => $this->wrapPermission($permission),
         ];
 
@@ -223,7 +267,86 @@ final class NTDST_Rest_Registrar
             $this->ensureBodyLimitFilterHooked();
         }
 
+        $cors = $options['cors'] ?? null;
+        if ($cors instanceof NTDST_Cors_Policy) {
+            // Scope the policy to the CONCRETE route prefix it guards. The
+            // route string is a WP-native regex fragment (D5); '/' . namespace
+            // . route is the registration-time prefix. rtrim of the trailing
+            // slash is the P2 gate rider: a namespace-root route ('/') would
+            // otherwise construct '/stride/v1/', which register() accepts but
+            // NTDST_Cors_Policy::matchesRegisteredPrefix() never matches
+            // against the exact concrete route '/stride/v1' ($route === $prefix
+            // fails, '/stride/v1' !== '/stride/v1/') — the policy would
+            // silently never fire on its own namespace root. Stripping the
+            // dangling slash yields the exact-matchable prefix. (A non-root
+            // route like '/widgets' is unaffected — it carries no trailing
+            // slash to strip.)
+            $prefix = rtrim('/' . trim($this->namespace, '/') . $entry['route'], '/');
+            $cors->register($prefix);
+        }
+
         register_rest_route($this->namespace, $entry['route'], $args);
+    }
+
+    /**
+     * Wrap a caller-supplied handler so its return value is normalized to a
+     * WP_REST_Response / WP_Error before it reaches core's dispatch loop
+     * (D6). See the class docblock for the full normalization contract. The
+     * wrapper threads the WP_REST_Request through unchanged, so a handler's
+     * (WP_REST_Request):mixed signature is preserved.
+     */
+    private function wrapHandler(callable $handler): callable
+    {
+        return function (WP_REST_Request $request) use ($handler): mixed {
+            return $this->normalizeResult($handler($request));
+        };
+    }
+
+    /**
+     * Normalize a handler's raw return value into a WP_REST_Response or
+     * WP_Error. The ONE place handler-return shapes converge (D6) — see the
+     * class docblock for the full contract and the mitigation-10 warning.
+     *
+     * @param mixed $result The handler's raw return value.
+     * @return WP_REST_Response|WP_Error
+     */
+    private function normalizeResult(mixed $result): WP_REST_Response|WP_Error
+    {
+        // Pass-through shapes: the handler already produced a wire-ready
+        // value. WP_Error's message reaches the wire verbatim (mitigation 10,
+        // documented on the class) — that is the handler's responsibility,
+        // not something to sanitize here.
+        if ($result instanceof WP_REST_Response || $result instanceof WP_Error) {
+            return $result;
+        }
+
+        // NTDST_Response → its own envelope + stored status, no exit.
+        if ($result instanceof NTDST_Response) {
+            return $result->toRestResponse();
+        }
+
+        // Bare array → the {success:true,data:…} success envelope, status 200
+        // (Stefan CONFIRMED the wrap — NOT bare data).
+        if (is_array($result)) {
+            return new WP_REST_Response(NTDST_Response::apiSuccess($result), 200);
+        }
+
+        // Anything else (scalar, unexpected object, null) is a programming
+        // error in the handler, not a client-facing value. Never leak it:
+        // log the offending type for the developer and return a generic 500.
+        ntdst_log('api')->error(
+            'REST handler returned an unexpected type — expected WP_REST_Response|WP_Error|NTDST_Response|array.',
+            [
+                'namespace' => $this->namespace,
+                'returned_type' => get_debug_type($result),
+            ],
+        );
+
+        return new WP_Error(
+            'invalid_handler_return',
+            'The server encountered an unexpected condition.',
+            ['status' => 500],
+        );
     }
 
     /**

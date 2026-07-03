@@ -41,7 +41,7 @@ final class NtdstRestRegistrarTest extends TestCase
     {
         global $_test_rest_route_calls;
 
-        $handler = fn() => 'ok';
+        $handler = fn() => ['ok' => true];
         $permission = fn() => true;
 
         $registrar = new \NTDST_Rest_Registrar('stride/v1');
@@ -58,7 +58,17 @@ final class NtdstRestRegistrarTest extends TestCase
         self::assertSame('stride/v1', $call['namespace']);
         self::assertSame('/widgets', $call['route']);
         self::assertSame('GET', $call['args']['methods']);
-        self::assertSame($handler, $call['args']['callback']);
+
+        // As of task 3.4, the captured callback is the normalizing wrapper,
+        // not the raw handler (see the Task 3.4 normalization tests for the
+        // wrapper's own contract) — assert behavioral equivalence (a bare
+        // array normalizes to the {success:true,data} 200 envelope) instead
+        // of raw identity.
+        self::assertIsCallable($call['args']['callback']);
+        self::assertNotSame($handler, $call['args']['callback']);
+        $normalized = ($call['args']['callback'])(new \WP_REST_Request('GET', '/widgets'));
+        self::assertInstanceOf(\WP_REST_Response::class, $normalized);
+        self::assertSame(['success' => true, 'data' => ['ok' => true]], $normalized->get_data());
 
         // As of task 3.2, the captured permission_callback is the
         // memoizing wrapper, not the raw callable (see
@@ -806,5 +816,283 @@ final class NtdstRestRegistrarTest extends TestCase
         self::assertInstanceOf(\WP_Error::class, $result, '+json suffix media types are JSON per core — the depth cap must apply to them.');
         self::assertSame('invalid_json', $result->get_error_code());
         self::assertSame(400, $result->get_error_data()['status']);
+    }
+
+    // =====================================================================
+    // Task 3.4 — handler-return normalization (D6).
+    //
+    // Every registered callback is wrapped so a handler's return value is
+    // normalized to a WP_REST_Response / WP_Error before it reaches core's
+    // dispatch loop, so handlers can return a bare array / NTDST_Response /
+    // WP_REST_Response / WP_Error interchangeably. The registered
+    // 'callback' captured in $_test_rest_route_calls is therefore the
+    // WRAPPER, not the raw handler — driving it with a request exercises
+    // normalizeResult().
+    // =====================================================================
+
+    public function testHandlerReturningArrayIsWrappedInApiSuccessRestResponse200(): void
+    {
+        global $_test_rest_route_calls;
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get('/norm-array', fn() => ['id' => 7, 'name' => 'widget'], ['permission' => fn() => true]);
+
+        do_action('rest_api_init');
+
+        $callback = $_test_rest_route_calls[0]['args']['callback'];
+        self::assertNotSame(
+            fn() => ['id' => 7],
+            $callback,
+            'The registered callback must be the normalizing wrapper, not the raw handler.',
+        );
+
+        $result = $callback(new \WP_REST_Request('GET', '/stride/v1/norm-array'));
+
+        self::assertInstanceOf(\WP_REST_Response::class, $result);
+        self::assertSame(200, $result->get_status());
+        self::assertSame(
+            ['success' => true, 'data' => ['id' => 7, 'name' => 'widget']],
+            $result->get_data(),
+            'A bare array must be wrapped as {success:true,data:…} (NOT returned as bare data).',
+        );
+    }
+
+    public function testHandlerReturningWpRestResponseIsPassedThroughUnchanged(): void
+    {
+        global $_test_rest_route_calls;
+
+        $response = new \WP_REST_Response(['custom' => 'shape'], 201);
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get('/norm-response', fn() => $response, ['permission' => fn() => true]);
+
+        do_action('rest_api_init');
+
+        $callback = $_test_rest_route_calls[0]['args']['callback'];
+        $result = $callback(new \WP_REST_Request('GET', '/stride/v1/norm-response'));
+
+        self::assertSame($response, $result, 'A WP_REST_Response must be returned as-is — never re-wrapped.');
+        self::assertSame(201, $result->get_status());
+    }
+
+    public function testHandlerReturningWpErrorIsPassedThroughUnchanged(): void
+    {
+        global $_test_rest_route_calls;
+
+        $error = new \WP_Error('forbidden', 'Nope.', ['status' => 403]);
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get('/norm-error', fn() => $error, ['permission' => fn() => true]);
+
+        do_action('rest_api_init');
+
+        $callback = $_test_rest_route_calls[0]['args']['callback'];
+        $result = $callback(new \WP_REST_Request('GET', '/stride/v1/norm-error'));
+
+        self::assertSame($error, $result, 'A WP_Error must be returned as-is (WP-native serialization to the wire).');
+    }
+
+    public function testHandlerReturningNtdstResponseWithDataIsToRestResponseEnvelope(): void
+    {
+        global $_test_rest_route_calls;
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get(
+            '/norm-ntdst-data',
+            fn() => ntdst_response()->withData(['orders' => [1, 2, 3]]),
+            ['permission' => fn() => true],
+        );
+
+        do_action('rest_api_init');
+
+        $callback = $_test_rest_route_calls[0]['args']['callback'];
+        $result = $callback(new \WP_REST_Request('GET', '/stride/v1/norm-ntdst-data'));
+
+        self::assertInstanceOf(\WP_REST_Response::class, $result);
+        self::assertSame(200, $result->get_status());
+        self::assertSame(
+            ['success' => true, 'data' => ['orders' => [1, 2, 3]]],
+            $result->get_data(),
+            'An NTDST_Response with data must serialize via toRestResponse() — the success envelope.',
+        );
+    }
+
+    public function testHandlerReturningNtdstResponseErrorCarriesStoredStatusAndErrorEnvelope(): void
+    {
+        global $_test_rest_route_calls;
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get(
+            '/norm-ntdst-error',
+            fn() => ntdst_response()->error('Not allowed.', 422),
+            ['permission' => fn() => true],
+        );
+
+        do_action('rest_api_init');
+
+        $callback = $_test_rest_route_calls[0]['args']['callback'];
+        $result = $callback(new \WP_REST_Request('GET', '/stride/v1/norm-ntdst-error'));
+
+        self::assertInstanceOf(\WP_REST_Response::class, $result);
+        self::assertSame(422, $result->get_status(), 'toRestResponse() must carry the NTDST_Response stored status, not a fixed 200.');
+        self::assertSame(
+            ['success' => false, 'error' => 'Not allowed.'],
+            $result->get_data(),
+            'An NTDST_Response error must serialize via toRestResponse() — the jsonPayload() error shape.',
+        );
+    }
+
+    public function testHandlerReturningUnexpectedScalarBecomesInvalidHandlerReturn500AndIsLogged(): void
+    {
+        global $_test_rest_route_calls, $_test_log_entries;
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get('/norm-scalar', fn() => 'a bare string', ['permission' => fn() => true]);
+
+        do_action('rest_api_init');
+
+        $callback = $_test_rest_route_calls[0]['args']['callback'];
+        $result = $callback(new \WP_REST_Request('GET', '/stride/v1/norm-scalar'));
+
+        self::assertInstanceOf(\WP_Error::class, $result, 'An unexpected scalar handler return must become a WP_Error, never reach the wire raw.');
+        self::assertSame('invalid_handler_return', $result->get_error_code());
+        self::assertSame(500, $result->get_error_data()['status']);
+
+        self::assertNotEmpty($_test_log_entries, 'An invalid handler return must be logged.');
+        $logged = $_test_log_entries[count($_test_log_entries) - 1];
+        self::assertSame('api', $logged['channel']);
+        self::assertSame('error', $logged['level']);
+    }
+
+    public function testInvalidHandlerReturnMessageIsGenericNotTheRawValue(): void
+    {
+        global $_test_rest_route_calls;
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get('/norm-secret', fn() => "SENSITIVE_INTERNAL_STATE", ['permission' => fn() => true]);
+
+        do_action('rest_api_init');
+
+        $callback = $_test_rest_route_calls[0]['args']['callback'];
+        $result = $callback(new \WP_REST_Request('GET', '/stride/v1/norm-secret'));
+
+        self::assertStringNotContainsString(
+            'SENSITIVE_INTERNAL_STATE',
+            $result->get_error_message(),
+            'The wire-facing invalid_handler_return message must be generic — the raw value must never leak (mitigation 10).',
+        );
+    }
+
+    // =====================================================================
+    // Task 3.4 — 'cors' option wiring.
+    //
+    // A route carrying a 'cors' => NTDST_Cors_Policy option must register
+    // that policy against the CONCRETE route prefix ('/' . namespace .
+    // route) at registration time. A route with no 'cors' option must never
+    // touch a policy. The prefix passed must not carry a trailing-slash trap
+    // (P2 gate rider): a namespace-root route ('/') must still yield the
+    // exact-matchable '/stride/v1', not '/stride/v1/'.
+    // =====================================================================
+
+    public function testCorsOptionRegistersPolicyAgainstConcreteRoutePrefix(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $policy = new \NTDST_Cors_Policy(['origins' => ['https://app.example.com']]);
+
+        $registrar->get('/widgets', fn() => ['ok' => true], [
+            'permission' => fn() => true,
+            'cors' => $policy,
+        ]);
+
+        do_action('rest_api_init');
+
+        // Prove the policy is now scoped to exactly the route it guards:
+        // a request for that route matches, a sibling namespace does not.
+        self::assertTrue(
+            $this->policyGuardsRoute($policy, '/stride/v1/widgets'),
+            'The cors policy must be registered against the concrete route prefix it guards.',
+        );
+        self::assertFalse(
+            $this->policyGuardsRoute($policy, '/stride/v10/widgets'),
+            'The registered prefix must respect segment boundaries — a sibling namespace must not be guarded.',
+        );
+    }
+
+    public function testNoCorsOptionNeverRegistersAnyPolicy(): void
+    {
+        global $_test_filters;
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get('/no-cors', fn() => ['ok' => true], ['permission' => fn() => true]);
+
+        do_action('rest_api_init');
+
+        // A route with no 'cors' option must not hook the CORS filter at all
+        // — the only way NTDST_Cors_Policy::register() reaches the pipeline.
+        self::assertArrayNotHasKey(
+            'rest_pre_serve_request',
+            $_test_filters,
+            'A route with no cors option must never register a CORS policy.',
+        );
+    }
+
+    /**
+     * P2 gate rider: a namespace-root cors route ('/') must register the
+     * policy against '/stride/v1' — NOT '/stride/v1/'. A trailing-slash
+     * prefix is accepted by register() but then never matches the exact
+     * concrete route '/stride/v1' (matchesRegisteredPrefix compares
+     * $route === $prefix, and '/stride/v1' !== '/stride/v1/'), so the
+     * policy would silently never fire on its own namespace root. The
+     * registrar must strip the dangling slash before handing the prefix to
+     * register().
+     */
+    public function testCorsWiringForNamespaceRootRouteHasNoTrailingSlashTrap(): void
+    {
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $policy = new \NTDST_Cors_Policy(['origins' => ['https://app.example.com']]);
+
+        // A route registered at the namespace root ('/') — '/' . 'stride/v1'
+        // . '/' would naively construct '/stride/v1/', the trailing-slash
+        // trap. get_route() for this route returns the exact '/stride/v1'.
+        $registrar->get('/', fn() => ['ok' => true], [
+            'permission' => fn() => true,
+            'cors' => $policy,
+        ]);
+
+        do_action('rest_api_init');
+
+        self::assertTrue(
+            $this->policyGuardsRoute($policy, '/stride/v1'),
+            'A namespace-root cors route must guard the exact concrete route /stride/v1 — a trailing-slash prefix would silently never match it.',
+        );
+    }
+
+    /**
+     * Drive a policy's own applyCorsHeaders() against a concrete route and
+     * report whether it acted on that route (matched its registered prefix)
+     * — the un-mocked proof that register() wired the policy to the intended
+     * route. A matching, allowed origin makes the policy emit an
+     * Access-Control-Allow-Origin header; a non-matching route emits none.
+     */
+    private function policyGuardsRoute(\NTDST_Cors_Policy $policy, string $route): bool
+    {
+        $sent = [];
+        $policy->setHeaderSender(function (string $header) use (&$sent): void {
+            $sent[] = $header;
+        });
+        $policy->setHeaderRemover(static function (string $name): void {});
+
+        $request = new \WP_REST_Request('GET', $route);
+        $request->set_header('Origin', 'https://app.example.com');
+
+        $policy->applyCorsHeaders(true, null, $request, new \stdClass());
+
+        foreach ($sent as $header) {
+            if (str_starts_with($header, 'Access-Control-Allow-Origin:')) {
+                return true;
+            }
+        }
+
+        return false;
     }
 }

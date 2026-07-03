@@ -30,6 +30,7 @@ require_once NTDST_PATH . '/core/Bootstrap.php';
 require_once NTDST_PATH . '/api/Data.php';
 require_once NTDST_PATH . '/api/Response.php';
 require_once NTDST_PATH . '/api/CorsPolicy.php';
+require_once NTDST_PATH . '/api/RestRegistrar.php';
 require_once NTDST_PATH . '/api/MetaboxGenerator.php';
 
 // Load and initialize endpoints system
