@@ -1037,14 +1037,32 @@ if (!class_exists('WP_REST_Request')) {
             return $this->route;
         }
 
-        public function get_header(string $key): ?string
+        /**
+         * Matches real WP: canonicalize_header_name() lowercases AND maps
+         * '-' to '_' (class-wp-rest-request.php), so 'Content-Type' and
+         * 'content_type' address the same slot.
+         */
+        public static function canonicalize_header_name(string $key): string
         {
-            return $this->headers[strtolower($key)] ?? null;
+            return str_replace('-', '_', strtolower($key));
         }
 
-        public function set_header(string $key, string $value): void
+        public function get_header(string $key): ?string
         {
-            $this->headers[strtolower($key)] = $value;
+            $key = self::canonicalize_header_name($key);
+
+            if (!isset($this->headers[$key])) {
+                return null;
+            }
+
+            // Real WP stores each header as a list of values and joins with
+            // a bare comma (implode(',', …)) — no space.
+            return implode(',', $this->headers[$key]);
+        }
+
+        public function set_header(string $key, string|array $value): void
+        {
+            $this->headers[self::canonicalize_header_name($key)] = (array) $value;
         }
 
         public function get_json_params(): array

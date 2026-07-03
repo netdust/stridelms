@@ -20,6 +20,16 @@ final class NTDST_Cors_Policy
     /** @var list<string>|callable */
     private $origins;
 
+    /**
+     * Whether $origins is a resolver callable (decided ONCE, at construction,
+     * where the array-before-is_callable ordering lives). allowsOrigin() must
+     * branch on THIS flag, never re-run is_callable() on the stored value — a
+     * callable-shaped two-string list (e.g. ['DateTime', 'createFromFormat'])
+     * would otherwise be invoked as a resolver at call time even though the
+     * constructor correctly classified it as an exact-match allow-list.
+     */
+    private bool $originsIsCallable;
+
     /** @var list<string> */
     private array $methods;
 
@@ -28,8 +38,13 @@ final class NTDST_Cors_Policy
 
     private ?int $max_age;
 
-    /** Route prefix this policy's header emission is scoped to (set by register()). */
-    private string $routePrefix = '';
+    /**
+     * Route prefixes this policy's header emission is scoped to (appended by
+     * register(); a policy may guard several prefixes).
+     *
+     * @var list<string>
+     */
+    private array $routePrefixes = [];
 
     /**
      * Injectable header sender/remover for testability — real PHP
@@ -83,8 +98,10 @@ final class NTDST_Cors_Policy
                 }
             }
             $this->origins = $origins;
+            $this->originsIsCallable = false;
         } elseif (is_callable($origins)) {
             $this->origins = $origins;
+            $this->originsIsCallable = true;
         } else {
             throw new InvalidArgumentException('NTDST_Cors_Policy "origins" must be a list of strings or a callable.');
         }
@@ -103,6 +120,8 @@ final class NTDST_Cors_Policy
 
     /**
      * Test-only seam — swap the header sender for a capturing closure.
+     *
+     * @internal Not a consumer API.
      */
     public function setHeaderSender(callable $sender): void
     {
@@ -111,6 +130,8 @@ final class NTDST_Cors_Policy
 
     /**
      * Test-only seam — swap the header remover for a capturing closure.
+     *
+     * @internal Not a consumer API.
      */
     public function setHeaderRemover(callable $remover): void
     {
@@ -140,6 +161,11 @@ final class NTDST_Cors_Policy
      * SubmissionIntakeService::init() (same ground-truthed reasoning),
      * generalized to an injectable $routePrefix instead of a
      * class-constant namespace.
+     *
+     * May be called more than once: each call APPENDS its prefix (idempotent
+     * for a repeated identical prefix), so one policy can guard several route
+     * namespaces. Overwriting instead of appending would silently leave every
+     * earlier prefix fail-open on core's reflect+credentials default.
      */
     public function register(string $routePrefix): void
     {
@@ -167,8 +193,25 @@ final class NTDST_Cors_Policy
             );
         }
 
-        $this->routePrefix = $routePrefix;
+        if (preg_match('#^/[^/]#', $routePrefix) !== 1) {
+            // '/' (and '//…') passes both checks above, but a bare root
+            // prefix matches EVERY REST route — the same global-filter trap
+            // as the empty string, just spelled differently. The prefix must
+            // be a leading slash followed by a real first segment character.
+            throw new InvalidArgumentException(
+                'NTDST_Cors_Policy::register() route prefix must be "/" followed by a route segment (e.g. "/stride/v1") — a bare "/" would match every REST route and turn this into a global CORS filter.',
+            );
+        }
 
+        if (!in_array($routePrefix, $this->routePrefixes, true)) {
+            $this->routePrefixes[] = $routePrefix;
+        }
+
+        // The trailing 4 is rest_pre_serve_request's filter arity ($served,
+        // $result, $request, $server) — trimming it breaks the callback
+        // signature (WP would invoke applyCorsHeaders() with fewer args than
+        // its required parameters). Real WP dedupes this identical callback
+        // across repeated register() calls, so the filter is added once.
         add_filter('rest_pre_serve_request', [$this, 'applyCorsHeaders'], 20, 4);
     }
 
@@ -185,10 +228,14 @@ final class NTDST_Cors_Policy
             return false;
         }
 
-        if (is_callable($this->origins)) {
+        // Branch on the construction-time classification, NOT is_callable():
+        // a callable-shaped two-string allow-list must stay a list here too.
+        if ($this->originsIsCallable) {
             return (bool) ($this->origins)($origin, $request);
         }
 
+        // Strict in_array means a list-approved $origin is byte-identical to
+        // a server-side config string — safe to echo by construction.
         return in_array($origin, $this->origins, true);
     }
 
@@ -230,25 +277,40 @@ final class NTDST_Cors_Policy
      */
     public function applyCorsHeaders(bool $served, mixed $result, WP_REST_Request $request, mixed $server): bool
     {
-        if (!str_starts_with($request->get_route(), $this->routePrefix)) {
+        // No register() call, no scope: bail before ANY header side effect.
+        // Defends the raw add_filter-without-register() misuse — an unscoped
+        // policy must never touch a response.
+        if ($this->routePrefixes === []) {
             return $served;
         }
 
+        if (!$this->matchesRegisteredPrefix($request->get_route())) {
+            return $served;
+        }
+
+        // From here on, header side effects deliberately fire even when
+        // $served === false — the headers must reflect this policy regardless
+        // of the body-serving outcome, since core's reflection headers (prio
+        // 10) are already on the response either way.
+
         // WP core's own rest_send_cors_headers() already ran at the default
-        // priority (10, on rest_api_init) and, for ANY Origin header, will
-        // have set Access-Control-Allow-Credentials: true — this route must
-        // never advertise credentialed CORS unless explicitly configured to
-        // (it is not, currently). header() replaces same-name headers, but
-        // there is no "Allow-Credentials" header of ours to send in its
-        // place, so it must be explicitly removed here rather than left as
-        // core's default. Ground-truthed live against a real request in the
-        // reference implementation: without this line, `curl -i` showed
-        // `access-control-allow-credentials: true` on the route's response.
+        // priority (10, on rest_api_init) and, whenever an Origin header is
+        // present (its `if ($origin)` guard), will have set
+        // Access-Control-Allow-Credentials: true — this route must never
+        // advertise credentialed CORS unless explicitly configured to (it is
+        // not, currently). header() replaces same-name headers, but there is
+        // no "Allow-Credentials" header of ours to send in its place, so it
+        // must be explicitly removed here rather than left as core's default.
+        // Removing unconditionally is a harmless no-op on origin-less
+        // requests (core set nothing there). Ground-truthed live against a
+        // real request in the reference implementation: without this line,
+        // `curl -i` showed `access-control-allow-credentials: true` on the
+        // route's response.
         ($this->headerRemover)('Access-Control-Allow-Credentials');
 
         $origin = (string) $request->get_header('origin');
 
-        if ($this->allowsOrigin($origin, $request)) {
+        if ($this->allowsOrigin($origin, $request) && $this->isEmittableOriginShape($origin)) {
             ($this->headerSender)('Access-Control-Allow-Origin: ' . $origin);
             ($this->headerSender)('Access-Control-Allow-Methods: ' . implode(', ', $this->methods));
             ($this->headerSender)('Access-Control-Allow-Headers: ' . implode(', ', $this->headers));
@@ -258,14 +320,50 @@ final class NTDST_Cors_Policy
                 ($this->headerSender)('Access-Control-Max-Age: ' . $this->max_age);
             }
         } else {
-            // Non-matching (or absent) origin: strip whatever core's
-            // reflection already set for Allow-Origin too, so a mismatched
-            // or origin-less caller gets no CORS headers at all on this
-            // route (mitigation 5's "non-matching origins get no CORS
-            // headers" requirement).
+            // Non-matching (or absent) origin — or one that failed the
+            // emission shape gate: strip whatever core's reflection already
+            // set for Allow-Origin too, so a mismatched or origin-less
+            // caller gets no CORS headers at all on this route (mitigation
+            // 5's "non-matching origins get no CORS headers" requirement).
             ($this->headerRemover)('Access-Control-Allow-Origin');
         }
 
         return $served;
+    }
+
+    /**
+     * Does $route fall under any registered prefix, respecting path-segment
+     * boundaries? '/stride/v1' governs '/stride/v1' (exact) and
+     * '/stride/v1/sub' (child), but NOT '/stride/v10/x' or
+     * '/stride/v1-admin/x' — a plain str_starts_with() would leak this
+     * policy's headers (and its credentials strip) into sibling namespaces.
+     */
+    private function matchesRegisteredPrefix(string $route): bool
+    {
+        foreach ($this->routePrefixes as $prefix) {
+            if ($route === $prefix || str_starts_with($route, rtrim($prefix, '/') . '/')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * Emission shape gate for the CALLABLE origins path. On the LIST path a
+     * true allowsOrigin() means the echoed $origin is byte-identical to a
+     * server-side config string — safe by construction. A consumer-supplied
+     * resolver has no such guarantee: an over-permissive callable could
+     * approve a request-shaped string that must never reach header(). Only
+     * scheme://non-whitespace survives — no spaces, CR, or LF possible, so
+     * this is a no-op for any legitimate Origin header, and it fires BEFORE
+     * header() would (PHP's header() throws on CR/LF; the gate means no
+     * exception path exists at all — a malformed origin is simply denied).
+     * The /D modifier pins $ to the true end of string, so a trailing "\n"
+     * (which an undollared $ would tolerate) also fails the gate.
+     */
+    private function isEmittableOriginShape(string $origin): bool
+    {
+        return preg_match('#^[a-zA-Z][a-zA-Z0-9+.\-]*://\S+$#D', $origin) === 1;
     }
 }

@@ -37,9 +37,6 @@ if ($isIntegration) {
 // Enable bypass-finals to allow mocking final classes
 DG\BypassFinals::enable();
 
-// Brain\Monkey setup for WordPress function mocking
-use Brain\Monkey;
-
 // Define WordPress constants needed by services
 defined('ABSPATH') || define('ABSPATH', dirname(__DIR__) . '/web/wp/');
 defined('WP_CONTENT_DIR') || define('WP_CONTENT_DIR', dirname(__DIR__) . '/web/app');
@@ -68,7 +65,9 @@ $ntdstCoreFiles = [
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Bootstrap.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Router.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/Endpoints.php',
-    // Task 2.3 moves this to the loader — required directly here until then.
+    // The mu-plugin loader requires CorsPolicy too (landed in fc098b89), but
+    // this bootstrap never executes the loader — so this direct require is
+    // permanent, not a stopgap.
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/CorsPolicy.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Theme.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/MetaboxGenerator.php',

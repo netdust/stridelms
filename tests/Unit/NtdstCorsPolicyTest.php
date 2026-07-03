@@ -95,11 +95,20 @@ final class NtdstCorsPolicyTest extends TestCase
 
     public function testTwoStringOriginListIsNeverMisreadAsAPhpCallable(): void
     {
-        // ['strtolower', 'strtoupper'] (or any two-string list) is
-        // PHP-callable-shaped; it must be treated as an exact-match
-        // allow-list, not silently reinterpreted as a resolver.
-        $p = new \NTDST_Cors_Policy(['origins' => ['strtolower', 'strtoupper']]);
-        self::assertTrue($p->allowsOrigin('strtolower', new \WP_REST_Request()));
+        // ['DateTime', 'createFromFormat'] IS is_callable() in PHP (verified:
+        // a static-method [class, method] pair) — the sharpest fixture for
+        // the array-before-is_callable guard ordering. The previous fixture
+        // (['strtolower', 'strtoupper']) was NOT is_callable(), so that test
+        // passed regardless of guard order — vacuous.
+        //
+        // Branch-distinguishing assertions: in LIST mode, 'DateTime' is
+        // literally on the allow-list → true, and an unlisted origin → false.
+        // In (buggy) CALLABLE mode, allowsOrigin() would invoke
+        // DateTime::createFromFormat($origin, $request) — a TypeError, since
+        // the second argument is a WP_REST_Request, not a string. So a clean
+        // true/false here proves list-mode semantics, not resolver semantics.
+        $p = new \NTDST_Cors_Policy(['origins' => ['DateTime', 'createFromFormat']]);
+        self::assertTrue($p->allowsOrigin('DateTime', new \WP_REST_Request()));
         self::assertFalse($p->allowsOrigin('https://app.example.com', new \WP_REST_Request()));
     }
 
@@ -279,8 +288,7 @@ final class NtdstCorsPolicyTest extends TestCase
 
     public function testRegisterHooksRestPreServeRequestAtPriorityTwentyWithFourArgs(): void
     {
-        global $_test_filters;
-        $_test_filters = [];
+        global $_test_filters; // read below; reset already done in setUp()
 
         $policy = $this->makePolicyWithCapture();
         $policy->register('/stride/v1/widgets');
@@ -352,5 +360,141 @@ final class NtdstCorsPolicyTest extends TestCase
         foreach ($this->capturedSent as $header) {
             self::assertStringNotContainsStringIgnoringCase('access-control-', $header);
         }
+    }
+
+    // -------------------------------------------------------------------
+    // P2 gate findings — root-prefix guard, multi-prefix register,
+    // segment-boundary matching, callable-path emission shape gate,
+    // empty-registration bail.
+    // -------------------------------------------------------------------
+
+    public function testRegisterRejectsRootSlashPrefixAsAGlobalFilterInDisguise(): void
+    {
+        // '/' passes the empty and leading-slash checks, but
+        // str_starts_with($route, '/') is true for EVERY REST route —
+        // functionally identical to the empty-prefix global-filter trap.
+        $policy = $this->makePolicyWithCapture();
+
+        $this->expectException(InvalidArgumentException::class);
+        $policy->register('/');
+    }
+
+    public function testRepeatRegisterProtectsEveryPrefixNotJustTheLast(): void
+    {
+        // A second register() call must APPEND, not overwrite — otherwise
+        // the first prefix is silently left fail-open on WP core's
+        // reflect-origin + Allow-Credentials default (prio 10).
+        $policy = $this->makePolicyWithCapture();
+        $policy->register('/a/v1');
+        $policy->register('/b/v1');
+
+        foreach (['/a/v1/things', '/b/v1/things'] as $route) {
+            $this->capturedSent = [];
+            $this->capturedRemoved = [];
+
+            $request = new \WP_REST_Request('GET', $route);
+            $request->set_header('origin', 'https://app.example.com');
+
+            $policy->applyCorsHeaders(true, null, $request, null);
+
+            self::assertContains(
+                'Access-Control-Allow-Origin: https://app.example.com',
+                $this->capturedSent,
+                "route {$route} must receive policy treatment",
+            );
+            self::assertContains('Access-Control-Allow-Credentials', $this->capturedRemoved, $route);
+        }
+
+        // A third, never-registered prefix stays untouched.
+        $this->capturedSent = [];
+        $this->capturedRemoved = [];
+
+        $request = new \WP_REST_Request('GET', '/c/v1/things');
+        $request->set_header('origin', 'https://app.example.com');
+
+        $policy->applyCorsHeaders(true, null, $request, null);
+
+        self::assertSame([], $this->capturedSent);
+        self::assertSame([], $this->capturedRemoved);
+    }
+
+    public function testPrefixMatchingRespectsPathSegmentBoundaries(): void
+    {
+        // '/stride/v1' must govern '/stride/v1' (exact) and '/stride/v1/sub'
+        // (child segment) but NEVER '/stride/v10/...' or '/stride/v1-admin/...'
+        // — a plain str_starts_with() prefix check leaks across segment
+        // boundaries into sibling namespaces.
+        $policy = $this->makePolicyWithCapture();
+        $policy->register('/stride/v1');
+
+        foreach (['/stride/v1', '/stride/v1/sub'] as $route) {
+            $this->capturedSent = [];
+            $this->capturedRemoved = [];
+
+            $request = new \WP_REST_Request('GET', $route);
+            $request->set_header('origin', 'https://app.example.com');
+
+            $policy->applyCorsHeaders(true, null, $request, null);
+
+            self::assertContains(
+                'Access-Control-Allow-Origin: https://app.example.com',
+                $this->capturedSent,
+                "route {$route} must match prefix /stride/v1",
+            );
+        }
+
+        foreach (['/stride/v10/x', '/stride/v1-admin/x'] as $route) {
+            $this->capturedSent = [];
+            $this->capturedRemoved = [];
+
+            $request = new \WP_REST_Request('GET', $route);
+            $request->set_header('origin', 'https://app.example.com');
+
+            $policy->applyCorsHeaders(true, null, $request, null);
+
+            self::assertSame([], $this->capturedSent, "route {$route} must NOT match prefix /stride/v1");
+            self::assertSame([], $this->capturedRemoved, "route {$route} must NOT match prefix /stride/v1");
+        }
+    }
+
+    public function testMalformedOriginApprovedByOverPermissiveCallableIsNeverEmitted(): void
+    {
+        // The emission shape gate must fire BEFORE header() — PHP's header()
+        // would throw on CR/LF, but the gate means no exception path exists
+        // at all: a malformed origin is simply treated as denied.
+        $malformed = "https://evil.test\r\nX-Injected: 1";
+
+        $policy = $this->makePolicyWithCapture([
+            'origins' => static fn(string $o): bool => true, // over-permissive resolver
+        ]);
+        $policy->register('/stride/v1/widgets');
+
+        $request = new \WP_REST_Request('GET', '/stride/v1/widgets');
+        $request->set_header('origin', $malformed);
+
+        $served = $policy->applyCorsHeaders(true, null, $request, null);
+
+        self::assertTrue($served);
+        self::assertContains('Access-Control-Allow-Origin', $this->capturedRemoved);
+        foreach ($this->capturedSent as $header) {
+            self::assertStringNotContainsStringIgnoringCase('access-control-', $header);
+            self::assertStringNotContainsString('X-Injected', $header);
+        }
+    }
+
+    public function testApplyCorsHeadersWithoutRegisterIsAFullNoOp(): void
+    {
+        // Raw add_filter misuse defense: a policy whose register() was never
+        // called has no scope — it must bail before ANY header side effect.
+        $policy = $this->makePolicyWithCapture();
+
+        $request = new \WP_REST_Request('GET', '/stride/v1/widgets');
+        $request->set_header('origin', 'https://app.example.com');
+
+        $served = $policy->applyCorsHeaders(false, null, $request, null);
+
+        self::assertFalse($served);
+        self::assertSame([], $this->capturedSent);
+        self::assertSame([], $this->capturedRemoved);
     }
 }
