@@ -204,6 +204,10 @@ class NTDST_Response
         return ['success' => true, 'data' => $data];
     }
 
+    // Deliberately a DIFFERENT error wire shape than jsonPayload(): apiError()
+    // → {success:false,data:{message,code}} (Endpoints/ntdstAPI JS clients) vs
+    // jsonPayload() → {success:false,error:string} (json()/toRestResponse()
+    // clients). Do not "unify" — each shape has live consumers.
     public static function apiError(string $message, string $code = 'error'): array
     {
         return ['success' => false, 'data' => ['message' => $message, 'code' => $code]];

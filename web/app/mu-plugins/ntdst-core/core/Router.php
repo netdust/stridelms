@@ -155,12 +155,12 @@ class NTDST_Router
                 return $result;
             }
 
-            // If Response object, render it
+            // If Response object, render it through the shared seam.
+            // renderResponse() never returns when a template is set (render()
+            // exits); with no template it returns void and the explicit exit
+            // below fires — identical to the previous inline block.
             if ($result instanceof NTDST_Response) {
-                $template_name = $result->getTemplate();
-                if ($template_name) {
-                    $result->render($template_name);
-                }
+                $this->renderResponse($result);
                 exit;
             }
 
@@ -237,12 +237,11 @@ class NTDST_Router
                 return $result;
             }
 
-            // Handle Response object
+            // Handle Response object through the shared seam — same exit
+            // semantics as template() above (render() exits when a template
+            // is set; otherwise the explicit exit below fires).
             if ($result instanceof NTDST_Response) {
-                $template_name = $result->getTemplate();
-                if ($template_name) {
-                    $result->render($template_name);
-                }
+                $this->renderResponse($result);
                 exit;
             }
 
@@ -315,6 +314,9 @@ class NTDST_Router
      */
     protected function resolveRouteResult(mixed $result, string $template): string|false|null
     {
+        // Branches are mutually exclusive by type (an NTDST_Response never
+        // satisfies is_string / === null / === true) — but do not assume the
+        // order is reorderable if a future type could satisfy two branches.
         if ($result instanceof NTDST_Response) {
             $this->renderResponse($result);
             return null;

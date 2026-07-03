@@ -7,6 +7,13 @@ namespace Stride\Tests\Unit;
 use PHPUnit\Framework\TestCase;
 
 /**
+ * Thrown by the halting recording seam (makeHaltingRecordingRouter) in place
+ * of the production exit, so the closure code after renderResponse() —
+ * `exit;` — is never reached in-process.
+ */
+final class RouterSeamHalt extends \RuntimeException {}
+
+/**
  * Characterization tests for NTDST_Router::handleTemplateInclude()'s
  * current dispatch return contract.
  *
@@ -243,5 +250,120 @@ final class NtdstRouterDispatchCharacterizationTest extends TestCase
         // includes a template and exits the process. beStrictAboutOutput
         // additionally fails the test if anything was echoed.
         $this->addToAssertionCount(1);
+    }
+
+    /**
+     * Like makeRecordingRouter(), but the seam THROWS after recording —
+     * standing in for renderResponse()'s production "never returns when a
+     * template is set" semantics. Required for the when()/template() pins:
+     * their filter closures follow renderResponse() with an `exit;`, which
+     * a plain recording seam would fall through to, killing the process.
+     */
+    private function makeHaltingRecordingRouter(): \NTDST_Router
+    {
+        return new class extends \NTDST_Router {
+            /** @var list<?string> */
+            public array $rendered = [];
+
+            protected function renderResponse(\NTDST_Response $response): void
+            {
+                $this->rendered[] = $response->getTemplate();
+                throw new RouterSeamHalt('seam halt — stands in for the production exit');
+            }
+        };
+    }
+
+    /**
+     * Captures the single filter closure that $register adds to $hook in the
+     * stub's process-global $_test_filters — so the pin invokes exactly the
+     * closure THIS test registered, not stale closures leaked by other
+     * tests' router instances (see the class docblock warning), and not
+     * handleTemplateInclude (registered on template_include at priority 999
+     * by every constructor).
+     */
+    private function captureNewFilter(string $hook, callable $register): callable
+    {
+        global $_test_filters;
+
+        $before = count($_test_filters[$hook] ?? []);
+        $register();
+        $entries = $_test_filters[$hook] ?? [];
+
+        self::assertCount($before + 1, $entries, "registering must add exactly one '{$hook}' filter");
+
+        return $entries[array_key_last($entries)]['callback'];
+    }
+
+    /**
+     * P1 gate pin: template()'s filter closure must route an NTDST_Response
+     * return through the SAME renderResponse() seam the pattern routes use
+     * (no inline copy of the Response contract). Halting proves the closure
+     * treats the Response as terminal (production exits).
+     */
+    public function testTemplateFilterRoutesResponseThroughRenderResponseSeam(): void
+    {
+        $router = $this->makeHaltingRecordingRouter();
+
+        $closure = $this->captureNewFilter(
+            'single_template',
+            fn() => $router->template('single', fn($post, $template) => \ntdst_response()->template('project/single')),
+        );
+
+        try {
+            $closure('/theme/single.php');
+            self::fail('a Response return must halt the filter (production renders + exits)');
+        } catch (RouterSeamHalt) {
+            // expected — stands in for the production exit
+        }
+
+        self::assertSame(['project/single'], $router->rendered);
+    }
+
+    /**
+     * P1 gate pin: when()'s filter closure must route an NTDST_Response
+     * return through renderResponse() — byte-identical inline copy removed.
+     */
+    public function testWhenFilterRoutesResponseThroughRenderResponseSeam(): void
+    {
+        $router = $this->makeHaltingRecordingRouter();
+
+        $closure = $this->captureNewFilter(
+            'template_include',
+            fn() => $router->when(fn() => true, fn($post, $template) => \ntdst_response()->template('project/list')),
+        );
+
+        try {
+            $closure('/theme/index.php');
+            self::fail('a Response return must halt the filter (production renders + exits)');
+        } catch (RouterSeamHalt) {
+            // expected — stands in for the production exit
+        }
+
+        self::assertSame(['project/list'], $router->rendered);
+    }
+
+    /**
+     * Parity edge for the closures, mirroring the resolveRouteResult() pin:
+     * a Response with NO template set is still delegated to renderResponse()
+     * (which renders nothing) and the request still ends — when()/template()
+     * exit on any Response return, template or not.
+     */
+    public function testWhenFilterDelegatesResponseWithoutTemplateToSeam(): void
+    {
+        $router = $this->makeHaltingRecordingRouter();
+
+        $closure = $this->captureNewFilter(
+            'template_include',
+            fn() => $router->when(fn() => true, fn($post, $template) => \ntdst_response()),
+        );
+
+        try {
+            $closure('/theme/index.php');
+            self::fail('a template-less Response must still be delegated and halt the filter');
+        } catch (RouterSeamHalt) {
+            // expected — stands in for the production exit
+        }
+
+        self::assertSame([null], $router->rendered, 'the Response is delegated to renderResponse() even without a template');
     }
 }
