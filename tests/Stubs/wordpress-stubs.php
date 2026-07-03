@@ -1046,6 +1046,21 @@ if (!class_exists('WP_REST_Request')) {
         {
             $this->headers[strtolower($key)] = $value;
         }
+
+        public function get_json_params(): array
+        {
+            return [];
+        }
+
+        public function get_body_params(): array
+        {
+            return [];
+        }
+
+        public function get_file_params(): array
+        {
+            return [];
+        }
     }
 }
 
