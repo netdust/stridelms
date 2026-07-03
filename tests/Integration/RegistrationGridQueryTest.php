@@ -737,6 +737,64 @@ class RegistrationGridQueryTest extends IntegrationTestCase
     }
 
     // =========================================================================
+    // FIX-10 param-order guard: offerteVerdelingByGroup under a trajectory_id
+    // filter — the active_join carries a %d (traj_parent JOIN) that buildGridFilters
+    // array_unshifts to the FRONT of $params. The quote derived-table's %s must
+    // NOT collide with it. A wrong param order corrupts the prepared SQL → empty
+    // or wrong tally. This drives the exact interleaving the flat grid never does.
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function offerteVerdelingByGroupHonoursTrajectoryJoinParamOrder(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        // T1 corpus via trajectory_id filter (parent+child join): childA (confirmed),
+        // childB (waitlist), legacy (confirmed) → grouped by status: confirmed=2,
+        // waitlist=1. The T1 PARENT (edition_id NULL) is excluded by the base
+        // predicate; the T2 child must NEVER leak in.
+        $verdeling = $repo->offerteVerdelingByGroup(
+            ['trajectory_id' => self::$trajT1Id, 'edition_scope' => 'all', 'per_page' => 50],
+            'status',
+        );
+
+        $this->assertNotEmpty(
+            $verdeling,
+            'tally must be non-empty under a trajectory_id filter (proves the %d/%s param order is correct)',
+        );
+
+        $confirmed = RegistrationStatus::Confirmed->value;
+        $waitlist  = RegistrationStatus::Waitlist->value;
+
+        // Every T1 reg has no quote → the 'Geen offerte' bucket (key '').
+        $this->assertSame(
+            2,
+            array_sum($verdeling[$confirmed] ?? []),
+            'T1 confirmed group must total 2 (childA + legacy) — the traj JOIN corpus, no leak',
+        );
+        $this->assertSame(
+            1,
+            array_sum($verdeling[$waitlist] ?? []),
+            'T1 waitlist group must total 1 (childB)',
+        );
+
+        // Leak-check: the whole T1 tally must total exactly 3 (no T2 child, no
+        // parent). If the param order were wrong, the WHERE would bind the wrong
+        // values and this total would drift.
+        $grandTotal = 0;
+        foreach ($verdeling as $statusCounts) {
+            $grandTotal += array_sum($statusCounts);
+        }
+        $this->assertSame(
+            3,
+            $grandTotal,
+            'T1 tally must total exactly 3 rows (childA + childB + legacy) — no T2 leak, no parent',
+        );
+    }
+
+    // =========================================================================
     // FIX 5: grouped path forms no spurious NULL/'' group from trajectory parents.
     // =========================================================================
 
@@ -769,15 +827,20 @@ class RegistrationGridQueryTest extends IntegrationTestCase
             $this->assertNotSame('', (string) $agg->group_value, 'No empty edition_id group may form');
         }
 
-        // Every group must have a consistent reg-id set (count matches resolved ids,
-        // proving no IN('') miss silently dropped the group's ids).
+        // Every group's SQL offerte tally must sum to the aggregate count (proving
+        // no IN('') miss silently dropped the group, and the FIX-10 SQL tally scopes
+        // to exactly the same corpus as the aggregate).
+        $verdeling = $repo->offerteVerdelingByGroup(
+            ['company_id' => self::$companyId, 'edition_scope' => 'all'],
+            'edition_id',
+        );
         foreach ($result['agg_rows'] as $agg) {
-            $gv  = $agg->group_value;
-            $ids = $result['group_reg_ids'][$gv] ?? [];
+            $gv  = $agg->group_value === null ? '' : (string) $agg->group_value;
+            $sum = array_sum($verdeling[$gv] ?? []);
             $this->assertSame(
                 (int) $agg->cnt,
-                count($ids),
-                "Group {$gv}: resolved reg-id count must equal the aggregate count (no IN('') miss)",
+                $sum,
+                "Group {$gv}: SQL tally sum must equal the aggregate count (no IN('') miss)",
             );
         }
     }
@@ -1042,8 +1105,9 @@ class RegistrationGridQueryTest extends IntegrationTestCase
      *  (a) 'group_rows' key present,
      *  (b) every group's child rows count <= GROUP_ROW_CAP,
      *  (c) NO child row has edition_id NULL (trajectory-parent leak/denial path),
-     *  (d) group_reg_ids stays UNBOUNDED — at least one group has MORE reg_ids than
-     *      composed child rows (proves the cap bit while the tally stays complete).
+     *  (d) the group's TRUE size (aggregate cnt) exceeds the composed child-row cap
+     *      — proving the cap bit — while the SQL offerte tally (FIX-10) still sums
+     *      to the full group size (the tally stays complete without materialising ids).
      *
      * Seeds >GROUP_ROW_CAP confirmed rows under a dedicated company so the over-cap
      * group is deterministic and isolated from the shared test-DB corpus.
@@ -1114,26 +1178,37 @@ class RegistrationGridQueryTest extends IntegrationTestCase
             $this->assertObjectHasProperty($col, $sample, "child row must carry the full '{$col}' column");
         }
 
-        // (d) group_reg_ids (the FULL set for the tally) is unbounded — at least one
-        // group has MORE reg_ids than composed child rows, proving the cap bit while
-        // the tally stayed complete.
-        $capped = array_filter(
-            $result['group_reg_ids'],
-            fn($ids, $gv) => count($ids) > count($result['group_rows'][$gv] ?? []),
-            ARRAY_FILTER_USE_BOTH,
-        );
-        $this->assertNotEmpty($capped, 'at least one group must exceed the row cap to prove bounding (tally stays unbounded)');
-
-        // Specifically the confirmed group: >CAP ids, exactly CAP composed rows.
+        // (d) the confirmed group's TRUE size (aggregate cnt) exceeds the cap,
+        // while the composed child rows are exactly capped — proving the cap bit.
+        $confirmedAgg = null;
+        foreach ($result['agg_rows'] as $agg) {
+            if ((string) $agg->group_value === $confirmed) {
+                $confirmedAgg = $agg;
+                break;
+            }
+        }
+        $this->assertNotNull($confirmedAgg, 'confirmed aggregate row must be present');
         $this->assertGreaterThan(
             RegistrationRepository::GROUP_ROW_CAP,
-            count($result['group_reg_ids'][$confirmed]),
-            'confirmed group_reg_ids must exceed the cap (unbounded tally set)',
+            (int) $confirmedAgg->cnt,
+            'confirmed group size must exceed the cap',
         );
         $this->assertSame(
             RegistrationRepository::GROUP_ROW_CAP,
             count($result['group_rows'][$confirmed]),
             'confirmed group_rows must be exactly capped',
+        );
+
+        // FIX-10: the SQL offerte tally still sums to the FULL group size — the
+        // tally is complete WITHOUT ever materialising the per-group id set.
+        $verdeling = $repo->offerteVerdelingByGroup(
+            ['company_id' => $capCompanyId, 'edition_scope' => 'all', 'per_page' => 50],
+            'status',
+        );
+        $this->assertSame(
+            (int) $confirmedAgg->cnt,
+            array_sum($verdeling[$confirmed] ?? []),
+            'SQL offerte tally must sum to the full confirmed group size (complete without id materialisation)',
         );
     }
 

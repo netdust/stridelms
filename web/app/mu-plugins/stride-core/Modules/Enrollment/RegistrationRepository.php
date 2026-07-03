@@ -28,10 +28,10 @@ final class RegistrationRepository
 
     /**
      * Max composed child rows returned PER GROUP by queryForGridGrouped (the
-     * accordion body). The cap bounds the grouped response; the FULL per-group
-     * id set (group_reg_ids, used by the offerte tally) stays UNCAPPED so the
-     * tally is never desynced from the aggregate count. The "toon alle N"
-     * affordance surfaces the full set via the flat, paginated grid.
+     * accordion body). The cap bounds the grouped response; the offerte tally is
+     * computed separately in SQL (offerteVerdelingByGroup, FIX-10) so it is never
+     * desynced from the aggregate count without materialising ids. The "toon alle
+     * N" affordance surfaces the full set via the flat, paginated grid.
      */
     public const GROUP_ROW_CAP = 8;
 
@@ -1927,19 +1927,19 @@ final class RegistrationRepository
      * a GROUP BY aggregate SELECT on top.
      *
      * Returns a single array holding everything the service layer needs:
-     *  - 'agg_rows'      => array<object>  — one row per distinct group_value
-     *                                         (cols: group_value, cnt, completed_count)
-     *  - 'group_reg_ids' => array<string,array<int>>  — group_value => [regId, ...]
-     *                                         the FULL (uncapped) id set per visible
-     *                                         group; drives the offerte tally.
-     *  - 'group_rows'    => array<string,array<object>>  — group_value => up to
-     *                                         GROUP_ROW_CAP FULL child-row objects
-     *                                         (same column set as queryForGrid),
-     *                                         ordered registered_at DESC. The cap
-     *                                         applies ONLY here, never to the tally.
-     *  - 'total'         => int  — total number of ROWS (not groups) matching filters
-     *  - 'page'          => int
-     *  - 'per_page'      => int
+     *  - 'agg_rows'   => array<object>  — one row per distinct group_value
+     *                                      (cols: group_value, cnt, completed_count)
+     *  - 'group_rows' => array<string,array<object>>  — group_value => up to
+     *                                      GROUP_ROW_CAP FULL child-row objects
+     *                                      (same column set as queryForGrid),
+     *                                      ordered registered_at DESC.
+     *  - 'total'      => int  — total number of ROWS (not groups) matching filters
+     *  - 'page'       => int
+     *  - 'per_page'   => int
+     *
+     * The offerte_verdeling distribution is NOT returned here — it is computed in
+     * SQL by offerteVerdelingByGroup (FIX-10), so this method never materialises
+     * the full per-group id set.
      *
      * M4 guarantee: $groupBy MUST already be validated against GROUP_BY_ALLOWLIST
      * before calling this method (the caller owns the guard). The column name is
@@ -1947,7 +1947,7 @@ final class RegistrationRepository
      *
      * @param  array<string,mixed> $filters  Same key-set as queryForGrid.
      * @param  string              $groupBy  Validated allowlisted column name.
-     * @return array{agg_rows:array<object>,group_reg_ids:array<string,array<int>>,group_rows:array<string,array<object>>,total:int,page:int,per_page:int}
+     * @return array{agg_rows:array<object>,group_rows:array<string,array<object>>,total:int,page:int,per_page:int}
      */
     public function queryForGridGrouped(array $filters, string $groupBy): array
     {
@@ -1997,23 +1997,19 @@ final class RegistrationRepository
 
         if (empty($aggRows)) {
             return [
-                'agg_rows'      => [],
-                'group_reg_ids' => [],
-                'group_rows'    => [],
-                'total'         => $total,
-                'page'          => $page,
-                'per_page'      => $perPage,
+                'agg_rows'   => [],
+                'group_rows' => [],
+                'total'      => $total,
+                'page'       => $page,
+                'per_page'   => $perPage,
             ];
         }
 
-        // --- Fetch reg IDs per group for the current page's groups only ---
-        // This feeds the two-step offerte resolver without a JSON aggregate (M5).
-        // TODO(perf, deferred): this IDs subquery is unbounded per group — it pulls
-        // every reg-id of each visible group into PHP to tally offerte_verdeling.
-        // A bounded fix (aggregating the per-quote-status tally in SQL) is a larger
-        // rewrite than a fix-pass should carry; the FIX 1 trajectory-parent corpus
-        // exclusion already shrinks the corpus. A blind LIMIT here would desync the
-        // tally from the group count, so it is intentionally NOT applied. Tracked.
+        // --- Narrow to the current page's groups (for the capped child rows) ---
+        // FIX-10: the offerte_verdeling tally NO LONGER pulls every reg-id of each
+        // visible group into PHP — it is computed in SQL by offerteVerdelingByGroup.
+        // This group filter now serves ONLY the bounded window query below (the
+        // ≤ GROUP_ROW_CAP child rows), which is intrinsically bounded.
         // A NULL group_value (defensive — the edition_id-NULL corpus exclusion in
         // buildGridFilters means this should never occur for edition_id, but other
         // allowlist columns could in principle hold NULL) must route via IS NULL,
@@ -2044,39 +2040,22 @@ final class RegistrationRepository
             ? "{$whereClause} AND {$groupFilter}"
             : "WHERE {$groupFilter}";
 
-        $idsSql    = "SELECT r.id, r.{$groupBy} AS group_val
-                      FROM {$regTable} r
-                      LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
-                      {$activeJoin}
-                      {$fullWhere}";
-        $idsParams = array_merge($params, $groupFilterArgs);
-        $idsRows   = $wpdb->get_results($wpdb->prepare($idsSql, ...$idsParams));
-
-        $groupRegIds = [];
-        foreach ($idsRows as $row) {
-            $gv = $row->group_val;
-            if (!isset($groupRegIds[$gv])) {
-                $groupRegIds[$gv] = [];
-            }
-            $groupRegIds[$gv][] = (int) $row->id;
-        }
-
         // --- Capped per-group FULL-column child rows (the accordion body) ---
         // ONE window-function query (MariaDB 10.11): ROW_NUMBER() partitioned by
         // the group column, ordered registered_at DESC, filtered <= GROUP_ROW_CAP
         // in the outer WHERE — no N+1. Reuses the SAME $activeJoin + $fullWhere
-        // (the visible-page group filter) + $params as the id set above, so the
+        // (the visible-page group filter) + $params as the aggregate above, so the
         // composed rows are scoped IDENTICALLY (active-scope, company, status,
-        // trajectory-parent exclusion). The cap applies ONLY here; group_reg_ids
-        // stays the FULL unbounded set for the offerte tally.
+        // trajectory-parent exclusion). The cap applies ONLY here — the offerte
+        // tally is computed separately in SQL (offerteVerdelingByGroup, FIX-10).
         //
         // Column set is byte-identical to queryForGrid's $dataSql (M5: structured
         // columns only; enrollment_data solely for the anon-lead name fallback).
         // enrollment_data participates in NO filter/sort, only SELECT.
         //
-        // PARAM ORDER (M4): the inner subquery text consumes $idsParams
-        // (JOIN %d before WHERE params) in the SAME order as $idsSql above; the
-        // outer `_rn <= %d` placeholder follows all of them, so GROUP_ROW_CAP is
+        // PARAM ORDER (M4): the inner subquery text consumes $params + the group
+        // filter args (JOIN %d before WHERE params, then the group IN placeholders);
+        // the outer `_rn <= %d` placeholder follows all of them, so GROUP_ROW_CAP is
         // appended LAST.
         $rowsSql = "SELECT id, user_id, edition_id, trajectory_id,
                            parent_registration_id, status, enrollment_path,
@@ -2115,13 +2094,163 @@ final class RegistrationRepository
         }
 
         return [
-            'agg_rows'      => $aggRows,
-            'group_reg_ids' => $groupRegIds,
-            'group_rows'    => $groupRows,
-            'total'         => $total,
-            'page'          => $page,
-            'per_page'      => $perPage,
+            'agg_rows'   => $aggRows,
+            'group_rows' => $groupRows,
+            'total'      => $total,
+            'page'       => $page,
+            'per_page'   => $perPage,
         ];
+    }
+
+    /**
+     * Per-group offerte-status tally, computed ENTIRELY in SQL (FIX-10).
+     *
+     * Replaces the old unbounded path where queryForGridGrouped pulled EVERY
+     * registration id of every visible group into PHP (group_reg_ids) purely so
+     * the service could tally the offerte-status distribution. At 50k rows that
+     * built a 50k-placeholder IN clause and materialised 50k ids → OOM.
+     *
+     * This method computes the same distribution with a single GROUP BY:
+     *   GROUP BY r.{$groupBy}, <quote status of the MIN-post-ID quote>
+     * so the tally never leaves the database as a row set.
+     *
+     * SCOPE PARITY (INV-3): reuses buildGridFilters — the SAME active_join,
+     * where_clause and params as queryForGrid/queryForGridGrouped — so the WHERE
+     * and JOIN are byte-identical to the flat/grouped paths (trajectory-parent
+     * corpus exclusion, edition_id-NOT-NULL base predicate, active-scope, company,
+     * status, q). It then narrows to ONLY the visible page's groups (the same
+     * IN(nonNullGroupValues) OR IS NULL filter queryForGridGrouped derives from
+     * its paginated aggregate rows), so the tally matches the aggregate rows the
+     * service renders.
+     *
+     * QUOTE JOIN semantic — identical to QuoteRepository::findQuoteIdsByRegistrations:
+     * a registration may have MULTIPLE published vad_quote posts; the MIN(post ID)
+     * quote is THE quote. A derived table picks that MIN quote per registration_id
+     * (registration_id meta is a STRING), then its `status` meta is LEFT JOINed.
+     * A reg with no published quote — or a quote with null/empty status — falls
+     * into the NULL status bucket, returned under the '' key. The SERVICE maps the
+     * raw status → QuoteStatus->label() / 'Geen offerte', exactly as
+     * resolveOfferteStatuses does (null/'' → 'Geen offerte'; valid enum → label();
+     * unknown raw → verbatim), so labels are byte-identical to the old path.
+     *
+     * @param  array<string,mixed> $filters  Same key-set as queryForGridGrouped.
+     * @param  string              $groupBy  Validated allowlisted column (caller owns M4).
+     * @return array<string,array<string,int>>  group_value => (raw status | '') => count.
+     *         The NULL-group key is '' (empty string); the no-quote/null-status
+     *         bucket key is also '' within a group's inner map.
+     */
+    public function offerteVerdelingByGroup(array $filters, string $groupBy): array
+    {
+        global $wpdb;
+
+        $built       = $this->buildGridFilters($filters);
+        $page        = $built['page'];
+        $perPage     = $built['per_page'];
+        $activeJoin  = $built['active_join'];
+        $whereClause = $built['where_clause'];
+        $params      = $built['params'];
+        $regTable    = $this->table();
+
+        $groupColSql = "r.{$groupBy}";  // column name from allowlist — never user input
+
+        // --- Resolve the visible page's groups (mirror queryForGridGrouped) ---
+        // The tally must cover EXACTLY the groups the aggregate page renders, so
+        // we recompute the same paginated group set (same ORDER BY cnt DESC /
+        // LIMIT/OFFSET) and narrow to it. A NULL group_value routes via IS NULL,
+        // never IN ('') (strval(null)='' would silently miss the IS NULL rows).
+        $aggSql = "SELECT {$groupColSql} AS group_value, COUNT(*) AS cnt
+                   FROM {$regTable} r
+                   LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                   {$activeJoin}
+                   {$whereClause}
+                   GROUP BY {$groupColSql}
+                   ORDER BY cnt DESC
+                   LIMIT %d OFFSET %d";
+        $aggParams = array_merge($params, [$perPage, ($page - 1) * $perPage]);
+        $aggRows   = $wpdb->get_results($wpdb->prepare($aggSql, ...$aggParams));
+
+        if (empty($aggRows)) {
+            return [];
+        }
+
+        $nonNullGroupValues = [];
+        $hasNullGroup       = false;
+        foreach ($aggRows as $r) {
+            if ($r->group_value === null) {
+                $hasNullGroup = true;
+            } else {
+                $nonNullGroupValues[] = (string) $r->group_value;
+            }
+        }
+
+        $groupClauses    = [];
+        $groupFilterArgs = [];
+        if (!empty($nonNullGroupValues)) {
+            $groupPlaceholders = implode(',', array_fill(0, count($nonNullGroupValues), '%s'));
+            $groupClauses[]    = "r.{$groupBy} IN ({$groupPlaceholders})";
+            $groupFilterArgs   = $nonNullGroupValues;
+        }
+        if ($hasNullGroup) {
+            $groupClauses[] = "r.{$groupBy} IS NULL";
+        }
+        $groupFilter = '(' . implode(' OR ', $groupClauses) . ')';
+
+        $fullWhere = $whereClause
+            ? "{$whereClause} AND {$groupFilter}"
+            : "WHERE {$groupFilter}";
+
+        // --- The SQL tally ---
+        // Derived table `q` = MIN(post ID) published vad_quote per registration_id
+        // (mirrors findQuoteIdsByRegistrations: registration_id meta is a string,
+        // GROUP BY meta_value, MIN(p.ID) wins over multiple quotes). Then LEFT JOIN
+        // that quote's `status` postmeta. r → q join is on the string reg id.
+        // Aggregate: COUNT(*) per (group_value, status), NULL status kept as NULL
+        // (mapped to the '' bucket in PHP). No registration id ever leaves SQL.
+        $quotePostType = \Stride\Modules\Invoicing\QuoteCPT::POST_TYPE;
+
+        // The quote derived table is joined FIRST (before $activeJoin) so its %s
+        // post_type placeholder is the very first bound param — this keeps the
+        // param order simple and correct even when $activeJoin itself carries a
+        // %d (the trajectory JOIN, whose param buildGridFilters array_unshifts to
+        // the FRONT of $params). SQL text placeholder order is therefore:
+        //   %s (post_type) → $activeJoin's %d (if any) + $whereClause's params
+        //   (both already in $params, active-join param first) → group filter args.
+        $sql = "SELECT {$groupColSql} AS group_value, qs.meta_value AS quote_status, COUNT(*) AS cnt
+                FROM {$regTable} r
+                LEFT JOIN (
+                    SELECT pm.meta_value AS reg_id, MIN(p.ID) AS quote_id
+                    FROM {$wpdb->posts} p
+                    INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+                    WHERE p.post_type = %s AND p.post_status = 'publish'
+                      AND pm.meta_key = 'registration_id'
+                    GROUP BY pm.meta_value
+                ) q ON q.reg_id = CAST(r.id AS CHAR)
+                LEFT JOIN {$wpdb->postmeta} qs
+                    ON qs.post_id = q.quote_id AND qs.meta_key = 'status'
+                LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                {$activeJoin}
+                {$fullWhere}
+                GROUP BY {$groupColSql}, qs.meta_value";
+
+        $sqlParams = array_merge([$quotePostType], $params, $groupFilterArgs);
+        $rows      = $wpdb->get_results($wpdb->prepare($sql, ...$sqlParams));
+
+        $tally = [];
+        foreach ($rows as $row) {
+            $group  = $row->group_value === null ? '' : (string) $row->group_value;
+            // Null/empty quote status → the no-quote bucket, keyed ''. The service
+            // maps '' → 'Geen offerte' (identical to resolveOfferteStatuses).
+            $status = ($row->quote_status === null || $row->quote_status === '')
+                ? ''
+                : (string) $row->quote_status;
+
+            if (!isset($tally[$group])) {
+                $tally[$group] = [];
+            }
+            $tally[$group][$status] = ($tally[$group][$status] ?? 0) + (int) $row->cnt;
+        }
+
+        return $tally;
     }
 
     /**
