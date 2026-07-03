@@ -572,10 +572,15 @@ if (!function_exists('add_action')) {
 if (!function_exists('do_action')) {
     function do_action($hook, ...$args)
     {
-        global $_test_actions, $_test_action_calls;
+        global $_test_actions, $_test_action_calls, $_test_did_action_counts;
 
         // Track action calls for assertions
         $_test_action_calls[$hook][] = $args;
+
+        // Mirror WP core's $wp_actions counter so did_action() reflects
+        // whether $hook has actually fired in this test (e.g.
+        // did_action('rest_api_init') after do_action('rest_api_init')).
+        $_test_did_action_counts[$hook] = ($_test_did_action_counts[$hook] ?? 0) + 1;
 
         if (!isset($_test_actions[$hook])) {
             return;
@@ -1205,12 +1210,51 @@ if (!class_exists('WP_User_Query')) {
 if (!function_exists('register_rest_route')) {
     function register_rest_route(string $namespace, string $route, array $args): bool
     {
-        global $_test_rest_routes;
+        global $_test_rest_routes, $_test_rest_route_calls;
         if (!isset($_test_rest_routes)) {
             $_test_rest_routes = [];
         }
+        if (!isset($_test_rest_route_calls)) {
+            $_test_rest_route_calls = [];
+        }
         $_test_rest_routes[$namespace . $route] = $args;
+        // Ordered call log (unlike the keyed map above, this never
+        // overwrites on a repeat namespace+route) so tests can assert
+        // per-call detail (e.g. every method variant queued via route()).
+        $_test_rest_route_calls[] = [
+            'namespace' => $namespace,
+            'route' => $route,
+            'args' => $args,
+        ];
         return true;
+    }
+}
+
+// did_action()/_doing_it_wrong() capture for testing. Mirrors WP core's
+// $wp_actions counter (did_action) and adds an assertable log of
+// _doing_it_wrong() calls (WP core just fires a filtered user error; tests
+// need to observe that it fired without triggering a real PHP error).
+global $_test_did_action_counts, $_test_doing_it_wrong_calls;
+$_test_did_action_counts = [];
+$_test_doing_it_wrong_calls = [];
+
+if (!function_exists('did_action')) {
+    function did_action($hook_name): int
+    {
+        global $_test_did_action_counts;
+        return $_test_did_action_counts[$hook_name] ?? 0;
+    }
+}
+
+if (!function_exists('_doing_it_wrong')) {
+    function _doing_it_wrong($function_name, $message, $version): void
+    {
+        global $_test_doing_it_wrong_calls;
+        $_test_doing_it_wrong_calls[] = [
+            'function_name' => $function_name,
+            'message' => $message,
+            'version' => $version,
+        ];
     }
 }
 

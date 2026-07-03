@@ -42,6 +42,8 @@ abstract class TestCase extends BaseTestCase
         global $_test_users, $_test_posts, $_test_data_manager_meta;
         global $_test_abilities, $_test_ability_categories, $_test_log_entries;
         global $_test_new_user_notification_calls;
+        global $_test_rest_routes, $_test_rest_route_calls;
+        global $_test_did_action_counts, $_test_doing_it_wrong_calls;
 
         $_test_user_meta = [];
         $_test_post_meta = [];
@@ -58,6 +60,10 @@ abstract class TestCase extends BaseTestCase
         $_test_ability_categories = [];
         $_test_log_entries = [];
         $_test_new_user_notification_calls = 0;
+        $_test_rest_routes = [];
+        $_test_rest_route_calls = [];
+        $_test_did_action_counts = [];
+        $_test_doing_it_wrong_calls = [];
     }
 
     /**

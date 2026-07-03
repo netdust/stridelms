@@ -69,6 +69,9 @@ $ntdstCoreFiles = [
     // this bootstrap never executes the loader — so this direct require is
     // permanent, not a stopgap.
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/CorsPolicy.php',
+    // Registrar (landing in the loader at Task 3.4) — loaded directly here
+    // the same way, ahead of the loader wiring.
+    dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/RestRegistrar.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/core/Theme.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/api/MetaboxGenerator.php',
     dirname(__DIR__) . '/web/app/mu-plugins/ntdst-core/services/Mailer.php',
