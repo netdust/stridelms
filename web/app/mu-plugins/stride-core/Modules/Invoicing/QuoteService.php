@@ -654,7 +654,30 @@ final class QuoteService extends AbstractService
         // persisted negative tax/total on that edge).
         $totals = QuoteCalculator::deriveTotalsFromCents($subtotalCents, $discount->inCents());
 
-        // Update quote
+        // DATA-1: redeem BEFORE persisting the discount. If we wrote the
+        // discount first and the redeem then failed, the quote would carry an
+        // "unfunded" discount — money written off with no matching redemption
+        // flowing to Exact Online. Redeeming first means the discount write
+        // (below) is only reached once a funding record exists.
+        //
+        // Ordering is release(previous) -> redeem(new) -> write. The previous
+        // code was already released above; if this new redeem fails the discount
+        // write never runs, so the quote's meta keeps its PRIOR funded state
+        // (old voucher_code + old discount) rather than an unfunded new discount.
+        $userId = (int) ($meta['user_id'] ?? 0);
+        $redemption = $voucherService->redeemVoucher($voucherCode, $userId, $quoteId);
+
+        if (is_wp_error($redemption)) {
+            ntdst_log('invoicing')->error('Voucher application failed', [
+                'quote_id' => $quoteId,
+                'voucher_code' => $voucherCode,
+                'error' => $redemption->get_error_message(),
+            ]);
+            return $redemption;
+        }
+
+        // Update quote — only reached after the redeem succeeded, so the
+        // persisted discount always has a matching redemption behind it.
         $result = $this->repository->updateMeta($quoteId, [
             'voucher_code' => $voucherCode,
             'discount' => $totals['discount'],
@@ -669,19 +692,6 @@ final class QuoteService extends AbstractService
                 'error' => 'Kon offerte niet bijwerken',
             ]);
             return new WP_Error('update_failed', 'Kon offerte niet bijwerken');
-        }
-
-        // Redeem the voucher
-        $userId = (int) ($meta['user_id'] ?? 0);
-        $redemption = $voucherService->redeemVoucher($voucherCode, $userId, $quoteId);
-
-        if (is_wp_error($redemption)) {
-            ntdst_log('invoicing')->error('Voucher application failed', [
-                'quote_id' => $quoteId,
-                'voucher_code' => $voucherCode,
-                'error' => $redemption->get_error_message(),
-            ]);
-            return $redemption;
         }
 
         ntdst_log('invoicing')->info('Voucher applied to quote', [

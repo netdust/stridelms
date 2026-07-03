@@ -295,7 +295,9 @@
         this.switchView('inschrijvingen', { queue: q.key });
       },
 
-      /* Click an Acties row → that person's dossier (cluster D reads ?user=).
+      /* Click an Acties row → that person's dossier (cluster D reads ?user=),
+         deep-linked to the SPECIFIC waiting registration via ?reg= so the
+         dossier opens the right edition rather than the person's newest one.
          Meldingen rows open their own url instead. */
       openAction(item) {
         if (item.isMelding) {
@@ -303,7 +305,7 @@
           return;
         }
         const id = item.userId || item.regId;
-        if (id) this.switchView('dossier', { user: id });
+        if (id) this.switchView('dossier', { user: id, reg: item.regId });
       },
 
       pulse() {

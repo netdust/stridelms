@@ -15,8 +15,12 @@ final class AuditTable
      * v2: STORED generated column subject_user_id (from context.user_id)
      *     + indexes idx_subject_user / idx_action, for indexable
      *     subject-targeted queries (notification feeds).
+     * v3: composite index idx_created_id (created_at, id) for the activity-feed
+     *     keyset order `ORDER BY created_at DESC, id DESC LIMIT N`. The single
+     *     idx_created (created_at) cannot satisfy the id tiebreak, so the top-N
+     *     read was a filesort over the whole table (perf audit 4B.1).
      */
-    public const SCHEMA_VERSION = 2;
+    public const SCHEMA_VERSION = 3;
 
     private const SCHEMA_VERSION_OPTION = 'ntdst_audit_schema_version';
 
@@ -66,6 +70,7 @@ final class AuditTable
             INDEX idx_entity (entity_type, entity_id),
             INDEX idx_actor (actor_id),
             INDEX idx_created (created_at),
+            INDEX idx_created_id (created_at, id),
             INDEX idx_subject_user (subject_user_id, created_at),
             INDEX idx_action (action)
         ) {$charset};";
@@ -102,6 +107,11 @@ final class AuditTable
      *  - idx_subject_user (subject_user_id, created_at) serves the
      *    subject-targeted notification queries; idx_action serves
      *    action-filtered scans (e.g. session.note_updated).
+     *
+     * v3:
+     *  - idx_created_id (created_at, id) serves the activity-feed keyset order
+     *    `ORDER BY created_at DESC, id DESC LIMIT N`, which idx_created alone
+     *    could not (the id tiebreak forced a top-N filesort). Purely additive.
      *
      * Failure backoff: a failed run sets a 5-minute transient; while it
      * lives, migrate() bails before any DDL so a persistently failing ALTER
@@ -144,6 +154,13 @@ final class AuditTable
 
         if (!self::indexExists('idx_action')) {
             $clauses[] = 'ADD INDEX idx_action (action)';
+        }
+
+        // v3 — composite keyset index for the activity-feed ORDER BY. Purely
+        // additive; the per-clause indexExists guard keeps it idempotent across
+        // a straight v1→v3 jump and a v2→v3 upgrade alike.
+        if (!self::indexExists('idx_created_id')) {
+            $clauses[] = 'ADD INDEX idx_created_id (created_at, id)';
         }
 
         if ($clauses !== []) {

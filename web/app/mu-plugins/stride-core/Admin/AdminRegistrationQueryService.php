@@ -121,11 +121,39 @@ final class AdminRegistrationQueryService
             return $this->paginationEnvelope([], $total, $page, $perPage);
         }
 
+        // Two-step offerte resolver over this page's reg ids.
+        $regIds       = array_map(static fn($row) => (int) $row->id, $rows);
+        $offerteByReg = $this->resolveOfferteStatuses($regIds);
+
+        $items = $this->composeFromRows($rows, $offerteByReg);
+
+        return $this->paginationEnvelope($items, $total, $page, $perPage);
+    }
+
+    /**
+     * Collect ids from a batch of raw rows, run the batch resolves, and compose
+     * the read-model items — the resolve+compose half shared by the flat path and
+     * the grouped child-row path so there is no second copy of the batch-resolve
+     * or the row composition (INV-3: one composer, one resolve shape).
+     *
+     * The offerte map is passed IN (already resolved by the caller) because the
+     * grouped path resolves it once over the FULL group id set; composeRows reads
+     * it per-regId, so a map keyed by a superset of these rows' ids is fine.
+     *
+     * @param  array             $rows          Raw registration row objects.
+     * @param  array<int,string> $offerteByReg  regId => offerte label (may be a superset).
+     * @return array
+     */
+    private function composeFromRows(array $rows, array $offerteByReg): array
+    {
+        if (empty($rows)) {
+            return [];
+        }
+
         // --- Collect IDs for batch resolution ---
-        $userIds      = [];
-        $editionIds   = [];
+        $userIds       = [];
+        $editionIds    = [];
         $trajectoryIds = [];
-        $regIds       = [];
 
         foreach ($rows as $row) {
             $userId = (int) $row->user_id;
@@ -138,7 +166,6 @@ final class AdminRegistrationQueryService
             if (!empty($row->trajectory_id)) {
                 $trajectoryIds[] = (int) $row->trajectory_id;
             }
-            $regIds[] = (int) $row->id;
         }
 
         $userIds       = array_unique($userIds);
@@ -166,16 +193,17 @@ final class AdminRegistrationQueryService
             ? ntdst_get(\Stride\Modules\Edition\SessionRepository::class)->countByEditions($editionIds)
             : [];
 
-        // Attendance per edition (keyed per edition → userId → sessionId → status)
-        $attendanceByEdition = [];
-        foreach ($editionIds as $editionId) {
-            $attendanceByEdition[$editionId] = BatchQueryHelper::batchGetAttendance($editionId);
-        }
+        // Attendance per edition (keyed per edition → userId → sessionId → status).
+        // ONE batched query over edition_id IN (...) — the SHOW TABLES existence
+        // probe + SELECT are hoisted out of the former per-edition loop (perf 4B.2).
+        $attendanceByEdition = !empty($editionIds)
+            ? BatchQueryHelper::batchGetAttendanceForEditions($editionIds)
+            : [];
 
-        // Two-step offerte resolver
-        $offerteByReg = $this->resolveOfferteStatuses($regIds);
-
-        // --- Compose items ---
+        // --- Per-row assembly (no queries below this point) ---
+        // The identity/status/attendance/company/trajectory/offerte shape shared by
+        // BOTH the flat and grouped-child-row paths — the single row-composer. All
+        // reads are against the already-resolved batch maps above.
         $items = [];
         foreach ($rows as $row) {
             $userId    = (int) $row->user_id;
@@ -266,7 +294,7 @@ final class AdminRegistrationQueryService
             ];
         }
 
-        return $this->paginationEnvelope($items, $total, $page, $perPage);
+        return $items;
     }
 
     /**
@@ -352,30 +380,67 @@ final class AdminRegistrationQueryService
 
         // Delegate to the repository: identical WHERE/JOIN construction to
         // queryForGrid — q, active-scope, edition_id, company_id, status all applied.
-        $result      = $this->registrations->queryForGridGrouped($params, $groupBy);
-        $aggRows     = $result['agg_rows'];
-        $groupRegIds = $result['group_reg_ids'];
-        $total       = $result['total'];
-        $page        = $result['page'];
-        $perPage     = $result['per_page'];
+        $result    = $this->registrations->queryForGridGrouped($params, $groupBy);
+        $aggRows   = $result['agg_rows'];
+        $groupRows = $result['group_rows'];
+        $total     = $result['total'];
+        $page      = $result['page'];
+        $perPage   = $result['per_page'];
 
         if (empty($aggRows)) {
             return $this->paginationEnvelope([], $total, $page, $perPage);
         }
 
-        // All reg IDs across visible groups — for the bounded two-step offerte resolver.
-        $allRegIds    = array_merge(...array_values($groupRegIds));
-        $offerteByReg = !empty($allRegIds) ? $this->resolveOfferteStatuses($allRegIds) : [];
+        // Per-group offerte tally — computed IN SQL (FIX-10). Replaces the old
+        // path that pulled every registration id of every visible group into PHP
+        // just to count offerte labels (OOM at 50k rows). The repo returns raw
+        // [group_value => (rawStatus|'') => count]; we map raw → label here (the
+        // SAME translation resolveOfferteStatuses uses), so the enum→label output
+        // is byte-identical to the old tally.
+        $rawVerdeling  = $this->registrations->offerteVerdelingByGroup($params, $groupBy);
+        $offerteTallies = [];
+        foreach ($rawVerdeling as $groupKey => $statusCounts) {
+            $offerteTallies[$groupKey] = $this->labelOfferteTally($statusCounts);
+        }
 
-        // Compose aggregate items.
+        // Compose the capped child rows ONCE over the UNION of every group's
+        // (≤ GROUP_ROW_CAP) rows, via the SHARED composer — same identity/company/
+        // status/trajectory/offerte assembly as the flat grid, so grouped child
+        // rows can expose no row and no field the flat grid does not (INV-3/INV-7).
+        // This offerte resolve is over the BOUNDED capped union only (≤ GROUP_ROW_CAP
+        // per group), never the unbounded full id set — that is the whole point of
+        // FIX-10: only the tally moved to SQL; the capped-row resolve stays bounded.
+        $composedByRegId = [];
+        $cappedUnion     = $groupRows ? array_merge(...array_values($groupRows)) : [];
+        if (!empty($cappedUnion)) {
+            $cappedIds        = array_map(static fn($r) => (int) $r->id, $cappedUnion);
+            $cappedOfferteMap = $this->resolveOfferteStatuses($cappedIds);
+            foreach ($this->composeFromRows($cappedUnion, $cappedOfferteMap) as $item) {
+                $composedByRegId[$item['id']] = $item;
+            }
+        }
+
+        // Compose aggregate items, attaching each group's composed child rows.
         $items = [];
         foreach ($aggRows as $row) {
             $count       = (int) $row->cnt;
             $completed   = (int) $row->completed_count;
             $pctAfgerond = $count > 0 ? (int) round($completed / $count * 100) : 0;
 
-            $groupRids    = $groupRegIds[$row->group_value] ?? [];
-            $offerteTally = $this->tallyOfferteStatuses($groupRids, $offerteByReg);
+            // Look up the SQL tally by the same key convention the repo uses:
+            // '' for a NULL group_value, (string) value otherwise.
+            $groupKey     = $row->group_value === null ? '' : (string) $row->group_value;
+            $offerteTally = $offerteTallies[$groupKey] ?? [];
+
+            // Bucket the composed rows back to this group, preserving the repo's
+            // registered_at DESC order (group_rows is already ordered + capped).
+            $groupChildRows = [];
+            foreach ($groupRows[$row->group_value] ?? [] as $rawRow) {
+                $regId = (int) $rawRow->id;
+                if (isset($composedByRegId[$regId])) {
+                    $groupChildRows[] = $composedByRegId[$regId];
+                }
+            }
 
             $items[] = [
                 'group_value'        => $row->group_value,
@@ -383,6 +448,8 @@ final class AdminRegistrationQueryService
                 'pct_afgerond'       => $pctAfgerond,
                 'avg_attendance_pct' => null,  // Deferred: cross-edition avg requires per-row resolution
                 'offerte_verdeling'  => $offerteTally,
+                'rows'               => $groupChildRows,  // ≤ GROUP_ROW_CAP composed child rows
+                'row_total'          => $count,           // full group size — client shows "Toon alle N" when > count(rows)
             ];
         }
 
@@ -488,18 +555,30 @@ final class AdminRegistrationQueryService
     }
 
     /**
-     * Tally offerte statuses for a set of registration IDs.
+     * Translate a raw per-group offerte tally (from RegistrationRepository::
+     * offerteVerdelingByGroup) into the Dutch-label tally the grid renders.
      *
-     * @param  array<int>    $regIds
-     * @param  array<int,string> $offerteByReg
+     * The raw map is keyed by the quote's stored status meta value ('' for the
+     * no-quote / null-status bucket). This applies the SAME label translation as
+     * resolveOfferteStatuses so the counts and labels are byte-identical to the
+     * pre-FIX-10 PHP tally: '' → 'Geen offerte'; a valid QuoteStatus → label();
+     * an unknown raw status → the raw value verbatim. Two raw statuses that map to
+     * the same label are summed (defensive — cannot happen with the current enum).
+     *
+     * @param  array<string,int> $statusCounts  rawStatus|'' => count
      * @return array<string,int>  label => count
      */
-    private function tallyOfferteStatuses(array $regIds, array $offerteByReg): array
+    private function labelOfferteTally(array $statusCounts): array
     {
         $tally = [];
-        foreach ($regIds as $regId) {
-            $label        = $offerteByReg[$regId] ?? 'Geen offerte';
-            $tally[$label] = ($tally[$label] ?? 0) + 1;
+        foreach ($statusCounts as $rawStatus => $count) {
+            if ($rawStatus === '') {
+                $label = 'Geen offerte';
+            } else {
+                $enum  = QuoteStatus::tryFrom((string) $rawStatus);
+                $label = $enum !== null ? $enum->label() : (string) $rawStatus;
+            }
+            $tally[$label] = ($tally[$label] ?? 0) + (int) $count;
         }
         return $tally;
     }
