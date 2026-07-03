@@ -168,6 +168,45 @@ final class AuditTableMigrationTest extends IntegrationTestCase
     }
 
     /** @test */
+    public function activityFeedOrderIsIndexOrderedAfterMigration(): void
+    {
+        // 4B.1: the activity feed runs `ORDER BY created_at DESC, id DESC LIMIT N`.
+        // Without a (created_at, id) index this is a full-table scan + filesort.
+        // idx_created_id STRUCTURALLY satisfies the keyset order: forcing it yields
+        // an index scan with NO filesort. We assert the structural guarantee via
+        // FORCE INDEX because the UNFORCED optimiser choice on a small, volatile
+        // table is statistics-dependent (non-deterministic) — the fix is that an
+        // index-ordered path now EXISTS, which FORCE INDEX proves deterministically.
+        global $wpdb;
+
+        for ($i = 0; $i < 40; $i++) {
+            $this->seedRow('{"user_id": ' . (778000000 + $i) . '}');
+        }
+
+        delete_option(self::SCHEMA_OPTION);
+        AuditTable::migrate();
+
+        $this->assertTrue($this->indexExists('idx_created_id'), '4B.1: migrate() must add idx_created_id');
+
+        $plan = $wpdb->get_results(
+            "EXPLAIN SELECT * FROM {$this->table()} FORCE INDEX (idx_created_id)
+             ORDER BY created_at DESC, id DESC LIMIT 50",
+        );
+
+        $this->assertNotEmpty($plan, 'EXPLAIN should return a query plan');
+
+        $extra = (string) ($plan[0]->Extra ?? '');
+        $usedKey = (string) ($plan[0]->key ?? '');
+
+        $this->assertSame('idx_created_id', $usedKey, '4B.1: the keyset index must be usable for this order');
+        $this->assertStringNotContainsString(
+            'Using filesort',
+            $extra,
+            '4B.1: idx_created_id must provide index-ordered retrieval (no top-N filesort)',
+        );
+    }
+
+    /** @test */
     public function postMigrationInsertsWithUnsafeSubjectValuesSucceed(): void
     {
         // Rebuild the column from the current expression — IF-NOT-EXISTS /
@@ -237,6 +276,7 @@ final class AuditTableMigrationTest extends IntegrationTestCase
             $this->assertTrue($this->columnExists('subject_user_id'), 'I1a: fresh CREATE must include subject_user_id');
             $this->assertTrue($this->indexExists('idx_subject_user'), 'I1a: fresh CREATE must include idx_subject_user');
             $this->assertTrue($this->indexExists('idx_action'), 'I1a: fresh CREATE must include idx_action');
+            $this->assertTrue($this->indexExists('idx_created_id'), '4B.1: fresh CREATE must include idx_created_id (created_at, id) keyset index');
             $this->assertTrue($this->indexExists('idx_entity'), 'base index must survive');
 
             $this->assertSame(
@@ -394,6 +434,9 @@ final class AuditTableMigrationTest extends IntegrationTestCase
         }
         if ($this->indexExists('idx_action')) {
             $wpdb->query("ALTER TABLE {$this->table()} DROP INDEX idx_action");
+        }
+        if ($this->indexExists('idx_created_id')) {
+            $wpdb->query("ALTER TABLE {$this->table()} DROP INDEX idx_created_id");
         }
         if ($this->columnExists('subject_user_id')) {
             $wpdb->query("ALTER TABLE {$this->table()} DROP COLUMN subject_user_id");
