@@ -601,7 +601,10 @@ final class AdminAPIController
 
         $view = $request->get_param('view') ?? 'agenda';
         $page = max(1, (int) ($request->get_param('page') ?: 1));
-        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
+        // Clamp ceiling (4B.3): the schema declares maximum=100, but read the
+        // param defensively so an internal rest_do_request that bypasses arg
+        // validation still cannot hydrate everything (per_page=100000).
+        $perPage = min(100, max(1, (int) ($request->get_param('per_page') ?: 20)));
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $dateFrom = sanitize_text_field($request->get_param('date_from') ?? '');
@@ -895,7 +898,7 @@ final class AdminAPIController
         global $wpdb;
 
         $page = max(1, (int) ($request->get_param('page') ?: 1));
-        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
+        $perPage = min(100, max(1, (int) ($request->get_param('per_page') ?: 20))); // clamp ceiling (4B.3)
         $search = sanitize_text_field($request->get_param('search') ?? '');
         $status = sanitize_text_field($request->get_param('status') ?? '');
         $dateFrom = sanitize_text_field($request->get_param('date_from') ?? '');
@@ -1556,7 +1559,7 @@ final class AdminAPIController
         // NO $wpdb / read-model logic here.
         $filters = [
             'page'       => max(1, (int) ($request->get_param('page') ?: 1)),
-            'per_page'   => max(1, (int) ($request->get_param('per_page') ?: 20)),
+            'per_page'   => min(100, max(1, (int) ($request->get_param('per_page') ?: 20))), // clamp ceiling (4B.3 sibling audit)
             'search'     => sanitize_text_field($request->get_param('search') ?? ''),
             'status'     => sanitize_text_field($request->get_param('status') ?? ''),
             'edition_id' => (int) $request->get_param('edition_id'),
@@ -1729,7 +1732,7 @@ final class AdminAPIController
     {
         $staleDays = max(1, (int) ($request->get_param('stale_days') ?? 7));
         $page = max(1, (int) ($request->get_param('page') ?: 1));
-        $perPage = max(1, (int) ($request->get_param('per_page') ?: 20));
+        $perPage = min(100, max(1, (int) ($request->get_param('per_page') ?: 20))); // clamp ceiling (4B.3 sibling audit)
 
         if (!RegistrationTable::exists()) {
             return new WP_REST_Response([

@@ -203,29 +203,61 @@ final class BatchQueryHelper
      */
     public static function batchGetAttendance(int $editionId): array
     {
+        return self::batchGetAttendanceForEditions([$editionId])[$editionId] ?? [];
+    }
+
+    /**
+     * Batch fetch attendance for MANY editions in one query.
+     *
+     * Perf audit 4B.2: the admin registrations grid previously looped
+     * batchGetAttendance() per distinct edition — each iteration ran its own
+     * SHOW TABLES LIKE existence probe + a per-edition SELECT (worst case
+     * 2 × N editions queries per grid page). This hoists the existence check
+     * out of the loop (one probe) and fetches every edition's rows in a single
+     * `edition_id IN (...)` SELECT, then partitions the rows per edition.
+     *
+     * INV-3: BatchQueryHelper is the sanctioned $wpdb reader for these batch
+     * shapes (no per-edition repository finder exists); every dynamic value is
+     * a $wpdb->prepare() placeholder.
+     *
+     * @param array<int> $editionIds
+     * @return array<int, array<int, array<int, string>>> Map of editionId => (userId => [sessionId => status])
+     */
+    public static function batchGetAttendanceForEditions(array $editionIds): array
+    {
+        $editionIds = array_values(array_unique(array_map('intval', $editionIds)));
+        if (empty($editionIds)) {
+            return [];
+        }
+
+        // Every requested edition gets an entry, even with no attendance rows —
+        // callers index by editionId and expect a present (possibly empty) key.
+        $attendance = array_fill_keys($editionIds, []);
+
         global $wpdb;
 
         $table = $wpdb->prefix . 'vad_attendance';
 
-        // Check table exists
+        // Existence probe ONCE, not per edition (was the per-call overhead).
         if ($wpdb->get_var($wpdb->prepare("SHOW TABLES LIKE %s", $table)) !== $table) {
-            return [];
+            return $attendance;
         }
 
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+
         $results = $wpdb->get_results($wpdb->prepare(
-            "SELECT user_id, session_id, status FROM {$table} WHERE edition_id = %d",
-            $editionId,
+            "SELECT edition_id, user_id, session_id, status
+             FROM {$table}
+             WHERE edition_id IN ({$placeholders})",
+            ...$editionIds,
         ));
 
-        $attendance = [];
         foreach ($results as $row) {
-            $userId = (int) $row->user_id;
+            $editionId = (int) $row->edition_id;
+            $userId    = (int) $row->user_id;
             $sessionId = (int) $row->session_id;
 
-            if (!isset($attendance[$userId])) {
-                $attendance[$userId] = [];
-            }
-            $attendance[$userId][$sessionId] = $row->status;
+            $attendance[$editionId][$userId][$sessionId] = $row->status;
         }
 
         return $attendance;

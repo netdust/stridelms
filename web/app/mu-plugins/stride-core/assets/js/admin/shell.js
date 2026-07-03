@@ -175,10 +175,11 @@
          params on the URL FIRST so the target surface reads them on its own
          init(). This is the cross-surface contract for cluster B's deep-links:
            switchView('inschrijvingen', { queue: 'pending' })  → ?queue=pending
-           switchView('dossier',        { user: 1234 })        → ?user=1234
+           switchView('dossier',        { user: 1234, reg: 77 }) → ?user=1234&reg=77
          Cluster C's grid() consumes ?queue= and cluster D's dossier() consumes
-         ?user= from the URL on mount. Only a small whitelist of param keys is
-         written (queue, user); anything else is ignored. Stale deep-link params
+         ?user= (+ optional ?reg= to pre-select a registration) from the URL on
+         mount. Only a small whitelist of param keys is written (queue, user,
+         reg); anything else is ignored. Stale deep-link params
          for surfaces OTHER than the target are cleared so a later plain
          switchView() doesn't carry a previous surface's filter. */
       switchView(view, params) {
@@ -189,12 +190,19 @@
         // Clear any previous deep-link params before seeding the new ones.
         url.searchParams.delete('queue');
         url.searchParams.delete('user');
+        url.searchParams.delete('reg');
         if (params && typeof params === 'object') {
           if (params.queue != null && params.queue !== '') {
             url.searchParams.set('queue', String(params.queue));
           }
           if (params.user != null && params.user !== '') {
             url.searchParams.set('user', String(params.user));
+          }
+          // ?reg=<id> deep-links the dossier to the SPECIFIC waiting
+          // registration (e.g. a Vandaag "Wacht op mij" row), so it opens the
+          // right edition instead of defaulting to the person's newest one.
+          if (params.reg != null && params.reg !== '') {
+            url.searchParams.set('reg', String(params.reg));
           }
         }
         window.history.replaceState(null, '', url.toString());

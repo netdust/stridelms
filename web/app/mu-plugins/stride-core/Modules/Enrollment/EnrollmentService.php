@@ -205,8 +205,25 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('enrollment_closed', 'Enrollment is not open for this edition');
         }
 
-        // Begin atomic enrollment — lock capacity rows to prevent race conditions
+        // DATA-2 / mitigation 2: acquire the (user,edition) tuple advisory lock
+        // BEFORE the capacity FOR UPDATE. The capacity lock covers the CAPACITY
+        // predicate; the duplicate check at findByUserAndEdition below is a
+        // DIFFERENT predicate the capacity lock does not cover. Serializing on
+        // the tuple closes the two-concurrent-enrolls-for-the-same-user window.
+        //
+        // Lock ordering is load-bearing: tuple lock → THEN capacity FOR UPDATE,
+        // never the reverse, to avoid deadlock. The same lock is re-acquired
+        // (reentrant, same connection) inside RegistrationRepository::create().
         global $wpdb;
+        if (!$this->registrations->acquireEnrollLock($userId, $editionId)) {
+            ntdst_log('enrollment')->warning('Enrollment rejected: could not acquire tuple lock', [
+                'user_id' => $userId,
+                'edition_id' => $editionId,
+            ]);
+            return new WP_Error('lock_timeout', 'Kon de inschrijving niet vergrendelen, probeer het opnieuw.');
+        }
+
+        // Begin atomic enrollment — lock capacity rows to prevent race conditions
         $wpdb->query('START TRANSACTION');
 
         try {
@@ -327,6 +344,13 @@ final class EnrollmentService extends AbstractService
         } catch (\Throwable $e) {
             $wpdb->query('ROLLBACK');
             throw $e;
+        } finally {
+            // Release the tuple lock on EVERY exit from the transaction span
+            // (edition_full / already_enrolled / db_error early returns, the
+            // success fall-through, and any rethrown exception). The duplicate
+            // window is closed once create() has committed, so releasing here —
+            // before the grant/dispatch tail — is correct.
+            $this->registrations->releaseEnrollLock($userId, $editionId);
         }
 
         // Grant LMS access only for confirmed registrations

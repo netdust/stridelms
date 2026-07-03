@@ -622,9 +622,18 @@ class BulkRegistrationHandlerTest extends TestCase
         $this->assertCount(0, $report['failed']);
     }
 
-    /** A safe field (company_id) is absint-sanitized and persisted. */
+    /**
+     * A safe field (company_id) is absint-sanitized and persisted.
+     *
+     * BULK-1: company 42 must be a REAL scope for the write to proceed — a user
+     * carries it here. absint('42abc') === 42, the value is a known company, so
+     * the write proceeds (the existence guard does not change the absint contract).
+     */
     public function test_bulk_set_field_allows_company_id_absint(): void
     {
+        global $_test_user_meta;
+        $_test_user_meta[7] = ['_stride_company_id' => [42]]; // 42 is a real scope
+
         $row = (object) ['id' => 91, 'status' => 'confirmed', 'edition_id' => 10];
         $repo = $this->createMock(RegistrationRepository::class);
         $repo->method('find')->willReturn($row);
@@ -638,6 +647,116 @@ class BulkRegistrationHandlerTest extends TestCase
 
         $this->assertCount(1, $report['succeeded']);
         $this->assertCount(0, $report['failed']);
+    }
+
+    // =========================================================================
+    // BULK-1 / Task 4A.2 — company_id existence validation before write.
+    //   A bad company_id (absint-valid but carried by no user) silently moves a
+    //   registration into a partner's findByCompany() scope — a cross-tenant
+    //   leak (mitigation 7 / INV-1). The write is now gated on
+    //   CompanyAffiliation::companyExists(): an unknown non-zero company_id is
+    //   SKIPPED with a per-row error, a known one writes, and 0 (clear) is
+    //   allowed. companyExists() is driven through $_test_user_meta: a user
+    //   carrying company 42 makes 42 a real scope, 999 remains unknown.
+    // =========================================================================
+
+    /**
+     * DENIAL (the assertion): an unknown non-zero company_id writes NOTHING and
+     * lands in failed[] with invalid_company. Before the fix, this row wrote —
+     * poisoning findByCompany(). This is the cross-tenant-leak guard.
+     */
+    public function test_bulk_set_field_unknown_company_id_is_refused_not_written(): void
+    {
+        global $_test_user_meta;
+        $_test_user_meta[7] = ['_stride_company_id' => [42]]; // only 42 is a real scope
+
+        $row = (object) ['id' => 92, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        // The write must NEVER happen for an unknown company — this is the leak guard.
+        $repo->expects($this->never())->method('update');
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $report = $this->handler->handleBulkSetField([], ['ids' => [92], 'field' => 'company_id', 'value' => '999']);
+
+        $this->assertCount(0, $report['succeeded']);
+        $this->assertCount(1, $report['failed']);
+        $this->assertSame(92, $report['failed'][0]['id']);
+        $this->assertSame('invalid_company', $report['failed'][0]['code']);
+    }
+
+    /** A KNOWN company_id (carried by a user) writes normally. */
+    public function test_bulk_set_field_known_company_id_writes(): void
+    {
+        global $_test_user_meta;
+        $_test_user_meta[7] = ['_stride_company_id' => [42]]; // 42 is a real scope
+
+        $row = (object) ['id' => 93, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        $repo->expects($this->once())
+            ->method('update')
+            ->with(93, ['company_id' => 42])
+            ->willReturn(true);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $report = $this->handler->handleBulkSetField([], ['ids' => [93], 'field' => 'company_id', 'value' => '42']);
+
+        $this->assertCount(1, $report['succeeded']);
+        $this->assertCount(0, $report['failed']);
+    }
+
+    /**
+     * Boundary: company_id = 0 CLEARS the scope — a legitimate operation, never
+     * gated by companyExists(). The write proceeds with company_id => 0.
+     */
+    public function test_bulk_set_field_company_id_zero_clears_and_is_allowed(): void
+    {
+        $row = (object) ['id' => 94, 'status' => 'confirmed', 'edition_id' => 10];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturn($row);
+        $repo->expects($this->once())
+            ->method('update')
+            ->with(94, ['company_id' => 0])
+            ->willReturn(true);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        // No user carries any company at all — clearing must STILL be allowed.
+        $report = $this->handler->handleBulkSetField([], ['ids' => [94], 'field' => 'company_id', 'value' => '0']);
+
+        $this->assertCount(1, $report['succeeded']);
+        $this->assertCount(0, $report['failed']);
+    }
+
+    /**
+     * A set-field call carries ONE value for the whole selection, so an unknown
+     * company_id refuses the ENTIRE batch (no partial write): EVERY row lands in
+     * failed[] with invalid_company and NOTHING is written. This proves the guard
+     * fails closed across a multi-row selection — a leak on ANY row is impossible.
+     */
+    public function test_bulk_set_field_unknown_company_refuses_whole_batch_no_write(): void
+    {
+        global $_test_user_meta;
+        $_test_user_meta[7] = ['_stride_company_id' => [42]]; // only 42 is real; 999 is not
+
+        $rows = [
+            95 => (object) ['id' => 95, 'status' => 'confirmed', 'edition_id' => 10],
+            96 => (object) ['id' => 96, 'status' => 'confirmed', 'edition_id' => 10],
+        ];
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('find')->willReturnCallback(fn(int $id) => $rows[$id] ?? null);
+        $repo->expects($this->never())->method('update'); // fail closed — nothing writes
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $report = $this->handler->handleBulkSetField([], [
+            'ids' => [95, 96],
+            'field' => 'company_id',
+            'value' => '999',
+        ]);
+
+        $this->assertCount(0, $report['succeeded']);
+        $this->assertCount(2, $report['failed']);
+        $this->assertSame(['invalid_company', 'invalid_company'], array_column($report['failed'], 'code'));
     }
 
     /** M2 inherited: a view-only actor is denied 403 before the loop. */

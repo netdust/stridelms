@@ -71,6 +71,11 @@ add_action('init', function (): void {
         \Stride\Modules\Attendance\AttendanceTable::create();
         update_option('stride_attendance_table_created', '1');
     }
+
+    // Versioned schema upgrades for installs whose table predates a change
+    // (gated internally on stride_attendance_schema_version; 4B.4 drops the
+    // redundant idx_session_user).
+    \Stride\Modules\Attendance\AttendanceTable::migrate();
 }, 1);
 
 // Register partner role for Partner API
