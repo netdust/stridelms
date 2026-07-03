@@ -331,6 +331,64 @@ final class NtdstRestRegistrarTest extends TestCase
     }
 
     /**
+     * Regression test for the 3.2-review Critical (auth bypass): a
+     * memoization map shared across ALL wrappers of a registrar instance,
+     * keyed ONLY by the WP_REST_Request object, leaks one route's verdict
+     * to every other route on the same path. WP core's
+     * rest_send_allow_header() (web/wp/wp-includes/rest-api.php:854-886)
+     * calls EVERY handler's permission_callback for the matched path with
+     * the SAME request object — so with a shared map, a stricter route
+     * silently inherits a laxer route's cached `true` and its own
+     * permission callable is NEVER invoked.
+     *
+     * Contract (threat-model mitigation 3, per-wrapper realization —
+     * [PLAN-CORRECTION 2026-07-03]): each wrapper memoizes independently.
+     * Same wrapper + same request → exactly one evaluation; different
+     * wrappers + same request → fully independent verdicts.
+     */
+    public function testOpposingPermissionsOnSharedPathDoNotLeakVerdictAcrossWrappers(): void
+    {
+        global $_test_rest_route_calls;
+
+        $getCalls = 0;
+        $getPermission = function () use (&$getCalls) {
+            $getCalls++;
+            return false; // stricter route — must deny
+        };
+
+        $postCalls = 0;
+        $postPermission = function () use (&$postCalls) {
+            $postCalls++;
+            return true; // laxer route — allows
+        };
+
+        $registrar = new \NTDST_Rest_Registrar('stride/v1');
+        $registrar->get('/shared-path', fn() => 'ok', ['permission' => $getPermission]);
+        $registrar->post('/shared-path', fn() => 'ok', ['permission' => $postPermission]);
+
+        do_action('rest_api_init');
+
+        self::assertCount(2, $_test_rest_route_calls);
+        $byMethod = [];
+        foreach ($_test_rest_route_calls as $call) {
+            $byMethod[$call['args']['methods']] = $call['args']['permission_callback'];
+        }
+
+        // Mirror rest_send_allow_header(): the SAME request object is
+        // driven through every handler's permission_callback for the
+        // matched path — laxer (POST) wrapper first, stricter (GET) after.
+        $request = new \WP_REST_Request('POST', '/shared-path');
+
+        $postVerdict = ($byMethod['POST'])($request);
+        $getVerdict = ($byMethod['GET'])($request);
+
+        self::assertTrue($postVerdict, 'POST wrapper must return its own permission verdict (true).');
+        self::assertFalse($getVerdict, 'GET wrapper must return ITS OWN verdict (false) — inheriting POST\'s cached true is an auth bypass.');
+        self::assertSame(1, $postCalls, 'POST permission callable must be evaluated exactly once.');
+        self::assertSame(1, $getCalls, 'GET permission callable must be evaluated exactly once — 0 invocations means its verdict was never consulted.');
+    }
+
+    /**
      * Behavioral proof of WeakMap-not-spl_object_id semantics (per the
      * brief's Step 1c): spl_object_id() is a slot index PHP reuses
      * IMMEDIATELY once an object is garbage-collected, so a plain array
