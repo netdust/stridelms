@@ -7,9 +7,11 @@ Last refresh: 2026-06-10 (hardening sprint, phases 0–3 done; audit-remediation
 
 ---
 
-## NEXT: Audit remediation sprint — handoff ready
+## NEXT: Feature roadmap — see `docs/ROADMAP.md` (created 2026-07-03)
 
-Full handoff block at the top of `tasks/todo.md` (§NEXT SPRINT). Source: `docs/architecture/AUDIT-2026-06-10.md` (grade B−). Scope ruled by Stefan 2026-06-10: Milestones 0+1 + perf-critical M2; M3 post-launch; task 1.2 (Makefile/deploy method) parked — Stefan handles it. Execute via harnessed-development → planner (Class-B freshness review), audit's Deps column is authoritative for order. 4 open questions need Stefan first (uploads sensitivity, perf budget, history rewrite, Redis on Ploi) — listed in the todo.md block.
+**Frontend ruled production-ready by Stefan 2026-07-03; work is now feature-by-feature.** Roadmap consolidates STATE.md Post-Launch Vision + todo.md + memory backlog into 4 horizons: H0 launch ops (deploy tooling — Stefan; deploy-time checklist; gate cron; Redis) → H1 revenue enablers (webinar join-link mail, kennisname gate, payment-gateway wrapper, tier fencing, pricing page) → H2 demand-driven (on-demand/incompany, phased choices, video gate, CF Stream provider) → H3 module hardening gates (trajectories shake-out, Partner API bugs, LTI, SCORM decision, admin workspace phase 2) → H4 polish. Each feature enters via harnessed-development.
+
+*(Superseded: the audit-remediation sprint this section previously announced was executed 2026-06-10 — ~75 commits, see todo.md §DONE; the 2026-07-03 follow-up remediation also shipped on `feat/admin-url-filter-state`.)*
 
 ---
 
