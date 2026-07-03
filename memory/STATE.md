@@ -277,3 +277,4 @@ Inventory only — left in place per user instruction:
 
 **Decisions**
 - **only e-learning hides sessions.** Now let me implement this through the harness as the global rules require. This is a small, well-scoped bug fix (Class E/C) — change the predicate so the gate keys on `e-learning` only.
+[2026-07-03] — session ended (no significant changes captured)
