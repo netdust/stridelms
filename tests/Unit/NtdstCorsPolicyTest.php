@@ -19,6 +19,14 @@ use PHPUnit\Framework\TestCase;
  */
 final class NtdstCorsPolicyTest extends TestCase
 {
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        global $_test_filters;
+        $_test_filters = [];
+    }
+
     public function testExactOriginMatches(): void
     {
         $p = new \NTDST_Cors_Policy(['origins' => ['https://app.example.com']]);
@@ -114,5 +122,172 @@ final class NtdstCorsPolicyTest extends TestCase
         self::assertSame(['GET'], $p->getMethods());
         self::assertSame(['Authorization'], $p->getHeaders());
         self::assertSame(600, $p->getMaxAge());
+    }
+
+    // -------------------------------------------------------------------
+    // Header emission — applyCorsHeaders() overrides WP core's
+    // rest_send_cors_headers() (reflect-any-origin + Allow-Credentials:
+    // true default). Capturing seams (setHeaderSender/setHeaderRemover)
+    // are required because native header()/header_remove() are
+    // unobservable in the CLI SAPI — the proven todai-client pattern.
+    // -------------------------------------------------------------------
+
+    /** @var list<string> */
+    private array $capturedSent = [];
+
+    /** @var list<string> */
+    private array $capturedRemoved = [];
+
+    private function makePolicyWithCapture(array $configOverrides = []): \NTDST_Cors_Policy
+    {
+        $this->capturedSent = [];
+        $this->capturedRemoved = [];
+
+        $policy = new \NTDST_Cors_Policy(array_merge([
+            'origins' => ['https://app.example.com'],
+        ], $configOverrides));
+
+        $policy->setHeaderSender(function (string $header): void {
+            $this->capturedSent[] = $header;
+        });
+        $policy->setHeaderRemover(function (string $name): void {
+            $this->capturedRemoved[] = $name;
+        });
+
+        return $policy;
+    }
+
+    public function testAllowedOriginSendsExactOriginVaryAndConfiguredMethodsHeaders(): void
+    {
+        $policy = $this->makePolicyWithCapture([
+            'methods' => ['GET', 'POST'],
+            'headers' => ['Content-Type', 'X-Custom'],
+        ]);
+        $policy->register('/stride/v1/widgets');
+
+        $request = new \WP_REST_Request('GET', '/stride/v1/widgets');
+        $request->set_header('origin', 'https://app.example.com');
+
+        $served = $policy->applyCorsHeaders(true, null, $request, null);
+
+        self::assertTrue($served);
+        self::assertContains('Access-Control-Allow-Origin: https://app.example.com', $this->capturedSent);
+        self::assertContains('Vary: Origin', $this->capturedSent);
+        self::assertContains('Access-Control-Allow-Methods: GET, POST', $this->capturedSent);
+        self::assertContains('Access-Control-Allow-Headers: Content-Type, X-Custom', $this->capturedSent);
+        self::assertContains('Access-Control-Allow-Credentials', $this->capturedRemoved);
+
+        foreach ($this->capturedSent as $header) {
+            self::assertStringNotContainsString('Access-Control-Max-Age', $header);
+        }
+    }
+
+    public function testAllowedOriginSendsMaxAgeOnlyWhenConfigured(): void
+    {
+        $policy = $this->makePolicyWithCapture(['max_age' => 600]);
+        $policy->register('/stride/v1/widgets');
+
+        $request = new \WP_REST_Request('GET', '/stride/v1/widgets');
+        $request->set_header('origin', 'https://app.example.com');
+
+        $policy->applyCorsHeaders(true, null, $request, null);
+
+        self::assertContains('Access-Control-Max-Age: 600', $this->capturedSent);
+    }
+
+    public function testAllowCredentialsIsAlwaysRemovedRegardlessOfOriginOutcome(): void
+    {
+        // Mitigation 1 — this MUST fire unconditionally, even for the
+        // denied-origin path, since WP core's own rest_send_cors_headers()
+        // (prio 10) already set Allow-Credentials: true for ANY Origin.
+        $policy = $this->makePolicyWithCapture();
+        $policy->register('/stride/v1/widgets');
+
+        $request = new \WP_REST_Request('GET', '/stride/v1/widgets');
+        $request->set_header('origin', 'https://evil.example.com');
+
+        $policy->applyCorsHeaders(true, null, $request, null);
+
+        self::assertContains('Access-Control-Allow-Credentials', $this->capturedRemoved);
+    }
+
+    public function testDeniedOriginRemovesAllowOriginAndSendsNoCorsHeaders(): void
+    {
+        $policy = $this->makePolicyWithCapture();
+        $policy->register('/stride/v1/widgets');
+
+        $request = new \WP_REST_Request('GET', '/stride/v1/widgets');
+        $request->set_header('origin', 'https://evil.example.com');
+
+        $served = $policy->applyCorsHeaders(true, null, $request, null);
+
+        self::assertTrue($served);
+        self::assertContains('Access-Control-Allow-Credentials', $this->capturedRemoved);
+        self::assertContains('Access-Control-Allow-Origin', $this->capturedRemoved);
+        foreach ($this->capturedSent as $header) {
+            self::assertStringNotContainsStringIgnoringCase('access-control-', $header);
+        }
+    }
+
+    public function testMissingOriginHeaderIsTreatedLikeDeniedWithNoOriginEcho(): void
+    {
+        $policy = $this->makePolicyWithCapture();
+        $policy->register('/stride/v1/widgets');
+
+        $request = new \WP_REST_Request('GET', '/stride/v1/widgets');
+        // No origin header set at all.
+
+        $served = $policy->applyCorsHeaders(true, null, $request, null);
+
+        self::assertTrue($served);
+        self::assertContains('Access-Control-Allow-Credentials', $this->capturedRemoved);
+        self::assertContains('Access-Control-Allow-Origin', $this->capturedRemoved);
+        foreach ($this->capturedSent as $header) {
+            self::assertStringNotContainsStringIgnoringCase('access-control-', $header);
+        }
+    }
+
+    public function testForeignRouteNeverInvokesSenderOrRemoverAndPassesServedThrough(): void
+    {
+        $policy = $this->makePolicyWithCapture();
+        $policy->register('/stride/v1/widgets');
+
+        $request = new \WP_REST_Request('GET', '/wp/v2/posts');
+        $request->set_header('origin', 'https://app.example.com');
+
+        $served = $policy->applyCorsHeaders(false, null, $request, null);
+
+        self::assertFalse($served, 'served value must pass through unchanged for a foreign route');
+        self::assertSame([], $this->capturedSent);
+        self::assertSame([], $this->capturedRemoved);
+    }
+
+    public function testReturnValueIsAlwaysTheIncomingServedValueNeverConvertedToTrue(): void
+    {
+        $policy = $this->makePolicyWithCapture();
+        $policy->register('/stride/v1/widgets');
+
+        $request = new \WP_REST_Request('GET', '/stride/v1/widgets');
+        $request->set_header('origin', 'https://app.example.com');
+
+        // Even on the matched-route, allowed-origin path, applyCorsHeaders()
+        // must never upgrade a false $served to true.
+        $served = $policy->applyCorsHeaders(false, null, $request, null);
+
+        self::assertFalse($served);
+    }
+
+    public function testRegisterHooksRestPreServeRequestAtPriorityTwentyWithFourArgs(): void
+    {
+        global $_test_filters;
+        $_test_filters = [];
+
+        $policy = $this->makePolicyWithCapture();
+        $policy->register('/stride/v1/widgets');
+
+        self::assertTrue(has_filter('rest_pre_serve_request'));
+        $registered = $_test_filters['rest_pre_serve_request'][0];
+        self::assertSame(20, $registered['priority']);
+        self::assertSame(4, $registered['accepted_args']);
     }
 }
