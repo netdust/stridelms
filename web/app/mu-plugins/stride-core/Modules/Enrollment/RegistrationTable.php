@@ -21,8 +21,17 @@ final class RegistrationTable
      * Bump when ALTERing the table; add the matching step in migrate().
      *
      * v2: enrollment_path ENUM gains 'partner' (audit M-4).
+     * v3: idx_registered_at index (perf audit #8 — registered_at is the default
+     *     grid sort / export secondary sort / grouped child-row window order;
+     *     without it every grid page is a filesort over the filtered corpus).
+     *
+     * ⚠ MERGE COORDINATION: the unmerged branch feat/gate-deadlines-reminders
+     * ALSO claims SCHEMA_VERSION=3 (for a reminder_state column). Whichever
+     * branch merges SECOND must rebase its bump to v4 (or fold both into one
+     * v3 step) so the two migrations don't collide on the same version number —
+     * a v3 stamp from one branch would skip the other's v3 migration.
      */
-    public const SCHEMA_VERSION = 2;
+    public const SCHEMA_VERSION = 3;
 
     private const SCHEMA_VERSION_OPTION = 'stride_registrations_schema_version';
 
@@ -76,7 +85,8 @@ final class RegistrationTable
             INDEX idx_trajectory_status (trajectory_id, status),
             INDEX idx_company (company_id),
             INDEX idx_user_status (user_id, status),
-            INDEX idx_user_edition (user_id, edition_id)
+            INDEX idx_user_edition (user_id, edition_id),
+            INDEX idx_registered_at (registered_at)
         ) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
@@ -152,6 +162,34 @@ final class RegistrationTable
             set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
 
             return;
+        }
+
+        // v3 (perf audit #8): add idx_registered_at — the default grid sort has
+        // no index, so every filtered page is a top-N filesort. Purely additive.
+        // Idempotent: fresh v3 tables get the index from create() directly and
+        // then may still enter migrate() (option unset on an old install path),
+        // and a lapsed-backoff retry re-enters here — so add only when absent to
+        // avoid the "Duplicate key name" error a bare ADD INDEX would throw.
+        $indexExists = $wpdb->get_var(
+            "SHOW INDEX FROM {$table} WHERE Key_name = 'idx_registered_at'",
+        );
+
+        if ($indexExists === null) {
+            $indexed = $wpdb->query(
+                "ALTER TABLE {$table} ADD INDEX idx_registered_at (registered_at)",
+            );
+
+            if ($indexed === false) {
+                ntdst_log('enrollment')->error('registrations schema v3 migration failed', [
+                    'step' => 'add_registered_at_index',
+                    'error' => $wpdb->last_error,
+                ]);
+
+                // Don't stamp the version: retried once the backoff lapses (step is idempotent).
+                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
+                return;
+            }
         }
 
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
