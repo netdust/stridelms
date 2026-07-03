@@ -32,3 +32,9 @@ parameters:
         # producing unknown-symbol noise on new code.
         - web/app/mu-plugins/ntdst-core
         - web/app/plugins/sfwd-lms
+    scanFiles:
+        # ntdst_schedule_recurring()/ntdst_clear_recurring() (Task 4.1, INV-10)
+        # live directly in the loader file, not under the scanned ntdst-core/
+        # directory above — without this, PHPStan can't resolve them from any
+        # caller (surfaced by GateReminderService, Task 4.3, the first caller).
+        - web/app/mu-plugins/ntdst-coreloader.php

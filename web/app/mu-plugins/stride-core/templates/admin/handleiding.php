@@ -476,6 +476,39 @@
         <li><strong>Sessiekeuze</strong> — deelnemers kiezen zelf welke sessies ze bijwonen</li>
     </ul>
 
+    <h3>Deadlines &amp; herinneringen</h3>
+    <p>
+        Per editie kun je een <strong>deadline</strong> zetten voor de taken die een deelnemer
+        na inschrijving moet afronden. Er zijn drie afzonderlijke deadlines, elk gekoppeld aan
+        de bijhorende taak:
+    </p>
+    <ul>
+        <li><strong>Sessiekeuze</strong> — bestaande deadline; verschijnt bij de sessiekeuze-instellingen.</li>
+        <li><strong>Vragenlijst &amp; documenten (bij inschrijving)</strong> — één gedeelde datum. Verschijnt zodra je "Vragenlijst invullen" of "Documenten uploaden" aanzet.</li>
+        <li><strong>Evaluatie &amp; documenten (na de cursus)</strong> — één gedeelde datum voor de afrondingstaken.</li>
+    </ul>
+    <p>
+        <strong>Wat gebeurt er bij de deadline?</strong> Niets automatisch — de deelnemer kan
+        de taak ook ná de deadline nog afronden. Een verlopen deadline wordt enkel
+        <strong>gemarkeerd</strong>: bij <em>Acties nodig</em> zie je per inschrijving hoeveel
+        dagen er nog resten ("nog 3 dagen") of hoeveel dagen te laat ("2 dagen te laat"). Jij
+        beslist per geval — Stride annuleert nooit vanzelf.
+    </p>
+    <p>
+        <strong>De drie automatische e-mails.</strong> Zodra een deadline is ingesteld, krijgt
+        de deelnemer:
+    </p>
+    <ul>
+        <li>bij inschrijving (of bij het afronden van de cursus, voor de afrondingstaken) een mail "je moet nog…";</li>
+        <li>een <strong>herinnering</strong> een aantal dagen na inschrijving als het nog niet klaar is;</li>
+        <li>een laatste mail <strong>de dag vóór de deadline</strong>.</li>
+    </ul>
+    <p>
+        Het aantal dagen voor de herinnering stel je in onder <em>Stride → Instellingen →
+        Meldingen</em>, bij "Herinnering na inschrijving" (standaard 7 dagen, met een
+        aan/uit-schakelaar).
+    </p>
+
     <h3>Formuliervelden — systeemvelden</h3>
     <p>
         Onder <em>Stride → Formuliervelden</em> beheer je de extra velden die op de
@@ -654,6 +687,16 @@
                 Bij een <strong>cohort</strong> volgt een vaste groep samen dezelfde edities.
                 Bij <strong>zelfstandig</strong> kiest elke deelnemer zelf welke edities
                 en in welk tempo.
+            </p>
+        </details>
+
+        <details>
+            <summary>Krijgt een deelnemer automatisch een herinnering als hij zijn taken niet afrondt?</summary>
+            <p>
+                Ja — als je een deadline op de editie zet. Hij krijgt een mail bij inschrijving,
+                een herinnering (aantal dagen instelbaar onder Instellingen → Meldingen) en een
+                mail de dag vóór de deadline. De inschrijving wordt nooit automatisch
+                geannuleerd; verlopen deadlines zie je bij <em>Acties nodig</em>.
             </p>
         </details>
     </div>

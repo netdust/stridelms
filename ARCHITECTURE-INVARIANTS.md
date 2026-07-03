@@ -269,6 +269,32 @@ grep -rn "update_user_meta\|wp_update_user" --include="*.php" web/app/mu-plugins
 
 ---
 
+## INV-10 — Recurring cron jobs register through `ntdst_schedule_recurring()`, not raw `wp_schedule_event`
+
+**Convergence point:** `ntdst_schedule_recurring(string $hook, string $interval, callable $cb): void` in `web/app/mu-plugins/ntdst-coreloader.php` (global helper, `function_exists`-guarded, sits alongside `ntdst_enqueue_admin_toolkit()` / `ntdst_enqueue_api_client()`). Its sibling `ntdst_clear_recurring(string $hook): void` unschedules the same hook.
+
+**The rule.** Any code that needs a recurring WP-Cron job calls `ntdst_schedule_recurring($hook, $interval, $cb)` instead of pairing `wp_next_scheduled()` + `wp_schedule_event()` + `add_action()` by hand. The helper is self-healing (only schedules when nothing is already pending for the hook — repeated calls, e.g. on every page load, never double-schedule) and only accepts a **built-in** WP-Cron interval (`'daily'`, `'hourly'`, `'twicedaily'`, `'weekly'`) — it does not register a custom `cron_schedules` interval, so a caller needing a non-standard cadence must register that interval itself before calling in. To stop the recurrence, call `ntdst_clear_recurring($hook)`.
+
+The callback receives no request data — WP-Cron invokes hooks outside any HTTP request context, so no `$_GET`/`$_POST`/`$_REQUEST` is ever threaded through. This is a structural property of `add_action($hook, $cb)` fired by `do_action()` from `wp-cron.php`, not something the helper itself has to guard.
+
+**Known bypasses (accepted, pre-existing — do not re-flag):**
+- `ntdst-audit` (`web/app/plugins/ntdst-audit/src/AuditService.php:51`) — weekly `wp_schedule_event(time(), 'weekly', 'ntdst_audit_cleanup')`.
+- `ntdst-assistant` (`web/app/plugins/ntdst-assistant/ntdst-assistant.php:62`) — hourly `wp_schedule_event(time(), 'hourly', 'ntdst_assistant_cleanup_exports')`.
+
+Both are regular plugins that predate this seam (Task 4.1, 2026-07-01); they are accepted debt, not new bypasses to chase.
+
+**Out of scope (not recurring — do not flag as bypasses):** `ntdst_send_queued_mail` and `stride/mail/admin_notify_async` are single-event offloads (`wp_schedule_single_event`), not recurring jobs. INV-10 governs recurrence only.
+
+**Audit move:**
+```bash
+# Should return only the seam itself (ntdst-coreloader.php) plus the two
+# accepted pre-existing bypasses above. Any other hit is a new finding —
+# route it through ntdst_schedule_recurring().
+grep -rn "wp_schedule_event" web/app/mu-plugins/{stride-core,ntdst-core}
+```
+
+---
+
 ## Quick reference — convergence points
 
 | # | Property | Convergence point | Bypass signal |
@@ -282,3 +308,4 @@ grep -rn "update_user_meta\|wp_update_user" --include="*.php" web/app/mu-plugins
 | 7 | Status | `EditionService::getEffectiveStatus()` | raw stored-status read for a gate/display |
 | 8 | VAT/totals | `QuoteCalculator::TAX_RATE` + `deriveTotalsFromCents()` | hardcoded `0.21` / re-derived totals outside the helper |
 | 9 | Anon-lead → account | `EnrollmentService::resolveLeadAccount()` | `wp_create_user`/`wp_new_user_notification` outside it (or the tracked `resolveParticipant`/PartnerAPI bypass); credentials or `billing_*` meta written to a found existing account |
+| 10 | Recurring cron | `ntdst_schedule_recurring()` / `ntdst_clear_recurring()` (`ntdst-coreloader.php`) | raw `wp_schedule_event` outside the seam (excl. the two tracked pre-existing plugin bypasses) |

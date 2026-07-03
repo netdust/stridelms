@@ -327,6 +327,10 @@ button { font-family: inherit; cursor: pointer; }
 /* Anonymous interest/waitlist lead — no real account behind the row. */
 .ws-badge--lead { background: #f1f5f9; color: var(--ws-text-3); font-size: 10px; padding: 1px 7px; margin-left: 6px; vertical-align: middle; }
 
+/* Gate-deadline countdown badge (Vandaag "Wacht op gebruiker" rows, Task 6.2) */
+.ws-badge--overdue   { background: var(--ws-danger-bg); color: var(--ws-danger-text); }
+.ws-badge--due-soon  { background: var(--ws-surface-sunken); color: var(--ws-text-2); }
+
 /* Offerte (quote-workflow) badge — never "paid" */
 .ws-offerte { font-size: var(--ws-fs-sm); font-weight: 500; display: inline-flex; align-items: center; gap: 6px; }
 .ws-offerte__dot { width: 7px; height: 7px; border-radius: 999px; flex-shrink: 0; }

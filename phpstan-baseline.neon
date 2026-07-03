@@ -37,12 +37,6 @@ parameters:
 			path: web/app/mu-plugins/stride-core/Admin/AdminAPIController.php
 
 		-
-			message: '#^Function ntdst_enqueue_api_client not found\.$#'
-			identifier: function.notFound
-			count: 1
-			path: web/app/mu-plugins/stride-core/Admin/StrideSettingsService.php
-
-		-
 			message: '#^Parameter \$auditService of method Stride\\Modules\\Audit\\ActivityShortcode\:\:__construct\(\) has invalid type NTDST\\Audit\\AuditService\.$#'
 			identifier: class.notFound
 			count: 1

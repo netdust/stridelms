@@ -1799,6 +1799,147 @@ final class RegistrationRepository
         return $this->updateStatus($id, RegistrationStatus::Cancelled);
     }
 
+    // === Reminder state (Phase 2 Task 2.2) ===
+
+    /**
+     * Get the reminder-state ledger for a registration.
+     *
+     * Shape-agnostic: this method faithfully round-trips whatever array was
+     * stored via setReminderState() — it does not validate/interpret the
+     * reminder/deadline keys (that logic lives in Phase 4).
+     *
+     * @return array<string, mixed> Decoded reminder_state, or `[]` when the
+     *                               column is NULL/empty or the row doesn't
+     *                               exist. Never returns null/false.
+     */
+    public function getReminderState(int $registrationId): array
+    {
+        global $wpdb;
+
+        $raw = $wpdb->get_var($wpdb->prepare(
+            "SELECT reminder_state FROM {$this->table()} WHERE id = %d",
+            $registrationId,
+        ));
+
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Set the reminder-state ledger for a registration.
+     *
+     * @param array<string, mixed> $state
+     * @return bool|WP_Error True on success; WP_Error('db_error', ...) on a
+     *                       DB failure (INV-4) — never returns false.
+     */
+    public function setReminderState(int $registrationId, array $state): bool|WP_Error
+    {
+        global $wpdb;
+
+        $result = $wpdb->update(
+            $this->table(),
+            ['reminder_state' => wp_json_encode($state)],
+            ['id' => $registrationId],
+            ['%s'],
+            ['%d'],
+        );
+
+        if ($result === false) {
+            ntdst_log('enrollment')->error('failed to update reminder state', [
+                'registration_id' => $registrationId,
+                'error' => $wpdb->last_error,
+            ]);
+
+            return new WP_Error('db_error', 'Failed to update reminder state');
+        }
+
+        $this->clearCache();
+        $this->emitRowEvent('row_updated', $registrationId, ['reminder_state' => $state], 'set_reminder_state');
+
+        return true;
+    }
+
+    /**
+     * Enumeration query for the daily reminder cron (Phase 2 Task 2.3,
+     * threat-model A2): registrations whose edition has an active gate
+     * deadline (enroll-phase gate_deadline OR post-phase post_gate_deadline)
+     * that has NOT yet passed.
+     *
+     * DATE FLOOR (scalability audit 2026-07-03, finding #7): a row is only
+     * enumerated if at least one of its deadlines is >= $today. Confirmed
+     * rows only leave the table via completion/cancellation, so without this
+     * floor a confirmed-incomplete registration on a long-expired edition was
+     * re-scanned every daily cron tick forever (at 25k accumulated rows:
+     * ~100k+ queries + 25k GET_LOCKs per tick). The deadline metas are stored
+     * as zero-padded ISO date strings ('Y-m-d', from an <input type="date">),
+     * so lexicographic `>= $today` is a correct calendar comparison. The floor
+     * is $today (not today-minus-grace): the reminder mail always fires before
+     * the deadline and the day-before mail fires from deadline-1 onward, so a
+     * deadline landing on today stays enumerable while a strictly-past deadline
+     * drops out. Coupled with GateReminderDueCalculator (which already returns
+     * null for already-sent phases), this converges the corpus to only rows
+     * that can still produce a mail.
+     *
+     * KEYSET PAGINATION (finding #7): keyset (`r.id > $afterId ORDER BY r.id
+     * ASC LIMIT`) instead of OFFSET. OFFSET made the cron loop O(n^2) row
+     * visits across a run (each chunk re-walks all skipped rows) plus a
+     * filesort per chunk; keyset seeks straight to the cursor on the PK. Order
+     * is by r.id (the PK) — registered_at is not unique, so it cannot give a
+     * stable keyset cursor. The consumer (GateReminderService) processes each
+     * row independently by its own deadline, so id-order vs registered_at-order
+     * does not change any outcome.
+     *
+     * Bounded (mitigation 5) — explicit LIMIT, $limit clamped to [1, 1000] so
+     * a caller can never request an unbounded scan. Prepared (mitigation 8) —
+     * status values + the today floor + limit/cursor all go through
+     * $wpdb->prepare; the two meta_key literals are hardcoded constants (not
+     * user input), matching the findForExport precedent for inline meta-key
+     * literals in this repo. GROUP BY r.id dedupes any fan-out from the two
+     * LEFT JOINs against wp_postmeta, so a registration row is never returned
+     * twice within a page even if duplicate postmeta rows existed on an edition.
+     *
+     * @param int $limit   Page size, clamped to [1, 1000].
+     * @param int $afterId Keyset cursor — return rows with r.id strictly greater.
+     *
+     * @return array<object> Full row objects (SELECT *), matching the return
+     *                       shape of the other find* methods on this repo.
+     */
+    public function findWithActiveDeadline(int $limit = 500, int $afterId = 0): array
+    {
+        global $wpdb;
+        $table = $this->table();
+
+        $limit = max(1, min($limit, 1000));
+        $afterId = max(0, $afterId);
+        $today = current_time('Y-m-d');
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT r.* FROM {$table} r
+             LEFT JOIN {$wpdb->postmeta} pm_gate ON r.edition_id = pm_gate.post_id AND pm_gate.meta_key = '_ntdst_gate_deadline'
+             LEFT JOIN {$wpdb->postmeta} pm_post_gate ON r.edition_id = pm_post_gate.post_id AND pm_post_gate.meta_key = '_ntdst_post_gate_deadline'
+             WHERE r.status IN (%s, %s)
+               AND r.id > %d
+               AND (
+                   (pm_gate.meta_value IS NOT NULL AND pm_gate.meta_value >= %s)
+                   OR (pm_post_gate.meta_value IS NOT NULL AND pm_post_gate.meta_value >= %s)
+               )
+             GROUP BY r.id
+             ORDER BY r.id ASC
+             LIMIT %d",
+            RegistrationStatus::Confirmed->value,
+            RegistrationStatus::Pending->value,
+            $afterId,
+            $today,
+            $today,
+            $limit,
+        ));
+    }
+
     // === Cache management ===
 
     /**

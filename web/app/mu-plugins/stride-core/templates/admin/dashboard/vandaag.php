@@ -132,6 +132,10 @@ defined('ABSPATH') || exit;
                                     <div class="ws-actitem__meta" x-text="item.meta" x-show="item.meta"></div>
                                 </div>
                                 <div class="ws-actitem__age" x-text="item.age" x-show="item.age"></div>
+                                <span class="ws-badge ws-badge--dotless"
+                                      x-show="item.deadline"
+                                      :class="item.deadline && item.deadline.kind === 'overdue' ? 'ws-badge--overdue' : 'ws-badge--due-soon'"
+                                      x-text="item.deadline && item.deadline.label"></span>
                                 <span x-html="icon('chevRight')" style="width:16px;height:16px;color:var(--ws-text-3)"></span>
                             </a>
                         </template>

@@ -133,8 +133,17 @@ class StrideSettingsService
     public static function getNotificationRules(): array
     {
         $saved = get_option(self::OPTION_NOTIFICATIONS, []);
+        $rules = array_merge(ActionQueueService::DEFAULTS, is_array($saved) ? $saved : []);
 
-        return array_merge(ActionQueueService::DEFAULTS, is_array($saved) ? $saved : []);
+        // Defensive clamp: a value written before the clamp existed, or edited
+        // directly in the DB, must still read back within [1,365].
+        // Uses (int) rather than absint() so negative values floor to the
+        // minimum instead of flipping sign into range (absint(-5) === 5).
+        if (isset($rules['gate_reminder_days']['value'])) {
+            $rules['gate_reminder_days']['value'] = max(1, min(365, (int) $rules['gate_reminder_days']['value']));
+        }
+
+        return $rules;
     }
 
     // =========================================================================
@@ -393,7 +402,7 @@ class StrideSettingsService
      */
     private function saveNotificationSettings(array $params): array
     {
-        $ruleKeys = ['capacity_threshold', 'session_approaching', 'stale_quote', 'edition_starting', 'incomplete_tasks'];
+        $ruleKeys = ['capacity_threshold', 'session_approaching', 'stale_quote', 'edition_starting', 'incomplete_tasks', 'gate_reminder_days'];
         $rules = [];
 
         foreach ($ruleKeys as $key) {
@@ -406,11 +415,15 @@ class StrideSettingsService
             $rules[$key] = [
                 'enabled' => $enabled,
             ];
+            // (int) rather than absint(): absint() flips a negative raw value's
+            // sign into a valid positive range (absint(-5) === 5), silently
+            // bypassing the clamp below for every key. (int) preserves the
+            // sign, so max(1, ...) floors negatives to the minimum instead.
             $valueKey = $key . '_value';
-            $rawValue = array_key_exists($valueKey, $params) ? absint($params[$valueKey]) : 0;
-            $rules[$key]['value'] = $rawValue > 0
-                ? max(1, min(365, $rawValue))
+            $rawValue = array_key_exists($valueKey, $params)
+                ? (int) $params[$valueKey]
                 : (ActionQueueService::DEFAULTS[$key]['value'] ?? 7);
+            $rules[$key]['value'] = max(1, min(365, $rawValue));
         }
 
         update_option(self::OPTION_NOTIFICATIONS, $rules);

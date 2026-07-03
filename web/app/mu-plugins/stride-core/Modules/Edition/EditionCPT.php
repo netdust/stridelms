@@ -196,6 +196,11 @@ final class EditionCPT
                 'label' => __('Instructie documenten', 'stride'),
                 'description' => __('Toelichting die de deelnemer ziet bij de taak "Documenten uploaden". Leeg = standaardtekst.', 'stride'),
             ],
+            'gate_deadline' => [
+                'type' => 'text',
+                'label' => __('Deadline taken (vragenlijst & documenten)', 'stride'),
+                'description' => __('Deadline for questionnaire/documents gate tasks (YYYY-MM-DD)', 'stride'),
+            ],
             'requires_session_selection' => [
                 'type' => 'boolean',
                 'label' => 'Sessiekeuze vereist',
@@ -220,6 +225,11 @@ final class EditionCPT
                 'type' => 'textarea',
                 'label' => __('Instructie documenten na afloop', 'stride'),
                 'description' => __('Toelichting bij de upload-taak na afloop. Leeg = standaardtekst.', 'stride'),
+            ],
+            'post_gate_deadline' => [
+                'type' => 'text',
+                'label' => __('Deadline afronding (evaluatie & documenten)', 'stride'),
+                'description' => __('Deadline for post-course evaluation/documents gate tasks (YYYY-MM-DD)', 'stride'),
             ],
             'post_requires_approval' => [
                 'type' => 'boolean',

@@ -60,6 +60,12 @@ final class StrideMailBridge extends AbstractService
         add_action('stride/registration/created', [$this, 'scheduleAdminNotify']);
         add_action('stride/mail/admin_notify_async', [$this, 'onRegistrationCreatedAdminNotify']);
 
+        // Mail #1 ("je moet nog...") — fires ONLY when the phase's edition
+        // carries a gate deadline (no deadline -> no cadence -> no mail #1
+        // either, consistent with GateReminderService's cron).
+        add_action('stride/registration/created', [$this, 'onRegistrationCreatedGateTodoMail']);
+        add_action('stride/completion/completed', [$this, 'onCompletionCompletedGateTodoMail']);
+
         // User confirmations for logged-in interest / waitlist submissions.
         // Anonymous submissions send their confirmation inline from QuestionnaireHandler.
         add_action('stride/registration/interest_registered', [$this, 'onInterestRegisteredUserMail']);
@@ -169,6 +175,101 @@ final class StrideMailBridge extends AbstractService
             'edition_id' => $editionId,
             'edition' => ['title' => $edition ? $edition->post_title : ''],
         ], ['to' => $email]);
+    }
+
+    /**
+     * Mail #1 ("je moet nog...") — enroll phase.
+     *
+     * Fires ONLY when the edition carries a `gate_deadline` (enroll-phase
+     * gate). No deadline means no reminder cadence (GateReminderService
+     * never enumerates the registration either), so mail #1 stays silent
+     * too — the guard keeps enrollment mail behavior consistent with the
+     * cron's own eligibility check.
+     *
+     * @param array{registration_id: int, user_id: int, edition_id: int} $data
+     */
+    public function onRegistrationCreatedGateTodoMail(array $data): void
+    {
+        if (!function_exists('ndmail_send')) {
+            return;
+        }
+
+        $editionId = (int) ($data['edition_id'] ?? 0);
+        $userId = (int) ($data['user_id'] ?? 0);
+        $registrationId = (int) ($data['registration_id'] ?? 0);
+
+        if (!$editionId || !$userId) {
+            return;
+        }
+
+        $deadline = $this->editionRepo->getField($editionId, 'gate_deadline');
+        if (empty($deadline)) {
+            return;
+        }
+
+        $email = self::resolveUserEmail($userId);
+        if (!$email) {
+            return;
+        }
+
+        ndmail_send('stride-gate-todo', [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+            'registration_id' => $registrationId,
+        ], ['to' => $email]);
+    }
+
+    /**
+     * Mail #1 ("je moet nog...") — post/completion phase.
+     *
+     * Fires ONLY when the edition carries a `post_gate_deadline`. Mirrors
+     * the enroll-phase guard above: no deadline, no mail #1.
+     *
+     * @param array{edition_id: int, user_id: int, course_id?: int} $data
+     */
+    public function onCompletionCompletedGateTodoMail(array $data): void
+    {
+        if (!function_exists('ndmail_send')) {
+            return;
+        }
+
+        $editionId = (int) ($data['edition_id'] ?? 0);
+        $userId = (int) ($data['user_id'] ?? 0);
+
+        if (!$editionId || !$userId) {
+            return;
+        }
+
+        $deadline = $this->editionRepo->getField($editionId, 'post_gate_deadline');
+        if (empty($deadline)) {
+            return;
+        }
+
+        $email = self::resolveUserEmail($userId);
+        if (!$email) {
+            return;
+        }
+
+        ndmail_send('stride-gate-todo', [
+            'user_id' => $userId,
+            'edition_id' => $editionId,
+        ], ['to' => $email]);
+    }
+
+    /**
+     * Resolve a valid recipient email for a user id (mirrors
+     * GateReminderService::resolveEmail — same invalid/missing-email guard).
+     */
+    private static function resolveUserEmail(int $userId): ?string
+    {
+        if (!$userId) {
+            return null;
+        }
+
+        $user = get_userdata($userId);
+        $email = $user ? $user->user_email : '';
+
+        return ($email && is_email($email)) ? $email : null;
     }
 
     /**
@@ -657,7 +758,7 @@ final class StrideMailBridge extends AbstractService
      */
     public function maybeSeedTemplates(): void
     {
-        $currentVersion = '4';
+        $currentVersion = '5';
         if (get_option('stride_mail_templates_seeded') === $currentVersion) {
             return;
         }
@@ -885,6 +986,45 @@ final class StrideMailBridge extends AbstractService
                     . '<li>Anonimiseer het account via <a href="{{gdpr.edit_user_url}}">Gebruikers → bewerken</a> (of kies hard delete als geen historie bewaard moet blijven).</li>'
                     . '</ol>'
                     . '<p>Deze aanvraag is automatisch gelogd in de audit trail.</p>',
+            ],
+            'stride-gate-todo' => [
+                'title' => 'Je moet nog taken afronden',
+                'subject' => 'Nog te doen: {{edition.title}}',
+                // No auto-trigger: this template is dispatched manually by the
+                // deadline-gated handlers onRegistrationCreatedGateTodoMail /
+                // onCompletionCompletedGateTodoMail (see init(), above). A
+                // non-empty trigger here would ALSO get auto-bound by
+                // netdust-mail's MailService::activateTriggers() with no
+                // deadline guard, causing a double-send on gated editions and
+                // an unconditional send on editions with no gate_deadline at
+                // all. Keep this '' like the sibling stride-gate-reminder /
+                // stride-gate-deadline-tomorrow templates (both cron-sent).
+                'trigger' => '',
+                'category' => 'transactional',
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
+                    . '<p>Voor <strong>{{edition.title}}</strong> moet je nog enkele taken afronden (zoals de vragenlijst of het opladen van documenten) voordat de deadline verstrijkt.</p>'
+                    . '<p><a href="{{completion.url}}" class="button">Taken afronden</a></p>'
+                    . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
+            ],
+            'stride-gate-reminder' => [
+                'title' => 'Herinnering: taken nog niet afgerond',
+                'subject' => 'Herinnering: nog te doen voor {{edition.title}}',
+                'trigger' => '',
+                'category' => 'transactional',
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
+                    . '<p>Even een herinnering: je hebt nog openstaande taken voor <strong>{{edition.title}}</strong>. Rond deze tijdig af, zodat je niets mist.</p>'
+                    . '<p><a href="{{completion.url}}" class="button">Taken afronden</a></p>'
+                    . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
+            ],
+            'stride-gate-deadline-tomorrow' => [
+                'title' => 'Deadline morgen: taken nog niet afgerond',
+                'subject' => 'Deadline morgen: {{edition.title}}',
+                'trigger' => '',
+                'category' => 'transactional',
+                'body' => '<p>Beste {{user.first_name|klant}},</p>'
+                    . '<p>De deadline voor je openstaande taken bij <strong>{{edition.title}}</strong> is <strong>morgen</strong>. Rond ze vandaag nog af.</p>'
+                    . '<p><a href="{{completion.url}}" class="button">Taken afronden</a></p>'
+                    . '<p>Met vriendelijke groet,<br>{{site.name}}</p>',
             ],
         ];
     }

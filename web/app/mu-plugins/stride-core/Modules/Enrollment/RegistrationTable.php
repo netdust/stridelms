@@ -24,14 +24,13 @@ final class RegistrationTable
      * v3: idx_registered_at index (perf audit #8 — registered_at is the default
      *     grid sort / export secondary sort / grouped child-row window order;
      *     without it every grid page is a filesort over the filtered corpus).
-     *
-     * ⚠ MERGE COORDINATION: the unmerged branch feat/gate-deadlines-reminders
-     * ALSO claims SCHEMA_VERSION=3 (for a reminder_state column). Whichever
-     * branch merges SECOND must rebase its bump to v4 (or fold both into one
-     * v3 step) so the two migrations don't collide on the same version number —
-     * a v3 stamp from one branch would skip the other's v3 migration.
+     * v4: reminder_state JSON column added (Phase 2 Task 2.1 — reminder
+     *     idempotency ledger, consumed by later reminder-send tasks). Rebased
+     *     from v3 to v4 when feat/admin-url-filter-state merged first and took
+     *     v3 for the index; the two migrations now sequence cleanly (v2 install
+     *     upgrades v3-index then v4-column) instead of colliding on one version.
      */
-    public const SCHEMA_VERSION = 3;
+    public const SCHEMA_VERSION = 4;
 
     private const SCHEMA_VERSION_OPTION = 'stride_registrations_schema_version';
 
@@ -76,6 +75,7 @@ final class RegistrationTable
             notes TEXT NULL,
             completion_tasks JSON NULL,
             enrollment_data JSON NULL,
+            reminder_state JSON NULL,
             INDEX idx_user (user_id),
             INDEX idx_edition (edition_id),
             INDEX idx_trajectory (trajectory_id),
@@ -211,7 +211,7 @@ final class RegistrationTable
         // v3 (perf audit #8): add idx_registered_at — the default grid sort has
         // no index, so every filtered page is a top-N filesort. Purely additive.
         // Idempotent via the shared ensureRegisteredAtIndex() SHOW INDEX guard:
-        // fresh v3 tables get the index from create() directly and then may still
+        // fresh tables get the index from create() directly and then may still
         // enter migrate() (option unset on an old install path), and a lapsed-backoff
         // retry re-enters here — the guard skips the ADD when present, avoiding the
         // "Duplicate key name" error a bare ADD INDEX would throw.
@@ -225,6 +225,32 @@ final class RegistrationTable
             set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
 
             return;
+        }
+
+        // v4 (Phase 2 Task 2.1): add reminder_state JSON column, used by later
+        // reminder-send tasks as a per-registration idempotency ledger. Rebased
+        // from v3 to v4 (admin-url-filter-state took v3 for the index). Guarded
+        // via SHOW COLUMNS (same style as exists()'s SHOW TABLES probe) — unlike
+        // the v2 MODIFY above, ADD COLUMN errors if the column already exists, and
+        // the >= guard at the top of this method makes a v3 DB re-enter migrate()
+        // once SCHEMA_VERSION is bumped, so this step must tolerate running again
+        // on an already-v4 table (fresh create() already added the column).
+        $hasReminderStateColumn = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'reminder_state'");
+
+        if ($hasReminderStateColumn === null) {
+            $reminderStateAltered = $wpdb->query("ALTER TABLE {$table} ADD COLUMN reminder_state JSON NULL");
+
+            if ($reminderStateAltered === false) {
+                ntdst_log('enrollment')->error('registrations schema v4 migration failed', [
+                    'step' => 'add_reminder_state_column',
+                    'error' => $wpdb->last_error,
+                ]);
+
+                // Don't stamp the version: retried once the backoff lapses (step is idempotent).
+                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
+                return;
+            }
         }
 
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);

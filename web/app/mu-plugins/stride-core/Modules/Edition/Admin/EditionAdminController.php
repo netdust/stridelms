@@ -516,6 +516,15 @@ final class EditionAdminController
             $updateData['selection_deadline'] = sanitize_text_field($fields['selection_deadline']);
         }
 
+        // Process gate deadlines (pre-course questionnaire/documents gate,
+        // post-course evaluation/documents gate) — same shape as selection_deadline.
+        if (isset($fields['gate_deadline'])) {
+            $updateData['gate_deadline'] = sanitize_text_field($fields['gate_deadline']);
+        }
+        if (isset($fields['post_gate_deadline'])) {
+            $updateData['post_gate_deadline'] = sanitize_text_field($fields['post_gate_deadline']);
+        }
+
         // Process notes (stored as JSON)
         if (isset($fields['notes'])) {
             $jsonString = stripslashes($fields['notes']);

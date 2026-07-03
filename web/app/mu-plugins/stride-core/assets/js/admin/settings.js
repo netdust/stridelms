@@ -38,6 +38,7 @@ function strideSettingsApp() {
             stale_quote:         { enabled: true, value: 7 },
             edition_starting:    { enabled: true, value: 3 },
             incomplete_tasks:    { enabled: true, value: 7 },
+            gate_reminder_days:  { enabled: true, value: 7 },
         },
 
         // Company details

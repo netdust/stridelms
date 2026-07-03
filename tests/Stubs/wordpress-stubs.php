@@ -2020,6 +2020,42 @@ if (!function_exists('esc_attr')) {
     }
 }
 
+if (!function_exists('esc_attr_e')) {
+    function esc_attr_e(string $text, string $domain = 'default'): void
+    {
+        echo esc_attr($text);
+    }
+}
+
+if (!function_exists('esc_textarea')) {
+    function esc_textarea(string $text): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('checked')) {
+    function checked($checked, $current = true, bool $echo = true): string
+    {
+        $result = ((string) $checked === (string) $current) ? ' checked="checked"' : '';
+        if ($echo) {
+            echo $result;
+        }
+        return $result;
+    }
+}
+
+if (!function_exists('selected')) {
+    function selected($selected, $current = true, bool $echo = true): string
+    {
+        $result = ((string) $selected === (string) $current) ? ' selected="selected"' : '';
+        if ($echo) {
+            echo $result;
+        }
+        return $result;
+    }
+}
+
 if (!function_exists('has_action')) {
     function has_action($hook, $callback = false)
     {
