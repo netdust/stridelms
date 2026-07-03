@@ -137,4 +137,111 @@ final class NtdstRouterDispatchCharacterizationTest extends TestCase
             'when no route matches the URL, the original template must be returned unchanged',
         );
     }
+
+    /**
+     * Characterization pin for the resolveRouteResult() parity decision:
+     * BEFORE Task 1.3, an unrecognized callback return (int, array, …)
+     * fell off the end of handleTemplateInclude()'s if-chain and the
+     * foreach CONTINUED scanning later routes. That observable behavior
+     * must survive the refactor (the brief's "return $template" fallback
+     * would short-circuit it — pinned test is the authority).
+     */
+    public function testUnrecognizedReturnTypeContinuesScanningLaterRoutes(): void
+    {
+        $this->fixtureFile = tempnam(sys_get_temp_dir(), 'ntdst_router_fixture_');
+        $this->assertNotFalse($this->fixtureFile, 'tempnam() must produce a real file for the contract');
+
+        $this->router->get('projects/:slug', fn() => 12345);
+        $this->router->get('projects/:slug', fn() => $this->fixtureFile);
+
+        $result = $this->withServerRequest(
+            '/projects/foo',
+            'GET',
+            fn() => $this->router->handleTemplateInclude('/original/template.php'),
+        );
+
+        $this->assertSame(
+            $this->fixtureFile,
+            $result,
+            'an unrecognized return type must not short-circuit scanning — a later matching route must still win',
+        );
+    }
+
+    /**
+     * Builds the test-seam router subclass for the resolveRouteResult()
+     * tests: renderResponse() records instead of rendering+exiting.
+     */
+    private function makeRecordingRouter(): \NTDST_Router
+    {
+        return new class extends \NTDST_Router {
+            /** @var list<?string> */
+            public array $rendered = [];
+
+            protected function renderResponse(\NTDST_Response $response): void
+            {
+                // test seam — production renders + exits; test records
+                $this->rendered[] = $response->getTemplate();
+            }
+
+            public function expose(mixed $result, string $template): string|false|null
+            {
+                return $this->resolveRouteResult($result, $template);
+            }
+        };
+    }
+
+    /**
+     * Task 1.3 RED: the latent bug. A pattern-route callback returning an
+     * NTDST_Response (without itself calling an exiting output method)
+     * must be recognized as handled — parity with when()/template().
+     */
+    public function testResponseWithTemplateIsRecognizedAsHandled(): void
+    {
+        $router = $this->makeRecordingRouter();
+
+        $response = \ntdst_response()->template('project/single');
+        $outcome = $router->expose($response, '/theme/index.php');
+
+        self::assertNull($outcome, 'A Response return must be treated as handled, not fall through');
+        self::assertSame(['project/single'], $router->rendered);
+    }
+
+    /**
+     * Parity edge: when()/template() exit on a Response even when no
+     * template was set (documented, deliberate). resolveRouteResult()
+     * must mirror that — still delegated to renderResponse() and still
+     * handled (null → caller exits).
+     */
+    public function testResponseWithoutTemplateIsStillTreatedAsHandled(): void
+    {
+        $router = $this->makeRecordingRouter();
+
+        $outcome = $router->expose(\ntdst_response(), '/theme/index.php');
+
+        self::assertNull($outcome, 'A Response with no template is still handled — parity with when()/template()');
+        self::assertSame([null], $router->rendered, 'the Response is delegated to renderResponse() even without a template');
+    }
+
+    /**
+     * The PRODUCTION renderResponse() (not the test seam): a Response with
+     * no template set must render nothing and return — render() is never
+     * called (it would exit/include), in parity with when()/template()
+     * which skip render() when getTemplate() is empty.
+     */
+    public function testProductionRenderResponseWithoutTemplateRendersNothing(): void
+    {
+        $router = new class extends \NTDST_Router {
+            public function exposeRender(\NTDST_Response $response): void
+            {
+                $this->renderResponse($response);
+            }
+        };
+
+        $router->exposeRender(\ntdst_response());
+
+        // Reaching this line proves render() was never invoked: render()
+        // includes a template and exits the process. beStrictAboutOutput
+        // additionally fails the test if anything was echoed.
+        $this->addToAssertionCount(1);
+    }
 }

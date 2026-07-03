@@ -80,10 +80,12 @@ class NTDST_Router
      *
      * Return contract:
      *  - string (existing file path) → used as the resolved template
+     *  - NTDST_Response → rendered (request exits) — parity with when()/template()
      *  - null  → callback handled output itself; the request is exited
      *  - true  → same as null
      *  - false → fall through to the next matching route
-     *  - anything else → ignored, original $template is returned
+     *  - anything else → ignored, scanning continues; original $template is
+     *    returned if no later route handles the request
      *
      * @param string $pattern URL pattern (/path/:param/:id)
      * @param callable $callback Handler function
@@ -281,24 +283,67 @@ class NTDST_Router
                 // Execute callback
                 $result = call_user_func($route['callback'], $params, $template);
 
-                // If string, use as template
-                if (is_string($result) && file_exists($result)) {
-                    return $result;
-                }
-
-                // If null/true, assume callback handled output
-                if ($result === null || $result === true) {
+                $resolved = $this->resolveRouteResult($result, $template);
+                if ($resolved === null) {
                     exit;
                 }
-
-                // Continue to next route if false
-                if ($result === false) {
+                if ($resolved === false) {
                     continue;
                 }
+                return $resolved;
             }
         }
 
         return $template;
+    }
+
+    /**
+     * Decide what a route callback's return value means.
+     *
+     *  - string (existing file) → use as the template path
+     *  - NTDST_Response → render it + handled (null; caller exits) — mirrors
+     *    when()/template()'s Response contract exactly, incl. exiting on a
+     *    Response with no template set (documented, deliberate parity)
+     *  - null/true → handled (null; caller exits)
+     *  - false OR any unrecognized type → try next route (false). Parity
+     *    with the pre-refactor if-chain, where an unrecognized return fell
+     *    off the end and the route loop kept scanning — a later matching
+     *    route must still win (pinned by the characterization tests).
+     *
+     * $template (the incoming template_include value) is part of the seam
+     * contract for subclasses even though the base resolution ignores it.
+     */
+    protected function resolveRouteResult(mixed $result, string $template): string|false|null
+    {
+        if ($result instanceof NTDST_Response) {
+            $this->renderResponse($result);
+            return null;
+        }
+
+        if (is_string($result) && file_exists($result)) {
+            return $result;
+        }
+
+        if ($result === null || $result === true) {
+            return null;
+        }
+
+        return false;
+    }
+
+    /**
+     * Render a Response returned by a pattern-route callback.
+     *
+     * Production behavior: render() never returns (it exits). A Response
+     * with no template set renders nothing — the caller still exits, in
+     * parity with when()/template(). Protected so tests can seam it.
+     */
+    protected function renderResponse(NTDST_Response $response): void
+    {
+        $template_name = $response->getTemplate();
+        if ($template_name) {
+            $response->render($template_name); // never returns
+        }
     }
 
     /**
