@@ -1280,6 +1280,7 @@ if (!isset($wpdb) || !is_object($wpdb)) {
         public string $prefix = 'wp_';
         public string $posts = 'wp_posts';
         public string $postmeta = 'wp_postmeta';
+        public int $insert_id = 0;
 
         public function prepare(string $query, ...$args): string
         {

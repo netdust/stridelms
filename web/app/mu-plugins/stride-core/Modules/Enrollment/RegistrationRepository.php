@@ -243,104 +243,130 @@ final class RegistrationRepository
         $editionId = isset($data['edition_id']) ? absint($data['edition_id']) : null;
         $trajectoryId = isset($data['trajectory_id']) ? absint($data['trajectory_id']) : null;
 
-        // Check for existing registration (unique constraint on user+edition)
-        // Skip duplicate check for anonymous interest registrations (no user_id)
-        $existing = null;
+        // DATA-2 / mitigation 1: serialize the (user,edition) check-and-insert
+        // under a MySQL advisory lock so two concurrent create() calls for the
+        // same tuple can't both pass the findByUserAndEdition read before either
+        // writes. Only the edition path takes the lock — the finding is
+        // edition-scoped, and the trajectory/anonymous-interest paths key on
+        // different predicates. The lock is released on EVERY exit below.
         $userId = isset($data['user_id']) ? (int) $data['user_id'] : 0;
+        $lockHeld = false;
         if ($userId && $editionId) {
-            $existing = $this->findByUserAndEdition($userId, $editionId);
-        } elseif ($userId && $trajectoryId) {
-            $existing = $this->findByUserAndTrajectory($userId, $trajectoryId);
+            if (!$this->acquireEnrollLock($userId, $editionId)) {
+                return new WP_Error(
+                    'lock_timeout',
+                    'Kon de inschrijving niet vergrendelen, probeer het opnieuw.',
+                );
+            }
+            $lockHeld = true;
         }
 
-        if ($existing) {
-            $existingStatus = RegistrationStatus::tryFrom($existing->status);
+        // try/finally guarantees the advisory lock is released on EVERY exit
+        // path below (reactivate return, both duplicate WP_Errors, the two
+        // db_error returns, the success return, and any thrown exception).
+        try {
+            // Check for existing registration (unique constraint on user+edition)
+            // Skip duplicate check for anonymous interest registrations (no user_id)
+            $existing = null;
+            if ($userId && $editionId) {
+                $existing = $this->findByUserAndEdition($userId, $editionId);
+            } elseif ($userId && $trajectoryId) {
+                $existing = $this->findByUserAndTrajectory($userId, $trajectoryId);
+            }
 
-            // Reactivate-eligible statuses:
-            // - Cancelled: terminal-cancel state, re-enrolling reopens the row.
-            // - Interest / Waitlist: pre-enrollment holding states, the user already
-            //   expressed intent — enrolling promotes that row instead of blocking.
-            // For Interest specifically, EnrollmentService::enroll() has a separate
-            // upgrade path that merges enrollment_data when the row is anonymous
-            // (user_id=0). That path runs BEFORE this method, so we only land here
-            // when the existing Interest row already belongs to this user.
-            $reactivatableStatuses = [
-                RegistrationStatus::Cancelled,
-                RegistrationStatus::Interest,
-                RegistrationStatus::Waitlist,
-            ];
-            if (in_array($existingStatus, $reactivatableStatuses, true)) {
-                // Preserve existing enrollment_data (interest/waitlist stage payloads
-                // collected earlier) unless the caller passes new data to merge.
-                $existingData = is_string($existing->enrollment_data ?? null) && $existing->enrollment_data !== ''
-                    ? (json_decode($existing->enrollment_data, true) ?: [])
-                    : (is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : []);
-                $newData = is_array($data['enrollment_data'] ?? null) ? $data['enrollment_data'] : [];
-                $mergedData = self::normalizeEnrollmentData(array_merge($existingData, $newData));
+            if ($existing) {
+                $existingStatus = RegistrationStatus::tryFrom($existing->status);
 
-                $reactivate = [
-                    'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
-                    'enrollment_path' => $data['enrollment_path'] ?? ($existing->enrollment_path ?? 'individual'),
-                    'registered_at' => current_time('mysql'),
-                    'cancelled_at' => null,
-                    'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
-                    'enrollment_data' => $mergedData ? wp_json_encode($mergedData) : null,
-                    'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
-                    'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
-                    'completion_tasks' => null,
-                    'completed_at' => null,
+                // Reactivate-eligible statuses:
+                // - Cancelled: terminal-cancel state, re-enrolling reopens the row.
+                // - Interest / Waitlist: pre-enrollment holding states, the user already
+                //   expressed intent — enrolling promotes that row instead of blocking.
+                // For Interest specifically, EnrollmentService::enroll() has a separate
+                // upgrade path that merges enrollment_data when the row is anonymous
+                // (user_id=0). That path runs BEFORE this method, so we only land here
+                // when the existing Interest row already belongs to this user.
+                $reactivatableStatuses = [
+                    RegistrationStatus::Cancelled,
+                    RegistrationStatus::Interest,
+                    RegistrationStatus::Waitlist,
                 ];
+                if (in_array($existingStatus, $reactivatableStatuses, true)) {
+                    // Preserve existing enrollment_data (interest/waitlist stage payloads
+                    // collected earlier) unless the caller passes new data to merge.
+                    $existingData = is_string($existing->enrollment_data ?? null) && $existing->enrollment_data !== ''
+                        ? (json_decode($existing->enrollment_data, true) ?: [])
+                        : (is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : []);
+                    $newData = is_array($data['enrollment_data'] ?? null) ? $data['enrollment_data'] : [];
+                    $mergedData = self::normalizeEnrollmentData(array_merge($existingData, $newData));
 
-                $result = $wpdb->update($this->table(), $reactivate, ['id' => (int) $existing->id]);
+                    $reactivate = [
+                        'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
+                        'enrollment_path' => $data['enrollment_path'] ?? ($existing->enrollment_path ?? 'individual'),
+                        'registered_at' => current_time('mysql'),
+                        'cancelled_at' => null,
+                        'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
+                        'enrollment_data' => $mergedData ? wp_json_encode($mergedData) : null,
+                        'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
+                        'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
+                        'completion_tasks' => null,
+                        'completed_at' => null,
+                    ];
 
-                if ($result === false) {
-                    return new WP_Error('db_error', 'Failed to reactivate registration');
+                    $result = $wpdb->update($this->table(), $reactivate, ['id' => (int) $existing->id]);
+
+                    if ($result === false) {
+                        return new WP_Error('db_error', 'Failed to reactivate registration');
+                    }
+
+                    $this->clearCache();
+
+                    $this->emitRowEvent('row_updated', (int) $existing->id, $reactivate, 'reactivate');
+
+                    return (int) $existing->id;
                 }
 
-                $this->clearCache();
-
-                $this->emitRowEvent('row_updated', (int) $existing->id, $reactivate, 'reactivate');
-
-                return (int) $existing->id;
+                // Active registration exists — block duplicate
+                if ($editionId) {
+                    return new WP_Error('duplicate', 'User already registered for this edition');
+                }
+                return new WP_Error('duplicate', 'User already enrolled in this trajectory');
             }
 
-            // Active registration exists — block duplicate
-            if ($editionId) {
-                return new WP_Error('duplicate', 'User already registered for this edition');
+            $insert = [
+                'user_id' => isset($data['user_id']) ? absint($data['user_id']) : null,
+                'edition_id' => $editionId,
+                'trajectory_id' => $trajectoryId,
+                'parent_registration_id' => isset($data['parent_registration_id']) ? absint($data['parent_registration_id']) : null,
+                'company_id' => isset($data['company_id']) ? absint($data['company_id']) : null,
+                'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
+                'enrollment_path' => $data['enrollment_path'] ?? self::PATH_INDIVIDUAL,
+                'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
+                'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
+                'enrolled_by' => isset($data['enrolled_by']) ? absint($data['enrolled_by']) : null,
+                'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
+                'enrollment_data' => isset($data['enrollment_data']) && is_array($data['enrollment_data'])
+                    ? wp_json_encode(self::normalizeEnrollmentData($data['enrollment_data']))
+                    : null,
+            ];
+
+            $result = $wpdb->insert($this->table(), $insert);
+
+            if ($result === false) {
+                return new WP_Error('db_error', 'Failed to create registration');
             }
-            return new WP_Error('duplicate', 'User already enrolled in this trajectory');
+
+            $this->clearCache();
+
+            $registrationId = (int) $wpdb->insert_id;
+
+            $this->emitRowEvent('row_created', $registrationId, $insert, 'create');
+
+            return $registrationId;
+        } finally {
+            if ($lockHeld) {
+                $this->releaseEnrollLock($userId, $editionId);
+            }
         }
-
-        $insert = [
-            'user_id' => isset($data['user_id']) ? absint($data['user_id']) : null,
-            'edition_id' => $editionId,
-            'trajectory_id' => $trajectoryId,
-            'parent_registration_id' => isset($data['parent_registration_id']) ? absint($data['parent_registration_id']) : null,
-            'company_id' => isset($data['company_id']) ? absint($data['company_id']) : null,
-            'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
-            'enrollment_path' => $data['enrollment_path'] ?? self::PATH_INDIVIDUAL,
-            'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
-            'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
-            'enrolled_by' => isset($data['enrolled_by']) ? absint($data['enrolled_by']) : null,
-            'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
-            'enrollment_data' => isset($data['enrollment_data']) && is_array($data['enrollment_data'])
-                ? wp_json_encode(self::normalizeEnrollmentData($data['enrollment_data']))
-                : null,
-        ];
-
-        $result = $wpdb->insert($this->table(), $insert);
-
-        if ($result === false) {
-            return new WP_Error('db_error', 'Failed to create registration');
-        }
-
-        $this->clearCache();
-
-        $registrationId = (int) $wpdb->insert_id;
-
-        $this->emitRowEvent('row_created', $registrationId, $insert, 'create');
-
-        return $registrationId;
     }
 
     /**
@@ -400,6 +426,52 @@ final class RegistrationRepository
         // Prefix with the table prefix so parallel test/staging DBs on one
         // MySQL server don't contend on the same lock namespace.
         return $wpdb->prefix . 'vad_reg_selections_' . $registrationId;
+    }
+
+    /**
+     * Per-(user,edition) advisory lock for the enrollment check-and-insert
+     * (MySQL GET_LOCK). DATA-2 / mitigation 1.
+     *
+     * Serializes the duplicate-check-then-insert in create() so two concurrent
+     * enrolls for the same (user_id, edition_id) can't both pass the
+     * findByUserAndEdition read before either inserts → two confirmed rows +
+     * double grantAccess + double capacity count. The lock name is scoped to
+     * the tuple so unrelated enrollments never serialize.
+     *
+     * A plain UNIQUE key on (user_id, edition_id) was tried and DROPPED in
+     * June 2026 (gotcha_bad_unique_user_edition_constraint): it broke
+     * re-enrollment (Cancelled → re-enroll reactivates the SAME row) and
+     * trajectory cascade children (parent_registration_id IS NOT NULL rows
+     * share a user+edition shape). This advisory lock is the correct primitive.
+     */
+    public function acquireEnrollLock(int $userId, int $editionId, int $timeoutSeconds = 5): bool
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            'SELECT GET_LOCK(%s, %d)',
+            $this->enrollLockName($userId, $editionId),
+            $timeoutSeconds,
+        )) === 1;
+    }
+
+    public function releaseEnrollLock(int $userId, int $editionId): void
+    {
+        global $wpdb;
+
+        $wpdb->query($wpdb->prepare(
+            'SELECT RELEASE_LOCK(%s)',
+            $this->enrollLockName($userId, $editionId),
+        ));
+    }
+
+    private function enrollLockName(int $userId, int $editionId): string
+    {
+        global $wpdb;
+
+        // Prefix with the table prefix so parallel test/staging DBs on one
+        // MySQL server don't contend on the same lock namespace.
+        return $wpdb->prefix . 'stride_reg_' . $userId . '_' . $editionId;
     }
 
     // === Find by ID ===
