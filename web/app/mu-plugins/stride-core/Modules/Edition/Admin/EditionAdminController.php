@@ -233,7 +233,7 @@ final class EditionAdminController
     {
         $courses = get_posts([
             'post_type' => 'sfwd-courses',
-            'posts_per_page' => 500,
+            'posts_per_page' => -1,
             'fields' => 'ids',
             'tax_query' => [[
                 'taxonomy' => 'stride_format',
@@ -258,7 +258,7 @@ final class EditionAdminController
     {
         $courses = get_posts([
             'post_type' => 'sfwd-courses',
-            'posts_per_page' => 500,
+            'posts_per_page' => -1,
             'fields' => 'ids',
             'tax_query' => [[
                 'taxonomy' => 'stride_format',
@@ -975,7 +975,7 @@ final class EditionAdminController
         $currentCourse = (int) ($_GET['stride_course'] ?? 0);
         $courses = get_posts([
             'post_type'      => 'sfwd-courses',
-            'posts_per_page' => 500,
+            'posts_per_page' => -1,
             'post_status'    => 'publish',
             'orderby'        => 'title',
             'order'          => 'ASC',
@@ -1068,7 +1068,7 @@ final class EditionAdminController
 
             $courseIds = get_posts([
                 'post_type'      => 'sfwd-courses',
-                'posts_per_page' => 500,
+                'posts_per_page' => -1,
                 'fields'         => 'ids',
                 'tax_query'      => [
                     [
