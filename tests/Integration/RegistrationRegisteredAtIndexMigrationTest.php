@@ -32,12 +32,16 @@ final class RegistrationRegisteredAtIndexMigrationTest extends IntegrationTestCa
     }
 
     /** @test */
-    public function schemaVersionIsThree(): void
+    public function registeredAtIndexShippedInSchemaVersionThreeOrLater(): void
     {
-        $this->assertSame(
+        // The idx_registered_at index shipped as the v3 migration step. Later
+        // bumps (v4 reminder_state, from feat/gate-deadlines-reminders) keep it,
+        // so assert the constant is at least 3 rather than pinning an exact
+        // value that a future additive bump would break.
+        $this->assertGreaterThanOrEqual(
             3,
             RegistrationTable::SCHEMA_VERSION,
-            'registered_at index ships at SCHEMA_VERSION 3',
+            'registered_at index ships from SCHEMA_VERSION 3 onward',
         );
     }
 

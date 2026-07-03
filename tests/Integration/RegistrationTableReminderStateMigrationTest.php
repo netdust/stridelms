@@ -67,9 +67,9 @@ final class RegistrationTableReminderStateMigrationTest extends IntegrationTestC
 
         $this->assertTrue($this->reminderStateColumnExists(), 'migrate() must add the reminder_state column');
         $this->assertSame(
-            3,
+            RegistrationTable::SCHEMA_VERSION,
             (int) get_option(self::SCHEMA_OPTION),
-            'migrate() must stamp schema version 3 after a successful ALTER',
+            'migrate() must stamp the latest schema version after a successful ALTER',
         );
     }
 
@@ -83,23 +83,24 @@ final class RegistrationTableReminderStateMigrationTest extends IntegrationTestC
 
         RegistrationTable::migrate();
         $this->assertTrue($this->reminderStateColumnExists());
-        $this->assertSame(3, (int) get_option(self::SCHEMA_OPTION));
+        $this->assertSame(RegistrationTable::SCHEMA_VERSION, (int) get_option(self::SCHEMA_OPTION));
 
         // Guarded re-run: version already stamped at SCHEMA_VERSION → early return.
         RegistrationTable::migrate();
         $this->assertSame('', (string) $wpdb->last_error, 'Guarded second run must not error');
         $this->assertTrue($this->reminderStateColumnExists(), 'Column must still be present after re-run');
-        $this->assertSame(3, (int) get_option(self::SCHEMA_OPTION), 'Version must still be 3 after re-run');
+        $this->assertSame(RegistrationTable::SCHEMA_VERSION, (int) get_option(self::SCHEMA_OPTION), 'Version must still be latest after re-run');
 
         // Forced re-run (option cleared, simulating a v2 DB re-entering
-        // migrate() per the >= guard): the v2 step must be a safe no-op and
-        // the v3 step must not error on an already-present column.
+        // migrate() per the >= guard): the v2 step must be a safe no-op, the
+        // v3 index step must skip when present, and the v4 reminder_state step
+        // must not error on an already-present column.
         update_option(self::SCHEMA_OPTION, 2);
         RegistrationTable::migrate();
 
         $this->assertSame('', (string) $wpdb->last_error, 'Forced re-run must not error');
         $this->assertTrue($this->reminderStateColumnExists(), 'Column must remain present after forced re-run');
-        $this->assertSame(3, (int) get_option(self::SCHEMA_OPTION), 'Version must be re-stamped to 3');
+        $this->assertSame(RegistrationTable::SCHEMA_VERSION, (int) get_option(self::SCHEMA_OPTION), 'Version must be re-stamped to latest');
     }
 
     /** @test */
@@ -153,7 +154,7 @@ final class RegistrationTableReminderStateMigrationTest extends IntegrationTestC
         RegistrationTable::migrate();
 
         $this->assertTrue($this->reminderStateColumnExists(), 'After the backoff lapses migrate() must add the column');
-        $this->assertSame(3, (int) get_option(self::SCHEMA_OPTION));
+        $this->assertSame(RegistrationTable::SCHEMA_VERSION, (int) get_option(self::SCHEMA_OPTION));
     }
 
     // === Helpers ===
