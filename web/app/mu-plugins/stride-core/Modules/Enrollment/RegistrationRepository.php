@@ -26,6 +26,15 @@ final class RegistrationRepository
      */
     public const GROUP_BY_ALLOWLIST = ['edition_id', 'status', 'company_id'];
 
+    /**
+     * Max composed child rows returned PER GROUP by queryForGridGrouped (the
+     * accordion body). The cap bounds the grouped response; the offerte tally is
+     * computed separately in SQL (offerteVerdelingByGroup, FIX-10) so it is never
+     * desynced from the aggregate count without materialising ids. The "toon alle
+     * N" affordance surfaces the full set via the flat, paginated grid.
+     */
+    public const GROUP_ROW_CAP = 8;
+
     /** @var array<string, array<object>> Per-request cache for findByUser results */
     private array $findByUserCache = [];
 
@@ -234,104 +243,130 @@ final class RegistrationRepository
         $editionId = isset($data['edition_id']) ? absint($data['edition_id']) : null;
         $trajectoryId = isset($data['trajectory_id']) ? absint($data['trajectory_id']) : null;
 
-        // Check for existing registration (unique constraint on user+edition)
-        // Skip duplicate check for anonymous interest registrations (no user_id)
-        $existing = null;
+        // DATA-2 / mitigation 1: serialize the (user,edition) check-and-insert
+        // under a MySQL advisory lock so two concurrent create() calls for the
+        // same tuple can't both pass the findByUserAndEdition read before either
+        // writes. Only the edition path takes the lock — the finding is
+        // edition-scoped, and the trajectory/anonymous-interest paths key on
+        // different predicates. The lock is released on EVERY exit below.
         $userId = isset($data['user_id']) ? (int) $data['user_id'] : 0;
+        $lockHeld = false;
         if ($userId && $editionId) {
-            $existing = $this->findByUserAndEdition($userId, $editionId);
-        } elseif ($userId && $trajectoryId) {
-            $existing = $this->findByUserAndTrajectory($userId, $trajectoryId);
+            if (!$this->acquireEnrollLock($userId, $editionId)) {
+                return new WP_Error(
+                    'lock_timeout',
+                    'Kon de inschrijving niet vergrendelen, probeer het opnieuw.',
+                );
+            }
+            $lockHeld = true;
         }
 
-        if ($existing) {
-            $existingStatus = RegistrationStatus::tryFrom($existing->status);
+        // try/finally guarantees the advisory lock is released on EVERY exit
+        // path below (reactivate return, both duplicate WP_Errors, the two
+        // db_error returns, the success return, and any thrown exception).
+        try {
+            // Check for existing registration (unique constraint on user+edition)
+            // Skip duplicate check for anonymous interest registrations (no user_id)
+            $existing = null;
+            if ($userId && $editionId) {
+                $existing = $this->findByUserAndEdition($userId, $editionId);
+            } elseif ($userId && $trajectoryId) {
+                $existing = $this->findByUserAndTrajectory($userId, $trajectoryId);
+            }
 
-            // Reactivate-eligible statuses:
-            // - Cancelled: terminal-cancel state, re-enrolling reopens the row.
-            // - Interest / Waitlist: pre-enrollment holding states, the user already
-            //   expressed intent — enrolling promotes that row instead of blocking.
-            // For Interest specifically, EnrollmentService::enroll() has a separate
-            // upgrade path that merges enrollment_data when the row is anonymous
-            // (user_id=0). That path runs BEFORE this method, so we only land here
-            // when the existing Interest row already belongs to this user.
-            $reactivatableStatuses = [
-                RegistrationStatus::Cancelled,
-                RegistrationStatus::Interest,
-                RegistrationStatus::Waitlist,
-            ];
-            if (in_array($existingStatus, $reactivatableStatuses, true)) {
-                // Preserve existing enrollment_data (interest/waitlist stage payloads
-                // collected earlier) unless the caller passes new data to merge.
-                $existingData = is_string($existing->enrollment_data ?? null) && $existing->enrollment_data !== ''
-                    ? (json_decode($existing->enrollment_data, true) ?: [])
-                    : (is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : []);
-                $newData = is_array($data['enrollment_data'] ?? null) ? $data['enrollment_data'] : [];
-                $mergedData = self::normalizeEnrollmentData(array_merge($existingData, $newData));
+            if ($existing) {
+                $existingStatus = RegistrationStatus::tryFrom($existing->status);
 
-                $reactivate = [
-                    'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
-                    'enrollment_path' => $data['enrollment_path'] ?? ($existing->enrollment_path ?? 'individual'),
-                    'registered_at' => current_time('mysql'),
-                    'cancelled_at' => null,
-                    'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
-                    'enrollment_data' => $mergedData ? wp_json_encode($mergedData) : null,
-                    'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
-                    'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
-                    'completion_tasks' => null,
-                    'completed_at' => null,
+                // Reactivate-eligible statuses:
+                // - Cancelled: terminal-cancel state, re-enrolling reopens the row.
+                // - Interest / Waitlist: pre-enrollment holding states, the user already
+                //   expressed intent — enrolling promotes that row instead of blocking.
+                // For Interest specifically, EnrollmentService::enroll() has a separate
+                // upgrade path that merges enrollment_data when the row is anonymous
+                // (user_id=0). That path runs BEFORE this method, so we only land here
+                // when the existing Interest row already belongs to this user.
+                $reactivatableStatuses = [
+                    RegistrationStatus::Cancelled,
+                    RegistrationStatus::Interest,
+                    RegistrationStatus::Waitlist,
                 ];
+                if (in_array($existingStatus, $reactivatableStatuses, true)) {
+                    // Preserve existing enrollment_data (interest/waitlist stage payloads
+                    // collected earlier) unless the caller passes new data to merge.
+                    $existingData = is_string($existing->enrollment_data ?? null) && $existing->enrollment_data !== ''
+                        ? (json_decode($existing->enrollment_data, true) ?: [])
+                        : (is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : []);
+                    $newData = is_array($data['enrollment_data'] ?? null) ? $data['enrollment_data'] : [];
+                    $mergedData = self::normalizeEnrollmentData(array_merge($existingData, $newData));
 
-                $result = $wpdb->update($this->table(), $reactivate, ['id' => (int) $existing->id]);
+                    $reactivate = [
+                        'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
+                        'enrollment_path' => $data['enrollment_path'] ?? ($existing->enrollment_path ?? 'individual'),
+                        'registered_at' => current_time('mysql'),
+                        'cancelled_at' => null,
+                        'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
+                        'enrollment_data' => $mergedData ? wp_json_encode($mergedData) : null,
+                        'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
+                        'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
+                        'completion_tasks' => null,
+                        'completed_at' => null,
+                    ];
 
-                if ($result === false) {
-                    return new WP_Error('db_error', 'Failed to reactivate registration');
+                    $result = $wpdb->update($this->table(), $reactivate, ['id' => (int) $existing->id]);
+
+                    if ($result === false) {
+                        return new WP_Error('db_error', 'Failed to reactivate registration');
+                    }
+
+                    $this->clearCache();
+
+                    $this->emitRowEvent('row_updated', (int) $existing->id, $reactivate, 'reactivate');
+
+                    return (int) $existing->id;
                 }
 
-                $this->clearCache();
-
-                $this->emitRowEvent('row_updated', (int) $existing->id, $reactivate, 'reactivate');
-
-                return (int) $existing->id;
+                // Active registration exists — block duplicate
+                if ($editionId) {
+                    return new WP_Error('duplicate', 'User already registered for this edition');
+                }
+                return new WP_Error('duplicate', 'User already enrolled in this trajectory');
             }
 
-            // Active registration exists — block duplicate
-            if ($editionId) {
-                return new WP_Error('duplicate', 'User already registered for this edition');
+            $insert = [
+                'user_id' => isset($data['user_id']) ? absint($data['user_id']) : null,
+                'edition_id' => $editionId,
+                'trajectory_id' => $trajectoryId,
+                'parent_registration_id' => isset($data['parent_registration_id']) ? absint($data['parent_registration_id']) : null,
+                'company_id' => isset($data['company_id']) ? absint($data['company_id']) : null,
+                'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
+                'enrollment_path' => $data['enrollment_path'] ?? self::PATH_INDIVIDUAL,
+                'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
+                'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
+                'enrolled_by' => isset($data['enrolled_by']) ? absint($data['enrolled_by']) : null,
+                'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
+                'enrollment_data' => isset($data['enrollment_data']) && is_array($data['enrollment_data'])
+                    ? wp_json_encode(self::normalizeEnrollmentData($data['enrollment_data']))
+                    : null,
+            ];
+
+            $result = $wpdb->insert($this->table(), $insert);
+
+            if ($result === false) {
+                return new WP_Error('db_error', 'Failed to create registration');
             }
-            return new WP_Error('duplicate', 'User already enrolled in this trajectory');
+
+            $this->clearCache();
+
+            $registrationId = (int) $wpdb->insert_id;
+
+            $this->emitRowEvent('row_created', $registrationId, $insert, 'create');
+
+            return $registrationId;
+        } finally {
+            if ($lockHeld) {
+                $this->releaseEnrollLock($userId, $editionId);
+            }
         }
-
-        $insert = [
-            'user_id' => isset($data['user_id']) ? absint($data['user_id']) : null,
-            'edition_id' => $editionId,
-            'trajectory_id' => $trajectoryId,
-            'parent_registration_id' => isset($data['parent_registration_id']) ? absint($data['parent_registration_id']) : null,
-            'company_id' => isset($data['company_id']) ? absint($data['company_id']) : null,
-            'status' => $data['status'] ?? RegistrationStatus::Confirmed->value,
-            'enrollment_path' => $data['enrollment_path'] ?? self::PATH_INDIVIDUAL,
-            'selections' => isset($data['selections']) ? wp_json_encode($data['selections']) : null,
-            'quote_id' => isset($data['quote_id']) ? absint($data['quote_id']) : null,
-            'enrolled_by' => isset($data['enrolled_by']) ? absint($data['enrolled_by']) : null,
-            'notes' => isset($data['notes']) ? sanitize_textarea_field($data['notes']) : null,
-            'enrollment_data' => isset($data['enrollment_data']) && is_array($data['enrollment_data'])
-                ? wp_json_encode(self::normalizeEnrollmentData($data['enrollment_data']))
-                : null,
-        ];
-
-        $result = $wpdb->insert($this->table(), $insert);
-
-        if ($result === false) {
-            return new WP_Error('db_error', 'Failed to create registration');
-        }
-
-        $this->clearCache();
-
-        $registrationId = (int) $wpdb->insert_id;
-
-        $this->emitRowEvent('row_created', $registrationId, $insert, 'create');
-
-        return $registrationId;
     }
 
     /**
@@ -391,6 +426,52 @@ final class RegistrationRepository
         // Prefix with the table prefix so parallel test/staging DBs on one
         // MySQL server don't contend on the same lock namespace.
         return $wpdb->prefix . 'vad_reg_selections_' . $registrationId;
+    }
+
+    /**
+     * Per-(user,edition) advisory lock for the enrollment check-and-insert
+     * (MySQL GET_LOCK). DATA-2 / mitigation 1.
+     *
+     * Serializes the duplicate-check-then-insert in create() so two concurrent
+     * enrolls for the same (user_id, edition_id) can't both pass the
+     * findByUserAndEdition read before either inserts → two confirmed rows +
+     * double grantAccess + double capacity count. The lock name is scoped to
+     * the tuple so unrelated enrollments never serialize.
+     *
+     * A plain UNIQUE key on (user_id, edition_id) was tried and DROPPED in
+     * June 2026 (gotcha_bad_unique_user_edition_constraint): it broke
+     * re-enrollment (Cancelled → re-enroll reactivates the SAME row) and
+     * trajectory cascade children (parent_registration_id IS NOT NULL rows
+     * share a user+edition shape). This advisory lock is the correct primitive.
+     */
+    public function acquireEnrollLock(int $userId, int $editionId, int $timeoutSeconds = 5): bool
+    {
+        global $wpdb;
+
+        return (int) $wpdb->get_var($wpdb->prepare(
+            'SELECT GET_LOCK(%s, %d)',
+            $this->enrollLockName($userId, $editionId),
+            $timeoutSeconds,
+        )) === 1;
+    }
+
+    public function releaseEnrollLock(int $userId, int $editionId): void
+    {
+        global $wpdb;
+
+        $wpdb->query($wpdb->prepare(
+            'SELECT RELEASE_LOCK(%s)',
+            $this->enrollLockName($userId, $editionId),
+        ));
+    }
+
+    private function enrollLockName(int $userId, int $editionId): string
+    {
+        global $wpdb;
+
+        // Prefix with the table prefix so parallel test/staging DBs on one
+        // MySQL server don't contend on the same lock namespace.
+        return $wpdb->prefix . 'stride_reg_' . $userId . '_' . $editionId;
     }
 
     // === Find by ID ===
@@ -1718,6 +1799,147 @@ final class RegistrationRepository
         return $this->updateStatus($id, RegistrationStatus::Cancelled);
     }
 
+    // === Reminder state (Phase 2 Task 2.2) ===
+
+    /**
+     * Get the reminder-state ledger for a registration.
+     *
+     * Shape-agnostic: this method faithfully round-trips whatever array was
+     * stored via setReminderState() — it does not validate/interpret the
+     * reminder/deadline keys (that logic lives in Phase 4).
+     *
+     * @return array<string, mixed> Decoded reminder_state, or `[]` when the
+     *                               column is NULL/empty or the row doesn't
+     *                               exist. Never returns null/false.
+     */
+    public function getReminderState(int $registrationId): array
+    {
+        global $wpdb;
+
+        $raw = $wpdb->get_var($wpdb->prepare(
+            "SELECT reminder_state FROM {$this->table()} WHERE id = %d",
+            $registrationId,
+        ));
+
+        if ($raw === null || $raw === '') {
+            return [];
+        }
+
+        $decoded = json_decode($raw, true);
+
+        return is_array($decoded) ? $decoded : [];
+    }
+
+    /**
+     * Set the reminder-state ledger for a registration.
+     *
+     * @param array<string, mixed> $state
+     * @return bool|WP_Error True on success; WP_Error('db_error', ...) on a
+     *                       DB failure (INV-4) — never returns false.
+     */
+    public function setReminderState(int $registrationId, array $state): bool|WP_Error
+    {
+        global $wpdb;
+
+        $result = $wpdb->update(
+            $this->table(),
+            ['reminder_state' => wp_json_encode($state)],
+            ['id' => $registrationId],
+            ['%s'],
+            ['%d'],
+        );
+
+        if ($result === false) {
+            ntdst_log('enrollment')->error('failed to update reminder state', [
+                'registration_id' => $registrationId,
+                'error' => $wpdb->last_error,
+            ]);
+
+            return new WP_Error('db_error', 'Failed to update reminder state');
+        }
+
+        $this->clearCache();
+        $this->emitRowEvent('row_updated', $registrationId, ['reminder_state' => $state], 'set_reminder_state');
+
+        return true;
+    }
+
+    /**
+     * Enumeration query for the daily reminder cron (Phase 2 Task 2.3,
+     * threat-model A2): registrations whose edition has an active gate
+     * deadline (enroll-phase gate_deadline OR post-phase post_gate_deadline)
+     * that has NOT yet passed.
+     *
+     * DATE FLOOR (scalability audit 2026-07-03, finding #7): a row is only
+     * enumerated if at least one of its deadlines is >= $today. Confirmed
+     * rows only leave the table via completion/cancellation, so without this
+     * floor a confirmed-incomplete registration on a long-expired edition was
+     * re-scanned every daily cron tick forever (at 25k accumulated rows:
+     * ~100k+ queries + 25k GET_LOCKs per tick). The deadline metas are stored
+     * as zero-padded ISO date strings ('Y-m-d', from an <input type="date">),
+     * so lexicographic `>= $today` is a correct calendar comparison. The floor
+     * is $today (not today-minus-grace): the reminder mail always fires before
+     * the deadline and the day-before mail fires from deadline-1 onward, so a
+     * deadline landing on today stays enumerable while a strictly-past deadline
+     * drops out. Coupled with GateReminderDueCalculator (which already returns
+     * null for already-sent phases), this converges the corpus to only rows
+     * that can still produce a mail.
+     *
+     * KEYSET PAGINATION (finding #7): keyset (`r.id > $afterId ORDER BY r.id
+     * ASC LIMIT`) instead of OFFSET. OFFSET made the cron loop O(n^2) row
+     * visits across a run (each chunk re-walks all skipped rows) plus a
+     * filesort per chunk; keyset seeks straight to the cursor on the PK. Order
+     * is by r.id (the PK) — registered_at is not unique, so it cannot give a
+     * stable keyset cursor. The consumer (GateReminderService) processes each
+     * row independently by its own deadline, so id-order vs registered_at-order
+     * does not change any outcome.
+     *
+     * Bounded (mitigation 5) — explicit LIMIT, $limit clamped to [1, 1000] so
+     * a caller can never request an unbounded scan. Prepared (mitigation 8) —
+     * status values + the today floor + limit/cursor all go through
+     * $wpdb->prepare; the two meta_key literals are hardcoded constants (not
+     * user input), matching the findForExport precedent for inline meta-key
+     * literals in this repo. GROUP BY r.id dedupes any fan-out from the two
+     * LEFT JOINs against wp_postmeta, so a registration row is never returned
+     * twice within a page even if duplicate postmeta rows existed on an edition.
+     *
+     * @param int $limit   Page size, clamped to [1, 1000].
+     * @param int $afterId Keyset cursor — return rows with r.id strictly greater.
+     *
+     * @return array<object> Full row objects (SELECT *), matching the return
+     *                       shape of the other find* methods on this repo.
+     */
+    public function findWithActiveDeadline(int $limit = 500, int $afterId = 0): array
+    {
+        global $wpdb;
+        $table = $this->table();
+
+        $limit = max(1, min($limit, 1000));
+        $afterId = max(0, $afterId);
+        $today = current_time('Y-m-d');
+
+        return $wpdb->get_results($wpdb->prepare(
+            "SELECT r.* FROM {$table} r
+             LEFT JOIN {$wpdb->postmeta} pm_gate ON r.edition_id = pm_gate.post_id AND pm_gate.meta_key = '_ntdst_gate_deadline'
+             LEFT JOIN {$wpdb->postmeta} pm_post_gate ON r.edition_id = pm_post_gate.post_id AND pm_post_gate.meta_key = '_ntdst_post_gate_deadline'
+             WHERE r.status IN (%s, %s)
+               AND r.id > %d
+               AND (
+                   (pm_gate.meta_value IS NOT NULL AND pm_gate.meta_value >= %s)
+                   OR (pm_post_gate.meta_value IS NOT NULL AND pm_post_gate.meta_value >= %s)
+               )
+             GROUP BY r.id
+             ORDER BY r.id ASC
+             LIMIT %d",
+            RegistrationStatus::Confirmed->value,
+            RegistrationStatus::Pending->value,
+            $afterId,
+            $today,
+            $today,
+            $limit,
+        ));
+    }
+
     // === Cache management ===
 
     /**
@@ -1846,13 +2068,19 @@ final class RegistrationRepository
      * a GROUP BY aggregate SELECT on top.
      *
      * Returns a single array holding everything the service layer needs:
-     *  - 'agg_rows'      => array<object>  — one row per distinct group_value
-     *                                         (cols: group_value, cnt, completed_count)
-     *  - 'group_reg_ids' => array<string,array<int>>  — group_value => [regId, ...]
-     *                                         for the visible page groups only
-     *  - 'total'         => int  — total number of ROWS (not groups) matching filters
-     *  - 'page'          => int
-     *  - 'per_page'      => int
+     *  - 'agg_rows'   => array<object>  — one row per distinct group_value
+     *                                      (cols: group_value, cnt, completed_count)
+     *  - 'group_rows' => array<string,array<object>>  — group_value => up to
+     *                                      GROUP_ROW_CAP FULL child-row objects
+     *                                      (same column set as queryForGrid),
+     *                                      ordered registered_at DESC.
+     *  - 'total'      => int  — total number of ROWS (not groups) matching filters
+     *  - 'page'       => int
+     *  - 'per_page'   => int
+     *
+     * The offerte_verdeling distribution is NOT returned here — it is computed in
+     * SQL by offerteVerdelingByGroup (FIX-10), so this method never materialises
+     * the full per-group id set.
      *
      * M4 guarantee: $groupBy MUST already be validated against GROUP_BY_ALLOWLIST
      * before calling this method (the caller owns the guard). The column name is
@@ -1860,7 +2088,7 @@ final class RegistrationRepository
      *
      * @param  array<string,mixed> $filters  Same key-set as queryForGrid.
      * @param  string              $groupBy  Validated allowlisted column name.
-     * @return array{agg_rows:array<object>,group_reg_ids:array<string,array<int>>,total:int,page:int,per_page:int}
+     * @return array{agg_rows:array<object>,group_rows:array<string,array<object>>,total:int,page:int,per_page:int}
      */
     public function queryForGridGrouped(array $filters, string $groupBy): array
     {
@@ -1910,22 +2138,19 @@ final class RegistrationRepository
 
         if (empty($aggRows)) {
             return [
-                'agg_rows'      => [],
-                'group_reg_ids' => [],
-                'total'         => $total,
-                'page'          => $page,
-                'per_page'      => $perPage,
+                'agg_rows'   => [],
+                'group_rows' => [],
+                'total'      => $total,
+                'page'       => $page,
+                'per_page'   => $perPage,
             ];
         }
 
-        // --- Fetch reg IDs per group for the current page's groups only ---
-        // This feeds the two-step offerte resolver without a JSON aggregate (M5).
-        // TODO(perf, deferred): this IDs subquery is unbounded per group — it pulls
-        // every reg-id of each visible group into PHP to tally offerte_verdeling.
-        // A bounded fix (aggregating the per-quote-status tally in SQL) is a larger
-        // rewrite than a fix-pass should carry; the FIX 1 trajectory-parent corpus
-        // exclusion already shrinks the corpus. A blind LIMIT here would desync the
-        // tally from the group count, so it is intentionally NOT applied. Tracked.
+        // --- Narrow to the current page's groups (for the capped child rows) ---
+        // FIX-10: the offerte_verdeling tally NO LONGER pulls every reg-id of each
+        // visible group into PHP — it is computed in SQL by offerteVerdelingByGroup.
+        // This group filter now serves ONLY the bounded window query below (the
+        // ≤ GROUP_ROW_CAP child rows), which is intrinsically bounded.
         // A NULL group_value (defensive — the edition_id-NULL corpus exclusion in
         // buildGridFilters means this should never occur for edition_id, but other
         // allowlist columns could in principle hold NULL) must route via IS NULL,
@@ -1956,30 +2181,217 @@ final class RegistrationRepository
             ? "{$whereClause} AND {$groupFilter}"
             : "WHERE {$groupFilter}";
 
-        $idsSql    = "SELECT r.id, r.{$groupBy} AS group_val
-                      FROM {$regTable} r
-                      LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
-                      {$activeJoin}
-                      {$fullWhere}";
-        $idsParams = array_merge($params, $groupFilterArgs);
-        $idsRows   = $wpdb->get_results($wpdb->prepare($idsSql, ...$idsParams));
+        // --- Capped per-group FULL-column child rows (the accordion body) ---
+        // ONE window-function query (MariaDB 10.11): ROW_NUMBER() partitioned by
+        // the group column, ordered registered_at DESC, filtered <= GROUP_ROW_CAP
+        // in the outer WHERE — no N+1. Reuses the SAME $activeJoin + $fullWhere
+        // (the visible-page group filter) + $params as the aggregate above, so the
+        // composed rows are scoped IDENTICALLY (active-scope, company, status,
+        // trajectory-parent exclusion). The cap applies ONLY here — the offerte
+        // tally is computed separately in SQL (offerteVerdelingByGroup, FIX-10).
+        //
+        // Column set is byte-identical to queryForGrid's $dataSql (M5: structured
+        // columns only; enrollment_data solely for the anon-lead name fallback).
+        // enrollment_data participates in NO filter/sort, only SELECT.
+        //
+        // PARAM ORDER (M4): the inner subquery text consumes $params + the group
+        // filter args (JOIN %d before WHERE params, then the group IN placeholders);
+        // the outer `_rn <= %d` placeholder follows all of them, so GROUP_ROW_CAP is
+        // appended LAST.
+        $rowsSql = "SELECT id, user_id, edition_id, trajectory_id,
+                           parent_registration_id, status, enrollment_path,
+                           company_id, registered_at, completed_at,
+                           cancelled_at, quote_id, enrolled_by, notes,
+                           enrollment_data, group_val
+                    FROM (
+                        SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
+                               r.parent_registration_id, r.status, r.enrollment_path,
+                               r.company_id, r.registered_at, r.completed_at,
+                               r.cancelled_at, r.quote_id, r.enrolled_by, r.notes,
+                               r.enrollment_data,
+                               r.{$groupBy} AS group_val,
+                               ROW_NUMBER() OVER (
+                                   PARTITION BY r.{$groupBy}
+                                   ORDER BY r.registered_at DESC, r.id DESC
+                               ) AS _rn
+                        FROM {$regTable} r
+                        LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                        {$activeJoin}
+                        {$fullWhere}
+                    ) AS _ranked
+                    WHERE _rn <= %d";
 
-        $groupRegIds = [];
-        foreach ($idsRows as $row) {
+        $rowsParams = array_merge($params, $groupFilterArgs, [self::GROUP_ROW_CAP]);
+        $rankedRows = $wpdb->get_results($wpdb->prepare($rowsSql, ...$rowsParams));
+
+        $groupRows = [];
+        foreach ($rankedRows as $row) {
             $gv = $row->group_val;
-            if (!isset($groupRegIds[$gv])) {
-                $groupRegIds[$gv] = [];
+            unset($row->group_val); // keep the shape byte-identical to queryForGrid rows
+            if (!isset($groupRows[$gv])) {
+                $groupRows[$gv] = [];
             }
-            $groupRegIds[$gv][] = (int) $row->id;
+            $groupRows[$gv][] = $row;
         }
 
         return [
-            'agg_rows'      => $aggRows,
-            'group_reg_ids' => $groupRegIds,
-            'total'         => $total,
-            'page'          => $page,
-            'per_page'      => $perPage,
+            'agg_rows'   => $aggRows,
+            'group_rows' => $groupRows,
+            'total'      => $total,
+            'page'       => $page,
+            'per_page'   => $perPage,
         ];
+    }
+
+    /**
+     * Per-group offerte-status tally, computed ENTIRELY in SQL (FIX-10).
+     *
+     * Replaces the old unbounded path where queryForGridGrouped pulled EVERY
+     * registration id of every visible group into PHP (group_reg_ids) purely so
+     * the service could tally the offerte-status distribution. At 50k rows that
+     * built a 50k-placeholder IN clause and materialised 50k ids → OOM.
+     *
+     * This method computes the same distribution with a single GROUP BY:
+     *   GROUP BY r.{$groupBy}, <quote status of the MIN-post-ID quote>
+     * so the tally never leaves the database as a row set.
+     *
+     * SCOPE PARITY (INV-3): reuses buildGridFilters — the SAME active_join,
+     * where_clause and params as queryForGrid/queryForGridGrouped — so the WHERE
+     * and JOIN are byte-identical to the flat/grouped paths (trajectory-parent
+     * corpus exclusion, edition_id-NOT-NULL base predicate, active-scope, company,
+     * status, q). It then narrows to ONLY the visible page's groups (the same
+     * IN(nonNullGroupValues) OR IS NULL filter queryForGridGrouped derives from
+     * its paginated aggregate rows), so the tally matches the aggregate rows the
+     * service renders.
+     *
+     * QUOTE JOIN semantic — identical to QuoteRepository::findQuoteIdsByRegistrations:
+     * a registration may have MULTIPLE published vad_quote posts; the MIN(post ID)
+     * quote is THE quote. A derived table picks that MIN quote per registration_id
+     * (registration_id meta is a STRING), then its `status` meta is LEFT JOINed.
+     * A reg with no published quote — or a quote with null/empty status — falls
+     * into the NULL status bucket, returned under the '' key. The SERVICE maps the
+     * raw status → QuoteStatus->label() / 'Geen offerte', exactly as
+     * resolveOfferteStatuses does (null/'' → 'Geen offerte'; valid enum → label();
+     * unknown raw → verbatim), so labels are byte-identical to the old path.
+     *
+     * @param  array<string,mixed> $filters  Same key-set as queryForGridGrouped.
+     * @param  string              $groupBy  Validated allowlisted column (caller owns M4).
+     * @return array<string,array<string,int>>  group_value => (raw status | '') => count.
+     *         The NULL-group key is '' (empty string); the no-quote/null-status
+     *         bucket key is also '' within a group's inner map.
+     */
+    public function offerteVerdelingByGroup(array $filters, string $groupBy): array
+    {
+        global $wpdb;
+
+        $built       = $this->buildGridFilters($filters);
+        $page        = $built['page'];
+        $perPage     = $built['per_page'];
+        $activeJoin  = $built['active_join'];
+        $whereClause = $built['where_clause'];
+        $params      = $built['params'];
+        $regTable    = $this->table();
+
+        $groupColSql = "r.{$groupBy}";  // column name from allowlist — never user input
+
+        // --- Resolve the visible page's groups (mirror queryForGridGrouped) ---
+        // The tally must cover EXACTLY the groups the aggregate page renders, so
+        // we recompute the same paginated group set (same ORDER BY cnt DESC /
+        // LIMIT/OFFSET) and narrow to it. A NULL group_value routes via IS NULL,
+        // never IN ('') (strval(null)='' would silently miss the IS NULL rows).
+        $aggSql = "SELECT {$groupColSql} AS group_value, COUNT(*) AS cnt
+                   FROM {$regTable} r
+                   LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                   {$activeJoin}
+                   {$whereClause}
+                   GROUP BY {$groupColSql}
+                   ORDER BY cnt DESC
+                   LIMIT %d OFFSET %d";
+        $aggParams = array_merge($params, [$perPage, ($page - 1) * $perPage]);
+        $aggRows   = $wpdb->get_results($wpdb->prepare($aggSql, ...$aggParams));
+
+        if (empty($aggRows)) {
+            return [];
+        }
+
+        $nonNullGroupValues = [];
+        $hasNullGroup       = false;
+        foreach ($aggRows as $r) {
+            if ($r->group_value === null) {
+                $hasNullGroup = true;
+            } else {
+                $nonNullGroupValues[] = (string) $r->group_value;
+            }
+        }
+
+        $groupClauses    = [];
+        $groupFilterArgs = [];
+        if (!empty($nonNullGroupValues)) {
+            $groupPlaceholders = implode(',', array_fill(0, count($nonNullGroupValues), '%s'));
+            $groupClauses[]    = "r.{$groupBy} IN ({$groupPlaceholders})";
+            $groupFilterArgs   = $nonNullGroupValues;
+        }
+        if ($hasNullGroup) {
+            $groupClauses[] = "r.{$groupBy} IS NULL";
+        }
+        $groupFilter = '(' . implode(' OR ', $groupClauses) . ')';
+
+        $fullWhere = $whereClause
+            ? "{$whereClause} AND {$groupFilter}"
+            : "WHERE {$groupFilter}";
+
+        // --- The SQL tally ---
+        // Derived table `q` = MIN(post ID) published vad_quote per registration_id
+        // (mirrors findQuoteIdsByRegistrations: registration_id meta is a string,
+        // GROUP BY meta_value, MIN(p.ID) wins over multiple quotes). Then LEFT JOIN
+        // that quote's `status` postmeta. r → q join is on the string reg id.
+        // Aggregate: COUNT(*) per (group_value, status), NULL status kept as NULL
+        // (mapped to the '' bucket in PHP). No registration id ever leaves SQL.
+        $quotePostType = \Stride\Modules\Invoicing\QuoteCPT::POST_TYPE;
+
+        // The quote derived table is joined FIRST (before $activeJoin) so its %s
+        // post_type placeholder is the very first bound param — this keeps the
+        // param order simple and correct even when $activeJoin itself carries a
+        // %d (the trajectory JOIN, whose param buildGridFilters array_unshifts to
+        // the FRONT of $params). SQL text placeholder order is therefore:
+        //   %s (post_type) → $activeJoin's %d (if any) + $whereClause's params
+        //   (both already in $params, active-join param first) → group filter args.
+        $sql = "SELECT {$groupColSql} AS group_value, qs.meta_value AS quote_status, COUNT(*) AS cnt
+                FROM {$regTable} r
+                LEFT JOIN (
+                    SELECT pm.meta_value AS reg_id, MIN(p.ID) AS quote_id
+                    FROM {$wpdb->posts} p
+                    INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id
+                    WHERE p.post_type = %s AND p.post_status = 'publish'
+                      AND pm.meta_key = 'registration_id'
+                    GROUP BY pm.meta_value
+                ) q ON q.reg_id = CAST(r.id AS CHAR)
+                LEFT JOIN {$wpdb->postmeta} qs
+                    ON qs.post_id = q.quote_id AND qs.meta_key = 'status'
+                LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
+                {$activeJoin}
+                {$fullWhere}
+                GROUP BY {$groupColSql}, qs.meta_value";
+
+        $sqlParams = array_merge([$quotePostType], $params, $groupFilterArgs);
+        $rows      = $wpdb->get_results($wpdb->prepare($sql, ...$sqlParams));
+
+        $tally = [];
+        foreach ($rows as $row) {
+            $group  = $row->group_value === null ? '' : (string) $row->group_value;
+            // Null/empty quote status → the no-quote bucket, keyed ''. The service
+            // maps '' → 'Geen offerte' (identical to resolveOfferteStatuses).
+            $status = ($row->quote_status === null || $row->quote_status === '')
+                ? ''
+                : (string) $row->quote_status;
+
+            if (!isset($tally[$group])) {
+                $tally[$group] = [];
+            }
+            $tally[$group][$status] = ($tally[$group][$status] ?? 0) + (int) $row->cnt;
+        }
+
+        return $tally;
     }
 
     /**

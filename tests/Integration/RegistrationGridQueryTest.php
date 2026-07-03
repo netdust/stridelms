@@ -58,8 +58,14 @@ class RegistrationGridQueryTest extends IntegrationTestCase
     private static ?int $trajUser2Id = null;
     private static ?int $trajUser3Id = null;
 
+    // Anonymous (user_id NULL) interest lead — Task 5 parity anon-decode coverage.
+    private static ?int $anonInterestRegId = null;
+
     // Registration IDs to clean up
     private static array $regIds = [];
+
+    // Extra users created by the cap-group test (Task 2) — cleaned up in teardown.
+    private static array $capUserIds = [];
 
     public static function setUpBeforeClass(): void
     {
@@ -158,6 +164,25 @@ class RegistrationGridQueryTest extends IntegrationTestCase
         ]);
         self::assertValidRegId($r5, 'R5');
         self::$regIds[] = (int) $r5;
+
+        // R6: ANONYMOUS interest lead (user_id NULL), dateless edition, captured
+        // name/email in enrollment_data. Exercises the resolveAnonymousIdentity
+        // decode on the grouped child-row path (Task 5 parity: anon name must
+        // survive into the composed row, same as the flat path).
+        $r6 = $repo->create([
+            'edition_id'      => self::$datelessEditionId,
+            'company_id'      => self::$companyId,
+            'status'          => RegistrationStatus::Interest->value,
+            'enrollment_data' => [
+                'interest' => RegistrationRepository::wrapStage([
+                    'name'  => 'Anon Interest Lead',
+                    'email' => 'anon.lead@test.local',
+                ]),
+            ],
+        ]);
+        self::assertValidRegId($r6, 'R6-anon-interest');
+        self::$anonInterestRegId = (int) $r6;
+        self::$regIds[]          = (int) $r6;
 
         // --- Task 1.4b: trajectory grid-filter fixtures ---
         self::seedTrajectoryFixtures($repo);
@@ -297,10 +322,10 @@ class RegistrationGridQueryTest extends IntegrationTestCase
             }
         }
 
-        foreach ([
+        foreach (array_merge([
             self::$user1Id, self::$user2Id, self::$user3Id,
             self::$trajUser1Id, self::$trajUser2Id, self::$trajUser3Id,
-        ] as $uid) {
+        ], self::$capUserIds) as $uid) {
             if ($uid) {
                 require_once ABSPATH . 'wp-admin/includes/user.php';
                 wp_delete_user($uid);
@@ -712,6 +737,64 @@ class RegistrationGridQueryTest extends IntegrationTestCase
     }
 
     // =========================================================================
+    // FIX-10 param-order guard: offerteVerdelingByGroup under a trajectory_id
+    // filter — the active_join carries a %d (traj_parent JOIN) that buildGridFilters
+    // array_unshifts to the FRONT of $params. The quote derived-table's %s must
+    // NOT collide with it. A wrong param order corrupts the prepared SQL → empty
+    // or wrong tally. This drives the exact interleaving the flat grid never does.
+    // =========================================================================
+
+    /**
+     * @test
+     */
+    public function offerteVerdelingByGroupHonoursTrajectoryJoinParamOrder(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        // T1 corpus via trajectory_id filter (parent+child join): childA (confirmed),
+        // childB (waitlist), legacy (confirmed) → grouped by status: confirmed=2,
+        // waitlist=1. The T1 PARENT (edition_id NULL) is excluded by the base
+        // predicate; the T2 child must NEVER leak in.
+        $verdeling = $repo->offerteVerdelingByGroup(
+            ['trajectory_id' => self::$trajT1Id, 'edition_scope' => 'all', 'per_page' => 50],
+            'status',
+        );
+
+        $this->assertNotEmpty(
+            $verdeling,
+            'tally must be non-empty under a trajectory_id filter (proves the %d/%s param order is correct)',
+        );
+
+        $confirmed = RegistrationStatus::Confirmed->value;
+        $waitlist  = RegistrationStatus::Waitlist->value;
+
+        // Every T1 reg has no quote → the 'Geen offerte' bucket (key '').
+        $this->assertSame(
+            2,
+            array_sum($verdeling[$confirmed] ?? []),
+            'T1 confirmed group must total 2 (childA + legacy) — the traj JOIN corpus, no leak',
+        );
+        $this->assertSame(
+            1,
+            array_sum($verdeling[$waitlist] ?? []),
+            'T1 waitlist group must total 1 (childB)',
+        );
+
+        // Leak-check: the whole T1 tally must total exactly 3 (no T2 child, no
+        // parent). If the param order were wrong, the WHERE would bind the wrong
+        // values and this total would drift.
+        $grandTotal = 0;
+        foreach ($verdeling as $statusCounts) {
+            $grandTotal += array_sum($statusCounts);
+        }
+        $this->assertSame(
+            3,
+            $grandTotal,
+            'T1 tally must total exactly 3 rows (childA + childB + legacy) — no T2 leak, no parent',
+        );
+    }
+
+    // =========================================================================
     // FIX 5: grouped path forms no spurious NULL/'' group from trajectory parents.
     // =========================================================================
 
@@ -744,15 +827,20 @@ class RegistrationGridQueryTest extends IntegrationTestCase
             $this->assertNotSame('', (string) $agg->group_value, 'No empty edition_id group may form');
         }
 
-        // Every group must have a consistent reg-id set (count matches resolved ids,
-        // proving no IN('') miss silently dropped the group's ids).
+        // Every group's SQL offerte tally must sum to the aggregate count (proving
+        // no IN('') miss silently dropped the group, and the FIX-10 SQL tally scopes
+        // to exactly the same corpus as the aggregate).
+        $verdeling = $repo->offerteVerdelingByGroup(
+            ['company_id' => self::$companyId, 'edition_scope' => 'all'],
+            'edition_id',
+        );
         foreach ($result['agg_rows'] as $agg) {
-            $gv  = $agg->group_value;
-            $ids = $result['group_reg_ids'][$gv] ?? [];
+            $gv  = $agg->group_value === null ? '' : (string) $agg->group_value;
+            $sum = array_sum($verdeling[$gv] ?? []);
             $this->assertSame(
                 (int) $agg->cnt,
-                count($ids),
-                "Group {$gv}: resolved reg-id count must equal the aggregate count (no IN('') miss)",
+                $sum,
+                "Group {$gv}: SQL tally sum must equal the aggregate count (no IN('') miss)",
             );
         }
     }
@@ -1002,6 +1090,269 @@ class RegistrationGridQueryTest extends IntegrationTestCase
         foreach ($result['rows'] as $row) {
             $this->assertSame('confirmed', $row->status, 'status param must bind — only confirmed rows');
             $this->assertContains((int) $row->id, $allowedConfirmed, 'Only T1 confirmed children may appear');
+        }
+    }
+
+    // =========================================================================
+    // Task 2: capped-per-group child-row fetch (group_rows) — cap + leak + tally.
+    // =========================================================================
+
+    /**
+     * @test
+     * The grouped read-model returns a NEW `group_rows` key: up to GROUP_ROW_CAP
+     * FULL child rows per visible group, scoped by the SAME buildGridFilters WHERE
+     * as the aggregate + the id set. Contract:
+     *  (a) 'group_rows' key present,
+     *  (b) every group's child rows count <= GROUP_ROW_CAP,
+     *  (c) NO child row has edition_id NULL (trajectory-parent leak/denial path),
+     *  (d) the group's TRUE size (aggregate cnt) exceeds the composed child-row cap
+     *      — proving the cap bit — while the SQL offerte tally (FIX-10) still sums
+     *      to the full group size (the tally stays complete without materialising ids).
+     *
+     * Seeds >GROUP_ROW_CAP confirmed rows under a dedicated company so the over-cap
+     * group is deterministic and isolated from the shared test-DB corpus.
+     */
+    public function groupedChildRowsAreCappedAndScoped(): void
+    {
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        // Dedicated company + edition so the confirmed group deterministically
+        // exceeds GROUP_ROW_CAP regardless of other suites' shared-DB fixtures.
+        $capCompanyId = 88899;
+        $capEdition   = self::createEditionWithDates(
+            'GridTest CapGroup ' . time(),
+            date('Y-m-d', strtotime('+30 days')),
+            date('Y-m-d', strtotime('+31 days')),
+            'open',
+        );
+
+        // GROUP_ROW_CAP + 1 confirmed rows (distinct users — create() dedups on
+        // user+edition), all under $capCompanyId / $capEdition.
+        $overCap = RegistrationRepository::GROUP_ROW_CAP + 1;
+        for ($i = 0; $i < $overCap; $i++) {
+            $uid = wp_create_user('grid_cap_u' . $i . '_' . uniqid(), 'pass123', 'gcu' . $i . '_' . uniqid() . '@test.local');
+            self::assertFalse(is_wp_error($uid), 'cap-group user create');
+            self::$capUserIds[] = (int) $uid;
+
+            $reg = $repo->create([
+                'user_id'    => (int) $uid,
+                'edition_id' => $capEdition,
+                'company_id' => $capCompanyId,
+                'status'     => RegistrationStatus::Confirmed->value,
+            ]);
+            self::assertValidRegId($reg, "cap-row-{$i}");
+            self::$regIds[] = (int) $reg;
+        }
+
+        $result = $repo->queryForGridGrouped(
+            ['company_id' => $capCompanyId, 'edition_scope' => 'all', 'per_page' => 50],
+            'status',
+        );
+
+        // (a) the new key exists.
+        $this->assertArrayHasKey('group_rows', $result, "grouped response must carry the additive 'group_rows' key");
+
+        // (b) + (c): every group is capped, and no trajectory-parent (edition_id NULL) leaks.
+        foreach ($result['group_rows'] as $gv => $rows) {
+            $this->assertLessThanOrEqual(
+                RegistrationRepository::GROUP_ROW_CAP,
+                count($rows),
+                "group '{$gv}' child rows must be capped at GROUP_ROW_CAP",
+            );
+            foreach ($rows as $r) {
+                $this->assertNotNull(
+                    $r->edition_id,
+                    'no trajectory-parent (edition_id NULL) row may appear as a child',
+                );
+            }
+        }
+
+        // group_rows must be shaped by the SAME full column set as the flat path.
+        $confirmed = RegistrationStatus::Confirmed->value;
+        $this->assertArrayHasKey($confirmed, $result['group_rows'], 'confirmed group must be present');
+        $this->assertNotEmpty($result['group_rows'][$confirmed], 'confirmed group must carry composed rows');
+        $sample = $result['group_rows'][$confirmed][0];
+        foreach (['id', 'user_id', 'edition_id', 'trajectory_id', 'parent_registration_id',
+            'status', 'enrollment_path', 'company_id', 'registered_at', 'completed_at',
+            'cancelled_at', 'quote_id', 'enrolled_by', 'notes', 'enrollment_data'] as $col) {
+            $this->assertObjectHasProperty($col, $sample, "child row must carry the full '{$col}' column");
+        }
+
+        // (d) the confirmed group's TRUE size (aggregate cnt) exceeds the cap,
+        // while the composed child rows are exactly capped — proving the cap bit.
+        $confirmedAgg = null;
+        foreach ($result['agg_rows'] as $agg) {
+            if ((string) $agg->group_value === $confirmed) {
+                $confirmedAgg = $agg;
+                break;
+            }
+        }
+        $this->assertNotNull($confirmedAgg, 'confirmed aggregate row must be present');
+        $this->assertGreaterThan(
+            RegistrationRepository::GROUP_ROW_CAP,
+            (int) $confirmedAgg->cnt,
+            'confirmed group size must exceed the cap',
+        );
+        $this->assertSame(
+            RegistrationRepository::GROUP_ROW_CAP,
+            count($result['group_rows'][$confirmed]),
+            'confirmed group_rows must be exactly capped',
+        );
+
+        // FIX-10: the SQL offerte tally still sums to the FULL group size — the
+        // tally is complete WITHOUT ever materialising the per-group id set.
+        $verdeling = $repo->offerteVerdelingByGroup(
+            ['company_id' => $capCompanyId, 'edition_scope' => 'all', 'per_page' => 50],
+            'status',
+        );
+        $this->assertSame(
+            (int) $confirmedAgg->cnt,
+            array_sum($verdeling[$confirmed] ?? []),
+            'SQL offerte tally must sum to the full confirmed group size (complete without id materialisation)',
+        );
+    }
+
+    // =========================================================================
+    // Task 3: service composes capped child rows into the grouped response.
+    // =========================================================================
+
+    /**
+     * @test
+     * The grouped read-model (service) attaches, per group aggregate item, the
+     * composed child rows AND the full group size — the accordion body contract.
+     *  (a) every group carries a 'rows' array and a 'row_total' int,
+     *  (b) rows count <= row_total (rows are capped, row_total is the true size),
+     *  (c) each child row has EXACTLY the flat row key set — no fuller/leaked
+     *      shape in grouped mode (composed via the SHARED composeRows(), so the
+     *      grouped child rows can expose no field the flat grid does not).
+     *
+     * Uses the class fixture company (confirmed×2 + waitlist×1 + interest×1 +
+     * trajectory children) grouped by status under edition_scope=all so multiple
+     * status groups, each with real child rows, are deterministically present.
+     */
+    public function groupedResponseCarriesComposedChildRows(): void
+    {
+        $service = ntdst_get(AdminRegistrationQueryService::class);
+
+        $dto = $service->getGridPage([
+            'group_by'      => 'status',
+            'company_id'    => self::$companyId,
+            'edition_scope' => 'all',
+            'per_page'      => 50,
+        ]);
+
+        $this->assertNotInstanceOf(\WP_Error::class, $dto, 'grouped page must not error');
+        $this->assertNotEmpty($dto['items'], 'fixture company must yield at least one status group');
+
+        foreach ($dto['items'] as $group) {
+            $this->assertArrayHasKey('rows', $group, 'each group must carry composed child rows');
+            $this->assertArrayHasKey('row_total', $group, 'each group must carry its full size (row_total)');
+            $this->assertIsArray($group['rows']);
+            $this->assertIsInt($group['row_total']);
+            $this->assertSame(
+                $group['count'],
+                $group['row_total'],
+                'row_total must equal the group count (full group size)',
+            );
+            $this->assertLessThanOrEqual(
+                $group['row_total'],
+                count($group['rows']),
+                'composed rows are capped — never more than the full group size',
+            );
+
+            foreach ($group['rows'] as $row) {
+                // Shape-parity is the denial-of-leak path: a grouped child row must
+                // expose EXACTLY the flat row's nested key set — no fuller shape.
+                $this->assertSame(
+                    ['id', 'user', 'anonymous', 'edition', 'status', 'offerteStatus', 'attendancePct', 'company', 'trajectory'],
+                    array_keys($row),
+                    'grouped child row shape must equal the flat row shape (no fuller/leaked fields)',
+                );
+            }
+        }
+    }
+
+    // =========================================================================
+    // Task 5: server parity — grouped child rows === flat rows for the same filter.
+    // =========================================================================
+
+    /**
+     * @test
+     * The SAFETY property for the whole group-by-accordion feature: a grouped
+     * group's composed child rows must be BYTE-IDENTICAL to the flat rows of the
+     * same id — same identity (incl. anonymous enrollment_data decode), same
+     * company.id/company.name independence, same status AS RECEIVED, same
+     * offerteStatus. No leak, no drift, no fuller shape. Guaranteed by
+     * construction (both paths compose via the shared composeFromRows()), and
+     * PINNED here so any future divergence between the two paths goes RED.
+     *
+     * Driven at the status=interest axis, which surfaces anonymous leads (R6):
+     * the anon row's identity must come from the enrollment_data decode on the
+     * grouped path exactly as on the flat path.
+     */
+    public function groupedChildRowsMatchFlatRowsForSameFilter(): void
+    {
+        $service = ntdst_get(AdminRegistrationQueryService::class);
+
+        // Flat rows for status=interest (the axis that surfaces anonymous leads).
+        $flat = $service->getGridPage(['status' => 'interest', 'per_page' => 50]);
+        $this->assertNotInstanceOf(\WP_Error::class, $flat, 'flat interest page must not error');
+
+        $flatById = [];
+        foreach ($flat['items'] as $r) {
+            $flatById[$r['id']] = $r;
+        }
+
+        // Grouped by status → the 'interest' group's child rows.
+        $grouped = $service->getGridPage(['group_by' => 'status', 'per_page' => 50]);
+        $this->assertNotInstanceOf(\WP_Error::class, $grouped, 'grouped page must not error');
+
+        $interestGroup = null;
+        foreach ($grouped['items'] as $g) {
+            if ($g['group_value'] === RegistrationStatus::Interest->value) {
+                $interestGroup = $g;
+                break;
+            }
+        }
+        $this->assertNotNull($interestGroup, 'interest group present in grouped-by-status response');
+        $this->assertNotEmpty($interestGroup['rows'], 'interest group must carry composed child rows');
+
+        // PARITY: every composed child row is byte-identical to the flat row of
+        // the same id — identity/company/status/offerte, whole array assertSame.
+        foreach ($interestGroup['rows'] as $childRow) {
+            $this->assertArrayHasKey(
+                $childRow['id'],
+                $flatById,
+                "child row {$childRow['id']} must exist in the flat set (same scope — no row the flat grid wouldn't show)",
+            );
+            $this->assertSame(
+                $flatById[$childRow['id']],
+                $childRow,
+                "grouped child row {$childRow['id']} must EQUAL the flat row (identity/company/status/offerte parity — no drift, no fuller shape)",
+            );
+        }
+
+        // The seeded anonymous interest lead (R6) must be present as a child row,
+        // and its name must have come from the enrollment_data decode (not a
+        // wp_users join — it has no user record).
+        $anonRows = array_values(array_filter(
+            $interestGroup['rows'],
+            static fn($r) => $r['anonymous'] === true,
+        ));
+        $this->assertNotEmpty($anonRows, 'interest group must include at least one anonymous child row (R6)');
+        foreach ($anonRows as $anon) {
+            $this->assertNotSame(
+                '',
+                $anon['user']['name'],
+                'anonymous child row must resolve a captured name from the enrollment_data decode',
+            );
+        }
+
+        // Company independence: company.id (FK) and company.name (billing) are
+        // TWO separate keys on every child row — never merged.
+        foreach ($interestGroup['rows'] as $r) {
+            $this->assertArrayHasKey('id', $r['company'], 'company.id (FK) must be present as a separate key');
+            $this->assertArrayHasKey('name', $r['company'], 'company.name (billing) must be present as a separate key');
         }
     }
 

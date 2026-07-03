@@ -30,6 +30,69 @@ const sample = {
   counts: { approval: 1, post_approval: 1, stale_user: 1 },
 };
 
+/**
+ * Task 6.2 — deadline badge on stale_user rows. Reads the days_left /
+ * days_overdue keys Task 6.1 derives server-side (buildDeadlineCountdown()).
+ * Tier B (presentational badge) per testing-workflow, but toRow()'s branch
+ * selection (overdue > due-soon > none) is cheap to pin here since the
+ * mapper is already under test and importable without a browser.
+ */
+test.describe('mapActionBuckets — deadline badge (Task 6.2)', () => {
+  test('days_overdue present → red "overdue" badge on the stale_user row', () => {
+    const payload = {
+      items: [{ id: 201, type: 'stale_user', user_id: 21, user_name: 'Bram', days_idle: 12, days_overdue: 3 }],
+      counts: { stale_user: 1 },
+    };
+    const { gebruiker } = mappers.mapActionBuckets(payload, 0);
+    expect(gebruiker[0].deadline).toEqual({ kind: 'overdue', label: '3 dagen te laat' });
+  });
+
+  test('days_overdue === 0 → "vandaag verlopen"', () => {
+    const payload = {
+      items: [{ id: 202, type: 'stale_user', user_id: 22, user_name: 'Nora', days_idle: 5, days_overdue: 0 }],
+      counts: { stale_user: 1 },
+    };
+    const { gebruiker } = mappers.mapActionBuckets(payload, 0);
+    expect(gebruiker[0].deadline).toEqual({ kind: 'overdue', label: 'vandaag verlopen' });
+  });
+
+  test('no days_overdue but days_left present → neutral "due soon" badge', () => {
+    const payload = {
+      items: [{ id: 203, type: 'stale_user', user_id: 23, user_name: 'Karel', days_idle: 2, days_left: 4 }],
+      counts: { stale_user: 1 },
+    };
+    const { gebruiker } = mappers.mapActionBuckets(payload, 0);
+    expect(gebruiker[0].deadline).toEqual({ kind: 'due-soon', label: 'nog 4 dagen' });
+  });
+
+  test('neither key (no activeDeadline) → no badge (denial path)', () => {
+    const payload = {
+      items: [{ id: 204, type: 'stale_user', user_id: 24, user_name: 'Ilse', days_idle: 6 }],
+      counts: { stale_user: 1 },
+    };
+    const { gebruiker } = mappers.mapActionBuckets(payload, 0);
+    expect(gebruiker[0].deadline).toBeNull();
+  });
+
+  test('approval/post_approval rows never get a deadline badge, even if the keys leak in', () => {
+    const payload = {
+      items: [{ id: 205, type: 'approval', user_id: 25, user_name: 'Wout', days_overdue: 2, days_left: 1 }],
+      counts: { approval: 1 },
+    };
+    const { mij } = mappers.mapActionBuckets(payload, 0);
+    expect(mij[0].deadline).toBeNull();
+  });
+
+  test('explicit days_overdue: null (future-contract drift) → no badge, not "vandaag verlopen"', () => {
+    const payload = {
+      items: [{ id: 206, type: 'stale_user', user_id: 26, user_name: 'Freya', days_idle: 4, days_overdue: null, days_left: null }],
+      counts: { stale_user: 1 },
+    };
+    const { gebruiker } = mappers.mapActionBuckets(payload, 0);
+    expect(gebruiker[0].deadline).toBeNull();
+  });
+});
+
 test.describe('mapActionBuckets', () => {
   test('buckets approval + post_approval into "mij" (per-person rows)', () => {
     const { mij } = mappers.mapActionBuckets(sample, 0);

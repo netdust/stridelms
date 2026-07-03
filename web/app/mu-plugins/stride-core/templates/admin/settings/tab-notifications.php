@@ -83,6 +83,20 @@ defined('ABSPATH') || exit;
                        :disabled="!notifications.incomplete_tasks.enabled"> dag(en) na laatste sessie
             </td>
         </tr>
+        <!-- Herinnering: taken niet af na inschrijving -->
+        <tr>
+            <th scope="row">
+                <label>
+                    <input type="checkbox" x-model="notifications.gate_reminder_days.enabled">
+                    Herinnering na inschrijving
+                </label>
+            </th>
+            <td>
+                <input type="number" x-model.number="notifications.gate_reminder_days.value"
+                       class="small-text" min="1" max="365"
+                       :disabled="!notifications.gate_reminder_days.enabled"> dag(en) na inschrijving als de taken niet af zijn
+            </td>
+        </tr>
     </table>
 
     <p class="submit">

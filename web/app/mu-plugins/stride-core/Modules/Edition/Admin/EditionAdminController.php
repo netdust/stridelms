@@ -233,7 +233,7 @@ final class EditionAdminController
     {
         $courses = get_posts([
             'post_type' => 'sfwd-courses',
-            'posts_per_page' => 500,
+            'posts_per_page' => -1,
             'fields' => 'ids',
             'tax_query' => [[
                 'taxonomy' => 'stride_format',
@@ -258,7 +258,7 @@ final class EditionAdminController
     {
         $courses = get_posts([
             'post_type' => 'sfwd-courses',
-            'posts_per_page' => 500,
+            'posts_per_page' => -1,
             'fields' => 'ids',
             'tax_query' => [[
                 'taxonomy' => 'stride_format',
@@ -516,6 +516,15 @@ final class EditionAdminController
             $updateData['selection_deadline'] = sanitize_text_field($fields['selection_deadline']);
         }
 
+        // Process gate deadlines (pre-course questionnaire/documents gate,
+        // post-course evaluation/documents gate) — same shape as selection_deadline.
+        if (isset($fields['gate_deadline'])) {
+            $updateData['gate_deadline'] = sanitize_text_field($fields['gate_deadline']);
+        }
+        if (isset($fields['post_gate_deadline'])) {
+            $updateData['post_gate_deadline'] = sanitize_text_field($fields['post_gate_deadline']);
+        }
+
         // Process notes (stored as JSON)
         if (isset($fields['notes'])) {
             $jsonString = stripslashes($fields['notes']);
@@ -712,6 +721,11 @@ final class EditionAdminController
 
         $editionId = (int) $session['edition_id'];
 
+        // AA-1: per-edition object scope.
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_send_json_error(['message' => __('Geen toegang.', 'stride')], 403);
+        }
+
         if ($statusValue === 'unmarked') {
             // Delete attendance record
             $existing = $this->attendanceRepository->findBySessionAndUser($sessionId, $userId);
@@ -754,6 +768,11 @@ final class EditionAdminController
         }
 
         $editionId = (int) $session['edition_id'];
+
+        // AA-1: per-edition object scope.
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_send_json_error(['message' => __('Geen toegang.', 'stride')], 403);
+        }
 
         // Get all registrations for this edition
         $registrations = $this->getEditionRegistrations($editionId);
@@ -817,6 +836,8 @@ final class EditionAdminController
             wp_send_json_error(['message' => __('Ongeldige registratie.', 'stride')], 400);
         }
 
+        $this->requireEditionAccessForRegistration($registrationId);
+
         $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
         $result = $enrollmentService->confirmRegistration($registrationId);
 
@@ -837,6 +858,8 @@ final class EditionAdminController
         if (!$registrationId) {
             wp_send_json_error(['message' => __('Ongeldige registratie.', 'stride')], 400);
         }
+
+        $this->requireEditionAccessForRegistration($registrationId);
 
         $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
         $result = $enrollmentService->cancel($registrationId);
@@ -859,6 +882,8 @@ final class EditionAdminController
             wp_send_json_error(['message' => __('Ongeldige registratie.', 'stride')], 400);
         }
 
+        $this->requireEditionAccessForRegistration($registrationId);
+
         $completion = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
         $result = $completion->completeTask($registrationId, 'post_approval');
 
@@ -877,13 +902,21 @@ final class EditionAdminController
             wp_die('Invalid security token', 403);
         }
 
-        if (!current_user_can('edit_posts')) {
+        // AA-1: raise the inline cap to stride_manage (matches verifyAjaxNonce
+        // and the REST twin) — roster export is PII egress.
+        if (!current_user_can('stride_manage')) {
             wp_die('Unauthorized', 403);
         }
 
         $editionId = absint($_GET['edition_id'] ?? 0);
         if (!$editionId) {
             wp_die('Invalid edition', 400);
+        }
+
+        // AA-1: per-edition object scope — the actor must be able to edit the
+        // edition whose roster they are exporting.
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_die('Unauthorized', 403);
         }
 
         $type = sanitize_key($_GET['type'] ?? 'excel');
@@ -975,7 +1008,7 @@ final class EditionAdminController
         $currentCourse = (int) ($_GET['stride_course'] ?? 0);
         $courses = get_posts([
             'post_type'      => 'sfwd-courses',
-            'posts_per_page' => 500,
+            'posts_per_page' => -1,
             'post_status'    => 'publish',
             'orderby'        => 'title',
             'order'          => 'ASC',
@@ -1068,7 +1101,7 @@ final class EditionAdminController
 
             $courseIds = get_posts([
                 'post_type'      => 'sfwd-courses',
-                'posts_per_page' => 500,
+                'posts_per_page' => -1,
                 'fields'         => 'ids',
                 'tax_query'      => [
                     [
@@ -1108,12 +1141,41 @@ final class EditionAdminController
             return false;
         }
 
-        if (!current_user_can('edit_posts')) {
+        // AA-1: gate on the stride_manage coordinator cap (matching the REST
+        // twin AdminAPIController::canManageAdmin), NOT the stock author-level
+        // edit_posts. Per-edition object scope is added in each handler after
+        // it resolves its $editionId.
+        if (!current_user_can('stride_manage')) {
             wp_send_json_error(['message' => 'Unauthorized'], 403);
             return false;
         }
 
         return true;
+    }
+
+    /**
+     * AA-1 per-edition object scope for the registration-approval handlers.
+     *
+     * Resolves the edition from the registration row and enforces
+     * current_user_can('edit_post', $editionId) BEFORE any mutation. Terminates
+     * the request (404 unresolved registration/edition, 403 no access); returns
+     * the resolved edition id when the actor is allowed.
+     */
+    private function requireEditionAccessForRegistration(int $registrationId): int
+    {
+        $repo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
+        $registration = $repo->find($registrationId);
+
+        $editionId = $registration ? (int) ($registration->edition_id ?? 0) : 0;
+        if (!$editionId) {
+            wp_send_json_error(['message' => __('Inschrijving niet gevonden.', 'stride')], 404);
+        }
+
+        if (!current_user_can('edit_post', $editionId)) {
+            wp_send_json_error(['message' => __('Geen toegang.', 'stride')], 403);
+        }
+
+        return $editionId;
     }
 
     private function sanitizeSessionData(array $input): array

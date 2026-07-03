@@ -21,8 +21,16 @@ final class RegistrationTable
      * Bump when ALTERing the table; add the matching step in migrate().
      *
      * v2: enrollment_path ENUM gains 'partner' (audit M-4).
+     * v3: idx_registered_at index (perf audit #8 — registered_at is the default
+     *     grid sort / export secondary sort / grouped child-row window order;
+     *     without it every grid page is a filesort over the filtered corpus).
+     * v4: reminder_state JSON column added (Phase 2 Task 2.1 — reminder
+     *     idempotency ledger, consumed by later reminder-send tasks). Rebased
+     *     from v3 to v4 when feat/admin-url-filter-state merged first and took
+     *     v3 for the index; the two migrations now sequence cleanly (v2 install
+     *     upgrades v3-index then v4-column) instead of colliding on one version.
      */
-    public const SCHEMA_VERSION = 2;
+    public const SCHEMA_VERSION = 4;
 
     private const SCHEMA_VERSION_OPTION = 'stride_registrations_schema_version';
 
@@ -67,6 +75,7 @@ final class RegistrationTable
             notes TEXT NULL,
             completion_tasks JSON NULL,
             enrollment_data JSON NULL,
+            reminder_state JSON NULL,
             INDEX idx_user (user_id),
             INDEX idx_edition (edition_id),
             INDEX idx_trajectory (trajectory_id),
@@ -76,15 +85,60 @@ final class RegistrationTable
             INDEX idx_trajectory_status (trajectory_id, status),
             INDEX idx_company (company_id),
             INDEX idx_user_status (user_id, status),
-            INDEX idx_user_edition (user_id, edition_id)
+            INDEX idx_user_edition (user_id, edition_id),
+            INDEX idx_registered_at (registered_at)
         ) {$charset};";
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
         dbDelta($sql);
 
+        // dbDelta cannot reliably ADD a newly-declared index to an already-existing
+        // table (perf audit #8 / review-gate 3B.1): on any install whose table
+        // predates v3 and then re-runs create() (re-activation, tests), the
+        // idx_registered_at line in the DDL above is silently NOT applied. Converge
+        // the fresh-create path onto the SAME guarded, idempotent index-ensuring
+        // routine migrate() uses, so both paths land on identical index shape
+        // regardless of dbDelta's index quirks — this is the fresh-vs-migrated
+        // parity the schema-version contract depends on.
+        self::ensureRegisteredAtIndex();
+
         // Fresh tables are created at the latest schema — stamp the version so
         // migrate() doesn't re-run historical steps.
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
+    }
+
+    /**
+     * Idempotently ensure idx_registered_at (registered_at) exists on the table.
+     *
+     * Shared convergence point for BOTH the fresh-create path (create()) and the
+     * v2→v3 upgrade path (migrate()) — dbDelta is unreliable for adding an index
+     * to a pre-existing table, and a bare ADD INDEX throws "Duplicate key name"
+     * when the index is already present, so the SHOW INDEX guard makes this safe
+     * to call unconditionally on every path.
+     *
+     * @return bool true when the index is present after the call (already there or
+     *              just added), false when the ADD INDEX failed (DB error logged by
+     *              the caller's context — migrate() sets the retry backoff).
+     */
+    private static function ensureRegisteredAtIndex(): bool
+    {
+        global $wpdb;
+
+        $table = self::getTableName();
+
+        $indexExists = $wpdb->get_var(
+            "SHOW INDEX FROM {$table} WHERE Key_name = 'idx_registered_at'",
+        );
+
+        if ($indexExists !== null) {
+            return true;
+        }
+
+        $indexed = $wpdb->query(
+            "ALTER TABLE {$table} ADD INDEX idx_registered_at (registered_at)",
+        );
+
+        return $indexed !== false;
     }
 
     /**
@@ -152,6 +206,51 @@ final class RegistrationTable
             set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
 
             return;
+        }
+
+        // v3 (perf audit #8): add idx_registered_at — the default grid sort has
+        // no index, so every filtered page is a top-N filesort. Purely additive.
+        // Idempotent via the shared ensureRegisteredAtIndex() SHOW INDEX guard:
+        // fresh tables get the index from create() directly and then may still
+        // enter migrate() (option unset on an old install path), and a lapsed-backoff
+        // retry re-enters here — the guard skips the ADD when present, avoiding the
+        // "Duplicate key name" error a bare ADD INDEX would throw.
+        if (!self::ensureRegisteredAtIndex()) {
+            ntdst_log('enrollment')->error('registrations schema v3 migration failed', [
+                'step' => 'add_registered_at_index',
+                'error' => $wpdb->last_error,
+            ]);
+
+            // Don't stamp the version: retried once the backoff lapses (step is idempotent).
+            set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
+            return;
+        }
+
+        // v4 (Phase 2 Task 2.1): add reminder_state JSON column, used by later
+        // reminder-send tasks as a per-registration idempotency ledger. Rebased
+        // from v3 to v4 (admin-url-filter-state took v3 for the index). Guarded
+        // via SHOW COLUMNS (same style as exists()'s SHOW TABLES probe) — unlike
+        // the v2 MODIFY above, ADD COLUMN errors if the column already exists, and
+        // the >= guard at the top of this method makes a v3 DB re-enter migrate()
+        // once SCHEMA_VERSION is bumped, so this step must tolerate running again
+        // on an already-v4 table (fresh create() already added the column).
+        $hasReminderStateColumn = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'reminder_state'");
+
+        if ($hasReminderStateColumn === null) {
+            $reminderStateAltered = $wpdb->query("ALTER TABLE {$table} ADD COLUMN reminder_state JSON NULL");
+
+            if ($reminderStateAltered === false) {
+                ntdst_log('enrollment')->error('registrations schema v4 migration failed', [
+                    'step' => 'add_reminder_state_column',
+                    'error' => $wpdb->last_error,
+                ]);
+
+                // Don't stamp the version: retried once the backoff lapses (step is idempotent).
+                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
+                return;
+            }
         }
 
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);

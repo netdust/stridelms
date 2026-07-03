@@ -12,6 +12,7 @@ use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\RegistrationTransitions;
 use Stride\Modules\Invoicing\QuoteRepository;
+use Stride\Modules\User\CompanyAffiliation;
 use WP_Error;
 
 /**
@@ -359,6 +360,18 @@ final class BulkRegistrationHandler
         $value = $field === 'company_id'
             ? absint($params['value'] ?? 0)
             : sanitize_text_field((string) ($params['value'] ?? ''));
+
+        // BULK-1 / mitigation 7: a company_id is a partner tenant boundary — the
+        // whole of findByCompany() trusts it. absint alone lets a fat-fingered or
+        // fed value that no company carries move a row into a partner's scope
+        // (INV-1 leak). Gate a NON-ZERO company_id on the real-company set
+        // (CompanyAffiliation is the convergence home). 0 clears the scope — a
+        // legitimate op, never gated. An unknown value is skipped per-row (no
+        // write), landing in failed[] via the existing runBulk error contract.
+        if ($field === 'company_id' && $value > 0 && !CompanyAffiliation::companyExists($value)) {
+            return $this->finishBatch($this->runBulk($params, static fn(int $id, object $reg): WP_Error
+                => new WP_Error('invalid_company', __('Onbekend bedrijf: deze inschrijving is niet gewijzigd.', 'stride'))));
+        }
 
         $repo = ntdst_get(RegistrationRepository::class);
 

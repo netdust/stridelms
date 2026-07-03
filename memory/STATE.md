@@ -196,6 +196,11 @@ Inventory only — left in place per user instruction:
 
 ## Post-Launch Vision (not for launch)
 
+- **Courses on demand / incompany ("op aanvraag")** — scoped 2026-07-03, real product gap that would benefit clients. Vision: klassikaal/webinar courses discoverable as "op aanvraag"; a third org requests hosting on location; **the request is the payable action** (request → admin approves → quote → org pays → edition created → normal enrollment, free or paid per-seat). Grounded gap analysis (verified against source 2026-07-03):
+  - *Exists today:* individual interest flow (dateless klassikaal → `Announcement` → `/interesse/` form → registration row `status=interest`); Partner API (6 routes, `_stride_company_id` usermeta + `company_id` column, single-seat enroll w/ optional `create_user`); quote CPT already has `registration_id`/`edition_id` as *optional* fields (only `user_id` required) so a request-anchored quote is additive.
+  - *Missing:* (1) org-level request intake — recommend a `vad_request` CPT with lifecycle `new → approved → quoted → paid → planned → closed/rejected`, quote hangs off it, "paid" = manual admin flip (Exact owns invoicing, no payment tracking by design), then "create edition from request" affordance; (2) **private/company-scoped editions — no visibility/audience concept exists at all**: any published+active edition is public and enrollable by anyone logged in (`canEnroll()` checks only status+capacity); needs edition `visibility`+`company_id` fields, catalog predicates in BOTH `EditionRepository::catalogDateWindowMetaQuery()` and the theme's copy in `helpers/catalog.php` (drift hazard), and an enrollment authz gate → new multi-tenancy boundary → threat model required; (3) partner frontend dashboard — `partner` role is API-only, zero UI; drags in a minimal Company entity (today company = bare int, no name, no admin UI to set affiliation) + employee invite/affiliation flow.
+  - *Phasing:* 1. request intake+lifecycle (small, useful standalone; incl. suppress per-seat quote on €0 editions) · 2. private editions (medium, security-sensitive; optional per-request if hosted courses may stay public) · 3. partner dashboard + onboarding (large).
+  - *Open decisions:* private-always vs per-request "besloten" toggle; employees self-serve vs partner-enrolls; introduce minimal Company entity (phase 3 forces it).
 - Assistant exports — CSV/Excel/DOCX abilities (`memory/project_assistant_exports.md`)
 - Assistant evolution — headless mode, WP-CLI, event-triggered AI, audit log table (`memory/project_assistant_vision.md`)
 - Phase 8 voucher automations — annual member voucher renewal, reversal on cancellation
@@ -253,3 +258,5 @@ Inventory only — left in place per user instruction:
 
 **Decisions**
 - **only e-learning hides sessions.** Now let me implement this through the harness as the global rules require. This is a small, well-scoped bug fix (Class E/C) — change the predicate so the gate keys on `e-learning` only.
+[2026-07-02] — session ended (no significant changes captured)
+[2026-07-03] — session ended (no significant changes captured)

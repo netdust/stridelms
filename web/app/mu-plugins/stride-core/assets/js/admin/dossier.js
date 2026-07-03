@@ -348,6 +348,10 @@
 
         const params = new URLSearchParams(window.location.search);
         const userId = Number(params.get('user')) || 0;
+        // Optional deep-link to a SPECIFIC registration (e.g. from a Vandaag
+        // "Wacht op mij" row). When present we open/select that reg instead of
+        // defaulting to the newest one; 0 = no preference, fall back to regs[0].
+        const wantReg = Number(params.get('reg')) || 0;
         if (!userId) {
           this.loading.detail = false;
           this.loading.trajectories = false;
@@ -363,13 +367,20 @@
           if (detail.status === 'fulfilled') {
             const d = detail.value || {};
             this.person = d.user || null;
-            this.regs = (d.registrations || []).map((r, i) => ({ ...r, open: i === 0 }));
+            const allRegs = d.registrations || [];
+            // Honor the ?reg= deep-link if it matches a registration; otherwise
+            // fall back to the first (newest, registered_at DESC from the server).
+            const wantIdx = wantReg
+              ? allRegs.findIndex((r) => Number(r.id) === wantReg)
+              : -1;
+            const openIdx = wantIdx >= 0 ? wantIdx : 0;
+            this.regs = allRegs.map((r, i) => ({ ...r, open: i === openIdx }));
             // audit_trail is GATED — absent/empty means the viewer can't see it
             // (PII N1) OR there's simply no history. Either way: locked/empty
             // timeline, never a crash.
             this.auditTrail = Array.isArray(d.audit_trail) ? d.audit_trail : [];
             this.canSeeTimeline = Array.isArray(d.audit_trail);
-            this.timelineReg = this.regs.length ? this.regs[0].id : 0;
+            this.timelineReg = this.regs.length ? this.regs[openIdx].id : 0;
           } else {
             this.errors.detail = 'Kon het dossier niet laden.';
           }

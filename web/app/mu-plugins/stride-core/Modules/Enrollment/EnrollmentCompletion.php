@@ -133,8 +133,11 @@ final class EnrollmentCompletion
      * Compute availability for each task in a registration.
      *
      * Returns 'available', 'locked', or 'completed' per task, plus lock reason.
+     * questionnaire/documents/post_evaluation/post_documents additionally carry
+     * an 'overdue' flag (D3: past gate_deadline/post_gate_deadline is flag-only —
+     * it never locks or cancels the task).
      *
-     * @return array<string, array{state: string, reason: string}>
+     * @return array<string, array{state: string, reason: string, overdue?: bool}>
      */
     public function getTaskAvailability(array $tasks, int $editionId): array
     {
@@ -176,6 +179,14 @@ final class EnrollmentCompletion
             }
         }
 
+        // Gate deadlines (enrollment-phase + post-course-phase). Flag-only (D3):
+        // past deadline never locks/cancels the task, it only annotates the reason
+        // + overdue flag. This is the sole read site for these two fields.
+        $gateDeadline = $editionId ? $this->editions->getField($editionId, 'gate_deadline') : null;
+        $postGateDeadline = $editionId ? $this->editions->getField($editionId, 'post_gate_deadline') : null;
+        $gateInfo = $this->deadlineInfo($gateDeadline);
+        $postGateInfo = $this->deadlineInfo($postGateDeadline);
+
         foreach ($tasks as $type => $task) {
             $status = $task['status'] ?? 'pending';
 
@@ -198,7 +209,11 @@ final class EnrollmentCompletion
             switch ($type) {
                 case 'questionnaire':
                 case 'documents':
-                    $availability[$type] = ['state' => 'available', 'reason' => ''];
+                    $availability[$type] = [
+                        'state' => 'available',
+                        'reason' => $gateInfo['reason'],
+                        'overdue' => $gateInfo['overdue'],
+                    ];
                     break;
 
                 case 'approval':
@@ -228,7 +243,11 @@ final class EnrollmentCompletion
                     // Post-course tasks
                 case 'post_evaluation':
                 case 'post_documents':
-                    $availability[$type] = ['state' => 'available', 'reason' => ''];
+                    $availability[$type] = [
+                        'state' => 'available',
+                        'reason' => $postGateInfo['reason'],
+                        'overdue' => $postGateInfo['overdue'],
+                    ];
                     break;
 
                 case 'post_approval':
@@ -245,6 +264,32 @@ final class EnrollmentCompletion
         }
 
         return $availability;
+    }
+
+    /**
+     * Resolve reason + overdue flag for a gate deadline value (gate_deadline
+     * or post_gate_deadline). Flag-only (D3): the caller must NOT use the
+     * overdue flag to lock/cancel — it only annotates the reason.
+     *
+     * @return array{reason: string, overdue: bool}
+     */
+    private function deadlineInfo(?string $deadline): array
+    {
+        if (!$deadline) {
+            return ['reason' => '', 'overdue' => false];
+        }
+
+        if (strtotime($deadline) < time()) {
+            return ['reason' => __('De deadline is verstreken.', 'stride'), 'overdue' => true];
+        }
+
+        return [
+            'reason' => sprintf(
+                __('Voltooien voor %s', 'stride'),
+                date_i18n('d M Y', strtotime($deadline)),
+            ),
+            'overdue' => false,
+        ];
     }
 
     /**

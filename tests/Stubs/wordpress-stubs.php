@@ -21,6 +21,17 @@ if (!defined('WEEK_IN_SECONDS')) {
     define('WEEK_IN_SECONDS', 604800);
 }
 
+// wpdb output-format constants
+if (!defined('ARRAY_A')) {
+    define('ARRAY_A', 'ARRAY_A');
+}
+if (!defined('ARRAY_N')) {
+    define('ARRAY_N', 'ARRAY_N');
+}
+if (!defined('OBJECT')) {
+    define('OBJECT', 'OBJECT');
+}
+
 if (!class_exists('WP_Post')) {
     /**
      * WordPress Post Class Stub
@@ -454,6 +465,15 @@ if (!function_exists('current_user_can')) {
         global $current_user_caps;
         // If caps are explicitly set, use them; otherwise allow everything
         if (isset($current_user_caps) && is_array($current_user_caps)) {
+            // Object-scoped meta caps (e.g. current_user_can('edit_post', 123))
+            // can be granted per-object via an "edit_post:123" key so tests can
+            // model per-edition object scope; falls back to the bare cap.
+            if (!empty($args) && is_scalar($args[0])) {
+                $scopedKey = $capability . ':' . $args[0];
+                if (array_key_exists($scopedKey, $current_user_caps)) {
+                    return (bool) $current_user_caps[$scopedKey];
+                }
+            }
             return $current_user_caps[$capability] ?? false;
         }
         return true; // Allow everything in tests by default
@@ -993,6 +1013,53 @@ if (!interface_exists('NTDST_Service_Meta')) {
     }
 }
 
+/**
+ * Thrown by the wp_send_json_* stubs so a test can observe the terminal AJAX
+ * response (data + HTTP status) instead of the real functions exiting the
+ * process. Lets authorization-guard tests assert the exact denial status.
+ */
+if (!class_exists('StrideJsonResponse')) {
+    class StrideJsonResponse extends \RuntimeException
+    {
+        public bool $success;
+        /** @var mixed */
+        public $data;
+        public int $status;
+
+        public function __construct(bool $success, $data, int $status)
+        {
+            $this->success = $success;
+            $this->data = $data;
+            $this->status = $status;
+            parent::__construct('wp_send_json_' . ($success ? 'success' : 'error'), $status);
+        }
+    }
+}
+
+if (!function_exists('wp_send_json_error')) {
+    function wp_send_json_error($data = null, int $status_code = 0): void
+    {
+        throw new StrideJsonResponse(false, $data, $status_code);
+    }
+}
+
+if (!function_exists('wp_send_json_success')) {
+    function wp_send_json_success($data = null, int $status_code = 0): void
+    {
+        throw new StrideJsonResponse(true, $data, $status_code);
+    }
+}
+
+if (!function_exists('check_ajax_referer')) {
+    function check_ajax_referer($action = -1, $query_arg = false, $stop = true)
+    {
+        global $_test_check_ajax_referer_result;
+        // Default to a valid nonce so tests focus on the capability gate;
+        // set the global to false to simulate an invalid token.
+        return $_test_check_ajax_referer_result ?? true;
+    }
+}
+
 // NTDST Core function stubs
 if (!function_exists('ntdst_get')) {
     function ntdst_get(string $key)
@@ -1428,6 +1495,7 @@ if (!isset($wpdb) || !is_object($wpdb)) {
         public string $prefix = 'wp_';
         public string $posts = 'wp_posts';
         public string $postmeta = 'wp_postmeta';
+        public int $insert_id = 0;
 
         public function prepare(string $query, ...$args): string
         {
@@ -1457,6 +1525,31 @@ if (!isset($wpdb) || !is_object($wpdb)) {
 
         public function get_results(?string $query = null, string $output = 'OBJECT'): ?array
         {
+            return [];
+        }
+
+        /**
+         * Return a single column. Drives CompanyAffiliation::getKnownCompanyIds:
+         * a DISTINCT non-empty `_stride_company_id` usermeta query resolves to the
+         * distinct set of company ids carried by users in $_test_user_meta, so
+         * companyExists() is consistent with get_user_meta() in the same test.
+         */
+        public function get_col(?string $query = null, int $x = 0): array
+        {
+            global $_test_user_meta;
+
+            if ($query && str_contains($query, '_stride_company_id')) {
+                $ids = [];
+                foreach (($_test_user_meta ?? []) as $metas) {
+                    $value = $metas['_stride_company_id'][0] ?? null;
+                    if ($value !== null && $value !== '' && (int) $value > 0) {
+                        $ids[(string) (int) $value] = (string) (int) $value;
+                    }
+                }
+
+                return array_values($ids);
+            }
+
             return [];
         }
 
@@ -2072,6 +2165,42 @@ if (!function_exists('esc_attr')) {
     function esc_attr($text): string
     {
         return htmlspecialchars((string) $text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('esc_attr_e')) {
+    function esc_attr_e(string $text, string $domain = 'default'): void
+    {
+        echo esc_attr($text);
+    }
+}
+
+if (!function_exists('esc_textarea')) {
+    function esc_textarea(string $text): string
+    {
+        return htmlspecialchars($text, ENT_QUOTES, 'UTF-8');
+    }
+}
+
+if (!function_exists('checked')) {
+    function checked($checked, $current = true, bool $echo = true): string
+    {
+        $result = ((string) $checked === (string) $current) ? ' checked="checked"' : '';
+        if ($echo) {
+            echo $result;
+        }
+        return $result;
+    }
+}
+
+if (!function_exists('selected')) {
+    function selected($selected, $current = true, bool $echo = true): string
+    {
+        $result = ((string) $selected === (string) $current) ? ' selected="selected"' : '';
+        if ($echo) {
+            echo $result;
+        }
+        return $result;
     }
 }
 

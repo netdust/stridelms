@@ -134,6 +134,112 @@
     return out;
   }
 
+  /* ---- URL round-trip (PURE, Tier-A) ------------------------------------
+     The grid syncs its full view state into the browser URL (via replaceState
+     in load()), so a filtered/sorted/paged view is bookmarkable, reload-safe
+     and shareable. shell.js already owns ?view=/?queue=/?user=/?reg=; these two
+     mappers are the grid's HALF of the same URL and must coexist with those.
+
+     GROUP_BY_ALLOWLIST is the SERVER-allow-listed group dimensions (mirrors the
+     endpoint's GROUP_BY_ALLOWLIST). A URL carrying a bogus ?group_by= must never
+     become an active grouping — it would send an un-allow-listed group_by to the
+     server and render a broken grouped view. Same discipline as queueToParams'
+     denial branch: never fabricate a param the server would silently mishandle.
+
+     DEFAULT_PER_PAGE mirrors the grid's `perPage: 25` initial state — it is the
+     omit threshold (per_page is only URL-written when it differs) AND the parse
+     fallback (a malformed ?per_page= coerces back to it, never NaN). */
+  const GROUP_BY_ALLOWLIST = ['edition_id', 'status', 'company_id'];
+  const DEFAULT_PER_PAGE = 25;
+
+  /* state → the URL-param subset. Emits ONLY non-default state so a pristine
+     grid writes nothing (a clean URL); ids are stringified for URLSearchParams.
+     Symmetric with load()'s fetch params, minus the always-present page/per_page
+     (those are emitted only when they differ from the default). */
+  function gridStateToParams(state) {
+    const s = state || {};
+    const f = s.filters || {};
+    const out = {};
+    if (f.status) out.status = f.status;
+    if (f.edition_id) out.edition_id = String(f.edition_id);
+    if (f.company_id) out.company_id = String(f.company_id);
+    if (f.trajectory_id) out.trajectory_id = String(f.trajectory_id);
+    if (f.q) out.q = f.q;
+    if (s.sortKey) {
+      out.sort = s.sortKey;
+      out.order = s.sortDir === 'desc' ? 'desc' : 'asc';
+    }
+    if (s.groupBy && GROUP_BY_ALLOWLIST.includes(s.groupBy)) out.group_by = s.groupBy;
+    // The grid's pagination URL key is `p`, NOT `page` — `page` is WordPress
+    // admin's routing param (?page=stride-dashboard). Writing/deleting `page`
+    // here would destroy WP's routing and blank the whole dashboard on reload.
+    if (s.page && Number(s.page) > 1) out.p = String(s.page);
+    if (s.perPage && Number(s.perPage) !== DEFAULT_PER_PAGE) out.per_page = String(s.perPage);
+    return out;
+  }
+
+  /* URLSearchParams → a grid-state patch. Coerces numerics and, on any malformed
+     or un-allow-listed value, falls back to the default (never NaN, never a bogus
+     group_by/order). Returns the SAME shape the grid seeds from, so init() can
+     Object.assign the meaningful subset. */
+  function gridStateFromParams(params) {
+    const p = params || new URLSearchParams('');
+    const toInt = (v, dflt) => {
+      const n = parseInt(v, 10);
+      return Number.isFinite(n) && n > 0 ? n : dflt;
+    };
+    const gb = p.get('group_by');
+    const order = p.get('order');
+    return {
+      filters: {
+        status: p.get('status') || '',
+        edition_id: toInt(p.get('edition_id'), 0),
+        company_id: toInt(p.get('company_id'), 0),
+        trajectory_id: toInt(p.get('trajectory_id'), 0),
+        q: p.get('q') || '',
+      },
+      sortKey: p.get('sort') || '',
+      sortDir: order === 'desc' ? 'desc' : 'asc',
+      groupBy: GROUP_BY_ALLOWLIST.includes(gb) ? gb : '',
+      page: toInt(p.get('p'), 1),   // `p` — NOT `page` (WP admin routing param)
+      perPage: toInt(p.get('per_page'), DEFAULT_PER_PAGE),
+    };
+  }
+
+  /* ---- accordion per-group mapper (PURE, Tier-A) ------------------------
+     Task 6: the grouped endpoint item now carries its own composed child rows
+     ({ group_value, count, rows[≤8], row_total, pct_afgerond, avg_attendance_pct,
+     offerte_verdeling }). This maps ONE server group into the shape the accordion
+     template iterates (groupsView). It is PURE — it deliberately does NOT compute
+     the display label (that depends on `this.editionOptions`); the template calls
+     the instance-bound groupLabel(g) instead, which reads .group_value, so we pass
+     group_value through untouched.
+
+     Two load-bearing jobs:
+       key     — a STABLE String for collapsed[key] / toggleGroup(key). A null
+                 group_value (the "Geen editie / Geen organisatie" bucket) MUST
+                 coerce to a stable string ('' via String(v ?? '')) — never
+                 undefined, or collapsed[undefined] would alias every null-value
+                 group into a single toggle.
+       hasMore — true exactly when the true row_total exceeds the number of rows
+                 the server actually shipped (capped at 8). Drives "Toon alle N". */
+  function groupRowsFrom(group) {
+    const g = group || {};
+    const rows = g.rows || [];
+    const rowTotal = g.row_total || 0;
+    return {
+      key: String(g.group_value ?? ''),
+      group_value: g.group_value,      // passthrough so groupLabel(g) still resolves
+      rows,
+      count: g.count,
+      rowTotal,
+      hasMore: rowTotal > rows.length,
+      pct_afgerond: g.pct_afgerond,
+      avg_attendance_pct: g.avg_attendance_pct,
+      offerte_verdeling: g.offerte_verdeling,
+    };
+  }
+
   /* ---- the §2.1 transition mirror for the state-aware bulk bar -----------
      Lifted verbatim from the god-component STRIDE_SMART_ACTIONS. The bulk bar
      offers the SAFE INTERSECTION of actions across the selected rows' statuses.
@@ -221,22 +327,13 @@
         // Validate the bulk catalog against the server transition map (drift warn).
         validateTransitionDrift((window.StrideConfig || {}).transitions);
 
-        // Cold-landing deep-link: ?queue= (from the Vandaag queue click) and a
-        // direct ?status= both pre-filter on first load. The shell's extended
-        // switchView wrote ?queue=; we read it here (plan §5 / shell contract).
-        const p = new URLSearchParams(window.location.search);
-        const q = p.get('queue');
-        if (q) {
-          const qp = queueToParams(q);
-          if (qp.status) {
-            this.queue = q;
-            this.filters.status = qp.status;
-          }
-        }
-        const directStatus = p.get('status');
-        if (!this.filters.status && directStatus && STATUS_META[directStatus]) {
-          this.filters.status = directStatus;
-        }
+        // Restore the full grid view state from a bookmarked / reloaded URL
+        // (filters/search/sort/page/per_page/group_by). Runs BEFORE the queue
+        // deep-link so an explicit ?queue= from Vandaag still wins on status.
+        this.hydrateStateFromUrl();
+
+        // Cold-landing deep-link: ?queue=/?status= pre-filter on first load.
+        this.applyQueueDeepLink();
 
         // I-1: load the grid the FIRST time inschrijvingen becomes active (lazy),
         // not on mount. Deep-links from Vandaag land with view already =
@@ -247,6 +344,59 @@
           this.loadEditionOptions();
           this.load(1);
         });
+
+        // The lazyLoad latch fires its callback ONCE. But a queue deep-link from
+        // Vandaag can arrive on EVERY re-activation of this surface (?queue=
+        // rewritten, view switched back to inschrijvingen). Re-read the deep-link
+        // and reload on each re-activation so the 2nd+ queue click actually
+        // filters — without re-running the one-shot loadEditionOptions().
+        window.addEventListener('ws-view-changed', (e) => {
+          if (!e || !e.detail || e.detail.view !== 'inschrijvingen') return;
+          if (this.applyQueueDeepLink()) {
+            this.load(1);
+          }
+        });
+      },
+
+      /* Read ?queue=/?status= and apply them to the active filter. Returns true
+         when the resulting queue/status actually CHANGED, so the caller knows
+         whether a reload is warranted (a repeat activation with no new deep-link
+         must not stomp the user's in-grid filtering). The shell's extended
+         switchView wrote ?queue= (plan §5 / shell contract). */
+      applyQueueDeepLink() {
+        const p = new URLSearchParams(window.location.search);
+        const q = p.get('queue');
+        if (q) {
+          const qp = queueToParams(q);
+          if (qp.status && (this.queue !== q || this.filters.status !== qp.status)) {
+            this.queue = q;
+            this.filters.status = qp.status;
+            return true;
+          }
+          return false;
+        }
+        const directStatus = p.get('status');
+        if (!this.filters.status && directStatus && STATUS_META[directStatus]) {
+          this.filters.status = directStatus;
+          return true;
+        }
+        return false;
+      },
+
+      /* Restore the grid's view state from the URL on cold init — the read half
+         of syncStateToUrl(). Parses the URL through gridStateFromParams (which
+         coerces + denies malformed values), then copies the restored subset onto
+         the live state so the first load(1) renders the bookmarked view. Leaves
+         `queue` alone — applyQueueDeepLink (run right after) owns that, and an
+         explicit ?queue= must still win over a restored ?status=. */
+      hydrateStateFromUrl() {
+        const s = gridStateFromParams(new URLSearchParams(window.location.search));
+        this.filters = s.filters;
+        this.sortKey = s.sortKey;
+        this.sortDir = s.sortDir;
+        this.groupBy = s.groupBy;
+        this.page = s.page;
+        this.perPage = s.perPage;
       },
 
       /* Fetch ONE server page (or grouped aggregates). The single place a
@@ -274,6 +424,11 @@
         }
         if (this.groupBy) params.set('group_by', this.groupBy);
 
+        // Sync the grid's view state into the browser URL so a filtered/sorted/
+        // paged view is bookmarkable + reload-safe. Uses replaceState (same idiom
+        // as shell.js) and PRESERVES shell's own params — never clobbers them.
+        this.syncStateToUrl();
+
         try {
           const data = await this.api(`/admin/registrations?${params.toString()}`);
           if (this.groupBy) {
@@ -296,6 +451,27 @@
         } finally {
           this.loading = false;
         }
+      },
+
+      /* Grid half of the admin URL. Writes the grid's non-default view state
+         (filters/search/sort/page/per_page/group_by via gridStateToParams) into
+         the query string with replaceState — matching shell.js's idiom — while
+         PRESERVING every other param already present (WP's ?page=stride-dashboard,
+         and shell's ?view=/?queue=/?user=/?reg=). The grid owns exactly its own
+         keys: it deletes only those it manages, then re-sets the active subset,
+         so a cleared filter drops its key instead of lingering. Guarded for the
+         Node/test context where window.history is absent. */
+      syncStateToUrl() {
+        if (typeof window === 'undefined' || !window.history || !window.history.replaceState) return;
+        const url = new URL(window.location.href);
+        // Clear only the keys THIS grid owns (leave shell/WP params untouched).
+        // Pagination is `p`, NEVER `page` — `page` is WP admin's routing param
+        // (?page=stride-dashboard); deleting it here blanks the dashboard on reload.
+        ['status', 'edition_id', 'company_id', 'trajectory_id', 'q', 'sort', 'order', 'group_by', 'p', 'per_page']
+          .forEach((k) => url.searchParams.delete(k));
+        const gridParams = gridStateToParams(this);
+        Object.keys(gridParams).forEach((k) => url.searchParams.set(k, gridParams[k]));
+        window.history.replaceState(null, '', url.toString());
       },
 
       async loadEditionOptions() {
@@ -386,6 +562,28 @@
         return v || '—';
       },
       toggleGroup(key) { this.collapsed[key] = !this.collapsed[key]; },
+
+      /* The accordion iterates this: each server group mapped through the pure
+         groupRowsFrom (stable key + hasMore + child rows). groupRowsFrom passes
+         group_value through, so the template still calls groupLabel(g) for the
+         instance-dependent display label. */
+      get groupsView() { return this.groups.map(groupRowsFrom); },
+
+      /* "Toon alle N" — drop the grouping and re-fetch the FULL flat, paginated
+         set for this one group, by pinning the group's dimension as a filter.
+         Reuses the server-paged flat grid (NO client-side corpus append). The raw
+         group_value (g.group_value / g.key) is the filter value. */
+      showAllInGroup(g) {
+        const raw = g.group_value;
+        if (this.groupBy === 'status') this.filters.status = raw || '';
+        else if (this.groupBy === 'edition_id') this.filters.edition_id = Number(raw) || 0;
+        else if (this.groupBy === 'company_id') this.filters.company_id = Number(raw) || 0;
+        this.groupBy = '';
+        this.collapsed = {};      // match onGroupChange()'s collapse reset
+        this.clearSelection();
+        this.load(1);
+      },
+
       distSummary(verdeling) {
         if (!verdeling) return 'geen offertes';
         const parts = Object.entries(verdeling).filter(([, n]) => n > 0).map(([label, n]) => `${n} ${String(label).toLowerCase()}`);
@@ -560,6 +758,9 @@
     queueToParams,
     offerteClass,
     gridFilterPayload,
+    gridStateToParams,
+    gridStateFromParams,
+    groupRowsFrom,
     actionsForStates,
     avatarColor,
     initials,

@@ -65,8 +65,9 @@ foreach ($tasks as $task) {
 
     <?php foreach ($tasks as $type => $task): ?>
         <?php
-        $state  = $availability[$type]['state'] ?? 'available';
-        $reason = $availability[$type]['reason'] ?? '';
+        $state   = $availability[$type]['state'] ?? 'available';
+        $reason  = $availability[$type]['reason'] ?? '';
+        $overdue = $availability[$type]['overdue'] ?? false;
         ?>
         <div class="flex items-center gap-2.5">
             <?php if ($state === 'completed'): ?>
@@ -83,8 +84,13 @@ foreach ($tasks as $task) {
                     <?php endif; ?>
                 </span>
             <?php else: ?>
-                <span class="w-5 h-5 rounded-full border-[1.5px] border-border bg-surface-card shrink-0"></span>
-                <span class="text-[13px] font-semibold text-text flex-1"><?= esc_html($task_labels[$type] ?? $type) ?></span>
+                <span class="w-5 h-5 rounded-full border-[1.5px] <?= $overdue ? 'border-status-error' : 'border-border' ?> bg-surface-card shrink-0"></span>
+                <span class="text-[13px] font-semibold text-text flex-1">
+                    <?= esc_html($task_labels[$type] ?? $type) ?>
+                    <?php if ($overdue): ?>
+                        <span class="text-[12px] font-bold text-status-error"><?= esc_html__('verlopen', 'stridence') ?></span>
+                    <?php endif; ?>
+                </span>
                 <a href="<?= esc_url($complete_url) ?>"
                    class="text-[12px] font-bold text-primary hover:text-primary-hover shrink-0">
                     <?= esc_html($task_actions[$type] ?? __('Invullen', 'stridence')) ?> &rarr;

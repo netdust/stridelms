@@ -82,6 +82,7 @@ grep -rn "ntdst/api_data/" --include="*.php" web/app/mu-plugins/stride-core
 - `EditionService::deleteEditionRegistrations()` — bulk `$wpdb->delete` by edition (no bulk-delete-by-edition in the repo).
 - `Infrastructure/BatchQueryHelper.php` — N+1-prevention batch reads across `vad_registrations` / `vad_attendance` / `postmeta` / `term_relationships`.
 - `Modules/Edition/EditionFilesZipExporter.php` — export query.
+- `RegistrationRepository::offerteVerdelingByGroup()` — correlated `vad_quote` derived-table join (`MIN(published post ID)` per `registration_id`, then the quote's `status` meta) for the grouped-grid offerte tally (FIX-10, 2026-07-03). Cannot reuse `QuoteRepository::findQuoteIdsByRegistrations()` because that materialises a PHP id-map — the exact unbounded id-pull FIX-10 removes; a correlated aggregate must be inline SQL. Mirrors that method's `publish`/`MIN(post ID)` semantic and uses `QuoteCPT::POST_TYPE` (no literal). If a **third** consumer needs the reg→quote resolution, promote it to a shared SQL-fragment provider on `QuoteRepository` and name a "canonical quote of a registration" convergence point; two call sites is tolerable.
 - `Admin/AdminAPIController.php` — **accepted zone, actively draining** (`project_unified_api_postlaunch`): the legacy admin controller still carries direct `$wpdb` reads in its un-extracted remnants (`getEditions`, `getQuotes`, `getEditionsAgendaView`, `getEditionRegistrations`). The Admin-Workspace slice (1B–1F, 2026-06-23) **strangled it 4,013 → 2,783 lines / 173 → 76 `$wpdb`** — over half drained. New registration-table query *shapes* go to `RegistrationRepository` as touched (`idsWithCompletionTasks`, `findPendingWithOpenApproval`/`findConfirmedWithOpenPostApproval`; `idsForGridFilter`/`statusBreakdown`/`findByEditionsAndStatuses`; the picker `findEditionOptions`/`countEditionOptions`; `TrajectoryRepository::findTrajectoryOptions`/`countTrajectoryOptions`; `EditionRepository::findActiveDateScopedIds`). The remaining controller body is accepted until its extraction; the INV-3 advisory listing this file is expected, not a regression.
 - **Admin read-model services** (`Admin/AdminStatsService.php`, `Admin/AdminUserService.php`, `Admin/AdminTrajectoryService.php`, `Admin/Support/AdminBatchHelpers.php`, `Admin/AdminActivityService.php`, `Admin/AdminQuoteService.php`) — **sanctioned read-model layer** (the strangle's extraction targets, 1D/1E + the 2026-06-24 backend-cleanup that drained `AdminAPIController` 2,877 → 2,526). These hold the dashboard/stats/user-detail/trajectory/**activity-audit**/**quote-list** read SQL **moved verbatim out of `AdminAPIController`** (behavior-preserving, `$wpdb->prepare` throughout, concentrated for auditability — the same properties that justified the controller's accepted zone). `AdminActivityService` holds the `audit_log` reads (no matching `AuditRepository` finder exists — documented in its class header); `AdminQuoteService` holds only WHERE-assembly `esc_like`/`postmeta` interpolation (the quote SELECTs themselves moved to `QuoteRepository`). `AdminExportService` needs no exemption — it fully delegates and holds no `$wpdb`. New *write* shapes and net-new registration/edition query shapes still go to the owning repository (e.g. the 1F picker SQL was relocated from the controller into `EditionRepository`/`TrajectoryRepository`, NOT left in a service). A service growing a genuinely-new raw `$wpdb` read that isn't moved-from-the-controller and isn't a repo-worthy shape is still a bypass to flag.
 
@@ -270,7 +271,33 @@ grep -rn "update_user_meta\|wp_update_user" --include="*.php" web/app/mu-plugins
 
 ---
 
-## INV-10 — REST route registration and the CORS decision are made in one place
+## INV-10 — Recurring cron jobs register through `ntdst_schedule_recurring()`, not raw `wp_schedule_event`
+
+**Convergence point:** `ntdst_schedule_recurring(string $hook, string $interval, callable $cb): void` in `web/app/mu-plugins/ntdst-coreloader.php` (global helper, `function_exists`-guarded, sits alongside `ntdst_enqueue_admin_toolkit()` / `ntdst_enqueue_api_client()`). Its sibling `ntdst_clear_recurring(string $hook): void` unschedules the same hook.
+
+**The rule.** Any code that needs a recurring WP-Cron job calls `ntdst_schedule_recurring($hook, $interval, $cb)` instead of pairing `wp_next_scheduled()` + `wp_schedule_event()` + `add_action()` by hand. The helper is self-healing (only schedules when nothing is already pending for the hook — repeated calls, e.g. on every page load, never double-schedule) and only accepts a **built-in** WP-Cron interval (`'daily'`, `'hourly'`, `'twicedaily'`, `'weekly'`) — it does not register a custom `cron_schedules` interval, so a caller needing a non-standard cadence must register that interval itself before calling in. To stop the recurrence, call `ntdst_clear_recurring($hook)`.
+
+The callback receives no request data — WP-Cron invokes hooks outside any HTTP request context, so no `$_GET`/`$_POST`/`$_REQUEST` is ever threaded through. This is a structural property of `add_action($hook, $cb)` fired by `do_action()` from `wp-cron.php`, not something the helper itself has to guard.
+
+**Known bypasses (accepted, pre-existing — do not re-flag):**
+- `ntdst-audit` (`web/app/plugins/ntdst-audit/src/AuditService.php:51`) — weekly `wp_schedule_event(time(), 'weekly', 'ntdst_audit_cleanup')`.
+- `ntdst-assistant` (`web/app/plugins/ntdst-assistant/ntdst-assistant.php:62`) — hourly `wp_schedule_event(time(), 'hourly', 'ntdst_assistant_cleanup_exports')`.
+
+Both are regular plugins that predate this seam (Task 4.1, 2026-07-01); they are accepted debt, not new bypasses to chase.
+
+**Out of scope (not recurring — do not flag as bypasses):** `ntdst_send_queued_mail` and `stride/mail/admin_notify_async` are single-event offloads (`wp_schedule_single_event`), not recurring jobs. INV-10 governs recurrence only.
+
+**Audit move:**
+```bash
+# Should return only the seam itself (ntdst-coreloader.php) plus the two
+# accepted pre-existing bypasses above. Any other hit is a new finding —
+# route it through ntdst_schedule_recurring().
+grep -rn "wp_schedule_event" web/app/mu-plugins/{stride-core,ntdst-core}
+```
+
+---
+
+## INV-11 — REST route registration and the CORS decision are made in one place
 
 **Convergence points:**
 
@@ -312,4 +339,5 @@ grep -rn "register_rest_route\|Access-Control-\|rest_pre_serve_request" --includ
 | 7 | Status | `EditionService::getEffectiveStatus()` | raw stored-status read for a gate/display |
 | 8 | VAT/totals | `QuoteCalculator::TAX_RATE` + `deriveTotalsFromCents()` | hardcoded `0.21` / re-derived totals outside the helper |
 | 9 | Anon-lead → account | `EnrollmentService::resolveLeadAccount()` | `wp_create_user`/`wp_new_user_notification` outside it (or the tracked `resolveParticipant`/PartnerAPI bypass); credentials or `billing_*` meta written to a found existing account |
-| 10 | REST registration + CORS | `NTDST_Rest_Registrar` (`ntdst_router()->rest()`) / `NTDST_Cors_Policy` | raw `register_rest_route()` or hand-rolled `Access-Control-*`/`rest_pre_serve_request` outside the two classes; route with no/inline-permissive `permission` |
+| 10 | Recurring cron | `ntdst_schedule_recurring()` / `ntdst_clear_recurring()` (`ntdst-coreloader.php`) | raw `wp_schedule_event` outside the seam (excl. the two tracked pre-existing plugin bypasses) |
+| 11 | REST registration + CORS | `NTDST_Rest_Registrar` (`ntdst_router()->rest()`) / `NTDST_Cors_Policy` | raw `register_rest_route()` or hand-rolled `Access-Control-*`/`rest_pre_serve_request` outside the two classes; route with no/inline-permissive `permission` |
