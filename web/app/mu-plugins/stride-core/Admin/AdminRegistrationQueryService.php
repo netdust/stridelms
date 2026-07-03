@@ -193,11 +193,12 @@ final class AdminRegistrationQueryService
             ? ntdst_get(\Stride\Modules\Edition\SessionRepository::class)->countByEditions($editionIds)
             : [];
 
-        // Attendance per edition (keyed per edition → userId → sessionId → status)
-        $attendanceByEdition = [];
-        foreach ($editionIds as $editionId) {
-            $attendanceByEdition[$editionId] = BatchQueryHelper::batchGetAttendance($editionId);
-        }
+        // Attendance per edition (keyed per edition → userId → sessionId → status).
+        // ONE batched query over edition_id IN (...) — the SHOW TABLES existence
+        // probe + SELECT are hoisted out of the former per-edition loop (perf 4B.2).
+        $attendanceByEdition = !empty($editionIds)
+            ? BatchQueryHelper::batchGetAttendanceForEditions($editionIds)
+            : [];
 
         // --- Per-row assembly (no queries below this point) ---
         // The identity/status/attendance/company/trajectory/offerte shape shared by
