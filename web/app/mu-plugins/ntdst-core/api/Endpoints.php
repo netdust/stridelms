@@ -464,21 +464,12 @@ final class NTDST_Endpoints
 
     private function success(array $data): array
     {
-        return [
-            'success' => true,
-            'data'    => $data,
-        ];
+        return NTDST_Response::apiSuccess($data);
     }
 
     private function error(string $message, string $code = 'error'): array
     {
-        return [
-            'success' => false,
-            'data'    => [
-                'message' => $message,
-                'code'    => $code,
-            ],
-        ];
+        return NTDST_Response::apiError($message, $code);
     }
 }
 
