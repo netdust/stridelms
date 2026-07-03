@@ -1380,6 +1380,31 @@ if (!isset($wpdb) || !is_object($wpdb)) {
             return [];
         }
 
+        /**
+         * Return a single column. Drives CompanyAffiliation::getKnownCompanyIds:
+         * a DISTINCT non-empty `_stride_company_id` usermeta query resolves to the
+         * distinct set of company ids carried by users in $_test_user_meta, so
+         * companyExists() is consistent with get_user_meta() in the same test.
+         */
+        public function get_col(?string $query = null, int $x = 0): array
+        {
+            global $_test_user_meta;
+
+            if ($query && str_contains($query, '_stride_company_id')) {
+                $ids = [];
+                foreach (($_test_user_meta ?? []) as $metas) {
+                    $value = $metas['_stride_company_id'][0] ?? null;
+                    if ($value !== null && $value !== '' && (int) $value > 0) {
+                        $ids[(string) (int) $value] = (string) (int) $value;
+                    }
+                }
+
+                return array_values($ids);
+            }
+
+            return [];
+        }
+
         public function get_row(?string $query = null, string $output = 'OBJECT', int $y = 0): ?object
         {
             return null;
