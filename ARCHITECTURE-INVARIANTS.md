@@ -43,7 +43,7 @@ grep -rn "add_cap\|'stride_manage'\|'stride_view'" --include="*.php" web/app/mu-
 
 ## INV-2 — Frontend AJAX nonce is verified once, by the framework
 
-**Convergence point:** `ntdst-core/api/Endpoints.php:333` — `if (!wp_verify_nonce($nonce, $action))` — gates **every** `ntdst/api_data/{action}` dispatch before the filter fires (`:343`).
+**Convergence point:** `ntdst-core/api/Endpoints.php:343` — `if (!wp_verify_nonce($nonce, $action))` — gates **every** `ntdst/api_data/{action}` dispatch before the filter fires (`:353`).
 
 **The rule.** Frontend write/read actions register as `add_filter('ntdst/api_data/<action>', $cb, 10, 2)` (or via `Theme.php:536`'s wrapper). The handler receives already-nonce-verified input; it MUST NOT re-verify, and MUST NOT be reachable by any path that skips Endpoints.php. New frontend AJAX = a new `ntdst/api_data/*` filter, never a raw `add_action('wp_ajax_*')` that hand-rolls its own nonce.
 
@@ -137,6 +137,8 @@ grep -rn "return false;\|return null;" --include="*Repository.php" web/app/mu-pl
 **The rule (the dependency arrow).** `stride-core` (mu-plugin) MUST NEVER call theme helpers — `stridence_template_part`, `stridence_template_html`, any `stridence_*`, **or the non-prefixed theme helpers** `stride_format_money`, `stride_enrollment_url` (defined in `themes/stridence/helpers/formatting.php`). Plugin→theme inverts the dependency. Plugin-owned partials live in `stride-core/templates/` and render through the loader / `ntdst_response()->html()`. (This is the `gotcha_mu_plugin_no_theme_calls` memory, codified. The original "verified clean" claim covered only the `stridence_` prefix — a grep blind spot, audit finding H-6: 4 `stride_format_date` calls existed in `NotificationMapper` and `StrideMailBridge`. Task C2 — 2026-06-10 — resolved H-6 by moving `stride_format_date` into `stride-core/Support/formatting.php`: it is **core-owned** now, core and theme may both call it, and the check is BLOCKING. The unit-suite contract test is `tests/Unit/Support/FormattingHelpersTest.php` — it pins both the core ownership and the Dutch output.)
 
 **Output escaping (sub-invariant).** Dynamic output is escaped at the sink: `esc_html` (text), `esc_attr` (attributes), `esc_url` (URLs). Alpine `x-text` bindings are intentionally unescaped data (Alpine HTML-escapes on insertion — safe; `x-html` would not be). The one deliberate raw echo (`_tool-header.php` `$attrs`, "caller is trusted") is marked inline — new raw `echo $var` of dynamic data without an `esc_*` is a bypass.
+
+**API envelope note (added by the 2026-07 output-layer reshape):** `NTDST_Response` additionally owns the REST API envelope — `apiSuccess()` / `apiError()` / `toRestResponse()` (see INV-10) — alongside its existing template-render responsibility. The two concerns (page rendering vs. REST envelope) share one class but are additive/separate surfaces; `render()`/`html()`/`json()` behavior is unchanged.
 
 **Audit move:**
 ```bash
@@ -268,12 +270,41 @@ grep -rn "update_user_meta\|wp_update_user" --include="*.php" web/app/mu-plugins
 
 ---
 
+## INV-10 — REST route registration and the CORS decision are made in one place
+
+**Convergence points:**
+
+| Concern | Convergence point | Decides |
+|---|---|---|
+| New REST route registration | `NTDST_Rest_Registrar` (via `ntdst_router()->rest($namespace)`) — `web/app/mu-plugins/ntdst-core/api/RestRegistrar.php` | Route registration itself: required `permission` callable, `args`, optional `cors`, `max_body_bytes`, `max_json_depth` |
+| CORS / `Access-Control-*` emission | `NTDST_Cors_Policy` — `web/app/mu-plugins/ntdst-core/api/CorsPolicy.php` | Origin allow-listing, credentials-header stripping, preflight headers — for any route |
+
+**The rule.** Every *new* REST route registers through `ntdst_router()->rest($namespace)` (the `NTDST_Rest_Registrar` facade), never a raw `register_rest_route()` call. Any route that needs to answer cross-origin does so by passing a `NTDST_Cors_Policy` instance to the registrar — no hand-rolled `Access-Control-*` header, and no second `rest_pre_serve_request` CORS hook outside `CorsPolicy`. A route with no `permission` (or an inline-permissive one, e.g. `'__return_true'`) is the INV-1 failure mode recurring at framework level — the registrar makes `permission` a required option with no default specifically to prevent it.
+
+**Construction/registration misconfiguration throws; runtime paths never throw.** Bad configuration — `'*'` as an origin, a missing `permission` — is a programmer error caught at construction/registration time via `InvalidArgumentException` / `_doing_it_wrong()` (a wrong route/policy simply never goes live). Once registered, request-handling code paths never throw: a bad or malicious *request* (disallowed origin, oversized body, invalid JSON) is handled as a normal `WP_Error` / denied-CORS response, not an exception. Future auditors should not re-litigate this split — it is deliberate, not an inconsistency.
+
+**Dual error shape (deliberate, do not "unify").** `NTDST_Response` owns the API envelope, but two error shapes coexist on purpose for two different consumer sets:
+- `apiSuccess()`/`apiError()` → `{success:false,data:{message,code}}` — the `Endpoints.php`/`ntdstAPI` JS wire shape (frontend AJAX, INV-2).
+- `jsonPayload()` (via `json()`/`toRestResponse()`) → `{success:false,error:string}` — the REST-registrar wire shape.
+
+A "unify the two shapes" refactor would silently break one of these consumer sets (existing `ntdstAPI` JS callers expect `data.message`/`data.code`; REST consumers of the registrar expect `error`). Keep them separate; if a true unification is ever wanted, it needs a versioned migration on both sides, not a drive-by rename.
+
+**Known accepted baseline (pre-existing — do NOT re-flag):** `Modules/PartnerAPI/PartnerAPIController`, `Admin/AdminAPIController`, `Modules/Assistant/ReadAbilityRegistrar` / `WriteAbilityRegistrar`, and `ntdst-core/api/Endpoints.php` itself — all predate the registrar and use raw `register_rest_route()` / their own permission checks. Migrating them onto the registrar is optional future work, not debt created by this reshape.
+
+**Audit move (verified ZERO out-of-baseline hits across Phases 2-4 of the 2026-07 output-layer reshape):**
+```bash
+grep -rn "register_rest_route\|Access-Control-\|rest_pre_serve_request" --include="*.php" web/app/mu-plugins web/app/themes \
+  | grep -vE "RestRegistrar|CorsPolicy|Endpoints\.php|PartnerAPIController|AdminAPIController|AbilityRegistrar"
+```
+
+---
+
 ## Quick reference — convergence points
 
 | # | Property | Convergence point | Bypass signal |
 |---|---|---|---|
 | 1 | Authorization | `AdminAPIController::canView/canManageAdmin`, `PartnerAPIController::checkPermission`, per-ability registrars | route with no / inline `permission_callback`; new custom cap; partner query not via `findByCompany` |
-| 2 | Frontend AJAX nonce | `ntdst-core/api/Endpoints.php:330` (framework) | raw `wp_ajax_*` handler with no nonce |
+| 2 | Frontend AJAX nonce | `ntdst-core/api/Endpoints.php:343` (framework) | raw `wp_ajax_*` handler with no nonce |
 | 3 | Data access | `AbstractRepository`→`ntdst_data()`; `RegistrationRepository`/`AttendanceRepository` own their tables | `$wpdb`/`ntdst_data()` outside a repo; `post_title` keys; hardcoded `_ntdst_*` |
 | 4 | Error handling | `WP_Error` everywhere + `ntdst_log('chan')` | `return null/false` on failure; swallowed `is_wp_error`; raw `error_log` |
 | 5 | Rendering | `NTDST_Template_Loader` / `ntdst_response()->html()`; plugin never calls theme | `stridence_*` in stride-core; unescaped `echo $var` |
@@ -281,3 +312,4 @@ grep -rn "update_user_meta\|wp_update_user" --include="*.php" web/app/mu-plugins
 | 7 | Status | `EditionService::getEffectiveStatus()` | raw stored-status read for a gate/display |
 | 8 | VAT/totals | `QuoteCalculator::TAX_RATE` + `deriveTotalsFromCents()` | hardcoded `0.21` / re-derived totals outside the helper |
 | 9 | Anon-lead → account | `EnrollmentService::resolveLeadAccount()` | `wp_create_user`/`wp_new_user_notification` outside it (or the tracked `resolveParticipant`/PartnerAPI bypass); credentials or `billing_*` meta written to a found existing account |
+| 10 | REST registration + CORS | `NTDST_Rest_Registrar` (`ntdst_router()->rest()`) / `NTDST_Cors_Policy` | raw `register_rest_route()` or hand-rolled `Access-Control-*`/`rest_pre_serve_request` outside the two classes; route with no/inline-permissive `permission` |
