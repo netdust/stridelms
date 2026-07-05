@@ -107,6 +107,16 @@ jobs:
     # run here. The nginx-deny 403 test skips itself when the responding
     # server is not nginx (verified in DDEV + post-deploy curl instead).
     - name: Serve WordPress over HTTP (php -S)
+      # CODECEPTION_TEST flags this as a test env so mu-plugin test fixtures
+      # (test-cors-fixture.php, test-login-helper.php) register their loopback
+      # routes in THIS php -S worker process. Without it the fixture gate
+      # (test-cors-fixture.php:44-52) sees neither DDEV_PROJECT nor
+      # CODECEPTION_TEST, returns early, the route 404s, and the real-HTTP
+      # CORS tests observe WP core's untouched prio-10 defaults instead of the
+      # policy's stripped headers — the CI-only failure that never reproduced
+      # in DDEV (where DDEV_PROJECT starts with "stride").
+      env:
+        CODECEPTION_TEST: 'true'
       run: |
         PHP_CLI_SERVER_WORKERS=4 php -S 127.0.0.1:8080 -t web scripts/ci/router.php >/tmp/php-server.log 2>&1 &
         for i in $(seq 1 30); do
