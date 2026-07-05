@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stride\Tests\Integration;
 
 use IntegrationTestCase;
+use Stride\Contracts\LMSAdapterInterface;
 use Stride\Domain\OfferingStatus;
 use Stride\Domain\TrajectoryMode;
 use Stride\Modules\Edition\EditionRepository;
@@ -373,24 +374,24 @@ final class TrajectoryPriceLifecycleSaveTest extends IntegrationTestCase
     }
 
     // ---------------------------------------------------------------
-    // T-3 characterization — KNOWN LIMITATION, not desired behavior
+    // T-3 (FIXED) — per-enrollment progress reflects real course completion
     // ---------------------------------------------------------------
 
     /**
-     * KNOWN LIMITATION (T-3): renderEnrollmentsMetabox() hardcodes
-     * `$completedCourses = 0;` (TrajectoryAdminController.php:686), so the
-     * per-enrollment progress bar ALWAYS renders "0/N" regardless of how many
-     * courses the user has actually completed.
+     * T-3 fix: renderEnrollmentsMetabox() now derives the per-enrollment
+     * completed-course count from the single trajectory-progress convergence
+     * point (TrajectoryDashboardService::getProgressData → completed_count),
+     * the same source the front-end and React admin grid use — instead of the
+     * old hardcoded `$completedCourses = 0;`.
      *
-     * This test PINS that current cosmetic behavior; it does NOT assert desired
-     * behavior. It exists so that if/when a human decides to compute real
-     * progress, this characterization goes RED and flags the intentional change.
-     * Do NOT "fix" the product to make this pass differently — the fix is a
-     * separate product decision.
+     * With 2 required courses and the LMS adapter reporting exactly ONE of them
+     * complete for the enrolled user, the progress text must read "1/2" (not
+     * the old "0/2"). The LMS adapter is stubbed so completion is deterministic
+     * and does not depend on driving real LearnDash activity records.
      */
-    public function testEnrollmentsMetaboxProgressIsCurrentlyHardcodedZeroKnownLimitation(): void
+    public function testEnrollmentsMetaboxProgressReflectsRealCompletedCount(): void
     {
-        // A trajectory with 2 courses so N = 2 in the "0/N" text.
+        // A trajectory with 2 required courses so N = 2 in the "M/N" text.
         $courseA = wp_insert_post([
             'post_type'   => 'sfwd-courses',
             'post_title'  => 'Traj Course A ' . uniqid(),
@@ -411,8 +412,7 @@ final class TrajectoryPriceLifecycleSaveTest extends IntegrationTestCase
             ],
         ]);
 
-        // Enroll the (administrator) fixture user in this trajectory and mark the
-        // registration completed — so if progress were computed, it would NOT be 0.
+        // Enroll the (administrator) fixture user in this trajectory.
         $regRepo = ntdst_get(RegistrationRepository::class);
         $regId = $regRepo->create([
             'user_id'         => (int) self::$testUserId,
@@ -424,19 +424,71 @@ final class TrajectoryPriceLifecycleSaveTest extends IntegrationTestCase
         $this->assertIsInt($regId, 'trajectory registration must be created for the fixture');
         $this->createdRegistrationIds[] = $regId;
 
-        // Render the metabox and capture its HTML.
-        ob_start();
-        $this->controller()->renderEnrollmentsMetabox(get_post($this->trajectoryId));
-        $html = (string) ob_get_clean();
+        // Stub the LMS adapter so exactly courseA is complete for this user —
+        // deterministic, no dependency on real LearnDash activity records.
+        $userId = (int) self::$testUserId;
+        $stubAdapter = new class ($userId, $courseA) implements LMSAdapterInterface {
+            public function __construct(private int $userId, private int $completeCourseId)
+            {
+            }
+            public function grantAccess(int $userId, int $courseId): bool
+            {
+                return true;
+            }
+            public function revokeAccess(int $userId, int $courseId): bool
+            {
+                return true;
+            }
+            public function isComplete(int $userId, int $courseId): bool
+            {
+                return $userId === $this->userId && $courseId === $this->completeCourseId;
+            }
+            public function markComplete(int $userId, int $courseId): bool
+            {
+                return true;
+            }
+            public function isOpenCourse(int $courseId): bool
+            {
+                return false;
+            }
+        };
 
-        // Despite a COMPLETED enrollment and 2 courses, progress text is "0/2"
-        // because completedCourses is hardcoded 0 (line 686). This pins the
-        // known cosmetic limitation.
+        // The metabox resolves TrajectoryDashboardService from the container, and
+        // that service holds its LMS adapter as a constructor dependency captured
+        // at build time — so rebinding only the interface would not reach an
+        // already-instantiated service. Rebind the dashboard service itself to a
+        // fresh instance wired with the stub adapter, and restore afterwards.
+        $originalDashboard = ntdst_get(\Stride\Modules\Trajectory\TrajectoryDashboardService::class);
+        ntdst_set(
+            \Stride\Modules\Trajectory\TrajectoryDashboardService::class,
+            fn() => new \Stride\Modules\Trajectory\TrajectoryDashboardService(
+                ntdst_get(TrajectoryRepository::class),
+                ntdst_get(TrajectoryService::class),
+                ntdst_get(RegistrationRepository::class),
+                ntdst_get(\Stride\Modules\Edition\EditionService::class),
+                $stubAdapter,
+            ),
+        );
+
+        try {
+            // Render the metabox and capture its HTML.
+            ob_start();
+            $this->controller()->renderEnrollmentsMetabox(get_post($this->trajectoryId));
+            $html = (string) ob_get_clean();
+        } finally {
+            // Always restore the real service so no other test sees the stub.
+            ntdst_set(
+                \Stride\Modules\Trajectory\TrajectoryDashboardService::class,
+                fn() => $originalDashboard,
+            );
+        }
+
+        // One of two required courses complete → progress text reads "1/2".
         $this->assertStringContainsString(
-            '0/2',
+            '1/2',
             $html,
-            'KNOWN LIMITATION: progress text is hardcoded "0/N" (completedCourses = 0 at '
-            . 'TrajectoryAdminController.php:686), even for a completed enrollment. '
+            'Progress text must reflect the real completed-course count from '
+            . 'getProgressData() (1 of 2 complete), not the old hardcoded 0.'
             . 'This pins current behavior pending a product decision — NOT desired behavior.',
         );
     }

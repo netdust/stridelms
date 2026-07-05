@@ -677,13 +677,18 @@ final class TrajectoryAdminController
                     </tr>
                 </thead>
                 <tbody>
+                    <?php $dashboardService = ntdst_get(\Stride\Modules\Trajectory\TrajectoryDashboardService::class); ?>
                     <?php foreach ($enrollments as $enrollment): ?>
                         <?php
                         $user = get_userdata($enrollment->user_id);
                         $userName = $user ? ($user->display_name ?: $user->user_email) : __('Onbekend', 'stride');
                         $status = $enrollment->status ?? 'confirmed';
                         $enrolledAt = $enrollment->registered_at ?? '';
-                        $completedCourses = 0;
+                        // Completed-course count comes from the single trajectory-progress
+                        // convergence point (getProgressData → completed_count), the same
+                        // source the front-end + React admin grid use — not a hardcoded 0.
+                        $progress = $dashboardService->getProgressData((int) $enrollment->user_id, $post->ID);
+                        $completedCourses = (int) ($progress['completed_count'] ?? 0);
                         $progressPercent = $totalCourses > 0 ? round(($completedCourses / $totalCourses) * 100) : 0;
 
                         $statusLabels = [
