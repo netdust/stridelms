@@ -599,12 +599,10 @@ final class QuoteAdminController
             return;
         }
 
-        $price = (int) $this->editionRepository->getField($editionId, 'price', 0);
-        $priceNonMember = (int) $this->editionRepository->getField($editionId, 'price_non_member', 0);
-
-        // Use member price, or non-member if no member price. The stored edition
-        // price field is canonical CENTS already — do NOT ×100 (double-convert).
-        $unitPriceCents = $price > 0 ? $price : ($priceNonMember > 0 ? $priceNonMember : 0);
+        // Single price per offering; discounts are applied via vouchers, not a
+        // member tier. `price_non_member` is the canonical single price. The stored
+        // edition price field is canonical CENTS already — do NOT ×100 (double-convert).
+        $unitPriceCents = (int) $this->editionRepository->getField($editionId, 'price_non_member', 0);
 
         // Create item
         $items = [[

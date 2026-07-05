@@ -21,8 +21,10 @@ use Stride\Modules\Trajectory\TrajectoryService;
  * the repository.
  *
  * Pins, against the source (TrajectoryAdminController.php lines cited inline):
- *  - PRICE euros->cents dual STORE, as two INDEPENDENT keys (member vs
- *    non-member) — NOT the edition-style dual-write-to-same-key (lines 1139-1144).
+ *  - PRICE euros->cents SINGLE-price dual-write: posting `price_non_member`
+ *    writes the SAME cents to BOTH `price` AND `price_non_member` (EQUAL), and
+ *    the legacy `price`-only path also dual-writes both equal — mirroring
+ *    EditionAdminController. v1 has NO member tier; discounts come from vouchers.
  *  - CAPACITY absint (1114-1116).
  *  - LIFECYCLE booleans + the isset-guard "no clobber" contract (1118-1137).
  *  - enrollment_form sanitized text (1123-1124).
@@ -119,60 +121,62 @@ final class TrajectoryPriceLifecycleSaveTest extends IntegrationTestCase
     }
 
     // ---------------------------------------------------------------
-    // 1 + 2. PRICE: euros->cents, member/non-member independent keys
+    // 1 + 2. PRICE: euros->cents, SINGLE-price dual-write (price == price_non_member)
     // ---------------------------------------------------------------
 
     /**
-     * price=150.50 euros must STORE 15050 cents; price_non_member=200 euros must
-     * STORE 20000 cents (handleSave lines 1139-1144: (int) round(x * 100)).
+     * v1 has NO member tier — one price, discounts come from vouchers. Posting
+     * `price_non_member` (the canonical single-price key) writes the SAME cents
+     * to BOTH `price` AND `price_non_member`, EQUAL — mirroring
+     * EditionAdminController::handleSave (lines ~439-448).
      */
-    public function testPriceIsStoredAsCents(): void
+    public function testPriceNonMemberDualWritesBothKeysEqualInCents(): void
     {
         $this->save([
-            'price'            => '150.50',
-            'price_non_member' => '200',
+            'price_non_member' => '150.50',
         ]);
+
+        $priceNonMember = (int) $this->field('price_non_member');
+        $price          = (int) $this->field('price');
 
         $this->assertSame(
             15050,
-            (int) $this->field('price'),
-            'price=150.50 euros must persist as 15050 cents (euros->cents at line 1140)',
+            $priceNonMember,
+            'price_non_member=150.50 euros must persist as 15050 cents (euros->cents × 100)',
         );
+        // The load-bearing single-price contract: price is SYNCED equal to
+        // price_non_member. There is no member/non-member differentiation in v1.
         $this->assertSame(
-            20000,
-            (int) $this->field('price_non_member'),
-            'price_non_member=200 euros must persist as 20000 cents (line 1143)',
+            $priceNonMember,
+            $price,
+            'price must be dual-written EQUAL to price_non_member (single-price contract)',
         );
     }
 
     /**
-     * price and price_non_member are TWO INDEPENDENT fields. Unlike editions
-     * (which dual-write price == price_non_member), the trajectory save stores
-     * them under distinct keys. Setting DIFFERENT values must persist BOTH
-     * independently — neither clobbers the other, no dual-write-to-same-key.
+     * Back-compat path: a caller posts ONLY the legacy `price` key, no
+     * price_non_member. Both must still end up EQUAL (dual-write), mirroring the
+     * edition `elseif (isset($fields['price']))` branch.
      */
-    public function testMemberAndNonMemberPricesPersistIndependently(): void
+    public function testLegacyPriceKeyAlsoDualWritesBothEqual(): void
     {
         $this->save([
-            'price'            => '100',
-            'price_non_member' => '175.25',
+            'price' => '200',
         ]);
 
+        $price          = (int) $this->field('price');
+        $priceNonMember = (int) $this->field('price_non_member');
+
         $this->assertSame(
-            10000,
-            (int) $this->field('price'),
-            'member price must persist independently as 10000 cents',
+            20000,
+            $price,
+            'legacy price=200 euros must persist as 20000 cents',
         );
         $this->assertSame(
-            17525,
-            (int) $this->field('price_non_member'),
-            'non-member price must persist independently as 17525 cents — '
-            . 'trajectory does NOT dual-write price == price_non_member the way editions do',
-        );
-        $this->assertNotSame(
-            (int) $this->field('price'),
-            (int) $this->field('price_non_member'),
-            'the two prices are independent keys — different inputs must stay different',
+            $price,
+            $priceNonMember,
+            'the legacy price key must dual-write price_non_member EQUAL to price '
+            . '(single-price contract, back-compat branch)',
         );
     }
 

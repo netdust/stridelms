@@ -216,7 +216,6 @@ final class TrajectoryAdminController
 
         $currentMode = $trajectory['mode'] ?? TrajectoryMode::Cohort->value;
         $isCohort = $currentMode === TrajectoryMode::Cohort->value;
-        $priceDisplay = ($trajectory['price'] ?? 0) / 100;
         $priceNonMemberDisplay = ($trajectory['price_non_member'] ?? 0) / 100;
         wp_nonce_field(self::NONCE_SAVE, self::NONCE_FIELD);
         ?>
@@ -287,15 +286,11 @@ final class TrajectoryAdminController
 
                 <div class="stride-field-row two-col">
                     <div class="stride-field">
-                        <label for="trajectory_price"><?php esc_html_e('Prijs leden (€)', 'stride'); ?></label>
-                        <input type="number" id="trajectory_price" name="ntdst_fields[price]"
-                               value="<?php echo esc_attr($priceDisplay); ?>" min="0" step="0.01">
-                    </div>
-                    <div class="stride-field">
-                        <label for="trajectory_price_non_member"><?php esc_html_e('Prijs niet-leden (€)', 'stride'); ?></label>
+                        <label for="trajectory_price_non_member"><?php esc_html_e('Prijs (€)', 'stride'); ?></label>
                         <input type="number" id="trajectory_price_non_member" name="ntdst_fields[price_non_member]"
                                value="<?php echo esc_attr($priceNonMemberDisplay); ?>" min="0" step="0.01">
                     </div>
+                    <div class="stride-field"></div>
                 </div>
             </div>
 
@@ -1141,11 +1136,20 @@ final class TrajectoryAdminController
             }
         }
 
-        if (isset($fields['price'])) {
-            $updateData['price'] = (int) round((float) $fields['price'] * 100);
-        }
+        // Single-price dual-write. v1 has NO member tier — the admin form posts a
+        // single value as `price_non_member` (canonical for v1); discounts come
+        // from vouchers. Sync `price` to the same value so any reader still
+        // routing through member/non-member meta sees one source of truth.
+        // Mirrors EditionAdminController::handleSave.
         if (isset($fields['price_non_member'])) {
-            $updateData['price_non_member'] = (int) round((float) $fields['price_non_member'] * 100);
+            $cents = (int) round((float) $fields['price_non_member'] * 100);
+            $updateData['price_non_member'] = $cents;
+            $updateData['price'] = $cents;
+        } elseif (isset($fields['price'])) {
+            // Back-compat path if a caller still posts the legacy `price` key.
+            $cents = (int) round((float) $fields['price'] * 100);
+            $updateData['price'] = $cents;
+            $updateData['price_non_member'] = $cents;
         }
 
         if (isset($fields['deadline_months'])) {

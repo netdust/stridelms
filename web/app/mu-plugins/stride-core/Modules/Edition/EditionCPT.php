@@ -101,11 +101,11 @@ final class EditionCPT
             ],
             'price' => [
                 'type' => 'float',
-                'label' => 'Prijs (leden)',
+                'label' => 'Prijs (intern — spiegelt Prijs)',
             ],
             'price_non_member' => [
                 'type' => 'float',
-                'label' => 'Prijs (niet-leden)',
+                'label' => 'Prijs (€)',
             ],
             'venue' => [
                 'type' => 'text',

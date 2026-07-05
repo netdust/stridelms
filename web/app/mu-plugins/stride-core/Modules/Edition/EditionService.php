@@ -216,19 +216,23 @@ class EditionService extends AbstractService implements EditionQueryInterface
     /**
      * Get price for edition.
      *
-     * When $userId is provided, checks membership for member pricing.
-     * When null (anonymous/display), returns non-member price.
-     *
-     * Override via `stride/membership/price` filter.
+     * Single-price contract: every offering has ONE price (`price_non_member`,
+     * the canonical field). There is no member/non-member branch — discounts are
+     * vouchers, not membership. The `stride/membership/price` filter is kept as an
+     * inert escape hatch so a future client can still branch on membership; it
+     * receives the computed $isMember flag for that purpose, but core no longer
+     * selects a different meta field on it.
      */
     public function getPrice(int $editionId, ?int $userId = null): Money
     {
+        // Still computed so the escape-hatch filter keeps a stable 4-arg
+        // signature ($price, $editionId, $userId, $isMember) — core does not
+        // branch on it.
         $isMember = $userId !== null ? $this->isMember($userId) : false;
-        $field = $isMember ? 'price' : 'price_non_member';
         // Stored value is canonical CENTS (admin save ×100, admin display ÷100).
         // Read it as cents — never Money::eur(), which would treat it as euros
         // and render 100× too large.
-        $amount = (int) $this->repository->getField($editionId, $field, 0);
+        $amount = (int) $this->repository->getField($editionId, 'price_non_member', 0);
         $price = Money::cents($amount);
 
         return apply_filters('stride/membership/price', $price, $editionId, $userId, $isMember);

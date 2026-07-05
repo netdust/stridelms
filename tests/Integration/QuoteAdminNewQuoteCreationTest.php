@@ -242,15 +242,17 @@ final class QuoteAdminNewQuoteCreationTest extends IntegrationTestCase
         );
     }
 
-    public function test_line_item_unit_price_reflects_edition_member_price(): void
+    public function test_line_item_unit_price_reflects_edition_single_price(): void
     {
-        // Explicit member price (cents) so the member-vs-non-member branch is
-        // unambiguous: field `price` (_ntdst_price) > 0 → member price wins.
-        $memberPriceCents = 12345;
+        // Single-price model: `price_non_member` (_ntdst_price_non_member) is the
+        // canonical single price; discounts are applied via vouchers, not a member
+        // tier. The legacy `price` field must be IGNORED entirely. Seed a distinct,
+        // non-zero legacy `price` to prove the old member-first pick is gone.
+        $singlePriceCents = 20000;
         $editionId = $this->createTestEdition([
             'meta' => [
-                '_ntdst_price'            => $memberPriceCents, // field `price` (leden)
-                '_ntdst_price_non_member' => 20000,            // must NOT be chosen
+                '_ntdst_price'            => 12345,             // legacy member field: must be IGNORED
+                '_ntdst_price_non_member' => $singlePriceCents, // canonical single price
             ],
         ]);
 
@@ -267,9 +269,9 @@ final class QuoteAdminNewQuoteCreationTest extends IntegrationTestCase
         $this->assertCount(1, $items, 'new-quote creation must build exactly one line item');
 
         $this->assertSame(
-            $memberPriceCents,
+            $singlePriceCents,
             (int) ($items[0]['unit_price'] ?? -1),
-            'line item unit_price (cents) must reflect the edition member price, not non-member',
+            'line item unit_price (cents) must reflect the canonical single price (price_non_member), never the legacy member price',
         );
     }
 }

@@ -622,7 +622,8 @@
         <details>
             <summary>Kan ik de prijs per editie anders instellen?</summary>
             <p>
-                Ja. Elke editie heeft eigen prijzen (leden/niet-leden). De prijs in LearnDash
+                Ja. Elke editie heeft een eigen prijs. Kortingen (bv. voor leden) regel je
+                via het vouchersysteem, niet via een aparte ledenprijs. De prijs in LearnDash
                 wordt alleen gebruikt als er geen editie-prijs is ingesteld.
             </p>
         </details>
