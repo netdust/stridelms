@@ -1186,6 +1186,7 @@ final class EditionAdminController
             'end_time' => sanitize_text_field($input['end_time'] ?? ''),
             'slot' => sanitize_text_field($input['slot'] ?? ''),
             'type' => sanitize_text_field($input['session_type'] ?? 'in_person'),
+            'capacity' => absint($input['capacity'] ?? 0),
         ];
 
         // Convert euro input to cents for storage

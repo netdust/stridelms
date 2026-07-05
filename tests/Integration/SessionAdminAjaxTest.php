@@ -71,8 +71,8 @@ final class SessionAdminAjaxTest extends IntegrationTestCase
     protected function tearDown(): void
     {
         foreach (['nonce', 'edition_id', 'session_id', 'session_type', 'date',
-                  'start_time', 'end_time', 'slot', 'price_modifier', 'title',
-                  'location', 'description', 'webinar_link', 'lesson_id'] as $k) {
+                  'start_time', 'end_time', 'slot', 'price_modifier', 'capacity',
+                  'title', 'location', 'description', 'webinar_link', 'lesson_id'] as $k) {
             unset($_POST[$k], $_REQUEST[$k]);
         }
 
@@ -306,6 +306,66 @@ final class SessionAdminAjaxTest extends IntegrationTestCase
             // regression guard for that fix: -5 EUR => -500 cents.
             'negative -5 (discount) => -500' => ['-5', -500],
         ];
+    }
+
+    // =====================================================================
+    // 2b) capacity (seat count) — shared field, absint, 0 = unlimited
+    // =====================================================================
+
+    public function test_add_session_persists_posted_capacity(): void
+    {
+        $editionId = $this->createTestEdition();
+
+        $sessionId = $this->addSession($editionId, ['capacity' => 15]);
+
+        $session = $this->sessionService()->getSession($sessionId);
+        $this->assertNotNull($session, 'the persisted session must be readable');
+        $this->assertSame(
+            15,
+            $session['capacity'],
+            'a posted capacity=15 must persist as the session seat capacity',
+        );
+    }
+
+    public function test_add_session_without_capacity_defaults_to_unlimited(): void
+    {
+        $editionId = $this->createTestEdition();
+
+        // addSession posts no 'capacity' key.
+        $sessionId = $this->addSession($editionId);
+
+        $session = $this->sessionService()->getSession($sessionId);
+        $this->assertNotNull($session, 'the persisted session must be readable');
+        $this->assertSame(
+            0,
+            $session['capacity'],
+            'a session added with no capacity posted must default to 0 (unlimited)',
+        );
+    }
+
+    public function test_update_session_persists_changed_capacity(): void
+    {
+        $editionId = $this->createTestEdition();
+        $sessionId = $this->addSession($editionId, ['capacity' => 10]);
+
+        $result = $this->driveAjax('ajaxUpdateSession', [
+            'session_id'   => $sessionId,
+            'edition_id'   => $editionId,
+            'session_type' => 'in_person',
+            'date'         => '2026-09-01',
+            'start_time'   => '09:00',
+            'end_time'     => '17:00',
+            'title'        => 'Sessie 1',
+            'location'     => 'Brussel',
+            'description'  => 'Intro dag',
+            'capacity'     => 25,
+        ]);
+
+        $this->assertTrue($result['payload']['success'] ?? false, 'update must return a success response');
+
+        $session = $this->sessionService()->getSession($sessionId);
+        $this->assertNotNull($session, 'the updated session must be readable');
+        $this->assertSame(25, $session['capacity'], 'update must persist the new capacity');
     }
 
     // =====================================================================

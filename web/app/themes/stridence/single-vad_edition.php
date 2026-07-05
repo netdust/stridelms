@@ -409,6 +409,11 @@ get_header();
                                                     'attendance' => null,
                                                     'selected'   => $isSelected,
                                                     'not_chosen' => false,
+                                                    'seat_state' => stridence_session_seat_state(
+                                                        (int) $session['id'],
+                                                        isset($session['capacity']) ? (int) $session['capacity'] : null,
+                                                        $selected_session_ids,
+                                                    ),
                                                 ]); ?>
                                             <?php endforeach; ?>
                                         </div>
@@ -457,6 +462,11 @@ get_header();
                                                     'attendance' => null,
                                                     'selected'   => $isSelected,
                                                     'not_chosen' => $notChosen,
+                                                    'seat_state' => stridence_session_seat_state(
+                                                        (int) $session['id'],
+                                                        isset($session['capacity']) ? (int) $session['capacity'] : null,
+                                                        $selected_session_ids,
+                                                    ),
                                                 ]); ?>
                                             <?php endforeach; ?>
                                         </div>
@@ -474,6 +484,11 @@ get_header();
                                             'attendance' => null,
                                             'selected'   => $isSelected,
                                             'not_chosen' => false,
+                                            'seat_state' => stridence_session_seat_state(
+                                                (int) $session['id'],
+                                                isset($session['capacity']) ? (int) $session['capacity'] : null,
+                                                $selected_session_ids,
+                                            ),
                                         ]); ?>
                                     <?php endforeach; ?>
                                 </div>
@@ -505,6 +520,11 @@ get_header();
                                         'attendance' => null,
                                         'selected'   => $isSelected,
                                         'not_chosen' => $notChosen,
+                                        'seat_state' => stridence_session_seat_state(
+                                            (int) $session['id'],
+                                            isset($session['capacity']) ? (int) $session['capacity'] : null,
+                                            $selected_session_ids,
+                                        ),
                                     ]);
                                     ?>
                                 <?php endforeach; ?>

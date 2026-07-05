@@ -25,6 +25,13 @@ if (!$session) {
     return;
 }
 
+// Seat availability (display-only; the server gate in SessionService is
+// authoritative). The call site passes 'seat_state' precomputed via
+// stridence_session_seat_state() so the own-seat exemption uses the current
+// user's picks. Absent (attendance / read-only contexts) → no badge.
+$seat_state = $args['seat_state'] ?? null;
+$seat_badge = is_array($seat_state) ? stridence_session_seat_badge($seat_state) : '';
+
 // Session data
 $date       = $session->date ?? '';
 $start_time = $session->start_time ?? '';
@@ -99,6 +106,9 @@ $type_config = match ($type) {
                         <?php printf(esc_html__('Beschikbaar vanaf %s', 'stridence'), esc_html($formatted_date)); ?>
                     </span>
                 <?php endif; ?>
+                <?php if ($seat_badge !== '') : ?>
+                    <?php echo $seat_badge; // already-escaped seat availability badge ?>
+                <?php endif; ?>
             </div>
         </div>
         <!-- Right: selected or attendance -->
@@ -146,6 +156,9 @@ $type_config = match ($type) {
                 <?php endif; ?>
                 <?php if ($location) : ?>
                     <div class="text-[12px] text-text-faint"><?php echo esc_html($location); ?></div>
+                <?php endif; ?>
+                <?php if ($seat_badge !== '') : ?>
+                    <div class="mt-1"><?php echo $seat_badge; // already-escaped seat availability badge ?></div>
                 <?php endif; ?>
                 <?php if ($selected) : ?>
                     <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-primary/10 text-primary mt-1">

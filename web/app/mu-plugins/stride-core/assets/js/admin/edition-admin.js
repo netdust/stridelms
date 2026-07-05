@@ -238,6 +238,10 @@
                     $formRow.find('input[name="session_price_modifier"]').val('');
                 }
 
+                // Set capacity (0 = unlimited — leave the field blank so the placeholder shows)
+                var capacity = parseInt($editRow.data('capacity') || 0, 10);
+                $formRow.find('input[name="session_capacity"]').val(capacity > 0 ? capacity : '');
+
                 // Set radio button for session type and update active class
                 $formRow.find('.stride-type-option').removeClass('active');
                 var $typeOption = $formRow.find('.stride-type-option[data-type="' + sessionType + '"]');
@@ -351,6 +355,7 @@
                 end_time: $form.find('input[name="session_end_time"]').val(),
                 slot: $form.find('select[name="session_slot"]').val() || '',
                 price_modifier: $form.find('input[name="session_price_modifier"]').val() || '',
+                capacity: $form.find('input[name="session_capacity"]').val() || '',
                 session_type: sessionType
             };
 

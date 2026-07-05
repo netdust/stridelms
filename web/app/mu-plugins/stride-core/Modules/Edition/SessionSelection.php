@@ -66,11 +66,31 @@ final class SessionSelection
             }
         }
 
+        // Seat gate: refuse a full session, but only when NEWLY added. A user who
+        // already holds a seat on this session (re-submitting, or changing other
+        // picks) occupies a seat they already have and must not be blocked by it.
+        // Capacity 0 = unlimited (hasAvailableSeats returns true) — never blocks.
+        $currentSelections = array_map('intval', $this->registrations->getSelections($registrationId));
+        foreach ($sessionIds as $sessionId) {
+            $sessionId = (int) $sessionId;
+            $alreadyHeld = in_array($sessionId, $currentSelections, true);
+            if (!$alreadyHeld && !$this->sessions->hasAvailableSeats($sessionId)) {
+                return new WP_Error('session_full', "Sessie {$sessionId} is vol");
+            }
+        }
+
         // Save selections
         $result = $this->registrations->setSelections($registrationId, $sessionIds);
 
         if (!$result) {
             return new WP_Error('db_error', 'Failed to save selections');
+        }
+
+        // Invalidate the per-session selected-count cache for every written
+        // session (both the newly-added and the retained ones) so the next
+        // user's seat gate reads a fresh count.
+        foreach ($sessionIds as $sessionId) {
+            $this->sessions->invalidateSelectedCountCache((int) $sessionId);
         }
 
         do_action('stride/session/selections_updated', [

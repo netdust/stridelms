@@ -137,6 +137,7 @@ final class EditionSessionsMetabox
             data-description="<?php echo esc_attr($session['description'] ?? ''); ?>"
             data-webinar-link="<?php echo esc_attr($session['webinar_link'] ?? ''); ?>"
             data-lesson-ids="<?php echo esc_attr($lessonIds); ?>"
+            data-capacity="<?php echo esc_attr((string) ($session['capacity'] ?? 0)); ?>"
             data-price-modifier="<?php echo esc_attr((string) ($session['price_modifier'] ?? 0)); ?>">
             <td class="column-date"><?php echo esc_html($dateFormatted); ?></td>
             <td class="column-time"><?php echo esc_html($timeFormatted ?: '-'); ?></td>
@@ -212,6 +213,11 @@ final class EditionSessionsMetabox
                             <p class="description" id="stride-price-modifier-hint" style="display: none; font-size: 11px; color: #646970;">
                                 <?php esc_html_e('Alleen actief bij sessiekeuze', 'stride'); ?>
                             </p>
+                        </div>
+                        <div class="stride-field">
+                            <label><?php esc_html_e('Capaciteit (0 = onbeperkt)', 'stride'); ?></label>
+                            <input type="number" name="session_capacity" min="0" step="1" placeholder="0"
+                                   style="width: 100px;">
                         </div>
                     </div>
 

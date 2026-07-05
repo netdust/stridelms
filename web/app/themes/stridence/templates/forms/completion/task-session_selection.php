@@ -84,21 +84,33 @@ if ($hasSlots) {
 /**
  * Render a single session checkbox option.
  */
-$renderOption = function (array $session) {
+$renderOption = function (array $session) use ($selectedIds) {
     $sessionId = (int) ($session['id'] ?? 0);
     $title     = $session['title'] ?? '';
     $date      = $session['date'] ?? '';
     $startTime = $session['start_time'] ?? '';
     $endTime   = $session['end_time'] ?? '';
     $venue     = $session['venue'] ?? '';
+
+    // Seat availability (display-only; server gate is authoritative). Capacity
+    // is already in the session array; own-seat exemption uses the current
+    // registration's picks so a held-but-full session stays selectable.
+    $seat = stridence_session_seat_state(
+        $sessionId,
+        isset($session['capacity']) ? (int) $session['capacity'] : null,
+        $selectedIds,
+    );
+    $seatBadge = stridence_session_seat_badge($seat);
+    $isFull    = !empty($seat['disabled']);
     ?>
-    <label class="flex items-center gap-3 p-3 rounded-lg border transition-colors cursor-pointer"
+    <label class="flex items-center gap-3 p-3 rounded-lg border transition-colors <?= $isFull ? 'is-full opacity-60 cursor-not-allowed' : 'cursor-pointer' ?>"
            :class="selected.includes(<?= $sessionId ?>)
                ? 'border-primary bg-primary/5'
                : 'border-border hover:border-primary/50'"
-           @click.prevent="toggleSession(<?= $sessionId ?>)">
+           <?php if (!$isFull): ?>@click.prevent="toggleSession(<?= $sessionId ?>)"<?php endif; ?>>
         <input type="checkbox"
                :checked="selected.includes(<?= $sessionId ?>)"
+               <?= $isFull ? 'disabled' : '' ?>
                class="input-checkbox">
         <div class="flex-1 min-w-0">
             <?php if ($title): ?>
@@ -133,6 +145,9 @@ $renderOption = function (array $session) {
                     <?= stridence_icon('map-pin', 'w-3 h-3 inline-block') ?>
                     <?= esc_html($venue) ?>
                 </span>
+            <?php endif; ?>
+            <?php if ($seatBadge !== ''): ?>
+                <span class="mt-1 block"><?= $seatBadge ?></span>
             <?php endif; ?>
         </div>
     </label>

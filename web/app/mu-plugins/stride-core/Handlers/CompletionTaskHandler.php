@@ -69,17 +69,26 @@ final class CompletionTaskHandler
             return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
         }
 
+        // Persist session selections through SessionSelection so the completion
+        // path gets the SAME validation the API path has: deadline, locked,
+        // belongs-to-edition, AND the per-session seat gate. Do this BEFORE
+        // marking the task complete — completeTask fires task_completed
+        // (auto-confirm / LD finalize), so a rejected selection must stop us
+        // before the task is recorded as done with an invalid pick.
+        if ($taskType === 'session_selection' && !empty($taskData['session_ids'])) {
+            $sessionIds = array_map('intval', $taskData['session_ids']);
+            $selection = ntdst_get(\Stride\Modules\Edition\SessionSelection::class);
+            $written = $selection->setSelections($registrationId, $sessionIds);
+            if (is_wp_error($written)) {
+                return $written;
+            }
+        }
+
         $completion = ntdst_get(EnrollmentCompletion::class);
         $result = $completion->completeTask($registrationId, $taskType, $taskData);
 
         if (is_wp_error($result)) {
             return $result;
-        }
-
-        // Persist session selections to the registration's selections column
-        if ($taskType === 'session_selection' && !empty($taskData['session_ids'])) {
-            $sessionIds = array_map('intval', $taskData['session_ids']);
-            $repo->setSelections($registrationId, $sessionIds);
         }
 
         return ['completed' => true];

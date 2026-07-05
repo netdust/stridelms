@@ -125,6 +125,89 @@ final class SessionService
         return $this->repository->countByEdition($editionId);
     }
 
+    // === Seat Capacity ===
+    //
+    // Mirrors the edition seat pattern (EditionService::hasAvailableSpots /
+    // getRegisteredCount / getCapacity) INLINE — deliberately no shared helper.
+    // The one structural difference: a session is NOT a column in the
+    // registrations table. A user's picked sessions live as a JSON array of
+    // session ids in the `selections` column. So the count is a JSON_CONTAINS
+    // match rather than an equality filter, scoped to the session's own edition
+    // (a same-valued id selected under a different edition must not leak in).
+
+    /**
+     * Read a session's seat capacity. 0 means unlimited.
+     */
+    public function getCapacity(int $sessionId): int
+    {
+        return (int) $this->repository->getField($sessionId, 'capacity', 0);
+    }
+
+    /**
+     * Count DISTINCT active registrations that have picked this session.
+     *
+     * Scoped to the session's own edition AND to active statuses
+     * (confirmed/completed/pending), mirroring getRegisteredCount's status
+     * set. The `selections` column stores a JSON array of INTEGER session ids
+     * (RegistrationRepository::setSelections writes wp_json_encode(array<int>)),
+     * so the JSON_CONTAINS needle is the JSON integer literal (e.g. `123`), not
+     * a quoted string. Transient-cached 60s, mirroring the edition cache.
+     */
+    public function getSelectedCount(int $sessionId): int
+    {
+        $cacheKey = 'stride_session_sel_count_' . $sessionId;
+        $cached = get_transient($cacheKey);
+        if ($cached !== false) {
+            return (int) $cached;
+        }
+
+        $editionId = (int) $this->repository->getField($sessionId, 'edition_id', 0);
+
+        global $wpdb;
+        $table = $wpdb->prefix . 'vad_registrations';
+
+        // JSON integer literal — matches the int storage in `selections`.
+        $needle = (string) (int) $sessionId;
+
+        $count = (int) $wpdb->get_var($wpdb->prepare(
+            "SELECT COUNT(*) FROM {$table}
+             WHERE edition_id = %d
+               AND status IN ('confirmed', 'completed', 'pending')
+               AND JSON_CONTAINS(selections, %s)",
+            $editionId,
+            $needle,
+        ));
+
+        set_transient($cacheKey, $count, 60);
+
+        return $count;
+    }
+
+    /**
+     * Whether the session still has room. Capacity 0 = unlimited.
+     */
+    public function hasAvailableSeats(int $sessionId): bool
+    {
+        $cap = $this->getCapacity($sessionId);
+
+        if ($cap === 0) {
+            return true;
+        }
+
+        return $this->getSelectedCount($sessionId) < $cap;
+    }
+
+    /**
+     * Invalidate the cached selected-count for a session. Seats-3 calls this on
+     * every selection write so the gate reads fresh counts.
+     */
+    public function invalidateSelectedCountCache(int $sessionId): void
+    {
+        if ($sessionId > 0) {
+            delete_transient('stride_session_sel_count_' . $sessionId);
+        }
+    }
+
     // === Duration Calculations ===
 
     /**
