@@ -345,7 +345,7 @@ final class TrajectoryRepository extends AbstractRepository
             if (!isset($groups[$groupName])) {
                 $groups[$groupName] = [
                     'name' => $groupName,
-                    'required' => (int) ($config['min_choices'] ?? 0),
+                    'required' => (int) ($config['pick_count'] ?? $config['min_choices'] ?? 0),
                     'courses' => [],
                 ];
             }
