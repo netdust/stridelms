@@ -93,7 +93,7 @@ final class SessionCPT
                 'description' => 'User can opt out',
             ],
             'price_modifier' => [
-                'type' => 'int',
+                'type' => 'signed_int',
                 'label' => 'Prijswijziging',
                 'description' => 'Price modifier in cents (positive = surcharge, negative = discount)',
             ],

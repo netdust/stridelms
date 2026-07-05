@@ -123,6 +123,7 @@ class NTDST_Data_Model
     {
         return match ($type) {
             'int', 'integer' => 'absint',
+            'signed_int' => 'intval',
             'float', 'double' => 'floatval',
             'bool', 'boolean' => fn($v) => $this->sanitizeBoolean($v),
             'email' => 'sanitize_email',
