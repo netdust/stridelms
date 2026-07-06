@@ -140,6 +140,11 @@ add_action('ntdst/core_ready', function () use ($config): void {
     // registered above + ProfileTypeService).
     ntdst_set(\Stride\Modules\User\ProfileTypePolicy::class);
 
+    // Metabox rules sanitizer (M5). Plain-DI collaborator shared by the Edition +
+    // Trajectory admin handleSave paths — the single place the profiletype_rules
+    // shape + allowlist-drop lives. Autowired (dep: ProfileTypeService).
+    ntdst_set(\Stride\Modules\User\ProfiletypeRulesSanitizer::class);
+
     // AttendanceRepository registered by AttendanceService::init()
 
     // Register interface bindings

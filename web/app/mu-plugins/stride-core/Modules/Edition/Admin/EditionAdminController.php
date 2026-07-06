@@ -51,6 +51,7 @@ final class EditionAdminController
         add_action('add_meta_boxes', [$this, 'registerMetaboxes']);
         add_action('save_post_' . EditionCPT::POST_TYPE, [$this, 'handleSave'], 10, 2);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
+        add_action('admin_notices', [$this, 'renderDroppedSlugNotice']);
 
         // Session AJAX endpoints
         add_action('wp_ajax_stride_add_session', [$this, 'ajaxAddSession']);
@@ -583,10 +584,66 @@ final class EditionAdminController
             }
         }
 
+        // Per-profile-type enrollment rules (M5). Sanitized + allowlist-dropped
+        // through the shared sanitizer (the single place the rule shape lives);
+        // rides inside the nonce + cap guards above. Unknown slugs are dropped and
+        // surfaced via an admin notice.
+        if (isset($fields['profiletype_rules'])) {
+            $sanitizer = ntdst_get(\Stride\Modules\User\ProfiletypeRulesSanitizer::class);
+            $updateData['profiletype_rules'] = $sanitizer->sanitize($fields['profiletype_rules']);
+            $this->flagDroppedProfiletypeSlugs($sanitizer->getDroppedSlugs());
+        }
+
+        // Catalog-listing flag (concept A). A blunt bool; not a security boundary.
+        if (isset($fields['exclude_from_catalog'])) {
+            $updateData['exclude_from_catalog'] = (bool) $fields['exclude_from_catalog'];
+        }
+
         // Update if we have data
         if (!empty($updateData)) {
             $this->editionRepository->updateMeta($postId, $updateData);
         }
+    }
+
+    /**
+     * Stash dropped-slug names for the next admin_notices render (M5 secondary:
+     * surface which unknown profile-type slugs were rejected). User-scoped
+     * transient so it survives the save→redirect and shows once.
+     *
+     * @param array<int, string> $slugs
+     */
+    private function flagDroppedProfiletypeSlugs(array $slugs): void
+    {
+        if ($slugs === []) {
+            return;
+        }
+
+        set_transient(
+            'stride_dropped_profiletype_slugs_' . get_current_user_id(),
+            array_map('sanitize_key', $slugs),
+            60,
+        );
+    }
+
+    public function renderDroppedSlugNotice(): void
+    {
+        $key    = 'stride_dropped_profiletype_slugs_' . get_current_user_id();
+        $slugs  = get_transient($key);
+
+        if (empty($slugs) || !is_array($slugs)) {
+            return;
+        }
+
+        delete_transient($key);
+
+        printf(
+            '<div class="notice notice-warning is-dismissible"><p>%s</p></div>',
+            esc_html(sprintf(
+                /* translators: %s: comma-separated list of unknown profile-type slugs */
+                __('Onbekende profieltypes genegeerd bij het opslaan van de inschrijvingsregels: %s', 'stride'),
+                implode(', ', $slugs),
+            )),
+        );
     }
 
     // === Session AJAX Endpoints ===

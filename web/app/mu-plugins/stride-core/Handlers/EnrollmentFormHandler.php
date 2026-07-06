@@ -423,7 +423,7 @@ final class EnrollmentFormHandler
         // and trajectoryId (which is stored as edition_id field for now - can be refactored later)
         $quoteService = ntdst_get(QuoteService::class);
 
-        return $quoteService->createQuote(
+        $quoteId = $quoteService->createQuote(
             $userId,
             $enrollmentId,      // Using enrollment_id as registration_id
             $trajectoryId,      // Using trajectory_id as edition_id (item reference)
@@ -432,6 +432,35 @@ final class EnrollmentFormHandler
             $appliedVoucherCode,
             $discount,
         );
+
+        if (!is_wp_error($quoteId)) {
+            // Auto-apply the profile-type voucher (M3) — parity with the edition
+            // path (EnrollmentQuoteHandler::onRegistrationCreated, T8). Resolved
+            // server-side from the ATTENDEE's STORED profile type ($userId, never
+            // client/request input); applied via applyVoucher which validates +
+            // REDEEMS (moves used_count) — closing the createQuote-doesn't-redeem
+            // gap the manual validate+calculate path above leaves open. Skip when a
+            // manual voucher was already supplied so the auto path never stacks a
+            // second redemption (manual takes precedence).
+            if (empty($voucherCode)) {
+                $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
+                $autoCode = $policy->autoVoucherCode($userId, $trajectoryId, 'vad_trajectory');
+                if ($autoCode !== null) {
+                    $applied = $quoteService->applyVoucher($quoteId, $autoCode);
+                    if (is_wp_error($applied)) {
+                        // Resolved code invalid/expired/over-cap: the enrollment +
+                        // quote STAND, just without the discount. Log, do not fail.
+                        ntdst_log('enrollment')->info('Auto-voucher not applied to trajectory (invalid/exhausted)', [
+                            'quote_id' => $quoteId,
+                            'code' => $autoCode,
+                            'reason' => $applied->get_error_message(),
+                        ]);
+                    }
+                }
+            }
+        }
+
+        return $quoteId;
     }
 
     /**

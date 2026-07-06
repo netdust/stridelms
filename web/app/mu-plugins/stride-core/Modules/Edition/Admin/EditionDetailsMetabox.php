@@ -9,6 +9,7 @@ use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionService;
+use Stride\Modules\User\ProfiletypeRulesMetaboxFields;
 use WP_Post;
 
 /**
@@ -58,6 +59,9 @@ final class EditionDetailsMetabox
                     <button type="button" class="stride-tab" data-tab="cursusinstellingen" style="display:none;">
                         <?php esc_html_e('Cursusinstellingen', 'stride'); ?>
                     </button>
+                    <button type="button" class="stride-tab" data-tab="toegang">
+                        <?php esc_html_e('Toegang', 'stride'); ?>
+                    </button>
                 </div>
 
                 <!-- Tab: Algemeen -->
@@ -83,6 +87,16 @@ final class EditionDetailsMetabox
                 <!-- Tab: Cursusinstellingen (online only, shown via tab system) -->
                 <div class="stride-tab-content" data-tab="cursusinstellingen">
                     <?php $this->renderCursusinstellingenTab($courseId); ?>
+                </div>
+
+                <!-- Tab: Toegang (profile-type enroll rules + catalog flag) -->
+                <div class="stride-tab-content" data-tab="toegang">
+                    <?php
+                    ProfiletypeRulesMetaboxFields::render(
+                        $this->repository->getProfiletypeRules($post->ID),
+                        $this->repository->getExcludeFromCatalog($post->ID),
+                    );
+        ?>
                 </div>
 
             </div>
