@@ -64,10 +64,14 @@ foreach ($progress['edition_registrations'] as $edReg) {
 $trajectorySelection = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class);
 $selectedCourseIds = $trajectorySelection->getSelectedCourseIds((int) ($enrollment->id ?? 0));
 
-// Build timeline rows: required courses in order, then one keuze row per group.
+// Build timeline rows: required courses ordered by their edition's first
+// session date (a chronological journey), then one keuze row per group.
 $timeline = [];
 
-foreach ($progress['required_courses'] as $course) {
+// Course rows collected with a sort key, then ordered by session date before
+// the keuze rows are appended.
+$courseRows = [];
+foreach ($progress['required_courses'] as $orderIndex => $course) {
     if (in_array($course->ID, $completedIds, true)) {
         $state = 'done';
     } elseif (in_array($course->ID, $inProgressIds, true)) {
@@ -76,12 +80,42 @@ foreach ($progress['required_courses'] as $course) {
         $state = 'upcoming';
     }
 
-    $timeline[] = [
+    // Resolve the edition once (registered edition, else the course's next
+    // visible edition) so both the sort key and the render reuse it.
+    $editionId = $editionByCourse[$course->ID] ?? 0;
+    if ($editionId === 0) {
+        $editionId = stridence_trajectory_elective_edition_id((int) $course->ID);
+    }
+
+    $courseRows[] = [
         'type' => 'course',
         'state' => $state,
         'course' => $course,
+        'edition_id' => $editionId,
+        'sort_date' => stridence_trajectory_edition_sort_date($editionId),
+        'order_index' => $orderIndex, // stable tie-break for undated rows
     ];
 }
+
+// Chronological by session date; undated rows (sort_date '') fall to the end,
+// keeping their original schema order via the stable order_index tie-break.
+usort($courseRows, static function (array $a, array $b): int {
+    $ad = $a['sort_date'];
+    $bd = $b['sort_date'];
+    if ($ad === $bd) {
+        return $a['order_index'] <=> $b['order_index'];
+    }
+    if ($ad === '') {
+        return 1;
+    }
+    if ($bd === '') {
+        return -1;
+    }
+
+    return strcmp($ad, $bd);
+});
+
+$timeline = $courseRows;
 
 foreach ($progress['elective_groups'] as $groupIndex => $group) {
     $courses = $group['courses'] ?? [];
@@ -163,15 +197,10 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
 
                 <?php if ($row['type'] === 'course') :
                     $course = $row['course'];
-                    // Prefer the edition the user is actually registered in; fall
-                    // back to the course's next visible edition (same lookup the
-                    // Keuzes cards use) so the metadata subline still renders when
-                    // no child-edition registration row exists yet.
-                    $editionId = $editionByCourse[$course->ID]
-                        ?? 0;
-                    if ($editionId === 0) {
-                        $editionId = stridence_trajectory_elective_edition_id((int) $course->ID);
-                    }
+                    // Edition resolved once during timeline assembly (registered
+                    // edition, else the course's next visible edition) — reused
+                    // here so the sort order and the rendered metadata agree.
+                    $editionId = (int) ($row['edition_id'] ?? 0);
                     ?>
                     <?php if ($row['state'] === 'done') :
                         $completedOn = LearnDashHelper::getCompletionDate($course->ID, $user->ID);

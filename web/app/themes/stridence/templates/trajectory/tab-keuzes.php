@@ -125,6 +125,12 @@ $selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::c
             </p>
         <?php endif; ?>
 
+        <?php // Show a per-group heading only when there are 2+ groups to
+              // distinguish. With a single group the page h2 "Keuzecursussen"
+              // + the deadline intro already frame it — a second heading (often
+              // a stored name like "Keuzecursussen (kies 2)") just repeats the
+              // title and can contradict the real `required` count. ?>
+        <?php $showGroupHeadings = count($electiveGroups) > 1; ?>
         <div x-data="strideTrajectoryChoices({ registrationId: <?php echo (int) ($enrollment->id ?? 0); ?> })">
         <form id="elective-selection-form" class="space-y-7" x-show="!saved" @submit.prevent="submit($el)">
             <?php foreach ($electiveGroups as $groupIndex => $group) :
@@ -135,12 +141,14 @@ $selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::c
                 $inputClass = $required === 1 ? 'input-radio' : 'input-checkbox';
                 ?>
                 <div>
-                    <h3 class="text-[15px] font-bold text-text mb-0.5">
-                        <?php echo esc_html($groupName); ?>
-                    </h3>
-                    <p class="text-[13px] text-text-muted mb-3.5">
-                        <?php printf(esc_html__('Selecteer %d cursus(sen)', 'stridence'), $required); ?>
-                    </p>
+                    <?php if ($showGroupHeadings) : ?>
+                        <h3 class="text-[15px] font-bold text-text mb-0.5">
+                            <?php echo esc_html($groupName); ?>
+                        </h3>
+                        <p class="text-[13px] text-text-muted mb-3.5">
+                            <?php printf(esc_html__('Selecteer %d cursus(sen)', 'stridence'), $required); ?>
+                        </p>
+                    <?php endif; ?>
 
                     <div class="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
                         <?php foreach ($courses as $course) :

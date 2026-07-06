@@ -120,6 +120,41 @@ if (!function_exists('stridence_trajectory_next_session_label')) {
     }
 }
 
+if (!function_exists('stridence_trajectory_edition_sort_date')) {
+    /**
+     * A sortable date key for ordering timeline rows chronologically: the
+     * edition's earliest session date, falling back to its start_date, then
+     * the edition's end_date. Returns '' when nothing is dated — such rows
+     * sort last (see the timeline sort in tab-voortgang.php).
+     */
+    function stridence_trajectory_edition_sort_date(int $editionId): string
+    {
+        if ($editionId <= 0) {
+            return '';
+        }
+
+        $sessionService = ntdst_get(SessionService::class);
+        $earliest = '';
+        foreach ($sessionService->getSessionsForEdition($editionId) as $session) {
+            $date = (string) ($session['date'] ?? '');
+            if ($date === '') {
+                continue;
+            }
+            if ($earliest === '' || $date < $earliest) {
+                $earliest = $date;
+            }
+        }
+        if ($earliest !== '') {
+            return $earliest;
+        }
+
+        $repo = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
+        $start = (string) $repo->getField($editionId, 'start_date', '');
+
+        return $start !== '' ? $start : (string) $repo->getField($editionId, 'end_date', '');
+    }
+}
+
 if (!function_exists('stridence_trajectory_meta_line')) {
     /**
      * Joined subline string, or '' when there is nothing to show.
