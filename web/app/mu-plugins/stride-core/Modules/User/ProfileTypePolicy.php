@@ -31,8 +31,7 @@ final class ProfileTypePolicy
         private readonly ProfileTypeService $profileTypes,
         private readonly EditionRepository $editions,
         private readonly TrajectoryRepository $trajectories,
-    ) {
-    }
+    ) {}
 
     /**
      * Fail-open: no rule for the user's type ⇒ false.
@@ -40,24 +39,55 @@ final class ProfileTypePolicy
      */
     public function blocksEnrollment(?int $userId, int $enrollableId, string $postType): bool
     {
-        throw new \LogicException('ProfileTypePolicy::blocksEnrollment not implemented');
+        return (bool) ($this->resolveRule($userId, $enrollableId, $postType)['block'] ?? false);
     }
 
     /** No rule ⇒ false (full form). */
     public function usesMinimalForm(?int $userId, int $enrollableId, string $postType): bool
     {
-        throw new \LogicException('ProfileTypePolicy::usesMinimalForm not implemented');
+        return (bool) ($this->resolveRule($userId, $enrollableId, $postType)['minimal'] ?? false);
     }
 
-    /** No rule ⇒ null (no auto-voucher). */
+    /** No rule ⇒ null (no auto-voucher). Empty voucher string ⇒ null. */
     public function autoVoucherCode(?int $userId, int $enrollableId, string $postType): ?string
     {
-        throw new \LogicException('ProfileTypePolicy::autoVoucherCode not implemented');
+        $code = $this->resolveRule($userId, $enrollableId, $postType)['voucher'] ?? null;
+
+        return is_string($code) && $code !== '' ? $code : null;
     }
 
     /** Slug of the user's stored primary profile type, or null (no/deleted type). */
     public function currentUserType(?int $userId): ?string
     {
-        throw new \LogicException('ProfileTypePolicy::currentUserType not implemented');
+        // Short-circuit: getUserType() takes a non-nullable int; never call getUserType(0).
+        if ($userId === null || $userId === 0) {
+            return null;
+        }
+
+        $type = $this->profileTypes->getUserType($userId);
+
+        return $type['slug'] ?? null;
+    }
+
+    /**
+     * Resolve the single rule row for this user's stored type against this enrollable.
+     * Returns the `{block, minimal, voucher}` entry, or an empty array when the user
+     * has no/deleted type OR the postType-routed rules map has no row for that slug.
+     *
+     * @return array{block?: bool, minimal?: bool, voucher?: string|null}
+     */
+    private function resolveRule(?int $userId, int $enrollableId, string $postType): array
+    {
+        $slug = $this->currentUserType($userId);
+
+        if ($slug === null) {
+            return [];
+        }
+
+        $rules = $postType === 'vad_trajectory'
+            ? $this->trajectories->getProfiletypeRules($enrollableId)
+            : $this->editions->getProfiletypeRules($enrollableId);
+
+        return $rules[$slug] ?? [];
     }
 }
