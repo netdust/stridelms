@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&amp;family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #F9FAFC; }
+    @keyframes st-toast-in { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  </style>
+</helmet>
+
+<div data-screen-label="Detail — Traject" style="min-height: 100vh; background: #F9FAFC; font-family: 'Hanken Grotesk', system-ui, sans-serif; color: #292C31;">
+
+  <!-- site header -->
+  <div style="background: #FFFFFF; box-shadow: 0 1px 0 #E3E6EB; padding: 16px clamp(20px, 4vw, 48px); display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+    <div style="font-size: 20px; font-weight: 800; letter-spacing: -0.02em;">stride<span style="color: #0E6E6B;">.</span></div>
+    <div style="display: flex; gap: clamp(14px, 2.5vw, 30px); font-size: 15px; font-weight: 600; color: #585C63;">
+      <a href="Catalogus — Trajecten.dc.html" style="color: #0E6E6B; text-decoration: none;">Trajecten</a>
+      <a href="Catalogus — Klassikaal.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Klassikaal</a>
+      <a href="Catalogus — Online.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Online</a>
+      <a href="Contact.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Contact</a>
+    </div>
+    <a href="Dashboard — Mijn account.dc.html" style="font-size: 14px; font-weight: 700; color: #292C31; text-decoration: none; border: 1px solid #D2D6DD; border-radius: 10px; padding: 9px 18px; transition: background 150ms;" style-hover="background: #EEF1F5;">Mijn account</a>
+  </div>
+
+  <!-- header band -->
+  <div style="background: #EEF1F5; padding: clamp(24px, 4vw, 40px) clamp(20px, 4vw, 48px) clamp(22px, 3.5vw, 34px);">
+    <div style="max-width: 1080px; margin: 0 auto; display: flex; gap: clamp(20px, 4vw, 40px); align-items: center; flex-wrap: wrap;">
+      <div style="flex: 1; min-width: 280px;">
+        <div style="font-size: 13px; color: #767A82; display: flex; gap: 8px; flex-wrap: wrap;">
+          <a href="Homepage.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Home</a><span>›</span>
+          <a href="Catalogus — Trajecten.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Trajecten</a><span>›</span>
+          <span style="color: #292C31; font-weight: 600;">Begeleider buitenschoolse kinderopvang</span>
+        </div>
+        <div style="display: flex; gap: 8px; margin-top: 18px;">
+          <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #EBEEF9; color: #36459C;">Traject</span>
+          <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">✓ Ingeschreven</span>
+        </div>
+        <h1 style="font-family: 'Newsreader', Georgia, serif; font-weight: 400; font-size: clamp(28px, 4vw, 40px); line-height: 1.12; max-width: 680px; margin: 14px 0 10px;">Begeleider buitenschoolse kinderopvang</h1>
+        <div style="font-size: 15px; color: #585C63;">4 onderdelen · gestart februari 2026 · verwachte afronding september 2026</div>
+      </div>
+      <div style="display: flex; align-items: center; gap: 16px;">
+        <div style="position: relative; width: 84px; height: 84px;">
+          <svg width="84" height="84" viewBox="0 0 84 84" style="transform: rotate(-90deg);">
+            <circle cx="42" cy="42" r="35" fill="none" stroke="#FFFFFF" stroke-width="8"></circle>
+            <circle cx="42" cy="42" r="35" fill="none" stroke="#0E6E6B" stroke-width="8" stroke-linecap="round" stroke-dasharray="{{ ringDash }}" style="transition: stroke-dasharray 900ms cubic-bezier(0.16,1,0.3,1);"></circle>
+          </svg>
+          <div style="position: absolute; inset: 0; display: grid; place-items: center; font-size: 18px; font-weight: 800; font-variant-numeric: tabular-nums;">50%</div>
+        </div>
+        <div style="font-size: 13px; color: #585C63; line-height: 1.5;">2 van 4 onderdelen<br>afgerond</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- content -->
+  <div style="max-width: 1080px; margin: 0 auto; padding: clamp(20px, 3vw, 36px) clamp(20px, 4vw, 48px) 80px; display: flex; flex-direction: column; gap: 28px;">
+
+    <!-- tabs -->
+    <div style="display: flex; gap: clamp(16px, 3vw, 28px); box-shadow: inset 0 -1px 0 #E3E6EB; overflow-x: auto;">
+      <sc-for list="{{ tabs }}" as="tb" hint-placeholder-count="4">
+        <div onClick="{{ tb.go }}" style="font-size: 15px; font-weight: {{ tb.weight }}; color: {{ tb.color }}; padding: 0 2px 12px; cursor: pointer; box-shadow: {{ tb.shadow }}; white-space: nowrap; display: flex; align-items: center; gap: 7px; transition: color 150ms;" style-hover="color: {{ tb.hoverColor }};">{{ tb.label }}<sc-if value="{{ tb.badge }}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 700; background: #4A5FBE; color: #FFFFFF; border-radius: 999px; padding: 1px 7px;">{{ tb.badge }}</span></sc-if></div>
+      </sc-for>
+    </div>
+
+    <!-- ═══ VOORTGANG: journey ═══ -->
+    <sc-if value="{{ isVg }}" hint-placeholder-val="{{ true }}">
+      <div style="display: flex; flex-direction: column;">
+
+        <div style="display: flex; gap: 18px;">
+          <div style="display: flex; flex-direction: column; align-items: center; width: 28px; flex-shrink: 0;">
+            <span style="width: 28px; height: 28px; border-radius: 999px; background: #E2F2E8; color: #17683D; font-size: 14px; font-weight: 800; display: grid; place-items: center;">✓</span>
+            <span style="width: 2px; flex: 1; background: #0E6E6B; min-height: 24px;"></span>
+          </div>
+          <div style="flex: 1; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 18px 22px; margin-bottom: 14px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;"><div style="font-size: 15px; font-weight: 700;">Pedagogisch handelen — basis</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">Klassikaal · 2 sessies · afgerond op 12 februari 2026</div></div>
+            <span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F2E8; color: #17683D;">Afgerond</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 18px;">
+          <div style="display: flex; flex-direction: column; align-items: center; width: 28px; flex-shrink: 0;">
+            <span style="width: 28px; height: 28px; border-radius: 999px; background: #E2F2E8; color: #17683D; font-size: 14px; font-weight: 800; display: grid; place-items: center;">✓</span>
+            <span style="width: 2px; flex: 1; background: #0E6E6B; min-height: 24px;"></span>
+          </div>
+          <div style="flex: 1; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 18px 22px; margin-bottom: 14px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;"><div style="font-size: 15px; font-weight: 700;">EHBO bij kinderen</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">Klassikaal · 1 sessie · afgerond op 3 april 2026</div></div>
+            <span style="font-size: 12px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F2E8; color: #17683D;">Afgerond</span>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 18px;">
+          <div style="display: flex; flex-direction: column; align-items: center; width: 28px; flex-shrink: 0;">
+            <span style="width: 28px; height: 28px; border-radius: 999px; background: #0E6E6B; display: grid; place-items: center;"><span style="width: 9px; height: 9px; border-radius: 999px; background: #FFFFFF;"></span></span>
+            <span style="width: 2px; flex: 1; background: #D2D6DD; min-height: 24px;"></span>
+          </div>
+          <div style="flex: 1; background: #E2F0EE; border-radius: 14px; padding: 18px 22px; margin-bottom: 14px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;"><div style="font-size: 15px; font-weight: 700;">Omgaan met verbale agressie in de zorg</div><div style="font-size: 13px; color: #44524F; margin-top: 2px;">Klassikaal · 2 sessies · volgende sessie do 21 mei, 09:30</div></div>
+            <a href="Detail — Editie.dc.html" style="font-size: 13px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; text-decoration: none; border-radius: 9px; padding: 10px 16px; transition: background 150ms;" style-hover="background: #0A5E5B;">Bekijk editie</a>
+          </div>
+        </div>
+
+        <div style="display: flex; gap: 18px;">
+          <div style="display: flex; flex-direction: column; align-items: center; width: 28px; flex-shrink: 0;">
+            <span style="width: 28px; height: 28px; border-radius: 999px; background: #FFFFFF; box-shadow: inset 0 0 0 2px #D2D6DD;"></span>
+          </div>
+          <div style="flex: 1; background: #FFFFFF; border-radius: 14px; box-shadow: inset 0 0 0 1.5px #E3E6EB; padding: 18px 22px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 200px;"><div style="font-size: 15px; font-weight: 700;">Keuzemodule — kies 1 uit 3</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">{{ keuzeStatus }}</div></div>
+            <button onClick="{{ goKeuzes }}" style="font-family: inherit; font-size: 13px; font-weight: 700; color: {{ keuzeBtnColor }}; background: {{ keuzeBtnBg }}; border: {{ keuzeBtnBorder }}; border-radius: 9px; padding: 10px 16px; cursor: pointer; transition: background 150ms;">{{ keuzeBtnLabel }}</button>
+          </div>
+        </div>
+
+      </div>
+    </sc-if>
+
+    <!-- ═══ KEUZES ═══ -->
+    <sc-if value="{{ isKz }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 18px;">
+        <div style="font-size: 15px; color: #585C63; line-height: 1.6; max-width: 640px;">Kies één verdiepingsmodule om je traject af te ronden. Je keuze kan tot 1 augustus 2026 aangepast worden.</div>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px;">
+          <sc-for list="{{ keuzes }}" as="k" hint-placeholder-count="3">
+            <div onClick="{{ k.pick }}" style="background: #FFFFFF; border-radius: 14px; box-shadow: {{ k.shadow }}; padding: 22px; display: flex; flex-direction: column; gap: 10px; cursor: pointer; transition: box-shadow 200ms cubic-bezier(0.16,1,0.3,1);">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; gap: 10px;">
+                <div style="font-size: 15px; font-weight: 700; line-height: 1.35;">{{ k.title }}</div>
+                <span style="width: 22px; height: 22px; border-radius: 999px; background: #FFFFFF; border: {{ k.radio }}; flex-shrink: 0; box-sizing: border-box; transition: border 150ms;"></span>
+              </div>
+              <div style="font-size: 13px; color: #585C63; line-height: 1.6;">{{ k.desc }}</div>
+              <div style="font-size: 12px; color: #767A82; margin-top: auto;">{{ k.meta }}</div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
+          <button onClick="{{ confirmChoice }}" style="font-family: inherit; font-size: 15px; font-weight: 700; color: {{ confColor }}; background: {{ confBg }}; border: none; border-radius: 10px; padding: 13px 24px; cursor: {{ confCursor }}; min-height: 48px; transition: background 150ms;">Bevestig je keuze</button>
+          <span style="font-size: 13px; color: #767A82;">{{ confHint }}</span>
+        </div>
+      </div>
+    </sc-if>
+
+    <!-- ═══ MATERIALEN ═══ -->
+    <sc-if value="{{ isMt }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <sc-for list="{{ materialen }}" as="m" hint-placeholder-count="3">
+          <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 16px 20px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+            <span style="width: 38px; height: 38px; border-radius: 10px; background: #EEF1F5; color: #585C63; display: grid; place-items: center; font-size: 10px; font-weight: 800; flex-shrink: 0;">PDF</span>
+            <div style="flex: 1; min-width: 200px;"><div style="font-size: 14px; font-weight: 700;">{{ m.title }}</div><div style="font-size: 12px; color: #767A82; margin-top: 2px;">{{ m.meta }}</div></div>
+            <button onClick="{{ m.download }}" style="font-family: inherit; font-size: 13px; font-weight: 700; color: #292C31; background: transparent; border: 1px solid #D2D6DD; border-radius: 9px; padding: 9px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;">Download</button>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <!-- ═══ BERICHTEN ═══ -->
+    <sc-if value="{{ isBr }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: #F4F6FC; border-radius: 12px; padding: 16px 18px; display: flex; gap: 14px; align-items: flex-start;">
+          <span style="width: 36px; height: 36px; border-radius: 999px; background: #EBEEF9; color: #36459C; display: grid; place-items: center; font-size: 13px; font-weight: 800; flex-shrink: 0;">EM</span>
+          <div style="flex: 1; min-width: 0;"><div style="display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;"><span style="font-size: 14px; font-weight: 700;">Eva Maerten — trajectbegeleider</span><span style="font-size: 12px; color: #90959E;">2 u geleden</span></div><div style="font-size: 14px; color: #43454C; line-height: 1.6; margin-top: 4px;">Dag An, vergeet je intakeformulier niet vóór 14 mei — dan kunnen we de oefeningen op jouw werkcontext afstemmen.</div></div>
+        </div>
+        <div style="background: #FFFFFF; border-radius: 12px; box-shadow: inset 0 0 0 1px #E3E6EB; padding: 16px 18px; display: flex; gap: 14px; align-items: flex-start;">
+          <span style="width: 36px; height: 36px; border-radius: 999px; background: #EEF1F5; color: #585C63; display: grid; place-items: center; font-size: 13px; font-weight: 800; flex-shrink: 0;">S</span>
+          <div style="flex: 1; min-width: 0;"><div style="display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap;"><span style="font-size: 14px; font-weight: 600; color: #585C63;">Stride</span><span style="font-size: 12px; color: #90959E;">3 april</span></div><div style="font-size: 14px; color: #585C63; line-height: 1.6; margin-top: 4px;">Proficiat! Je rondde EHBO bij kinderen af — je attest staat klaar bij Certificaten.</div></div>
+        </div>
+      </div>
+    </sc-if>
+
+  </div>
+
+  <!-- toast -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; right: 24px; bottom: 24px; z-index: 50; background: #FFFFFF; border-radius: 12px; box-shadow: 0 24px 48px -12px rgba(41,44,49,0.2); padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; width: 340px; max-width: calc(100vw - 48px); animation: st-toast-in 250ms cubic-bezier(0.16,1,0.3,1);">
+      <div style="width: 28px; height: 28px; border-radius: 999px; background: #E2F2E8; color: #17683D; display: grid; place-items: center; font-size: 14px; font-weight: 800; flex-shrink: 0;">✓</div>
+      <div style="flex: 1;"><div style="font-size: 14px; font-weight: 700;">{{ toastTitle }}</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">{{ toastSub }}</div></div>
+      <div onClick="{{ closeToast }}" style="font-size: 16px; color: #90959E; cursor: pointer; line-height: 1;" style-hover="color: #292C31;">×</div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { tab: 'vg', choice: null, confirmed: false, toast: null, mounted: false };
+
+  componentDidMount() { this._mt = setTimeout(() => this.setState({ mounted: true }), 120); }
+  componentWillUnmount() { clearTimeout(this._mt); clearTimeout(this._tt); }
+  showToast(title, sub) {
+    clearTimeout(this._tt);
+    this.setState({ toast: { title, sub } });
+    this._tt = setTimeout(() => this.setState({ toast: null }), 3500);
+  }
+
+  renderVals() {
+    const s = this.state;
+    const defs = [
+      { id: 'vg', label: 'Voortgang' },
+      { id: 'kz', label: 'Keuzes', badge: s.confirmed ? null : '1' },
+      { id: 'mt', label: 'Materialen' },
+      { id: 'br', label: 'Berichten' }
+    ];
+    const tabs = defs.map(t => {
+      const a = t.id === s.tab;
+      return Object.assign({}, t, {
+        go: () => this.setState({ tab: t.id }),
+        weight: a ? 700 : 600,
+        color: a ? '#0E6E6B' : '#767A82',
+        hoverColor: a ? '#0E6E6B' : '#292C31',
+        shadow: a ? 'inset 0 -2px 0 #0E6E6B' : 'none'
+      });
+    });
+
+    const opts = [
+      { id: 'a', title: 'Muzisch werken met kinderen', desc: 'Creatieve werkvormen — muziek, drama en beeld — die je meteen inzet in je opvang.', meta: 'Klassikaal · 1 sessie · Gent' },
+      { id: 'b', title: 'Buiten spelen en risicovol spel', desc: 'Waarom uitdagend spel belangrijk is, en hoe je het veilig genoeg organiseert.', meta: 'Klassikaal · 1 sessie · Antwerpen' },
+      { id: 'c', title: 'Communiceren met ouders', desc: 'Korte contactmomenten benutten: van breng- en haalmomenten tot lastige gesprekken.', meta: 'Klassikaal · 1 sessie · Brussel' }
+    ];
+    const keuzes = opts.map(o => {
+      const sel = s.choice === o.id;
+      return Object.assign({}, o, {
+        pick: () => this.setState({ choice: o.id, confirmed: false }),
+        shadow: sel ? '0 0 0 2px #0E6E6B, 0 8px 16px -4px rgba(41,44,49,0.1)' : '0 2px 6px rgba(41,44,49,0.05)',
+        radio: sel ? '6.5px solid #0E6E6B' : '1.5px solid #D2D6DD'
+      });
+    });
+    const chosen = opts.find(o => o.id === s.choice);
+
+    const dlToast = (t) => () => this.showToast('Download gestart', t + ' wordt gedownload.');
+
+    return {
+      tabs,
+      isVg: s.tab === 'vg', isKz: s.tab === 'kz', isMt: s.tab === 'mt', isBr: s.tab === 'br',
+      ringDash: s.mounted ? '110 219.9' : '0 219.9',
+      goKeuzes: () => this.setState({ tab: 'kz' }),
+      keuzeStatus: s.confirmed && chosen ? 'Gekozen: ' + chosen.title : 'Nog geen keuze gemaakt — kies vóór 1 augustus 2026',
+      keuzeBtnLabel: s.confirmed ? 'Wijzig keuze' : 'Maak je keuze',
+      keuzeBtnBg: s.confirmed ? 'transparent' : '#0E6E6B',
+      keuzeBtnColor: s.confirmed ? '#292C31' : '#FFFFFF',
+      keuzeBtnBorder: s.confirmed ? '1px solid #D2D6DD' : 'none',
+      keuzes,
+      confirmChoice: () => {
+        if (!s.choice) return;
+        this.setState({ confirmed: true });
+        const c = opts.find(o => o.id === this.state.choice);
+        this.showToast('Keuze bevestigd', c.title + ' is toegevoegd aan je traject.');
+      },
+      confBg: s.choice ? '#0E6E6B' : '#DCE3E2',
+      confColor: s.choice ? '#FFFFFF' : '#8A938F',
+      confCursor: s.choice ? 'pointer' : 'not-allowed',
+      confHint: s.confirmed ? 'Je keuze is bevestigd — aanpassen kan tot 1 augustus.' : (s.choice ? 'Je kan je keuze later nog aanpassen.' : 'Selecteer eerst een module.'),
+      materialen: [
+        { title: 'Trajectgids — Begeleider buitenschoolse kinderopvang', meta: 'PDF · 2,8 MB', download: dlToast('trajectgids.pdf') },
+        { title: 'Cursusmap — Pedagogisch handelen', meta: 'PDF · 4,6 MB', download: dlToast('cursusmap-pedagogisch.pdf') },
+        { title: 'Sjabloon kindvolgsysteem', meta: 'PDF · 420 kB', download: dlToast('sjabloon-kindvolg.pdf') }
+      ],
+      toast: s.toast,
+      toastTitle: s.toast ? s.toast.title : '',
+      toastSub: s.toast ? s.toast.sub : '',
+      closeToast: () => { clearTimeout(this._tt); this.setState({ toast: null }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

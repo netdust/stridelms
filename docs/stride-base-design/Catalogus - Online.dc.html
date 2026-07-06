@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&amp;family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #F9FAFC; }
+    @keyframes st-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  </style>
+</helmet>
+
+<div data-screen-label="Catalogus — Online" style="min-height: 100vh; background: #F9FAFC; font-family: 'Hanken Grotesk', system-ui, sans-serif; color: #292C31;">
+
+  <!-- site header -->
+  <div style="background: #FFFFFF; box-shadow: 0 1px 0 #E3E6EB; padding: 16px clamp(20px, 4vw, 48px); display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+    <div style="font-size: 20px; font-weight: 800; letter-spacing: -0.02em;">stride<span style="color: #0E6E6B;">.</span></div>
+    <div style="display: flex; gap: clamp(14px, 2.5vw, 30px); font-size: 15px; font-weight: 600; color: #585C63;">
+      <a href="Catalogus — Trajecten.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Trajecten</a>
+      <a href="Catalogus — Klassikaal.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Klassikaal</a>
+      <a href="Catalogus — Online.dc.html" style="color: #0E6E6B; text-decoration: none;">Online</a>
+      <a href="Contact.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Contact</a>
+    </div>
+    <a href="Dashboard — Mijn account.dc.html" style="font-size: 14px; font-weight: 700; color: #292C31; text-decoration: none; border: 1px solid #D2D6DD; border-radius: 10px; padding: 9px 18px; transition: background 150ms;" style-hover="background: #EEF1F5;">Mijn account</a>
+  </div>
+
+  <!-- header band -->
+  <div style="background: #EEF1F5; padding: clamp(28px, 5vw, 44px) clamp(20px, 4vw, 48px) clamp(24px, 4vw, 36px);">
+    <div style="max-width: 1280px; margin: 0 auto;">
+      <h1 style="font-family: 'Newsreader', Georgia, serif; font-weight: 400; font-size: clamp(32px, 4.5vw, 44px); line-height: 1.1; margin: 0;">Online leren</h1>
+      <p style="font-size: 16px; color: #585C63; margin: 10px 0 0; max-width: 560px;">Leer op je eigen tempo met onze e-learningmodules en webinars — start wanneer het jou past.</p>
+    </div>
+  </div>
+
+  <!-- content -->
+  <div style="max-width: 1280px; margin: 0 auto; padding: clamp(20px, 3vw, 32px) clamp(20px, 4vw, 48px) 80px; display: flex; flex-direction: column; gap: 24px;">
+
+    <!-- filter chips -->
+    <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+      <sc-for list="{{ chips }}" as="ch" hint-placeholder-count="5">
+        <button onClick="{{ ch.go }}" style="font-family: inherit; font-size: 13px; font-weight: {{ ch.weight }}; color: {{ ch.color }}; background: {{ ch.bg }}; border: 1px solid {{ ch.border }}; border-radius: 999px; padding: 8px 16px; cursor: pointer; min-height: 36px; display: inline-flex; align-items: center; gap: 7px; transition: background 150ms, border-color 150ms;">{{ ch.label }}<span style="font-size: 11px; font-weight: 700; background: {{ ch.pillBg }}; color: {{ ch.pillColor }}; border-radius: 999px; padding: 1px 7px; font-variant-numeric: tabular-nums;">{{ ch.count }}</span></button>
+      </sc-for>
+    </div>
+
+    <!-- card grid -->
+    <sc-if value="{{ hasResults }}" hint-placeholder-val="{{ true }}">
+      <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 18px;">
+        <sc-for list="{{ cards }}" as="c" hint-placeholder-count="6">
+          <a href="Detail — Online opleiding.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 24px; display: flex; flex-direction: column; gap: 13px; cursor: pointer; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);">
+            <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+              <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Online</span>
+              <sc-if value="{{ c.free }}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #DFF3E9; color: #166F54;">Gratis</span></sc-if>
+              <sc-if value="{{ c.pctBadge }}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #DFF3E9; color: #166F54;">{{ c.pctBadge }}</span></sc-if>
+            </div>
+            <div style="font-size: 17px; font-weight: 700; line-height: 1.35; text-wrap: pretty;">{{ c.title }}</div>
+            <div style="display: flex; flex-direction: column; gap: 5px; font-size: 13px; color: #585C63;">
+              <div>Op eigen tempo · {{ c.duration }}</div>
+              <div>{{ c.format }}</div>
+            </div>
+            <sc-if value="{{ c.pct }}" hint-placeholder-val="{{ false }}">
+              <div style="height: 7px; border-radius: 999px; background: #EEF1F5; overflow: hidden;"><div style="height: 100%; width: {{ c.pctW }}; border-radius: 999px; background: #0E6E6B;"></div></div>
+            </sc-if>
+            <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center; padding-top: 4px;">
+              <span style="font-size: 16px; font-weight: 800; color: {{ c.priceColor }};">{{ c.price }}</span>
+              <span style="font-size: 14px; font-weight: 700; color: #0E6E6B;">{{ c.cta }} →</span>
+            </div>
+          </a>
+        </sc-for>
+      </div>
+    </sc-if>
+
+    <!-- empty state -->
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="background: #EEF1F5; border-radius: 16px; padding: 64px 28px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px;">
+        <div style="width: 56px; height: 56px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 2px 6px rgba(41,44,49,0.06); display: grid; place-items: center;">
+          <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="9" cy="9" r="6.5" fill="none" stroke="#767A82" stroke-width="2"></circle><line x1="14" y1="14" x2="19" y2="19" stroke="#767A82" stroke-width="2" stroke-linecap="round"></line></svg>
+        </div>
+        <div style="font-size: 17px; font-weight: 700;">Geen online opleidingen binnen dit thema</div>
+        <div style="font-size: 14px; color: #585C63; line-height: 1.6; max-width: 340px;">We werken aan nieuwe modules rond dit thema. Bekijk intussen het volledige aanbod.</div>
+        <button onClick="{{ clearFilter }}" style="font-family: inherit; font-size: 14px; font-weight: 700; color: #292C31; background: #FFFFFF; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 20px; cursor: pointer; min-height: 44px; transition: background 150ms;" style-hover="background: #F9FAFC;">Toon alles</button>
+      </div>
+    </sc-if>
+
+    <!-- load more -->
+    <sc-if value="{{ showMore }}" hint-placeholder-val="{{ false }}">
+      <div style="display: flex; justify-content: center;">
+        <sc-if value="{{ loading }}" hint-placeholder-val="{{ false }}">
+          <button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #585C63; background: #EEF1F5; border: 1px solid #E3E6EB; border-radius: 10px; padding: 13px 36px; min-height: 48px; display: inline-flex; align-items: center; gap: 10px; cursor: wait;"><span style="width: 15px; height: 15px; border-radius: 999px; border: 2px solid #C6CBD2; border-top-color: #585C63; animation: st-spin 700ms linear infinite; display: inline-block;"></span>Laden…</button>
+        </sc-if>
+        <sc-if value="{{ notLoading }}" hint-placeholder-val="{{ true }}">
+          <button onClick="{{ loadMore }}" style="font-family: inherit; font-size: 15px; font-weight: 700; color: #292C31; background: transparent; border: 1px solid #D2D6DD; border-radius: 10px; padding: 13px 36px; min-height: 48px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;">Toon meer</button>
+        </sc-if>
+      </div>
+    </sc-if>
+
+  </div>
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { theme: 'alles', shown: 6, loading: false };
+
+  componentWillUnmount() { clearTimeout(this._lt); }
+
+  renderVals() {
+    const s = this.state;
+    const items = [
+      { title: 'Privacy en beroepsgeheim in de praktijk', theme: 'Beleid & regelgeving', duration: '± 2 uur', format: 'E-learning met afsluitende toets', free: true, pct: 60 },
+      { title: 'Signalen van kindermishandeling herkennen', theme: 'Zorg & welzijn', duration: '± 3 uur', format: 'E-learning · 6 modules', price: '€ 75,00' },
+      { title: 'Introductie agressiebeheersing', theme: 'Agressie & veiligheid', duration: '± 1,5 uur', format: 'E-learning · 4 modules', free: true },
+      { title: 'Webinar: het nieuwe kwaliteitskader', theme: 'Beleid & regelgeving', duration: '90 min', format: 'Opgenomen webinar', price: '€ 45,00' },
+      { title: 'Gezonde voeding in de kinderopvang', theme: 'Zorg & welzijn', duration: '± 2,5 uur', format: 'E-learning · 5 modules', price: '€ 65,00' },
+      { title: 'Digitaal dossierbeheer', theme: 'Beleid & regelgeving', duration: '± 2 uur', format: 'E-learning met oefenomgeving', price: '€ 85,00' },
+      { title: 'Omgaan met rouw bij cliënten', theme: 'Communicatie', duration: '± 2 uur', format: 'E-learning · 4 modules', price: '€ 70,00' },
+      { title: 'Webinar: motiverende gespreksvoering — kennismaking', theme: 'Communicatie', duration: '60 min', format: 'Opgenomen webinar', free: true }
+    ];
+    const themes = ['Agressie & veiligheid', 'Communicatie', 'Zorg & welzijn', 'Beleid & regelgeving', 'Team & beleid'];
+    const countFor = (t) => items.filter(i => i.theme === t).length;
+
+    const chipDefs = [{ id: 'alles', label: 'Alles', count: items.length }]
+      .concat(themes.map(t => ({ id: t, label: t, count: countFor(t) })));
+    const chips = chipDefs.map(ch => {
+      const a = ch.id === s.theme;
+      return Object.assign({}, ch, {
+        go: () => this.setState({ theme: ch.id, shown: 6, loading: false }),
+        bg: a ? '#0E6E6B' : '#FFFFFF', color: a ? '#FFFFFF' : '#585C63',
+        border: a ? '#0E6E6B' : '#D2D6DD', weight: a ? 700 : 600,
+        pillBg: a ? 'rgba(255,255,255,0.22)' : '#EEF1F5', pillColor: a ? '#FFFFFF' : '#585C63'
+      });
+    });
+
+    const filtered = s.theme === 'alles' ? items : items.filter(i => i.theme === s.theme);
+    const visible = filtered.slice(0, s.shown).map(i => Object.assign({}, i, {
+      free: !!i.free,
+      pct: i.pct || false,
+      pctW: i.pct ? i.pct + '%' : '0%',
+      pctBadge: i.pct ? i.pct + '% voltooid' : false,
+      price: i.free ? 'Gratis' : i.price,
+      priceColor: i.free ? '#166F54' : '#292C31',
+      cta: i.pct ? 'Ga verder' : 'Start opleiding'
+    }));
+
+    return {
+      chips,
+      cards: visible,
+      hasResults: filtered.length > 0,
+      isEmpty: filtered.length === 0,
+      showMore: filtered.length > s.shown || s.loading,
+      loading: s.loading,
+      notLoading: !s.loading,
+      loadMore: () => {
+        this.setState({ loading: true });
+        this._lt = setTimeout(() => this.setState({ loading: false, shown: this.state.shown + 6 }), 800);
+      },
+      clearFilter: () => this.setState({ theme: 'alles', shown: 6 })
+    };
+  }
+}
+</script>
+</body>
+</html>

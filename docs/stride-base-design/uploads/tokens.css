@@ -1,0 +1,105 @@
+/**
+ * Stride Design Tokens
+ *
+ * Single source of truth for all design values.
+ * These CSS custom properties are consumed by Tailwind config.
+ */
+
+:root {
+  /* ── Brand Colors ── */
+  --color-primary: 8 106 105;          /* #086a69 deep teal */
+  --color-primary-hover: 0 93 92;      /* #005d5c */
+  --color-primary-subtle: 232 248 247; /* #e8f8f7 very subtle teal */
+  --color-primary-light: 142 220 218;  /* #8edcda */
+  --color-primary-dark: 0 88 87;       /* #005857 */
+  --color-accent: 152 72 45;          /* #98482d terracotta */
+  --color-accent-light: 244 145 113;  /* #f49171 */
+
+  /* ── Neutral Colors (warm paper) ── */
+  --color-surface: 251 250 242;        /* #fbfaf2 */
+  --color-surface-alt: 244 244 235;    /* #f4f4eb */
+  --color-surface-card: 255 255 255;   /* #ffffff */
+  --color-border: 177 179 167;         /* #b1b3a7 ghost borders */
+  --color-border-strong: 121 124 113;  /* #797c71 */
+  --color-text: 49 51 43;             /* #31332b never pure black */
+  --color-text-muted: 94 96 86;       /* #5e6056 */
+  --color-text-inverse: 255 255 255;
+
+  /* ── Status Colors ── */
+  --color-success: 22 163 74;
+  --color-warning: 217 119 6;
+  --color-error: 172 52 52;            /* #ac3434 warmer red */
+  --color-info: 8 106 105;
+
+  /* ── Badge Colors (token-driven) ── */
+  --color-badge-open-bg: 240 253 244;
+  --color-badge-open-text: 21 128 61;
+  --color-badge-few-bg: 254 252 232;
+  --color-badge-few-text: 161 98 7;
+  --color-badge-full-bg: 254 242 242;
+  --color-badge-full-text: 153 27 27;
+  --color-badge-cancelled-bg: 249 250 251;
+  --color-badge-cancelled-text: 107 114 128;
+  --color-badge-online-bg: 232 248 247;
+  --color-badge-online-text: 8 106 105;
+  --color-badge-free-bg: 236 253 245;
+  --color-badge-free-text: 4 120 87;
+
+  /* ── Typography ── */
+  --font-sans: 'Plus Jakarta Sans', 'Manrope', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-heading: 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-serif: 'Newsreader', Georgia, 'Times New Roman', serif;
+  --font-label: 'Manrope', system-ui, sans-serif;
+
+  /* ── Spacing ── */
+  --space-section: 6rem;
+  --space-block: 3.5rem;
+  --space-element: 1.5rem;
+
+  /* ── Layout (unchanged) ── */
+  --container-max: 1280px;
+  --content-max: 960px;
+  --sidebar-width: 240px;
+  --sidebar-collapsed: 56px;
+
+  /* ── Border Radius ── */
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+
+  /* ── Shadows (warm-tinted) ── */
+  --shadow-xs: 0 1px 2px rgba(49, 51, 43, 0.03);
+  --shadow-sm: 0 2px 6px rgba(49, 51, 43, 0.04);
+  --shadow-md: 0 8px 16px -4px rgba(49, 51, 43, 0.06);
+  --shadow-lg: 0 20px 40px rgba(49, 51, 43, 0.06);
+  --shadow-overlay: 0 24px 48px -12px rgba(49, 51, 43, 0.12);
+
+  /* Tailwind-mapped aliases */
+  --shadow-card: var(--shadow-xs);
+  --shadow-elevated: var(--shadow-md);
+
+  /* ── Transitions (unchanged) ── */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+
+  /* ── Editorial Surface Containers ── */
+  --color-tertiary: 129 82 0;
+  --color-tertiary-light: 255 185 92;
+  --color-secondary-container: 221 246 239;
+  --color-surface-container: 238 238 228;
+  --color-surface-container-high: 232 233 222;
+  --color-surface-container-highest: 226 228 215;
+}
+
+/* ── Reduced Motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

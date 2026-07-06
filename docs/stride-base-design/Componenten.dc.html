@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&amp;family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #E7E8EA; }
+    @keyframes st-spin { to { transform: rotate(360deg); } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  </style>
+</helmet>
+
+<div style="min-height: 100vh; background: #E7E8EA; padding: 56px 40px 96px; display: flex; flex-direction: column; align-items: center; gap: 28px; font-family: 'Hanken Grotesk', system-ui, sans-serif; color: #292C31;">
+
+  <!-- header -->
+  <div style="width: 1240px; max-width: 100%; background: #FFFFFF; border-radius: 20px; padding: 36px 44px; box-shadow: 0 8px 16px -4px rgba(41,44,49,0.07); display: flex; justify-content: space-between; align-items: flex-end; gap: 24px; flex-wrap: wrap;">
+    <div>
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #4A5FBE;">Stride · Helder Tij · teal + korenbloem · IJs</div>
+      <div style="font-family: 'Newsreader', Georgia, serif; font-size: 36px; line-height: 1.1; margin-top: 10px;">Componentenblad</div>
+    </div>
+    <div style="font-size: 13px; color: #585C63; max-width: 420px; line-height: 1.6;">Every value here flows from the proposed <span style="font-family: monospace; font-size: 12px; background: #EEF1F5; padding: 2px 6px; border-radius: 6px;">tokens.css</span> (in the project root). Hover anything interactive — motion is 150–250ms ease-out.</div>
+  </div>
+
+  <!-- ═══ Buttons ═══ -->
+  <div data-screen-label="Buttons" style="width: 1240px; max-width: 100%; background: #FFFFFF; border-radius: 20px; padding: 32px 44px 36px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); display: flex; flex-direction: column; gap: 24px;">
+    <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Buttons</div>
+    <div style="display: flex; gap: 36px; flex-wrap: wrap; align-items: flex-end;">
+      <div style="display: flex; flex-direction: column; gap: 8px;"><button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 10px; padding: 12px 22px; cursor: pointer; transition: background 150ms cubic-bezier(0.16,1,0.3,1);" style-hover="background: #0A5E5B;">Schrijf je in</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">primair · hover = donkerder</span></div>
+      <div style="display: flex; flex-direction: column; gap: 8px;"><button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #FFFFFF; background: #094F4D; border: none; border-radius: 10px; padding: 12px 22px;">Schrijf je in</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">pressed</span></div>
+      <div style="display: flex; flex-direction: column; gap: 8px;"><button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #8A938F; background: #DCE3E2; border: none; border-radius: 10px; padding: 12px 22px; cursor: not-allowed;">Schrijf je in</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">disabled</span></div>
+      <div style="display: flex; flex-direction: column; gap: 8px;"><button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 10px; padding: 12px 22px; display: inline-flex; align-items: center; gap: 10px; cursor: wait;"><span style="width: 15px; height: 15px; border-radius: 999px; border: 2px solid rgba(255,255,255,0.35); border-top-color: #FFFFFF; animation: st-spin 700ms linear infinite; display: inline-block;"></span>Bezig met inschrijven…</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">loading</span></div>
+      <div style="display: flex; flex-direction: column; gap: 8px;"><button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #292C31; background: transparent; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 22px; cursor: pointer; transition: background 150ms cubic-bezier(0.16,1,0.3,1);" style-hover="background: #EEF1F5;">Vraag een offerte</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">ghost · hover = alt-vlak</span></div>
+      <div style="display: flex; flex-direction: column; gap: 8px;"><button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #B0B4BB; background: transparent; border: 1px solid #E3E6EB; border-radius: 10px; padding: 11px 22px; cursor: not-allowed;">Vraag een offerte</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">ghost disabled</span></div>
+    </div>
+    <div style="display: flex; gap: 36px; flex-wrap: wrap; align-items: flex-end;">
+      <div style="display: flex; flex-direction: column; gap: 8px;"><button style="font-family: inherit; font-size: 13px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer; transition: background 150ms;" style-hover="background: #0A5E5B;">Bekijk</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">sm</span></div>
+      <div style="display: flex; flex-direction: column; gap: 8px;"><button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 10px; padding: 12px 22px; cursor: pointer; transition: background 150ms;" style-hover="background: #0A5E5B;">Schrijf je in</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">md</span></div>
+      <div style="display: flex; flex-direction: column; gap: 8px;"><button style="font-family: inherit; font-size: 16px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 12px; padding: 15px 30px; cursor: pointer; transition: background 150ms;" style-hover="background: #0A5E5B;">Start deze opleiding</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">lg</span></div>
+      <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 280px; max-width: 380px;"><button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #292C31; background: transparent; border: 1px solid #D2D6DD; border-radius: 10px; padding: 12px; cursor: pointer; width: 100%; transition: background 150ms;" style-hover="background: #EEF1F5;">Toon meer</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">load-more</span></div>
+      <div style="display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 280px; max-width: 380px;"><button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #585C63; background: #EEF1F5; border: 1px solid #E3E6EB; border-radius: 10px; padding: 12px; width: 100%; display: inline-flex; align-items: center; justify-content: center; gap: 10px; cursor: wait;"><span style="width: 14px; height: 14px; border-radius: 999px; border: 2px solid #C6CBD2; border-top-color: #585C63; animation: st-spin 700ms linear infinite; display: inline-block;"></span>Laden…</button><span style="font-size: 11px; font-weight: 600; color: #90959E;">load-more · loading</span></div>
+    </div>
+  </div>
+
+  <!-- ═══ Badges + breadcrumb + tabs ═══ -->
+  <div data-screen-label="Badges en navigatie" style="width: 1240px; max-width: 100%; background: #FFFFFF; border-radius: 20px; padding: 32px 44px 36px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); display: flex; flex-direction: column; gap: 28px;">
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Statusbadges</div>
+      <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+        <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #E2F2E8; color: #17683D;">Open inschrijving</span>
+        <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #FAF3D3; color: #71610E;">Nog enkele plaatsen</span>
+        <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #FAE8E6; color: #9A2F2B;">Volzet</span>
+        <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #EEF0F3; color: #5F636A;">Geannuleerd</span>
+        <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Online</span>
+        <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #DFF3E9; color: #166F54;">Gratis</span>
+        <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">✓ Ingeschreven</span>
+        <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #EBEEF9; color: #36459C;">Traject</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Breadcrumb</div>
+      <div style="font-size: 13px; color: #767A82; display: flex; gap: 8px; align-items: center;">
+        <span style="cursor: pointer; transition: color 150ms;" style-hover="color: #292C31;">Home</span><span>›</span>
+        <span style="cursor: pointer; transition: color 150ms;" style-hover="color: #292C31;">Klassikaal</span><span>›</span>
+        <span style="color: #292C31; font-weight: 600;">Omgaan met verbale agressie</span>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 44px;">
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Tabs · paginaniveau</div>
+        <div style="display: flex; gap: 26px; box-shadow: inset 0 -1px 0 #E3E6EB;">
+          <div style="font-size: 15px; font-weight: 700; color: #0E6E6B; padding: 0 2px 12px; box-shadow: inset 0 -2px 0 #0E6E6B;">Voortgang</div>
+          <div style="font-size: 15px; font-weight: 600; color: #767A82; padding: 0 2px 12px; cursor: pointer; transition: color 150ms;" style-hover="color: #292C31;">Keuzes</div>
+          <div style="font-size: 15px; font-weight: 600; color: #767A82; padding: 0 2px 12px; cursor: pointer; transition: color 150ms;" style-hover="color: #292C31;">Materialen</div>
+          <div style="font-size: 15px; font-weight: 600; color: #767A82; padding: 0 2px 12px; cursor: pointer; transition: color 150ms;" style-hover="color: #292C31;">Berichten</div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Tabs · in kaart (segmented)</div>
+        <div style="display: inline-flex; gap: 2px; background: #EEF1F5; border-radius: 11px; padding: 4px; align-self: flex-start;">
+          <div style="font-size: 13px; font-weight: 700; color: #292C31; background: #FFFFFF; border-radius: 8px; padding: 7px 14px; box-shadow: 0 1px 2px rgba(41,44,49,0.07); display: flex; align-items: center; gap: 7px;">Wacht op mij<span style="font-size: 11px; font-weight: 700; background: #0E6E6B; color: #FFFFFF; border-radius: 999px; padding: 1px 7px;">2</span></div>
+          <div style="font-size: 13px; font-weight: 600; color: #585C63; border-radius: 8px; padding: 7px 14px; cursor: pointer; transition: color 150ms;" style-hover="color: #292C31;">Wacht op gebruiker<span style="font-size: 11px; font-weight: 700; background: #DDE1E7; color: #585C63; border-radius: 999px; padding: 1px 7px; margin-left: 7px;">1</span></div>
+          <div style="font-size: 13px; font-weight: 600; color: #585C63; border-radius: 8px; padding: 7px 14px; cursor: pointer; transition: color 150ms;" style-hover="color: #292C31;">Meldingen<span style="font-size: 11px; font-weight: 700; background: #DDE1E7; color: #585C63; border-radius: 999px; padding: 1px 7px; margin-left: 7px;">3</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Cards ═══ -->
+  <div data-screen-label="Kaarten" style="width: 1240px; max-width: 100%; background: #FFFFFF; border-radius: 20px; padding: 32px 44px 36px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); display: flex; flex-direction: column; gap: 18px;">
+    <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">De drie kaarttypes — hover om de lift te zien</div>
+    <div style="background: #F9FAFC; border-radius: 16px; padding: 24px; box-shadow: inset 0 0 0 1px rgba(41,44,49,0.05); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px;">
+      <!-- edition card -->
+      <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 24px; display: flex; flex-direction: column; gap: 14px; cursor: pointer; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);">
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Klassikaal</span>
+          <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #FAF3D3; color: #71610E;">Nog enkele plaatsen</span>
+        </div>
+        <div style="font-size: 17px; font-weight: 700; line-height: 1.35;">Omgaan met verbale agressie in de zorg</div>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #585C63;">
+          <div><strong style="color: #292C31; font-weight: 600;">21 mei en 12 juni 2026</strong> · 2 sessies</div>
+          <div>Vanderlindenstraat 15, 1030 Brussel</div>
+        </div>
+        <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 16px; font-weight: 800;">€ 245,00</span>
+          <span style="font-size: 14px; font-weight: 700; color: #0E6E6B;">Bekijk editie →</span>
+        </div>
+      </div>
+      <!-- trajectory card -->
+      <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 24px; display: flex; flex-direction: column; gap: 14px; cursor: pointer; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);">
+        <div style="display: flex; gap: 6px;">
+          <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #EBEEF9; color: #36459C;">Traject</span>
+        </div>
+        <div style="font-size: 17px; font-weight: 700; line-height: 1.35;">Begeleider buitenschoolse kinderopvang</div>
+        <div style="display: flex; align-items: center; gap: 0;">
+          <span style="width: 12px; height: 12px; border-radius: 999px; background: #0E6E6B; flex-shrink: 0;"></span><span style="height: 2px; flex: 1; background: #0E6E6B;"></span>
+          <span style="width: 12px; height: 12px; border-radius: 999px; background: #0E6E6B; flex-shrink: 0;"></span><span style="height: 2px; flex: 1; background: #D2D6DD;"></span>
+          <span style="width: 12px; height: 12px; border-radius: 999px; background: #FFFFFF; box-shadow: inset 0 0 0 2px #D2D6DD; flex-shrink: 0;"></span><span style="height: 2px; flex: 1; background: #D2D6DD;"></span>
+          <span style="width: 12px; height: 12px; border-radius: 999px; background: #FFFFFF; box-shadow: inset 0 0 0 2px #D2D6DD; flex-shrink: 0;"></span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #585C63;">
+          <div><strong style="color: #292C31; font-weight: 600;">4 opleidingen</strong> · waarvan 1 keuzemodule</div>
+          <div>Start september 2026 · ± 6 maanden</div>
+        </div>
+        <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 16px; font-weight: 800;">€ 1.150,00</span>
+          <span style="font-size: 14px; font-weight: 700; color: #0E6E6B;">Bekijk traject →</span>
+        </div>
+      </div>
+      <!-- online card -->
+      <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 24px; display: flex; flex-direction: column; gap: 14px; cursor: pointer; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);">
+        <div style="display: flex; gap: 6px;">
+          <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Online</span>
+          <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #DFF3E9; color: #166F54;">Gratis</span>
+        </div>
+        <div style="font-size: 17px; font-weight: 700; line-height: 1.35;">Privacy en beroepsgeheim in de praktijk</div>
+        <div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: #585C63;">
+          <div>Op eigen tempo · ± 2 uur</div>
+          <div>E-learning met afsluitende toets</div>
+        </div>
+        <div style="margin-top: auto; display: flex; justify-content: space-between; align-items: center;">
+          <span style="font-size: 13px; font-weight: 700; color: #166F54;">Gratis</span>
+          <span style="font-size: 14px; font-weight: 700; color: #0E6E6B;">Start opleiding →</span>
+        </div>
+      </div>
+    </div>
+    <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82; margin-top: 8px;">Ingeschreven-varianten</div>
+    <div style="background: #F9FAFC; border-radius: 16px; padding: 24px; box-shadow: inset 0 0 0 1px rgba(41,44,49,0.05); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 18px;">
+      <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Klassikaal</span>
+          <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">✓ Ingeschreven</span>
+        </div>
+        <div style="font-size: 17px; font-weight: 700; line-height: 1.35;">Omgaan met verbale agressie in de zorg</div>
+        <div style="font-size: 13px; color: #585C63;"><strong style="color: #292C31; font-weight: 600;">Volgende sessie:</strong> do 21 mei 2026, 09:30</div>
+        <div style="margin-top: auto;"><span style="font-size: 14px; font-weight: 700; color: #0E6E6B;">Bekijk je inschrijving →</span></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+        <div style="display: flex; gap: 6px;">
+          <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Online</span>
+        </div>
+        <div style="font-size: 17px; font-weight: 700; line-height: 1.35;">Privacy en beroepsgeheim in de praktijk</div>
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #585C63; margin-bottom: 6px;"><span>60% voltooid</span><span style="font-variant-numeric: tabular-nums;">3/5 modules</span></div>
+          <div style="height: 7px; border-radius: 999px; background: #EEF1F5; overflow: hidden;"><div style="height: 100%; width: 60%; border-radius: 999px; background: #0E6E6B; transition: width 250ms cubic-bezier(0.16,1,0.3,1);"></div></div>
+        </div>
+        <div style="margin-top: auto;"><span style="font-size: 14px; font-weight: 700; color: #0E6E6B;">Ga verder →</span></div>
+      </div>
+      <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 24px; display: flex; flex-direction: column; gap: 14px; opacity: 0.85;">
+        <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+          <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Klassikaal</span>
+          <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #EEF0F3; color: #5F636A;">Geannuleerd</span>
+        </div>
+        <div style="font-size: 17px; font-weight: 700; line-height: 1.35; color: #585C63;">Werken met een zorgplan</div>
+        <div style="font-size: 13px; color: #585C63;">Deze editie werd geannuleerd. Je werd per e-mail verwittigd.</div>
+        <div style="margin-top: auto;"><span style="font-size: 14px; font-weight: 700; color: #0E6E6B;">Bekijk alternatieven →</span></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Session row + progress ═══ -->
+  <div data-screen-label="Sessierij en voortgang" style="width: 1240px; max-width: 100%; background: #FFFFFF; border-radius: 20px; padding: 32px 44px 36px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); display: grid; grid-template-columns: 1.4fr 1fr; gap: 44px;">
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Sessierij</div>
+      <div style="background: #F9FAFC; border-radius: 14px; padding: 16px; box-shadow: inset 0 0 0 1px rgba(41,44,49,0.05); display: flex; flex-direction: column; gap: 10px;">
+        <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 14px 18px; display: flex; align-items: center; gap: 16px;">
+          <div style="width: 50px; height: 50px; border-radius: 11px; background: #E2F0EE; color: #0B5F5C; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;"><span style="font-size: 17px; font-weight: 800; line-height: 1;">21</span><span style="font-size: 10px; font-weight: 700; text-transform: uppercase;">mei</span></div>
+          <div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 700;">Sessie 1 — Herkennen en de-escaleren</div><div style="font-size: 13px; color: #585C63;">donderdag 21 mei 2026</div></div>
+          <div style="text-align: right;"><div style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;">09:30 – 16:30</div><div style="font-size: 12px; color: #767A82;">Vanderlindenstraat 15, Brussel</div></div>
+        </div>
+        <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 14px 18px; display: flex; align-items: center; gap: 16px; opacity: 0.6;">
+          <div style="width: 50px; height: 50px; border-radius: 11px; background: #EEF1F5; color: #585C63; display: flex; flex-direction: column; align-items: center; justify-content: center; flex-shrink: 0;"><span style="font-size: 17px; font-weight: 800; line-height: 1;">7</span><span style="font-size: 10px; font-weight: 700; text-transform: uppercase;">mei</span></div>
+          <div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: 700;">Sessie 0 — Intake (voorbij)</div><div style="font-size: 13px; color: #585C63;">donderdag 7 mei 2026</div></div>
+          <div style="text-align: right;"><div style="font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums;">09:30 – 12:30</div><div style="font-size: 12px; color: #767A82;">Online via Teams</div></div>
+        </div>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Voortgang · balk en ring</div>
+      <div style="display: flex; flex-direction: column; gap: 16px;">
+        <div>
+          <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #585C63; margin-bottom: 6px;"><span>3 van 5 stappen afgerond</span><span style="font-variant-numeric: tabular-nums;">60%</span></div>
+          <div style="height: 8px; border-radius: 999px; background: #EEF1F5; overflow: hidden;"><div style="height: 100%; width: 60%; border-radius: 999px; background: #0E6E6B;"></div></div>
+        </div>
+        <div style="display: flex; align-items: center; gap: 18px;">
+          <div style="position: relative; width: 72px; height: 72px;">
+            <svg width="72" height="72" viewBox="0 0 72 72" style="transform: rotate(-90deg);">
+              <circle cx="36" cy="36" r="30" fill="none" stroke="#EEF1F5" stroke-width="7"></circle>
+              <circle cx="36" cy="36" r="30" fill="none" stroke="#0E6E6B" stroke-width="7" stroke-linecap="round" stroke-dasharray="135.7 188.5"></circle>
+            </svg>
+            <div style="position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums;">72%</div>
+          </div>
+          <div style="font-size: 13px; color: #585C63; line-height: 1.5;">Voortgangsring — dashboard en trajectoverzicht.<br>Vulling start geanimeerd vanaf 0 (250ms, ease-out).</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Form fields ═══ -->
+  <div data-screen-label="Formuliervelden" style="width: 1240px; max-width: 100%; background: #FFFFFF; border-radius: 20px; padding: 32px 44px 40px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); display: flex; flex-direction: column; gap: 22px;">
+    <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Formuliervelden</div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 24px;">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 13px; font-weight: 600;">Voornaam</label>
+        <div style="border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; font-size: 15px; background: #FFFFFF; color: #292C31;">An</div>
+        <span style="font-size: 11px; font-weight: 600; color: #90959E;">default</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 13px; font-weight: 600;">E-mailadres</label>
+        <div style="border: 1px solid #0E6E6B; border-radius: 10px; padding: 11px 14px; font-size: 15px; background: #FFFFFF; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);">an.vermeulen@zorg<span style="display: inline-block; width: 1px; height: 15px; background: #292C31; vertical-align: text-bottom;"></span></div>
+        <span style="font-size: 11px; font-weight: 600; color: #90959E;">focus · zichtbare ring</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 13px; font-weight: 600;">E-mailadres</label>
+        <div style="border: 1px solid #B23838; border-radius: 10px; padding: 11px 14px; font-size: 15px; background: #FFFFFF; box-shadow: 0 0 0 3px rgba(178,56,56,0.1);">an.vermeulen@</div>
+        <span style="font-size: 12px; font-weight: 600; color: #B23838;">Vul een geldig e-mailadres in.</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 13px; font-weight: 600; color: #90959E;">Rijksregisternummer</label>
+        <div style="border: 1px solid #E3E6EB; border-radius: 10px; padding: 11px 14px; font-size: 15px; background: #EEF1F5; color: #90959E; cursor: not-allowed;">••.••.••-•••.••</div>
+        <span style="font-size: 11px; font-weight: 600; color: #90959E;">disabled</span>
+      </div>
+    </div>
+    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 24px; align-items: start;">
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 13px; font-weight: 600;">Organisatie</label>
+        <div style="border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; font-size: 15px; background: #FFFFFF; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: border-color 150ms;" style-hover="border-color: #90959E;"><span>vzw De Sloep, Gent</span><span style="color: #767A82; font-size: 12px;">▾</span></div>
+        <span style="font-size: 11px; font-weight: 600; color: #90959E;">select</span>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <label style="font-size: 13px; font-weight: 600;">Checkbox</label>
+        <div style="display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer;">
+          <span style="width: 22px; height: 22px; border-radius: 6px; background: #0E6E6B; color: #FFFFFF; display: grid; place-items: center; font-size: 13px; font-weight: 800; flex-shrink: 0;">✓</span>
+          <span style="font-size: 14px;">Ik ga akkoord met de algemene voorwaarden</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer;">
+          <span style="width: 22px; height: 22px; border-radius: 6px; background: #FFFFFF; border: 1.5px solid #D2D6DD; flex-shrink: 0; transition: border-color 150ms;" style-hover="border-color: #90959E;"></span>
+          <span style="font-size: 14px; color: #585C63;">Hou me op de hoogte van nieuwe edities</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 10px;">
+        <label style="font-size: 13px; font-weight: 600;">Facturatie aan</label>
+        <div style="display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer;">
+          <span style="width: 22px; height: 22px; border-radius: 999px; background: #FFFFFF; border: 6.5px solid #0E6E6B; flex-shrink: 0; box-sizing: border-box;"></span>
+          <span style="font-size: 14px;">Mezelf</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer;">
+          <span style="width: 22px; height: 22px; border-radius: 999px; background: #FFFFFF; border: 1.5px solid #D2D6DD; flex-shrink: 0; box-sizing: border-box; transition: border-color 150ms;" style-hover="border-color: #90959E;"></span>
+          <span style="font-size: 14px; color: #585C63;">Mijn werkgever</span>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;">
+        <label style="font-size: 13px; font-weight: 600;">Opmerking <span style="font-weight: 400; color: #767A82;">(optioneel)</span></label>
+        <div style="border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; font-size: 15px; background: #FFFFFF; color: #90959E; min-height: 64px;">Bv. dieetwensen voor de lunch…</div>
+        <span style="font-size: 11px; font-weight: 600; color: #90959E;">textarea · placeholder</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Empty / error / toast ═══ -->
+  <div data-screen-label="Lege staat, fout en toast" style="width: 1240px; max-width: 100%; background: #FFFFFF; border-radius: 20px; padding: 32px 44px 40px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 28px;">
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Lege staat</div>
+      <div style="background: #F9FAFC; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(41,44,49,0.05); padding: 40px 28px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; flex: 1;">
+        <div style="width: 56px; height: 56px; border-radius: 999px; background: #FFFFFF; box-shadow: 0 2px 6px rgba(41,44,49,0.06); display: grid; place-items: center;">
+          <svg width="22" height="22" viewBox="0 0 22 22"><circle cx="9" cy="9" r="6.5" fill="none" stroke="#767A82" stroke-width="2"></circle><line x1="14" y1="14" x2="19" y2="19" stroke="#767A82" stroke-width="2" stroke-linecap="round"></line></svg>
+        </div>
+        <div style="font-size: 16px; font-weight: 700;">Geen opleidingen gevonden</div>
+        <div style="font-size: 13px; color: #585C63; line-height: 1.6; max-width: 240px;">Geen resultaat binnen dit thema. Pas je filters aan of bekijk het volledige aanbod.</div>
+        <button style="font-family: inherit; font-size: 13px; font-weight: 700; color: #292C31; background: #FFFFFF; border: 1px solid #D2D6DD; border-radius: 9px; padding: 9px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;">Wis filters</button>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Foutstaat</div>
+      <div style="background: #F9FAFC; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(41,44,49,0.05); padding: 40px 28px; display: flex; flex-direction: column; align-items: center; text-align: center; gap: 12px; flex: 1;">
+        <div style="width: 56px; height: 56px; border-radius: 999px; background: #FAE8E6; color: #9A2F2B; display: grid; place-items: center; font-size: 22px; font-weight: 800;">!</div>
+        <div style="font-size: 16px; font-weight: 700;">Er ging iets mis</div>
+        <div style="font-size: 13px; color: #585C63; line-height: 1.6; max-width: 240px;">We konden het aanbod niet laden. Probeer het opnieuw — blijft het misgaan, contacteer ons.</div>
+        <button style="font-family: inherit; font-size: 13px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 9px; padding: 10px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #0A5E5B;">Opnieuw proberen</button>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Toast · schuift in van rechts</div>
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 24px 48px -12px rgba(41,44,49,0.14); padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start;">
+          <div style="width: 28px; height: 28px; border-radius: 999px; background: #E2F2E8; color: #17683D; display: grid; place-items: center; font-size: 14px; font-weight: 800; flex-shrink: 0;">✓</div>
+          <div style="flex: 1;"><div style="font-size: 14px; font-weight: 700;">Inschrijving bevestigd</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">Je ontvangt een bevestiging per e-mail.</div></div>
+          <div style="font-size: 16px; color: #90959E; cursor: pointer; line-height: 1; transition: color 150ms;" style-hover="color: #292C31;">×</div>
+        </div>
+        <div style="background: #FFFFFF; border-radius: 12px; box-shadow: 0 24px 48px -12px rgba(41,44,49,0.14); padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start;">
+          <div style="width: 28px; height: 28px; border-radius: 999px; background: #FAE8E6; color: #9A2F2B; display: grid; place-items: center; font-size: 14px; font-weight: 800; flex-shrink: 0;">!</div>
+          <div style="flex: 1;"><div style="font-size: 14px; font-weight: 700;">Opslaan mislukt</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">Controleer je verbinding en probeer opnieuw.</div></div>
+          <div style="font-size: 16px; color: #90959E; cursor: pointer; line-height: 1; transition: color 150ms;" style-hover="color: #292C31;">×</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Sidebar / notification / stat ═══ -->
+  <div data-screen-label="Sidebar, meldingen en statkaarten" style="width: 1240px; max-width: 100%; background: #FFFFFF; border-radius: 20px; padding: 32px 44px 40px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); display: grid; grid-template-columns: 300px 90px 1fr; gap: 36px;">
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Sidebar-navigatie · 240px</div>
+      <div style="background: #F9FAFC; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(41,44,49,0.05); padding: 14px; display: flex; flex-direction: column; gap: 2px;">
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;"><span style="width: 20px; height: 20px; border-radius: 6px; background: #DDE1E7; flex-shrink: 0;"></span><span style="font-size: 14px; font-weight: 600; color: #585C63;">Home</span></div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; background: #E2F0EE; cursor: pointer;"><span style="width: 20px; height: 20px; border-radius: 6px; background: #0E6E6B; flex-shrink: 0;"></span><span style="font-size: 14px; font-weight: 700; color: #0B5F5C;">Opleidingen</span></div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;"><span style="width: 20px; height: 20px; border-radius: 6px; background: #DDE1E7; flex-shrink: 0;"></span><span style="font-size: 14px; font-weight: 600; color: #585C63;">Trajecten</span></div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;"><span style="width: 20px; height: 20px; border-radius: 6px; background: #DDE1E7; flex-shrink: 0;"></span><span style="font-size: 14px; font-weight: 600; color: #585C63;">Offertes</span></div>
+        <div style="height: 1px; background: #E3E6EB; margin: 8px 4px;"></div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;"><span style="width: 20px; height: 20px; border-radius: 6px; background: #DDE1E7; flex-shrink: 0;"></span><span style="font-size: 14px; font-weight: 600; color: #585C63; flex: 1;">Meldingen</span><span style="font-size: 11px; font-weight: 700; background: #4A5FBE; color: #FFFFFF; border-radius: 999px; padding: 1px 7px;">3</span></div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;"><span style="width: 20px; height: 20px; border-radius: 6px; background: #DDE1E7; flex-shrink: 0;"></span><span style="font-size: 14px; font-weight: 600; color: #585C63;">Certificaten</span></div>
+        <div style="height: 1px; background: #E3E6EB; margin: 8px 4px;"></div>
+        <div style="display: flex; align-items: center; gap: 12px; padding: 8px 12px;"><span style="width: 32px; height: 32px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C; display: grid; place-items: center; font-size: 12px; font-weight: 800; flex-shrink: 0;">AV</span><div style="min-width: 0;"><div style="font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">An Vermeulen</div><div style="font-size: 11px; color: #767A82;">vzw De Sloep</div></div></div>
+      </div>
+      <div style="font-size: 12px; color: #767A82; line-height: 1.5;">Icons = placeholders — echte set (bv. Lucide, stroke 1.75) volgt in de schermen.</div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 14px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">56px</div>
+      <div style="background: #F9FAFC; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(41,44,49,0.05); padding: 14px 0; display: flex; flex-direction: column; align-items: center; gap: 6px; width: 56px;">
+        <div style="width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;"><span style="width: 20px; height: 20px; border-radius: 6px; background: #DDE1E7;"></span></div>
+        <div style="width: 38px; height: 38px; border-radius: 10px; background: #E2F0EE; display: grid; place-items: center; cursor: pointer;"><span style="width: 20px; height: 20px; border-radius: 6px; background: #0E6E6B;"></span></div>
+        <div style="position: relative; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;"><span style="width: 20px; height: 20px; border-radius: 6px; background: #DDE1E7;"></span><span style="position: absolute; top: 5px; right: 5px; width: 9px; height: 9px; border-radius: 999px; background: #4A5FBE; box-shadow: 0 0 0 2px #F9FAFC;"></span></div>
+        <div style="height: 1px; background: #E3E6EB; width: 26px; margin: 4px 0;"></div>
+        <span style="width: 32px; height: 32px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C; display: grid; place-items: center; font-size: 12px; font-weight: 800;">AV</span>
+      </div>
+    </div>
+    <div style="display: flex; flex-direction: column; gap: 26px;">
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Meldingsitems</div>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <div style="background: #F4F6FC; border-radius: 12px; padding: 13px 16px; display: flex; gap: 12px; align-items: flex-start; cursor: pointer; transition: background 150ms;" style-hover="background: #EDF0FA;">
+            <span style="width: 8px; height: 8px; border-radius: 999px; background: #4A5FBE; margin-top: 6px; flex-shrink: 0;"></span>
+            <div style="flex: 1;"><div style="font-size: 14px; font-weight: 700;">Je attest staat klaar</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">Omgaan met verbale agressie — download het bij Certificaten.</div></div>
+            <span style="font-size: 12px; color: #767A82; white-space: nowrap;">2 u geleden</span>
+          </div>
+          <div style="background: #FFFFFF; border-radius: 12px; box-shadow: inset 0 0 0 1px #E3E6EB; padding: 13px 16px; display: flex; gap: 12px; align-items: flex-start; cursor: pointer; transition: background 150ms;" style-hover="background: #F9FAFC;">
+            <span style="width: 8px; height: 8px; border-radius: 999px; background: transparent; margin-top: 6px; flex-shrink: 0;"></span>
+            <div style="flex: 1;"><div style="font-size: 14px; font-weight: 600; color: #585C63;">Herinnering: sessie morgen om 09:30</div><div style="font-size: 13px; color: #767A82; margin-top: 2px;">Vanderlindenstraat 15, 1030 Brussel.</div></div>
+            <span style="font-size: 12px; color: #90959E; white-space: nowrap;">gisteren</span>
+          </div>
+        </div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 14px;">
+        <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Statkaarten</div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px;">
+          <div style="background: #F9FAFC; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(41,44,49,0.05); padding: 18px 20px;"><div style="font-size: 13px; font-weight: 600; color: #585C63;">Actieve inschrijvingen</div><div style="font-size: 30px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums;">4</div><div style="font-size: 12px; color: #767A82; margin-top: 2px;">waarvan 1 wacht op actie</div></div>
+          <div style="background: #F9FAFC; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(41,44,49,0.05); padding: 18px 20px;"><div style="font-size: 13px; font-weight: 600; color: #585C63;">Behaalde certificaten</div><div style="font-size: 30px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums;">7</div><div style="font-size: 12px; color: #166F54; font-weight: 700; margin-top: 2px;">+2 dit jaar</div></div>
+          <div style="background: #F9FAFC; border-radius: 14px; box-shadow: inset 0 0 0 1px rgba(41,44,49,0.05); padding: 18px 20px;"><div style="font-size: 13px; font-weight: 600; color: #585C63;">Openstaande offertes</div><div style="font-size: 30px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums;">1</div><div style="font-size: 12px; color: #71610E; font-weight: 700; margin-top: 2px;">wacht op goedkeuring</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- next -->
+  <div style="width: 1240px; max-width: 100%; background: #FFFFFF; border-radius: 20px; padding: 28px 44px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); display: flex; justify-content: space-between; align-items: center; gap: 24px; flex-wrap: wrap;">
+    <div style="font-size: 14px; color: #585C63; line-height: 1.6;"><strong style="color: #292C31;">Next:</strong> dashboard <span style="font-family: monospace; font-size: 12px; background: #EEF1F5; padding: 2px 6px; border-radius: 6px;">/mijn-account/</span> — built entirely from these components.</div>
+    <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #4A5FBE;">tokens.css · v2 staat in de projectroot</div>
+  </div>
+
+</div>
+
+</x-dc>
+</body>
+</html>

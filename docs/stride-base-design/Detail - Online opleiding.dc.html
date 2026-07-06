@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&amp;family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #F9FAFC; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  </style>
+</helmet>
+
+<div data-screen-label="Detail — Online opleiding" style="min-height: 100vh; background: #F9FAFC; font-family: 'Hanken Grotesk', system-ui, sans-serif; color: #292C31; padding-bottom: {{ pagePadBottom }};">
+
+  <!-- site header -->
+  <div style="background: #FFFFFF; box-shadow: 0 1px 0 #E3E6EB; padding: 16px clamp(20px, 4vw, 48px); display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+    <div style="font-size: 20px; font-weight: 800; letter-spacing: -0.02em;">stride<span style="color: #0E6E6B;">.</span></div>
+    <div style="display: flex; gap: clamp(14px, 2.5vw, 30px); font-size: 15px; font-weight: 600; color: #585C63;">
+      <a href="Catalogus — Trajecten.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Trajecten</a>
+      <a href="Catalogus — Klassikaal.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Klassikaal</a>
+      <a href="Catalogus — Online.dc.html" style="color: #0E6E6B; text-decoration: none;">Online</a>
+      <a href="Contact.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Contact</a>
+    </div>
+    <a href="Dashboard — Mijn account.dc.html" style="font-size: 14px; font-weight: 700; color: #292C31; text-decoration: none; border: 1px solid #D2D6DD; border-radius: 10px; padding: 9px 18px; transition: background 150ms;" style-hover="background: #EEF1F5;">Mijn account</a>
+  </div>
+
+  <!-- header band -->
+  <div style="background: #EEF1F5; padding: clamp(24px, 4vw, 40px) clamp(20px, 4vw, 48px) clamp(22px, 3.5vw, 34px);">
+    <div style="max-width: 1280px; margin: 0 auto;">
+      <div style="font-size: 13px; color: #767A82; display: flex; gap: 8px; flex-wrap: wrap;">
+        <a href="Homepage.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Home</a><span>›</span>
+        <a href="Catalogus — Online.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Online</a><span>›</span>
+        <span style="color: #292C31; font-weight: 600;">Privacy en beroepsgeheim</span>
+      </div>
+      <div style="display: flex; gap: 8px; margin-top: 18px;">
+        <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Online</span>
+        <span style="font-size: 12px; font-weight: 700; padding: 4px 11px; border-radius: 999px; background: #DFF3E9; color: #166F54;">Gratis</span>
+      </div>
+      <h1 style="font-family: 'Newsreader', Georgia, serif; font-weight: 400; font-size: clamp(30px, 4.5vw, 44px); line-height: 1.12; max-width: 760px; margin: 14px 0 12px;">Privacy en beroepsgeheim in de praktijk</h1>
+      <div style="display: flex; gap: 10px; align-items: center; font-size: 15px; color: #585C63; flex-wrap: wrap;">
+        <span>Op eigen tempo</span><span style="color: #B6B8AE;">·</span>
+        <span>± 2 uur</span><span style="color: #B6B8AE;">·</span>
+        <span>5 modules</span><span style="color: #B6B8AE;">·</span>
+        <span>met afsluitende toets</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- content -->
+  <div style="max-width: 1280px; margin: 0 auto; padding: clamp(20px, 3vw, 36px) clamp(20px, 4vw, 48px) 64px; display: flex; gap: clamp(24px, 4vw, 48px); flex-wrap: wrap; align-items: flex-start;">
+
+    <!-- main: LearnDash-rendered content, styled via CSS -->
+    <div style="flex: 1 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 28px;">
+      <div style="display: flex; flex-direction: column; gap: 16px; font-size: 16px; line-height: 1.7; color: #43454C;">
+        <p style="margin: 0;">Wat mag je delen met collega's, ouders of de politie — en wat niet? Deze module maakt het beroepsgeheim concreet met herkenbare situaties uit zorg en welzijn, telkens met een duidelijke vuistregel.</p>
+      </div>
+
+      <!-- lesson list (LearnDash markup, gestyled via tokens) -->
+      <div style="display: flex; flex-direction: column; gap: 12px;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline; gap: 14px; flex-wrap: wrap;">
+          <div style="font-size: 18px; font-weight: 700;">Inhoud van de opleiding</div>
+          <div style="font-size: 13px; font-weight: 700; color: #166F54;">3 van 5 modules afgerond</div>
+        </div>
+        <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); display: flex; flex-direction: column;">
+          <div style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: background 150ms;" style-hover="background: #F9FAFC;">
+            <span style="width: 24px; height: 24px; border-radius: 999px; background: #E2F2E8; color: #17683D; font-size: 13px; font-weight: 800; display: grid; place-items: center; flex-shrink: 0;">✓</span>
+            <div style="flex: 1; min-width: 0;"><div style="font-size: 15px; font-weight: 600; color: #585C63;">1 · Wat valt onder het beroepsgeheim?</div></div>
+            <span style="font-size: 12px; color: #90959E; font-variant-numeric: tabular-nums;">20 min</span>
+          </div>
+          <div style="height: 1px; background: #EEF1F5; margin: 0 20px;"></div>
+          <div style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: background 150ms;" style-hover="background: #F9FAFC;">
+            <span style="width: 24px; height: 24px; border-radius: 999px; background: #E2F2E8; color: #17683D; font-size: 13px; font-weight: 800; display: grid; place-items: center; flex-shrink: 0;">✓</span>
+            <div style="flex: 1; min-width: 0;"><div style="font-size: 15px; font-weight: 600; color: #585C63;">2 · Delen met collega's: het gedeeld beroepsgeheim</div></div>
+            <span style="font-size: 12px; color: #90959E; font-variant-numeric: tabular-nums;">25 min</span>
+          </div>
+          <div style="height: 1px; background: #EEF1F5; margin: 0 20px;"></div>
+          <div style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; cursor: pointer; transition: background 150ms;" style-hover="background: #F9FAFC;">
+            <span style="width: 24px; height: 24px; border-radius: 999px; background: #E2F2E8; color: #17683D; font-size: 13px; font-weight: 800; display: grid; place-items: center; flex-shrink: 0;">✓</span>
+            <div style="flex: 1; min-width: 0;"><div style="font-size: 15px; font-weight: 600; color: #585C63;">3 · Dossiervorming en notities</div></div>
+            <span style="font-size: 12px; color: #90959E; font-variant-numeric: tabular-nums;">20 min</span>
+          </div>
+          <div style="height: 1px; background: #EEF1F5; margin: 0 20px;"></div>
+          <div style="padding: 16px 20px; display: flex; align-items: center; gap: 14px; cursor: pointer; background: #E2F0EE; transition: background 150ms;">
+            <span style="width: 24px; height: 24px; border-radius: 999px; background: #0E6E6B; display: grid; place-items: center; flex-shrink: 0;"><span style="width: 8px; height: 8px; border-radius: 999px; background: #FFFFFF;"></span></span>
+            <div style="flex: 1; min-width: 0;"><div style="font-size: 15px; font-weight: 700;">4 · Beeldmateriaal en toestemming</div><div style="font-size: 12px; font-weight: 700; color: #0B5F5C; margin-top: 2px;">Hier ben je gebleven</div></div>
+            <span style="font-size: 12px; color: #585C63; font-variant-numeric: tabular-nums;">25 min</span>
+          </div>
+          <div style="height: 1px; background: #EEF1F5; margin: 0 20px;"></div>
+          <div style="padding: 16px 20px; display: flex; align-items: center; gap: 14px;">
+            <span style="width: 24px; height: 24px; border-radius: 999px; background: #FFFFFF; box-shadow: inset 0 0 0 1.5px #D2D6DD; flex-shrink: 0;"></span>
+            <div style="flex: 1; min-width: 0;"><div style="font-size: 15px; font-weight: 600; color: #90959E;">5 · Afsluitende toets</div></div>
+            <span style="font-size: 12px; color: #B0B4BB; font-variant-numeric: tabular-nums;">30 min</span>
+          </div>
+        </div>
+        <div style="font-size: 12px; color: #767A82; line-height: 1.6;">Deze lijst is LearnDash-markup — in de implementatie wordt ze enkel via CSS-overrides op de tokens gestyled, nooit vervangen.</div>
+      </div>
+    </div>
+
+    <!-- sidebar CTA panel (desktop) -->
+    <sc-if value="{{ notMobile }}" hint-placeholder-val="{{ true }}">
+      <div style="flex: 0 1 360px; min-width: 300px; display: flex; flex-direction: column; gap: 14px; position: sticky; top: 24px;">
+        <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 8px 16px -4px rgba(41,44,49,0.07); padding: 28px;">
+          <div style="display: flex; align-items: center; gap: 18px;">
+            <div style="position: relative; width: 64px; height: 64px; flex-shrink: 0;">
+              <svg width="64" height="64" viewBox="0 0 64 64" style="transform: rotate(-90deg);">
+                <circle cx="32" cy="32" r="26" fill="none" stroke="#EEF1F5" stroke-width="6"></circle>
+                <circle cx="32" cy="32" r="26" fill="none" stroke="#0E6E6B" stroke-width="6" stroke-linecap="round" stroke-dasharray="{{ ringDash }}" style="transition: stroke-dasharray 900ms cubic-bezier(0.16,1,0.3,1);"></circle>
+              </svg>
+              <div style="position: absolute; inset: 0; display: grid; place-items: center; font-size: 13px; font-weight: 800; font-variant-numeric: tabular-nums;">60%</div>
+            </div>
+            <div><div style="font-size: 15px; font-weight: 700;">Goed bezig, An</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">Nog 2 modules — ± 55 min</div></div>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 22px;">
+            <button style="font-family: inherit; font-size: 16px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 12px; padding: 14px; cursor: pointer; min-height: 48px; transition: background 150ms cubic-bezier(0.16,1,0.3,1);" style-hover="background: #0A5E5B;">Ga verder met module 4</button>
+          </div>
+          <div style="height: 1px; background: #E3E6EB; margin: 20px 0 16px;"></div>
+          <div style="display: flex; flex-direction: column; gap: 8px; font-size: 13px; color: #585C63;">
+            <div style="display: flex; gap: 8px; align-items: center;"><span style="color: #0E6E6B; font-weight: 800;">✓</span> Gratis voor de hele sector</div>
+            <div style="display: flex; gap: 8px; align-items: center;"><span style="color: #0E6E6B; font-weight: 800;">✓</span> Certificaat na de afsluitende toets</div>
+            <div style="display: flex; gap: 8px; align-items: center;"><span style="color: #0E6E6B; font-weight: 800;">✓</span> Je voortgang wordt automatisch bewaard</div>
+          </div>
+        </div>
+        <div style="background: #EBEEF9; border-radius: 14px; padding: 18px 22px; font-size: 14px; color: #36459C; display: flex; justify-content: space-between; align-items: center; cursor: pointer; transition: background 150ms;" style-hover="background: #DFE4F4;"><span style="font-weight: 600;">Liever klassikaal?</span><span style="font-weight: 700;">Bekijk de edities →</span></div>
+      </div>
+    </sc-if>
+
+  </div>
+
+  <!-- sticky mobile CTA -->
+  <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; left: 0; right: 0; bottom: 0; background: #FFFFFF; box-shadow: 0 -4px 16px rgba(41,44,49,0.1); padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); display: flex; gap: 14px; align-items: center; z-index: 40;">
+      <div style="flex: 1; min-width: 0;">
+        <div style="font-size: 14px; font-weight: 800;">60% voltooid</div>
+        <div style="font-size: 12px; color: #585C63;">Nog 2 modules · ± 55 min</div>
+      </div>
+      <button style="font-family: inherit; font-size: 15px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 11px; padding: 13px 24px; cursor: pointer; min-height: 48px; transition: background 150ms;" style-hover="background: #0A5E5B;">Ga verder</button>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { isMobile: false, mounted: false };
+
+  componentDidMount() {
+    this._onR = () => this.setState({ isMobile: window.innerWidth < 820 });
+    window.addEventListener('resize', this._onR);
+    this._onR();
+    this._mt = setTimeout(() => this.setState({ mounted: true }), 120);
+  }
+  componentWillUnmount() { window.removeEventListener('resize', this._onR); clearTimeout(this._mt); }
+
+  renderVals() {
+    const s = this.state;
+    return {
+      isMobile: s.isMobile, notMobile: !s.isMobile,
+      pagePadBottom: s.isMobile ? '96px' : '0px',
+      ringDash: s.mounted ? '98 163.4' : '0 163.4'
+    };
+  }
+}
+</script>
+</body>
+</html>

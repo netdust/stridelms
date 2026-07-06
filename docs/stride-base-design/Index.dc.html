@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&amp;family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;1,6..72,400&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #E7E8EA; }
+  </style>
+</helmet>
+
+<div data-screen-label="Index" style="min-height: 100vh; background: #E7E8EA; padding: 56px clamp(20px, 4vw, 40px) 96px; font-family: 'Hanken Grotesk', system-ui, sans-serif; color: #292C31; display: flex; flex-direction: column; align-items: center; gap: 28px;">
+
+  <div style="width: 980px; max-width: 100%; display: flex; flex-direction: column; gap: 10px;">
+    <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: #4A5FBE;">Stride · reskin Helder Tij · teal + korenbloem · IJs</div>
+    <div style="font-family: 'Newsreader', Georgia, serif; font-size: clamp(32px, 5vw, 44px); line-height: 1.1;">Alle schermen</div>
+    <div style="font-size: 14px; color: #585C63; line-height: 1.6; max-width: 620px;">10 schermen + componentenblad, allemaal op de voorgestelde <span style="font-family: monospace; font-size: 12px; background: #DDDFE3; padding: 2px 6px; border-radius: 6px;">tokens.css</span>. Alles is responsive — versmal het venster voor mobiel (de detailpagina's krijgen dan de sticky CTA-balk, het dashboard de mobiele navigatie).</div>
+  </div>
+
+  <div style="width: 980px; max-width: 100%; display: flex; flex-direction: column; gap: 24px;">
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Fundament</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+        <a href="Componenten.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Componentenblad</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">alle componenten, alle states</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+        <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px;"><div><div style="font-size: 15px; font-weight: 700;">tokens.css</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">v2-voorstel in de projectroot</div></div><span style="font-family: monospace; font-size: 11px; color: #767A82;">CSS</span></div>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Dashboard</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+        <a href="Dashboard — Mijn account.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Mijn account</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">8 tabs · inklapbare sidebar · toasts</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Catalogus</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+        <a href="Catalogus — Trajecten.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Trajecten</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">journey-kaarten · filters</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+        <a href="Catalogus — Klassikaal.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Klassikaal</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">filters · toon meer · lege staat</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+        <a href="Catalogus — Online.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Online</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">gratis-badges · voortgang op kaart</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Detailpagina's</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+        <a href="Detail — Editie.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Editie (klassikaal)</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">tabs · sessierijen · CTA-paneel</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+        <a href="Detail — Online opleiding.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Online opleiding</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">LearnDash-lijst · voortgangsring</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+        <a href="Detail — Traject.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Traject</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">leerpad · kies 1 uit 3 · berichten</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+      </div>
+    </div>
+
+    <div style="display: flex; flex-direction: column; gap: 10px;">
+      <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Marketing</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 14px;">
+        <a href="Homepage.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Homepage</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">serif-hero · modusselector · CTA</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+        <a href="Contact.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Contact</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">persoonlijk · formulier · praktisch</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+        <a href="Over ons.dc.html" style="text-decoration: none; color: inherit; background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px; display: flex; justify-content: space-between; align-items: center; gap: 12px; transition: box-shadow 250ms cubic-bezier(0.16,1,0.3,1), transform 250ms cubic-bezier(0.16,1,0.3,1);" style-hover="box-shadow: 0 8px 16px -4px rgba(41,44,49,0.1); transform: translateY(-2px);"><div><div style="font-size: 15px; font-weight: 700;">Over ons</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">editorial long-read · serif-stem</div></div><span style="font-weight: 700; color: #0E6E6B;">→</span></a>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+</x-dc>
+</body>
+</html>

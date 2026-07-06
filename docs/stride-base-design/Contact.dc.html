@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&amp;family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #F9FAFC; }
+    @keyframes st-toast-in { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  </style>
+</helmet>
+
+<div data-screen-label="Contact" style="min-height: 100vh; background: #F9FAFC; font-family: 'Hanken Grotesk', system-ui, sans-serif; color: #292C31;">
+
+  <!-- site header -->
+  <div style="background: #FFFFFF; box-shadow: 0 1px 0 #E3E6EB; padding: 16px clamp(20px, 4vw, 48px); display: flex; align-items: center; justify-content: space-between; gap: 16px;">
+    <div style="font-size: 20px; font-weight: 800; letter-spacing: -0.02em;">stride<span style="color: #0E6E6B;">.</span></div>
+    <div style="display: flex; gap: clamp(14px, 2.5vw, 30px); font-size: 15px; font-weight: 600; color: #585C63;">
+      <a href="Catalogus — Trajecten.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Trajecten</a>
+      <a href="Catalogus — Klassikaal.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Klassikaal</a>
+      <a href="Catalogus — Online.dc.html" style="color: inherit; text-decoration: none; transition: color 150ms;" style-hover="color: #292C31;">Online</a>
+      <a href="Contact.dc.html" style="color: #0E6E6B; text-decoration: none;">Contact</a>
+    </div>
+    <a href="Dashboard — Mijn account.dc.html" style="font-size: 14px; font-weight: 700; color: #292C31; text-decoration: none; border: 1px solid #D2D6DD; border-radius: 10px; padding: 9px 18px; transition: background 150ms;" style-hover="background: #EEF1F5;">Mijn account</a>
+  </div>
+
+  <!-- header band -->
+  <div style="background: #EEF1F5; padding: clamp(28px, 5vw, 48px) clamp(20px, 4vw, 48px) clamp(24px, 4vw, 40px);">
+    <div style="max-width: 1080px; margin: 0 auto;">
+      <h1 style="font-family: 'Newsreader', Georgia, serif; font-weight: 400; font-size: clamp(32px, 4.5vw, 44px); line-height: 1.1; margin: 0;">Zeg ons gedag</h1>
+      <p style="font-size: 16px; color: #585C63; margin: 10px 0 0; max-width: 560px;">Een vraag over een opleiding, een offerte voor je team, of gewoon eens aftoetsen wat kan? We antwoorden binnen één werkdag — met een mens, niet met een ticketnummer.</p>
+    </div>
+  </div>
+
+  <!-- content -->
+  <div style="max-width: 1080px; margin: 0 auto; padding: clamp(24px, 4vw, 44px) clamp(20px, 4vw, 48px) 80px; display: flex; gap: clamp(28px, 5vw, 56px); flex-wrap: wrap; align-items: flex-start;">
+
+    <!-- left: details -->
+    <div style="flex: 1 1 320px; min-width: 280px; display: flex; flex-direction: column; gap: 22px;">
+      <div style="display: flex; gap: 14px; align-items: flex-start;">
+        <div style="display: flex;">
+          <span style="width: 44px; height: 44px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C; display: grid; place-items: center; font-size: 14px; font-weight: 800; box-shadow: 0 0 0 2px #F9FAFC;">LD</span>
+          <span style="width: 44px; height: 44px; border-radius: 999px; background: #EBEEF9; color: #36459C; display: grid; place-items: center; font-size: 14px; font-weight: 800; margin-left: -10px; box-shadow: 0 0 0 2px #F9FAFC;">EM</span>
+          <span style="width: 44px; height: 44px; border-radius: 999px; background: #DFF3E9; color: #166F54; display: grid; place-items: center; font-size: 14px; font-weight: 800; margin-left: -10px; box-shadow: 0 0 0 2px #F9FAFC;">JV</span>
+        </div>
+        <div style="font-size: 14px; color: #585C63; line-height: 1.6;">Lies, Eva en Jonas beantwoorden je bericht — zij kennen het aanbod door en door.</div>
+      </div>
+
+      <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+        <div>
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Bezoek ons</div>
+          <div style="font-size: 14px; color: #43454C; line-height: 1.6; margin-top: 6px;">Vanderlindenstraat 15, 1030 Brussel<br>op 5 min wandelen van station Schaarbeek</div>
+        </div>
+        <div style="height: 1px; background: #EEF1F5;"></div>
+        <div>
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Bel of mail</div>
+          <div style="font-size: 14px; color: #43454C; line-height: 1.6; margin-top: 6px;"><a href="#" style="color: #0E6E6B; font-weight: 700; text-decoration: none;">+32 2 123 45 67</a> — werkdagen 9:00 – 17:00<br><a href="#" style="color: #0E6E6B; font-weight: 700; text-decoration: none;">info@stride.be</a></div>
+        </div>
+        <div style="height: 1px; background: #EEF1F5;"></div>
+        <div>
+          <div style="font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #767A82;">Facturatie</div>
+          <div style="font-size: 14px; color: #43454C; line-height: 1.6; margin-top: 6px;">BTW BE 0123.456.789<br>Erkend dienstverlener KMO-portefeuille</div>
+        </div>
+      </div>
+
+      <div style="aspect-ratio: 16 / 9; border-radius: 16px; background: repeating-linear-gradient(45deg, #EEF1F5 0px, #EEF1F5 14px, #E4E8EE 14px, #E4E8EE 28px); display: grid; place-items: center;">
+        <span style="font-family: monospace; font-size: 12px; color: #767A82; background: rgba(255,255,255,0.8); border-radius: 8px; padding: 6px 12px;">kaart: locatie Schaarbeek</span>
+      </div>
+    </div>
+
+    <!-- right: form -->
+    <div style="flex: 1 1 420px; min-width: 300px; background: #FFFFFF; border-radius: 16px; box-shadow: 0 8px 16px -4px rgba(41,44,49,0.07); padding: clamp(22px, 3vw, 32px); display: flex; flex-direction: column; gap: 18px;">
+      <div style="font-size: 18px; font-weight: 700;">Stuur ons een bericht</div>
+      <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px;">
+        <div style="display: flex; flex-direction: column; gap: 6px;"><label style="font-size: 13px; font-weight: 600;">Naam</label><input placeholder="Je voor- en achternaam" style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);"></div>
+        <div style="display: flex; flex-direction: column; gap: 6px;"><label style="font-size: 13px; font-weight: 600;">E-mailadres</label><input placeholder="naam@organisatie.be" style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);"></div>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><label style="font-size: 13px; font-weight: 600;">Waarover gaat het?</label>
+        <select style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none; appearance: auto;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);">
+          <option>Vraag over een opleiding</option>
+          <option>Offerte voor mijn team</option>
+          <option>Opleiding op maat</option>
+          <option>Iets anders</option>
+        </select>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 6px;"><label style="font-size: 13px; font-weight: 600;">Je bericht</label><textarea rows="5" placeholder="Vertel kort wat je zoekt — wij denken mee." style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none; resize: vertical;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);"></textarea></div>
+      <div style="display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer;">
+        <span style="width: 22px; height: 22px; border-radius: 6px; background: #FFFFFF; border: 1.5px solid #D2D6DD; flex-shrink: 0; transition: border-color 150ms;" style-hover="border-color: #90959E;"></span>
+        <span style="font-size: 13px; color: #585C63;">Hou me op de hoogte van nieuwe opleidingen (max. 1 mail per maand)</span>
+      </div>
+      <button onClick="{{ send }}" style="font-family: inherit; font-size: 16px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 12px; padding: 14px; cursor: pointer; min-height: 48px; transition: background 150ms cubic-bezier(0.16,1,0.3,1);" style-hover="background: #0A5E5B;">Verstuur bericht</button>
+      <div style="font-size: 12px; color: #767A82; line-height: 1.5;">We gebruiken je gegevens alleen om te antwoorden — zie ons privacybeleid.</div>
+    </div>
+
+  </div>
+
+  <!-- toast -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; right: 24px; bottom: 24px; z-index: 50; background: #FFFFFF; border-radius: 12px; box-shadow: 0 24px 48px -12px rgba(41,44,49,0.2); padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; width: 340px; max-width: calc(100vw - 48px); animation: st-toast-in 250ms cubic-bezier(0.16,1,0.3,1);">
+      <div style="width: 28px; height: 28px; border-radius: 999px; background: #E2F2E8; color: #17683D; display: grid; place-items: center; font-size: 14px; font-weight: 800; flex-shrink: 0;">✓</div>
+      <div style="flex: 1;"><div style="font-size: 14px; font-weight: 700;">Bericht verstuurd</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">Lies, Eva of Jonas antwoordt binnen één werkdag.</div></div>
+      <div onClick="{{ closeToast }}" style="font-size: 16px; color: #90959E; cursor: pointer; line-height: 1;" style-hover="color: #292C31;">×</div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { toast: false };
+  componentWillUnmount() { clearTimeout(this._tt); }
+  renderVals() {
+    return {
+      toast: this.state.toast,
+      send: () => {
+        clearTimeout(this._tt);
+        this.setState({ toast: true });
+        this._tt = setTimeout(() => this.setState({ toast: false }), 3500);
+      },
+      closeToast: () => { clearTimeout(this._tt); this.setState({ toast: false }); }
+    };
+  }
+}
+</script>
+</body>
+</html>

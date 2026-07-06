@@ -1,0 +1,492 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous">
+  <link href="https://fonts.googleapis.com/css2?family=Hanken+Grotesk:wght@400;500;600;700;800&amp;family=Newsreader:ital,opsz,wght@0,6..72,300;0,6..72,400;0,6..72,500;1,6..72,400&amp;display=swap" rel="stylesheet">
+  <style>
+    html, body { margin: 0; padding: 0; background: #F9FAFC; }
+    @keyframes st-toast-in { from { transform: translateY(12px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  </style>
+</helmet>
+
+<div data-screen-label="Dashboard — Mijn account" style="min-height: 100vh; display: flex; background: #F9FAFC; font-family: 'Hanken Grotesk', system-ui, sans-serif; color: #292C31;">
+
+  <!-- ── sidebar (desktop, expanded) ── -->
+  <sc-if value="{{ showSidebarFull }}" hint-placeholder-val="{{ true }}">
+    <div style="width: 240px; flex-shrink: 0; background: #FFFFFF; box-shadow: 1px 0 0 #E3E6EB; display: flex; flex-direction: column; padding: 20px 14px; position: sticky; top: 0; height: 100vh; box-sizing: border-box;">
+      <div style="display: flex; align-items: center; justify-content: space-between; padding: 0 10px 18px;">
+        <div style="font-size: 19px; font-weight: 800; letter-spacing: -0.02em;">stride<span style="color: #0E6E6B;">.</span></div>
+        <button onClick="{{ toggleSidebar }}" aria-label="Zijbalk inklappen" style="font-family: inherit; width: 28px; height: 28px; border-radius: 8px; border: none; background: transparent; color: #767A82; font-size: 14px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;">«</button>
+      </div>
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <sc-for list="{{ navMain }}" as="nv" hint-placeholder-count="4">
+          <div onClick="{{ nv.go }}" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; background: {{ nv.bg }}; transition: background 150ms;" style-hover="background: {{ nv.hoverBg }};">
+            <span style="width: 18px; height: 18px; border-radius: 5px; background: {{ nv.iconBg }}; flex-shrink: 0;"></span>
+            <span style="font-size: 14px; font-weight: {{ nv.weight }}; color: {{ nv.color }}; flex: 1;">{{ nv.label }}</span>
+          </div>
+        </sc-for>
+      </div>
+      <div style="height: 1px; background: #E3E6EB; margin: 12px 8px;"></div>
+      <div style="display: flex; flex-direction: column; gap: 2px;">
+        <sc-for list="{{ navUtil }}" as="nv" hint-placeholder-count="3">
+          <div onClick="{{ nv.go }}" style="display: flex; align-items: center; gap: 12px; padding: 10px 12px; border-radius: 10px; cursor: pointer; background: {{ nv.bg }}; transition: background 150ms;" style-hover="background: {{ nv.hoverBg }};">
+            <span style="width: 18px; height: 18px; border-radius: 5px; background: {{ nv.iconBg }}; flex-shrink: 0;"></span>
+            <span style="font-size: 14px; font-weight: {{ nv.weight }}; color: {{ nv.color }}; flex: 1;">{{ nv.label }}</span>
+            <sc-if value="{{ nv.badge }}" hint-placeholder-val="{{ false }}"><span style="font-size: 11px; font-weight: 700; background: #4A5FBE; color: #FFFFFF; border-radius: 999px; padding: 1px 7px;">{{ nv.badge }}</span></sc-if>
+          </div>
+        </sc-for>
+      </div>
+      <div style="margin-top: auto;">
+        <div style="height: 1px; background: #E3E6EB; margin: 12px 8px;"></div>
+        <div onClick="{{ goProfiel }}" style="display: flex; align-items: center; gap: 12px; padding: 8px 12px; border-radius: 10px; cursor: pointer; background: {{ profielBg }}; transition: background 150ms;" style-hover="background: #EEF1F5;">
+          <span style="width: 34px; height: 34px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C; display: grid; place-items: center; font-size: 12px; font-weight: 800; flex-shrink: 0;">AV</span>
+          <div style="min-width: 0;"><div style="font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">An Vermeulen</div><div style="font-size: 11px; color: #767A82;">vzw De Sloep</div></div>
+        </div>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ── sidebar (desktop, collapsed rail) ── -->
+  <sc-if value="{{ showSidebarRail }}" hint-placeholder-val="{{ false }}">
+    <div style="width: 56px; flex-shrink: 0; background: #FFFFFF; box-shadow: 1px 0 0 #E3E6EB; display: flex; flex-direction: column; align-items: center; padding: 20px 0; position: sticky; top: 0; height: 100vh; box-sizing: border-box; gap: 4px;">
+      <button onClick="{{ toggleSidebar }}" aria-label="Zijbalk uitklappen" style="font-family: inherit; width: 32px; height: 32px; border-radius: 8px; border: none; background: transparent; color: #767A82; font-size: 14px; cursor: pointer; margin-bottom: 10px; transition: background 150ms;" style-hover="background: #EEF1F5;">»</button>
+      <sc-for list="{{ navAll }}" as="nv" hint-placeholder-count="7">
+        <div onClick="{{ nv.go }}" title="{{ nv.label }}" style="position: relative; width: 38px; height: 38px; border-radius: 10px; display: grid; place-items: center; cursor: pointer; background: {{ nv.bg }}; transition: background 150ms;" style-hover="background: {{ nv.hoverBg }};">
+          <span style="width: 18px; height: 18px; border-radius: 5px; background: {{ nv.iconBg }};"></span>
+          <sc-if value="{{ nv.badge }}" hint-placeholder-val="{{ false }}"><span style="position: absolute; top: 4px; right: 4px; width: 9px; height: 9px; border-radius: 999px; background: #4A5FBE; box-shadow: 0 0 0 2px #FFFFFF;"></span></sc-if>
+        </div>
+      </sc-for>
+      <div style="margin-top: auto;">
+        <span onClick="{{ goProfiel }}" style="width: 34px; height: 34px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C; display: grid; place-items: center; font-size: 12px; font-weight: 800; cursor: pointer;">AV</span>
+      </div>
+    </div>
+  </sc-if>
+
+  <!-- ── main column ── -->
+  <div style="flex: 1; min-width: 0; display: flex; flex-direction: column;">
+
+    <!-- mobile top bar + nav chips -->
+    <sc-if value="{{ isMobile }}" hint-placeholder-val="{{ false }}">
+      <div style="background: #FFFFFF; box-shadow: 0 1px 0 #E3E6EB; padding: 14px 16px 0; position: sticky; top: 0; z-index: 20;">
+        <div style="display: flex; align-items: center; justify-content: space-between;">
+          <div style="font-size: 18px; font-weight: 800; letter-spacing: -0.02em;">stride<span style="color: #0E6E6B;">.</span></div>
+          <span onClick="{{ goProfiel }}" style="width: 34px; height: 34px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C; display: grid; place-items: center; font-size: 12px; font-weight: 800; cursor: pointer;">AV</span>
+        </div>
+        <div style="display: flex; gap: 8px; overflow-x: auto; padding: 12px 0;">
+          <sc-for list="{{ navAll }}" as="nv" hint-placeholder-count="7">
+            <div onClick="{{ nv.go }}" style="flex-shrink: 0; font-size: 13px; font-weight: {{ nv.weight }}; color: {{ nv.chipColor }}; background: {{ nv.chipBg }}; border-radius: 999px; padding: 7px 14px; cursor: pointer; display: flex; align-items: center; gap: 6px; min-height: 30px;">{{ nv.label }}<sc-if value="{{ nv.badge }}" hint-placeholder-val="{{ false }}"><span style="font-size: 10px; font-weight: 700; background: #4A5FBE; color: #FFFFFF; border-radius: 999px; padding: 1px 6px;">{{ nv.badge }}</span></sc-if></div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <div style="padding: clamp(20px, 4vw, 40px); display: flex; flex-direction: column; gap: 24px; max-width: 1080px; width: 100%; box-sizing: border-box; margin: 0 auto;">
+
+      <!-- page header -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap;">
+        <div>
+          <div style="font-family: 'Newsreader', Georgia, serif; font-size: clamp(26px, 3.5vw, 34px); line-height: 1.1;">{{ pageTitle }}</div>
+          <div style="font-size: 14px; color: #585C63; margin-top: 6px;">{{ pageSub }}</div>
+        </div>
+      </div>
+
+      <!-- ═══ HOME ═══ -->
+      <sc-if value="{{ isHome }}" hint-placeholder-val="{{ true }}">
+        <div style="display: flex; flex-direction: column; gap: 24px;">
+
+          <!-- hero next step -->
+          <div style="background: #E2F0EE; border-radius: 16px; padding: clamp(20px, 3vw, 28px); display: flex; justify-content: space-between; align-items: center; gap: 20px; flex-wrap: wrap;">
+            <div style="min-width: 240px;">
+              <div style="font-size: 12px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #0B5F5C;">Jouw volgende stap</div>
+              <div style="font-size: 19px; font-weight: 700; margin-top: 8px;">Vul je intakeformulier in vóór 14 mei</div>
+              <div style="font-size: 14px; color: #44524F; margin-top: 4px;">Omgaan met verbale agressie in de zorg · sessie 1 start op 21 mei om 09:30</div>
+            </div>
+            <button onClick="{{ heroGo }}" style="font-family: inherit; font-size: 15px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 10px; padding: 13px 22px; cursor: pointer; min-height: 48px; transition: background 150ms cubic-bezier(0.16,1,0.3,1);" style-hover="background: #0A5E5B;">Naar je inschrijving</button>
+          </div>
+
+          <!-- stats -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px;">
+            <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 18px 20px;"><div style="font-size: 13px; font-weight: 600; color: #585C63;">Actieve inschrijvingen</div><div style="font-size: 30px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums;">4</div><div style="font-size: 12px; color: #767A82; margin-top: 2px;">waarvan 1 wacht op actie</div></div>
+            <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 18px 20px;"><div style="font-size: 13px; font-weight: 600; color: #585C63;">Behaalde certificaten</div><div style="font-size: 30px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums;">7</div><div style="font-size: 12px; color: #166F54; font-weight: 700; margin-top: 2px;">+2 dit jaar</div></div>
+            <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 18px 20px;"><div style="font-size: 13px; font-weight: 600; color: #585C63;">Openstaande offertes</div><div style="font-size: 30px; font-weight: 800; margin-top: 6px; font-variant-numeric: tabular-nums;">1</div><div style="font-size: 12px; color: #71610E; font-weight: 700; margin-top: 2px;">wacht op goedkeuring</div></div>
+          </div>
+
+          <!-- acties nodig -->
+          <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: clamp(18px, 3vw, 26px); display: flex; flex-direction: column; gap: 16px;">
+            <div style="display: flex; justify-content: space-between; align-items: center; gap: 14px; flex-wrap: wrap;">
+              <div style="font-size: 17px; font-weight: 700;">Acties nodig</div>
+              <div style="display: inline-flex; gap: 2px; background: #EEF1F5; border-radius: 11px; padding: 4px;">
+                <div onClick="{{ setActieMij }}" style="font-size: 13px; font-weight: {{ atMijW }}; color: {{ atMijC }}; background: {{ atMijBg }}; border-radius: 8px; padding: 7px 13px; cursor: pointer; box-shadow: {{ atMijSh }}; display: flex; align-items: center; gap: 6px; transition: color 150ms;">Wacht op mij<span style="font-size: 11px; font-weight: 700; background: {{ atMijPillBg }}; color: {{ atMijPillC }}; border-radius: 999px; padding: 1px 7px;">2</span></div>
+                <div onClick="{{ setActieGebruiker }}" style="font-size: 13px; font-weight: {{ atGebW }}; color: {{ atGebC }}; background: {{ atGebBg }}; border-radius: 8px; padding: 7px 13px; cursor: pointer; box-shadow: {{ atGebSh }}; display: flex; align-items: center; gap: 6px; transition: color 150ms;">Wacht op werkgever<span style="font-size: 11px; font-weight: 700; background: {{ atGebPillBg }}; color: {{ atGebPillC }}; border-radius: 999px; padding: 1px 7px;">1</span></div>
+                <div onClick="{{ setActieMeldingen }}" style="font-size: 13px; font-weight: {{ atMelW }}; color: {{ atMelC }}; background: {{ atMelBg }}; border-radius: 8px; padding: 7px 13px; cursor: pointer; box-shadow: {{ atMelSh }}; display: flex; align-items: center; gap: 6px; transition: color 150ms;">Meldingen<span style="font-size: 11px; font-weight: 700; background: {{ atMelPillBg }}; color: {{ atMelPillC }}; border-radius: 999px; padding: 1px 7px;">3</span></div>
+              </div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 8px;">
+              <sc-for list="{{ acties }}" as="ac" hint-placeholder-count="2">
+                <div style="background: #F9FAFC; border-radius: 12px; padding: 13px 16px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+                  <div style="flex: 1; min-width: 200px;"><div style="font-size: 14px; font-weight: 700;">{{ ac.title }}</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">{{ ac.sub }}</div></div>
+                  <button onClick="{{ ac.go }}" style="font-family: inherit; font-size: 13px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 9px; padding: 9px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #0A5E5B;">{{ ac.cta }}</button>
+                </div>
+              </sc-for>
+            </div>
+          </div>
+
+          <!-- enrollment panels -->
+          <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 18px;">
+            <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+              <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+                <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Klassikaal</span>
+                <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">✓ Ingeschreven</span>
+              </div>
+              <div style="font-size: 16px; font-weight: 700; line-height: 1.35;">Omgaan met verbale agressie in de zorg</div>
+              <div style="font-size: 13px; color: #585C63;"><strong style="color: #292C31; font-weight: 600;">Volgende sessie:</strong> do 21 mei 2026 · 09:30 – 16:30<br>Vanderlindenstraat 15, 1030 Brussel</div>
+              <div style="display: flex; flex-direction: column; gap: 8px; background: #F9FAFC; border-radius: 12px; padding: 14px 16px;">
+                <div style="display: flex; gap: 10px; align-items: center;"><span style="width: 20px; height: 20px; border-radius: 999px; background: #E2F2E8; color: #17683D; font-size: 12px; font-weight: 800; display: grid; place-items: center; flex-shrink: 0;">✓</span><span style="font-size: 13px; color: #585C63;">Betaling ontvangen</span></div>
+                <div style="display: flex; gap: 10px; align-items: center;"><span style="width: 20px; height: 20px; border-radius: 999px; background: #FFFFFF; box-shadow: inset 0 0 0 1.5px #D2D6DD; flex-shrink: 0;"></span><span style="font-size: 13px; font-weight: 600; flex: 1;">Intakeformulier invullen</span><span style="font-size: 12px; font-weight: 700; color: #0E6E6B; cursor: pointer;" style-hover="color: #0A5E5B;">Invullen →</span></div>
+              </div>
+            </div>
+            <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 24px; display: flex; flex-direction: column; gap: 14px;">
+              <div style="display: flex; gap: 6px;">
+                <span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Online</span>
+              </div>
+              <div style="font-size: 16px; font-weight: 700; line-height: 1.35;">Privacy en beroepsgeheim in de praktijk</div>
+              <div>
+                <div style="display: flex; justify-content: space-between; font-size: 12px; font-weight: 700; color: #585C63; margin-bottom: 6px;"><span>60% voltooid</span><span style="font-variant-numeric: tabular-nums;">3/5 modules</span></div>
+                <div style="height: 8px; border-radius: 999px; background: #EEF1F5; overflow: hidden;"><div style="height: 100%; width: {{ onlineBarW }}; border-radius: 999px; background: #0E6E6B; transition: width 700ms cubic-bezier(0.16,1,0.3,1);"></div></div>
+              </div>
+              <div style="font-size: 13px; color: #585C63;">Volgende module: <strong style="color: #292C31; font-weight: 600;">Beeldmateriaal en toestemming</strong> · ± 25 min</div>
+              <button style="font-family: inherit; font-size: 14px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 10px; padding: 12px; cursor: pointer; margin-top: auto; transition: background 150ms;" style-hover="background: #0A5E5B;">Ga verder</button>
+            </div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ═══ INSCHRIJVINGEN ═══ -->
+      <sc-if value="{{ isInschrijvingen }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 14px;">
+          <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px 24px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 240px;">
+              <div style="display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px;"><span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Klassikaal</span><span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">✓ Ingeschreven</span></div>
+              <div style="font-size: 16px; font-weight: 700;">Omgaan met verbale agressie in de zorg</div>
+              <div style="font-size: 13px; color: #585C63; margin-top: 4px;">do 21 mei 2026 · 09:30 – 16:30 · Vanderlindenstraat 15, Brussel</div>
+            </div>
+            <div style="display: flex; flex-direction: column; gap: 6px; align-items: flex-end;">
+              <span style="font-size: 12px; font-weight: 700; color: #71610E;">1 actie open</span>
+              <button style="font-family: inherit; font-size: 13px; font-weight: 700; color: #292C31; background: transparent; border: 1px solid #D2D6DD; border-radius: 9px; padding: 9px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;">Bekijk details</button>
+            </div>
+          </div>
+          <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px 24px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap;">
+            <div style="flex: 1; min-width: 240px;">
+              <div style="display: flex; gap: 6px; margin-bottom: 10px;"><span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Online</span><span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #DFF3E9; color: #166F54;">60% voltooid</span></div>
+              <div style="font-size: 16px; font-weight: 700;">Privacy en beroepsgeheim in de praktijk</div>
+              <div style="height: 7px; border-radius: 999px; background: #EEF1F5; overflow: hidden; margin-top: 10px; max-width: 320px;"><div style="height: 100%; width: 60%; border-radius: 999px; background: #0E6E6B;"></div></div>
+            </div>
+            <button style="font-family: inherit; font-size: 13px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 9px; padding: 10px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #0A5E5B;">Ga verder</button>
+          </div>
+          <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px 24px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap; opacity: 0.8;">
+            <div style="flex: 1; min-width: 240px;">
+              <div style="display: flex; gap: 6px; margin-bottom: 10px;"><span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #E2F0EE; color: #0B5F5C;">Klassikaal</span><span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #EEF0F3; color: #5F636A;">Geannuleerd</span></div>
+              <div style="font-size: 16px; font-weight: 700; color: #585C63;">Werken met een zorgplan</div>
+              <div style="font-size: 13px; color: #585C63; margin-top: 4px;">Deze editie werd geannuleerd — je werd per e-mail verwittigd.</div>
+            </div>
+            <button style="font-family: inherit; font-size: 13px; font-weight: 700; color: #292C31; background: transparent; border: 1px solid #D2D6DD; border-radius: 9px; padding: 9px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;">Bekijk alternatieven</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ═══ TRAJECTEN ═══ -->
+      <sc-if value="{{ isTrajecten }}" hint-placeholder-val="{{ false }}">
+        <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: clamp(20px, 3vw, 28px); display: flex; flex-direction: column; gap: 20px;">
+          <div style="display: flex; gap: 20px; align-items: center; flex-wrap: wrap;">
+            <div style="position: relative; width: 72px; height: 72px; flex-shrink: 0;">
+              <svg width="72" height="72" viewBox="0 0 72 72" style="transform: rotate(-90deg);">
+                <circle cx="36" cy="36" r="30" fill="none" stroke="#EEF1F5" stroke-width="7"></circle>
+                <circle cx="36" cy="36" r="30" fill="none" stroke="#0E6E6B" stroke-width="7" stroke-linecap="round" stroke-dasharray="{{ ringDash }}" style="transition: stroke-dasharray 900ms cubic-bezier(0.16,1,0.3,1);"></circle>
+              </svg>
+              <div style="position: absolute; inset: 0; display: grid; place-items: center; font-size: 15px; font-weight: 800; font-variant-numeric: tabular-nums;">50%</div>
+            </div>
+            <div style="flex: 1; min-width: 220px;">
+              <div style="display: flex; gap: 6px; margin-bottom: 8px;"><span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #EBEEF9; color: #36459C;">Traject</span></div>
+              <div style="font-size: 18px; font-weight: 700;">Begeleider buitenschoolse kinderopvang</div>
+              <div style="font-size: 13px; color: #585C63; margin-top: 4px;">2 van 4 onderdelen afgerond · keuzemodule nog te kiezen</div>
+            </div>
+            <button style="font-family: inherit; font-size: 14px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 10px; padding: 12px 20px; cursor: pointer; transition: background 150ms;" style-hover="background: #0A5E5B;">Open traject</button>
+          </div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <div style="background: #F9FAFC; border-radius: 12px; padding: 13px 16px; display: flex; gap: 12px; align-items: center;"><span style="width: 22px; height: 22px; border-radius: 999px; background: #E2F2E8; color: #17683D; font-size: 12px; font-weight: 800; display: grid; place-items: center; flex-shrink: 0;">✓</span><span style="font-size: 14px; font-weight: 600; flex: 1;">Pedagogisch handelen — basis</span><span style="font-size: 12px; color: #767A82;">afgerond 12 feb 2026</span></div>
+            <div style="background: #F9FAFC; border-radius: 12px; padding: 13px 16px; display: flex; gap: 12px; align-items: center;"><span style="width: 22px; height: 22px; border-radius: 999px; background: #E2F2E8; color: #17683D; font-size: 12px; font-weight: 800; display: grid; place-items: center; flex-shrink: 0;">✓</span><span style="font-size: 14px; font-weight: 600; flex: 1;">EHBO bij kinderen</span><span style="font-size: 12px; color: #767A82;">afgerond 3 apr 2026</span></div>
+            <div style="background: #E2F0EE; border-radius: 12px; padding: 13px 16px; display: flex; gap: 12px; align-items: center;"><span style="width: 22px; height: 22px; border-radius: 999px; background: #0E6E6B; flex-shrink: 0; display: grid; place-items: center;"><span style="width: 8px; height: 8px; border-radius: 999px; background: #FFFFFF;"></span></span><span style="font-size: 14px; font-weight: 700; flex: 1;">Omgaan met verbale agressie in de zorg</span><span style="font-size: 12px; font-weight: 700; color: #0B5F5C;">bezig · start 21 mei</span></div>
+            <div style="background: #F9FAFC; border-radius: 12px; box-shadow: inset 0 0 0 1.5px #E3E6EB; padding: 13px 16px; display: flex; gap: 12px; align-items: center; flex-wrap: wrap;"><span style="width: 22px; height: 22px; border-radius: 999px; background: #FFFFFF; box-shadow: inset 0 0 0 1.5px #D2D6DD; flex-shrink: 0;"></span><span style="font-size: 14px; font-weight: 600; flex: 1; min-width: 180px;">Keuzemodule — kies 1 van 3</span><button style="font-family: inherit; font-size: 12px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 8px; padding: 8px 14px; cursor: pointer; transition: background 150ms;" style-hover="background: #0A5E5B;">Maak je keuze</button></div>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ═══ OFFERTES ═══ -->
+      <sc-if value="{{ isOffertes }}" hint-placeholder-val="{{ false }}">
+        <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 22px 24px; display: flex; gap: 18px; align-items: center; flex-wrap: wrap;">
+          <div style="flex: 1; min-width: 240px;">
+            <div style="display: flex; gap: 8px; align-items: center; margin-bottom: 8px;"><span style="font-size: 14px; font-weight: 700;">Offerte #2026-014</span><span style="font-size: 11px; font-weight: 700; padding: 3px 9px; border-radius: 999px; background: #FAF3D3; color: #71610E;">Wacht op goedkeuring</span></div>
+            <div style="font-size: 13px; color: #585C63;">Omgaan met verbale agressie · 12 deelnemers · <strong style="color: #292C31;">€ 2.940,00</strong> · verstuurd 2 juni 2026</div>
+          </div>
+          <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+            <button onClick="{{ remindEmployer }}" style="font-family: inherit; font-size: 13px; font-weight: 700; color: #292C31; background: transparent; border: 1px solid #D2D6DD; border-radius: 9px; padding: 9px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;">Herinner werkgever</button>
+            <button style="font-family: inherit; font-size: 13px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 9px; padding: 9px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #0A5E5B;">Bekijk offerte</button>
+          </div>
+        </div>
+      </sc-if>
+
+      <!-- ═══ CERTIFICATEN ═══ -->
+      <sc-if value="{{ isCertificaten }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <sc-for list="{{ certificaten }}" as="ct" hint-placeholder-count="3">
+            <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 16px 20px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+              <span style="width: 38px; height: 38px; border-radius: 10px; background: #E2F0EE; color: #0B5F5C; display: grid; place-items: center; font-size: 14px; font-weight: 800; flex-shrink: 0;">✓</span>
+              <div style="flex: 1; min-width: 200px;"><div style="font-size: 14px; font-weight: 700;">{{ ct.title }}</div><div style="font-size: 12px; color: #767A82; margin-top: 2px;">behaald op {{ ct.date }}</div></div>
+              <button onClick="{{ ct.download }}" style="font-family: inherit; font-size: 13px; font-weight: 700; color: #292C31; background: transparent; border: 1px solid #D2D6DD; border-radius: 9px; padding: 9px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;">Download PDF</button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- ═══ DOWNLOADS ═══ -->
+      <sc-if value="{{ isDownloads }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <sc-for list="{{ downloads }}" as="dl" hint-placeholder-count="3">
+            <div style="background: #FFFFFF; border-radius: 14px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: 16px 20px; display: flex; gap: 14px; align-items: center; flex-wrap: wrap;">
+              <span style="width: 38px; height: 38px; border-radius: 10px; background: #EEF1F5; color: #585C63; display: grid; place-items: center; font-size: 10px; font-weight: 800; flex-shrink: 0;">PDF</span>
+              <div style="flex: 1; min-width: 200px;"><div style="font-size: 14px; font-weight: 700;">{{ dl.title }}</div><div style="font-size: 12px; color: #767A82; margin-top: 2px;">{{ dl.meta }}</div></div>
+              <button onClick="{{ dl.download }}" style="font-family: inherit; font-size: 13px; font-weight: 700; color: #292C31; background: transparent; border: 1px solid #D2D6DD; border-radius: 9px; padding: 9px 16px; cursor: pointer; transition: background 150ms;" style-hover="background: #EEF1F5;">Download</button>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- ═══ MELDINGEN ═══ -->
+      <sc-if value="{{ isMeldingen }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 12px;">
+          <div style="display: flex; justify-content: flex-end;">
+            <button onClick="{{ markAllRead }}" style="font-family: inherit; font-size: 13px; font-weight: 700; color: #0E6E6B; background: transparent; border: none; cursor: pointer; padding: 6px 4px; transition: color 150ms;" style-hover="color: #0A5E5B;">Alles als gelezen markeren</button>
+          </div>
+          <sc-for list="{{ meldingen }}" as="md" hint-placeholder-count="4">
+            <div style="background: {{ md.bg }}; border-radius: 12px; box-shadow: {{ md.shadow }}; padding: 14px 18px; display: flex; gap: 12px; align-items: flex-start; cursor: pointer; transition: background 150ms;">
+              <span style="width: 8px; height: 8px; border-radius: 999px; background: {{ md.dot }}; margin-top: 6px; flex-shrink: 0;"></span>
+              <div style="flex: 1; min-width: 0;"><div style="font-size: 14px; font-weight: {{ md.weight }};">{{ md.title }}</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">{{ md.sub }}</div></div>
+              <span style="font-size: 12px; color: #90959E; white-space: nowrap;">{{ md.time }}</span>
+            </div>
+          </sc-for>
+        </div>
+      </sc-if>
+
+      <!-- ═══ PROFIEL ═══ -->
+      <sc-if value="{{ isProfiel }}" hint-placeholder-val="{{ false }}">
+        <div style="display: flex; flex-direction: column; gap: 20px; max-width: 720px;">
+          <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: clamp(20px, 3vw, 28px); display: flex; flex-direction: column; gap: 18px;">
+            <div>
+              <div style="font-size: 16px; font-weight: 700;">Persoonlijke gegevens</div>
+              <div style="font-size: 13px; color: #585C63; margin-top: 2px;">Zichtbaar op je attesten en certificaten.</div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+              <div style="display: flex; flex-direction: column; gap: 6px;"><label style="font-size: 13px; font-weight: 600;">Voornaam</label><input defaultValue="An" style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);"></div>
+              <div style="display: flex; flex-direction: column; gap: 6px;"><label style="font-size: 13px; font-weight: 600;">Naam</label><input defaultValue="Vermeulen" style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);"></div>
+              <div style="display: flex; flex-direction: column; gap: 6px;"><label style="font-size: 13px; font-weight: 600;">E-mailadres</label><input defaultValue="an.vermeulen@desloep.be" style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);"></div>
+              <div style="display: flex; flex-direction: column; gap: 6px;"><label style="font-size: 13px; font-weight: 600;">Telefoon</label><input defaultValue="+32 478 12 34 56" style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);"></div>
+            </div>
+          </div>
+          <div style="background: #FFFFFF; border-radius: 16px; box-shadow: 0 2px 6px rgba(41,44,49,0.05); padding: clamp(20px, 3vw, 28px); display: flex; flex-direction: column; gap: 18px;">
+            <div>
+              <div style="font-size: 16px; font-weight: 700;">Facturatiegegevens</div>
+              <div style="font-size: 13px; color: #585C63; margin-top: 2px;">Gebruikt voor offertes en facturen aan je werkgever.</div>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+              <div style="display: flex; flex-direction: column; gap: 6px;"><label style="font-size: 13px; font-weight: 600;">Organisatie</label><input defaultValue="vzw De Sloep" style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);"></div>
+              <div style="display: flex; flex-direction: column; gap: 6px;"><label style="font-size: 13px; font-weight: 600;">BTW-nummer</label><input defaultValue="BE 0123.456.789" style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);"></div>
+              <div style="display: flex; flex-direction: column; gap: 6px; grid-column: 1 / -1;"><label style="font-size: 13px; font-weight: 600;">Facturatieadres</label><input defaultValue="Botermarkt 9, 9000 Gent" style="font-family: inherit; font-size: 15px; color: #292C31; border: 1px solid #D2D6DD; border-radius: 10px; padding: 11px 14px; background: #FFFFFF; outline: none;" style-focus="border-color: #0E6E6B; box-shadow: 0 0 0 3px rgba(14,110,107,0.14);"></div>
+            </div>
+          </div>
+          <div style="display: flex; justify-content: flex-end;">
+            <button onClick="{{ saveProfile }}" style="font-family: inherit; font-size: 15px; font-weight: 700; color: #FFFFFF; background: #0E6E6B; border: none; border-radius: 10px; padding: 13px 24px; cursor: pointer; min-height: 48px; transition: background 150ms;" style-hover="background: #0A5E5B;">Wijzigingen opslaan</button>
+          </div>
+        </div>
+      </sc-if>
+
+    </div>
+  </div>
+
+  <!-- toast -->
+  <sc-if value="{{ toast }}" hint-placeholder-val="{{ false }}">
+    <div style="position: fixed; right: 24px; bottom: 24px; z-index: 50; background: #FFFFFF; border-radius: 12px; box-shadow: 0 24px 48px -12px rgba(41,44,49,0.2); padding: 14px 16px; display: flex; gap: 12px; align-items: flex-start; width: 340px; max-width: calc(100vw - 48px); animation: st-toast-in 250ms cubic-bezier(0.16,1,0.3,1);">
+      <div style="width: 28px; height: 28px; border-radius: 999px; background: #E2F2E8; color: #17683D; display: grid; place-items: center; font-size: 14px; font-weight: 800; flex-shrink: 0;">✓</div>
+      <div style="flex: 1;"><div style="font-size: 14px; font-weight: 700;">{{ toastTitle }}</div><div style="font-size: 13px; color: #585C63; margin-top: 2px;">{{ toastSub }}</div></div>
+      <div onClick="{{ closeToast }}" style="font-size: 16px; color: #90959E; cursor: pointer; line-height: 1;" style-hover="color: #292C31;">×</div>
+    </div>
+  </sc-if>
+
+</div>
+
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  state = { tab: 'home', expanded: true, actieTab: 'mij', toast: null, isMobile: false, mounted: false };
+
+  componentDidMount() {
+    this._onR = () => this.setState({ isMobile: window.innerWidth < 900 });
+    window.addEventListener('resize', this._onR);
+    this._onR();
+    this._mt = setTimeout(() => this.setState({ mounted: true }), 120);
+  }
+  componentWillUnmount() {
+    window.removeEventListener('resize', this._onR);
+    clearTimeout(this._tt); clearTimeout(this._mt);
+  }
+  toast(title, sub) {
+    clearTimeout(this._tt);
+    this.setState({ toast: { title, sub } });
+    this._tt = setTimeout(() => this.setState({ toast: null }), 3500);
+  }
+
+  renderVals() {
+    const s = this.state;
+    const tab = s.tab;
+    const go = (id) => () => this.setState({ tab: id });
+
+    const deco = (items) => items.map(it => {
+      const active = it.id === tab;
+      return Object.assign({}, it, {
+        go: go(it.id),
+        bg: active ? '#E2F0EE' : 'transparent',
+        hoverBg: active ? '#E2F0EE' : '#EEF1F5',
+        iconBg: active ? '#0E6E6B' : '#DDE1E7',
+        color: active ? '#0B5F5C' : '#585C63',
+        weight: active ? 700 : 600,
+        chipBg: active ? '#0E6E6B' : '#EEF1F5',
+        chipColor: active ? '#FFFFFF' : '#585C63'
+      });
+    });
+
+    const navMain = deco([
+      { id: 'home', label: 'Home' },
+      { id: 'inschrijvingen', label: 'Opleidingen' },
+      { id: 'trajecten', label: 'Trajecten' },
+      { id: 'offertes', label: 'Offertes' }
+    ]);
+    const navUtil = deco([
+      { id: 'meldingen', label: 'Meldingen', badge: '3' },
+      { id: 'downloads', label: 'Downloads' },
+      { id: 'certificaten', label: 'Certificaten' }
+    ]);
+
+    const titles = {
+      home: ['Goeiemorgen, An', 'donderdag 11 juni 2026 — dit staat er voor jou klaar.'],
+      inschrijvingen: ['Je opleidingen', 'Alle inschrijvingen voor klassikale en online opleidingen.'],
+      trajecten: ['Je trajecten', 'Meerdelige leertrajecten en je voortgang.'],
+      offertes: ['Offertes', 'Aanvragen voor jou of je team.'],
+      certificaten: ['Certificaten', 'Behaalde attesten en certificaten.'],
+      downloads: ['Downloads', 'Cursusmateriaal en documenten.'],
+      meldingen: ['Meldingen', 'Updates over je inschrijvingen en trajecten.'],
+      profiel: ['Profiel', 'Persoonlijke gegevens en facturatie.']
+    };
+
+    const at = s.actieTab;
+    const seg = (key) => ({
+      ['at' + key + 'W']: 0, // placeholder, replaced below
+    });
+    const segVals = (key, activeKey) => {
+      const a = key === activeKey;
+      return {
+        W: a ? 700 : 600, C: a ? '#292C31' : '#585C63', Bg: a ? '#FFFFFF' : 'transparent',
+        Sh: a ? '0 1px 2px rgba(41,44,49,0.07)' : 'none',
+        PillBg: a ? '#0E6E6B' : '#DDE1E7', PillC: a ? '#FFFFFF' : '#585C63'
+      };
+    };
+    const mij = segVals('mij', at), geb = segVals('geb', at), mel = segVals('mel', at);
+
+    const actiesData = {
+      mij: [
+        { title: 'Vul je intakeformulier in', sub: 'Omgaan met verbale agressie · vóór 14 mei', cta: 'Invullen', go: () => this.toast('Formulier geopend', 'Het intakeformulier opent in een nieuw venster.') },
+        { title: 'Kies je keuzemodule', sub: 'Traject begeleider buitenschoolse kinderopvang', cta: 'Kies', go: go('trajecten') }
+      ],
+      geb: [
+        { title: 'Offerte #2026-014 wacht op je werkgever', sub: 'Verstuurd op 2 juni 2026 · 12 deelnemers', cta: 'Herinner', go: () => this.toast('Herinnering verstuurd', 'Je werkgever kreeg een e-mail met de offerte.') }
+      ],
+      mel: [
+        { title: 'Je attest staat klaar', sub: 'Omgaan met verbale agressie — bij Certificaten', cta: 'Bekijk', go: go('certificaten') },
+        { title: 'Herinnering: sessie op 21 mei om 09:30', sub: 'Vanderlindenstraat 15, 1030 Brussel', cta: 'Bekijk', go: go('inschrijvingen') },
+        { title: 'Nieuwe editie: Werken met een zorgplan', sub: 'Najaar 2026 — inschrijvingen open', cta: 'Bekijk', go: () => this.toast('Geopend', 'De editiepagina opent in de catalogus.') }
+      ]
+    };
+
+    const meldingen = [
+      { title: 'Je attest staat klaar', sub: 'Omgaan met verbale agressie — download het bij Certificaten.', time: '2 u geleden', unread: true },
+      { title: 'Offerte #2026-014 werd verstuurd', sub: 'Naar facturatie@desloep.be · 12 deelnemers.', time: 'gisteren', unread: true },
+      { title: 'Module afgerond: Dossiervorming', sub: 'Privacy en beroepsgeheim — 60% voltooid.', time: 'gisteren', unread: true },
+      { title: 'Herinnering: sessie op 21 mei om 09:30', sub: 'Vanderlindenstraat 15, 1030 Brussel.', time: '3 dagen geleden', unread: false }
+    ].map(m => Object.assign({}, m, {
+      bg: m.unread ? '#F4F6FC' : '#FFFFFF',
+      shadow: m.unread ? 'none' : 'inset 0 0 0 1px #E3E6EB',
+      dot: m.unread ? '#4A5FBE' : 'transparent',
+      weight: m.unread ? 700 : 600
+    }));
+
+    const dlToast = (t) => () => this.toast('Download gestart', t + ' wordt gedownload.');
+
+    return {
+      isMobile: s.isMobile,
+      showSidebarFull: !s.isMobile && s.expanded,
+      showSidebarRail: !s.isMobile && !s.expanded,
+      toggleSidebar: () => this.setState({ expanded: !s.expanded }),
+      navMain, navUtil, navAll: navMain.concat(navUtil),
+      goProfiel: go('profiel'),
+      profielBg: tab === 'profiel' ? '#E2F0EE' : 'transparent',
+      pageTitle: titles[tab][0], pageSub: titles[tab][1],
+
+      isHome: tab === 'home', isInschrijvingen: tab === 'inschrijvingen',
+      isTrajecten: tab === 'trajecten', isOffertes: tab === 'offertes',
+      isCertificaten: tab === 'certificaten', isDownloads: tab === 'downloads',
+      isMeldingen: tab === 'meldingen', isProfiel: tab === 'profiel',
+
+      heroGo: go('inschrijvingen'),
+      onlineBarW: s.mounted ? '60%' : '0%',
+      ringDash: s.mounted ? '94.2 188.5' : '0 188.5',
+
+      setActieMij: () => this.setState({ actieTab: 'mij' }),
+      setActieGebruiker: () => this.setState({ actieTab: 'geb' }),
+      setActieMeldingen: () => this.setState({ actieTab: 'mel' }),
+      atMijW: mij.W, atMijC: mij.C, atMijBg: mij.Bg, atMijSh: mij.Sh, atMijPillBg: mij.PillBg, atMijPillC: mij.PillC,
+      atGebW: geb.W, atGebC: geb.C, atGebBg: geb.Bg, atGebSh: geb.Sh, atGebPillBg: geb.PillBg, atGebPillC: geb.PillC,
+      atMelW: mel.W, atMelC: mel.C, atMelBg: mel.Bg, atMelSh: mel.Sh, atMelPillBg: mel.PillBg, atMelPillC: mel.PillC,
+      acties: actiesData[at],
+
+      certificaten: [
+        { title: 'Veilig omgaan met medicatie', date: '14 maart 2026', download: dlToast('certificaat-medicatie.pdf') },
+        { title: 'EHBO bij kinderen', date: '3 april 2026', download: dlToast('certificaat-ehbo.pdf') },
+        { title: 'Pedagogisch handelen — basis', date: '12 februari 2026', download: dlToast('certificaat-pedagogisch.pdf') }
+      ],
+      downloads: [
+        { title: 'Cursusmap — Omgaan met verbale agressie', meta: 'PDF · 4,2 MB · toegevoegd 2 mei 2026', download: dlToast('cursusmap-agressie.pdf') },
+        { title: 'Oefenkaarten de-escalatie', meta: 'PDF · 1,1 MB · toegevoegd 2 mei 2026', download: dlToast('oefenkaarten.pdf') },
+        { title: 'Sjabloon zorgplan', meta: 'PDF · 380 kB · toegevoegd 8 jan 2026', download: dlToast('sjabloon-zorgplan.pdf') }
+      ],
+      meldingen,
+      markAllRead: () => this.toast('Alles gelezen', 'Je meldingen zijn als gelezen gemarkeerd.'),
+      remindEmployer: () => this.toast('Herinnering verstuurd', 'Je werkgever kreeg een e-mail met de offerte.'),
+      saveProfile: () => this.toast('Opgeslagen', 'Je profielgegevens zijn bijgewerkt.'),
+
+      toast: s.toast,
+      toastTitle: s.toast ? s.toast.title : '',
+      toastSub: s.toast ? s.toast.sub : '',
+      closeToast: () => { clearTimeout(this._tt); this.setState({ toast: null }); }
+    };
+  }
+}
+</script>
+</body>
+</html>
