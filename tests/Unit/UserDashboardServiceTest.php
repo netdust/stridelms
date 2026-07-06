@@ -63,6 +63,13 @@ class UserDashboardServiceTest extends TestCase
         };
         $this->registerService(\Stride\Modules\Invoicing\QuoteService::class, $mockQuoteService);
 
+        // Stub ProfileTypeService — getHomeData() resolves it via ntdst_get()
+        // for the "Voor jou" curated-links read (getForYouPages, T11). Default:
+        // no stored type → no promoted pages, so getHomeData behaves as before.
+        $mockProfileTypeService = $this->createMock(\Stride\Modules\User\ProfileTypeService::class);
+        $mockProfileTypeService->method('getUserType')->willReturn(null);
+        $this->registerService(\Stride\Modules\User\ProfileTypeService::class, $mockProfileTypeService);
+
         // Ensure no registrations by default
         $this->regRepo->method('findByUser')->willReturn([]);
         $this->regRepo->method('findTrajectoryEnrollmentsByUser')->willReturn([]);
