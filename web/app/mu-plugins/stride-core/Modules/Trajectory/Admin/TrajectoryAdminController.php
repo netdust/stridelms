@@ -940,7 +940,7 @@ final class TrajectoryAdminController
         <input type="hidden" id="stride_messages_data" name="ntdst_fields[trajectory_messages]" value="<?php echo esc_attr(json_encode($messages)); ?>">
 
         <script>
-        (function($) {
+        jQuery(function($) {
             'use strict';
 
             var $messagesList = $('#stride-messages-list');
@@ -1003,8 +1003,11 @@ final class TrajectoryAdminController
                 $messagesData.val(JSON.stringify(messages));
             }
 
-            // Add message
-            $('#stride-add-message').on('click', function() {
+            // Add message — delegate off document so the handler survives the
+            // metabox DOM being re-rendered/re-inserted by WP's postbox machinery
+            // after this script first runs (a direct bind to #stride-add-message
+            // is lost when that node is replaced, leaving the button dead).
+            $(document).on('click', '#stride-add-message', function() {
                 var $content = $('#stride-message-content');
                 var content = $content.val().trim();
 
@@ -1041,8 +1044,9 @@ final class TrajectoryAdminController
                 $content.val('');
             });
 
-            // Delete message
-            $messagesList.on('click', '.stride-message-delete', function() {
+            // Delete message — delegate off document (same rationale as add above:
+            // resilient to the messages list node being re-rendered).
+            $(document).on('click', '#stride-messages-list .stride-message-delete', function() {
                 var $item = $(this).closest('.stride-message-item');
                 var index = parseInt($item.data('index'), 10);
 
@@ -1053,7 +1057,7 @@ final class TrajectoryAdminController
                 }
             });
 
-        })(jQuery);
+        });
         </script>
         <?php
     }
@@ -1355,19 +1359,23 @@ final class TrajectoryAdminController
         $editionResults = [];
         foreach ($editions as $edition) {
             $editionId = (int) $edition['id'];
-            $meta = $edition['meta'] ?? [];
-            $courseId = (int) ($meta['course_id'] ?? 0);
+            // withMeta() returns meta keys with the storage prefix intact
+            // (_ntdst_course_id), so read the course id through the repository's
+            // prefix-aware accessor rather than the bare $edition['meta'] array —
+            // a bare $meta['course_id'] is always missing and makes every option
+            // fall back to "Onbekende cursus".
+            $courseId = (int) $this->editionRepository->getField($editionId, 'course_id', 0);
             $courseTitle = $courseId ? get_the_title($courseId) : '';
 
             // Build display text: "Course Name - 15 jan 2025 - Amsterdam"
             $label = $courseTitle ?: __('Onbekende cursus', 'stride');
 
-            $startDate = $meta['start_date'] ?? '';
+            $startDate = (string) $this->editionRepository->getField($editionId, 'start_date', '');
             if (!empty($startDate)) {
                 $label .= ' - ' . date_i18n('d M Y', strtotime($startDate));
             }
 
-            $venue = $meta['venue'] ?? '';
+            $venue = (string) $this->editionRepository->getField($editionId, 'venue', '');
             if (!empty($venue)) {
                 $label .= ' - ' . $venue;
             }
