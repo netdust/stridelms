@@ -101,6 +101,27 @@ final class AutoVoucherEditionTest extends IntegrationTestCase
     {
         global $wpdb;
 
+        // Delete the quotes the handler created for THIS suite's registrations
+        // BEFORE the registration rows go away. The registrations table's
+        // AUTO_INCREMENT id is reused across runs (rows are hard-deleted here),
+        // so a leaked quote whose `registration_id` meta = a low, reused id
+        // collides with a LATER run's fresh registration: findByRegistration()
+        // then returns the stale quote and onRegistrationCreated short-circuits
+        // on "quote already exists" — the auto-voucher never applies and the
+        // discount assertion fails (cross-run pollution, not a code bug).
+        // Cleaning the quote posts keyed on our own registration ids closes it.
+        // (Same class of leak as lesson_integration_test_registration_cleanup.)
+        foreach ($this->createdRegistrationIds as $regId) {
+            $quotePosts = $wpdb->get_col($wpdb->prepare(
+                "SELECT post_id FROM {$wpdb->postmeta}
+                 WHERE meta_key = 'registration_id' AND meta_value = %s",
+                (string) $regId,
+            ));
+            foreach ($quotePosts as $quotePostId) {
+                wp_delete_post((int) $quotePostId, true);
+            }
+        }
+
         foreach ($this->createdRegistrationIds as $id) {
             $wpdb->delete($wpdb->prefix . 'vad_registrations', ['id' => $id]);
         }
