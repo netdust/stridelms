@@ -30,6 +30,18 @@ final class TrajectorySelection
      */
     public function enroll(int $userId, int $trajectoryId, array $options = []): int|WP_Error
     {
+        // Profile-type enroll gate (INV-12 M1). A profile type marked block:true
+        // for this trajectory cannot self-enroll — checked BEFORE create() and the
+        // cascade so no parent or child registration rows are materialised. Fail-open
+        // when no rule applies. Resolved inline via the container (TrajectorySelection
+        // is always ntdst_get-resolved, never `new`'d, but resolving on demand keeps
+        // this cross-cutting policy off the constructor signature — the convention the
+        // enroll seams use).
+        $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
+        if ($policy->blocksEnrollment($userId, $trajectoryId, 'vad_trajectory')) {
+            return new WP_Error('profiletype_blocked', __('Niet beschikbaar voor jouw profieltype', 'stride'));
+        }
+
         // Check trajectory allows enrollment
         if (!$this->trajectories->isEnrollmentOpen($trajectoryId)) {
             return new WP_Error('enrollment_closed', 'Enrollment is not open for this trajectory');
