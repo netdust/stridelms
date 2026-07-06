@@ -870,6 +870,28 @@ return [
                 ['course_title' => 'Keuzecursus: Harm Reduction bij Eetproblemen', 'required' => false, 'group' => 'Keuzecursussen (kies 2)', 'min_choices' => 2],
             ],
             'covers' => ['trajectory:cohort', 'trajectory:elective_choose_n'],
+            // Admin-authored messages shown in the group / trajectory dashboard.
+            // Shape mirrors TrajectoryAdminController (type ∈ announcement|faq|update).
+            'messages' => [
+                [
+                    'type' => 'announcement',
+                    'content' => 'Welkom in het cohort! De eerste praktijkdag start om 9u00 in het BWEEG-leercentrum. Breng je laptop mee.',
+                    'author' => 'Trajectbegeleiding',
+                    'date' => '2 sep 2026',
+                ],
+                [
+                    'type' => 'update',
+                    'content' => 'De keuzecursussen zijn nu open: je kan tot en met volgende week 2 van de 3 keuzecursussen selecteren via je dashboard.',
+                    'author' => 'Trajectbegeleiding',
+                    'date' => '5 sep 2026',
+                ],
+                [
+                    'type' => 'faq',
+                    'content' => 'Veelgestelde vraag: kan ik een cursusdag verzetten? Ja, tot 7 dagen op voorhand via je persoonlijke dashboard of via een collega die je plaats overneemt.',
+                    'author' => 'Support',
+                    'date' => '8 sep 2026',
+                ],
+            ],
         ],
         [
             'title' => 'Traject Jeugdgezondheidswerker',
@@ -896,6 +918,20 @@ return [
                 ['course_title' => 'Webinarreeks: Actuele Thema\'s in Jeugdgezondheid', 'required' => false, 'group' => 'Optionele verdieping'],
             ],
             'covers' => ['trajectory:self_paced'],
+            'messages' => [
+                [
+                    'type' => 'update',
+                    'content' => 'Nieuwe module toegevoegd: "Beweegbeleid Ontwikkelen" staat nu klaar als optionele verdieping in je leerpad.',
+                    'author' => 'Trajectbegeleiding',
+                    'date' => '10 sep 2026',
+                ],
+                [
+                    'type' => 'faq',
+                    'content' => 'Hoe lang heb ik toegang? Je behoudt 12 maanden toegang tot alle online cursussen vanaf je eerste login.',
+                    'author' => 'Support',
+                    'date' => '12 sep 2026',
+                ],
+            ],
         ],
         [
             'title' => 'Kennismakingstraject Jeugdgezondheid',
@@ -919,6 +955,14 @@ return [
                 ['course_title' => 'Motiverende Gespreksvoering rond Voeding bij Jongeren', 'required' => false, 'group' => 'Optionele verdieping (betaald)'],
             ],
             'covers' => [],
+            'messages' => [
+                [
+                    'type' => 'announcement',
+                    'content' => 'Fijn dat je kennismaakt met BWEEG Academy! Begin met de gratis onderdelen en ontdek daarna zelf of je verder wil verdiepen.',
+                    'author' => 'BWEEG Academy',
+                    'date' => '1 sep 2026',
+                ],
+            ],
         ],
         [   // Slug-pinned E2E fixture — keep byte-identical contract
             'title' => 'Test Trajectory',

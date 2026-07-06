@@ -17,6 +17,7 @@ use Stride\Modules\Invoicing\VoucherService;
 use Stride\Modules\Invoicing\VoucherRepository;
 use Stride\Modules\Questionnaire\QuestionnaireRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
+use Stride\Modules\Trajectory\TrajectoryRepository;
 
 final class StrideSeedBuilders
 {
@@ -1140,6 +1141,9 @@ final class StrideSeedBuilders
             $existingId = $this->findIdByTitle('vad_trajectory', $t['title']);
         }
         if ($existingId) {
+            // Backfill admin messages onto already-seeded trajectories so a
+            // re-seed refreshes them without recreating the trajectory.
+            $this->seedTrajectoryMessages($existingId, $t['messages'] ?? []);
             echo "  - Trajectory '" . ($slug ?? $t['title']) . "' exists (ID: {$existingId})\n";
             return $existingId;
         }
@@ -1216,8 +1220,40 @@ final class StrideSeedBuilders
             wp_update_post(['ID' => $id, 'post_name' => $slug]);
         }
         update_post_meta($id, StrideSeedRunner::SEED_META_KEY, true);
+        $this->seedTrajectoryMessages((int) $id, $t['messages'] ?? []);
         echo "  + Trajectory: {$t['title']} [{$t['mode']}] (ID: {$id}, " . count($courses) . " courses)\n";
         return (int) $id;
+    }
+
+    /**
+     * Persist admin-authored messages onto a trajectory, matching the shape and
+     * write path of TrajectoryAdminController::handleSave (the schema-registered
+     * 'trajectory_messages' JSON field, written through the repository so it is
+     * encoded + prefixed the same way the metabox reads it back). No-op when the
+     * matrix entry declares no messages, so untouched trajectories keep whatever
+     * an admin authored by hand.
+     *
+     * @param array<int, array{type?: string, content?: string, author?: string, date?: string}> $messages
+     */
+    private function seedTrajectoryMessages(int $trajectoryId, array $messages): void
+    {
+        if (empty($messages)) {
+            return;
+        }
+
+        $sanitized = [];
+        foreach ($messages as $message) {
+            $sanitized[] = [
+                'type' => sanitize_key($message['type'] ?? 'announcement'),
+                'content' => sanitize_textarea_field($message['content'] ?? ''),
+                'author' => sanitize_text_field($message['author'] ?? ''),
+                'date' => sanitize_text_field($message['date'] ?? ''),
+            ];
+        }
+
+        ntdst_get(TrajectoryRepository::class)->update($trajectoryId, [
+            'trajectory_messages' => $sanitized,
+        ]);
     }
 
     /**
