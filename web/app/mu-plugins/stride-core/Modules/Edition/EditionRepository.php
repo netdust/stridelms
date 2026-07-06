@@ -158,6 +158,39 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
+     * The single `exclude_from_catalog` predicate, appended to every catalog
+     * ENUMERATION meta_query (primary list + both teaser strips). Matches rows
+     * where the flag is NOT true — i.e. the meta is absent (NOT EXISTS) OR the
+     * meta exists but is not the truthy '1'.
+     *
+     * Storage note (verified against a written value, 2026-07-06): a `bool`
+     * field's true persists as the string '1' and false as '' (empty, meta
+     * present). So NOT EXISTS (never flagged) OR != '1' (flag off) is exactly
+     * "listed"; only value === '1' (flagged) is excluded. INV-3: the key is
+     * built from getMetaPrefix(), never hardcoded. Listing-only — find($id) is
+     * deliberately NOT filtered (the flag is not access control).
+     *
+     * @return array<string, mixed> A single OR-grouped meta_query clause.
+     */
+    private function excludeFromCatalogMetaQuery(): array
+    {
+        $key = $this->getMetaPrefix() . 'exclude_from_catalog';
+
+        return [
+            'relation' => 'OR',
+            [
+                'key'     => $key,
+                'compare' => 'NOT EXISTS',
+            ],
+            [
+                'key'     => $key,
+                'value'   => '1',
+                'compare' => '!=',
+            ],
+        ];
+    }
+
+    /**
      * Catalog-eligible edition IDs — the raw enumeration that used to live in
      * stridence_catalog_klassikaal_items() / _online_items(): published
      * editions matching the single date-window predicate, capped to $limit.
@@ -176,6 +209,7 @@ final class EditionRepository extends AbstractRepository
     public function findCatalogEligibleIds(?array $courseIdFilter = null, int $limit = 200): array
     {
         $metaQuery = $this->catalogDateWindowMetaQuery();
+        $metaQuery[] = $this->excludeFromCatalogMetaQuery();
 
         $courseIds = $courseIdFilter === null
             ? []
@@ -254,6 +288,8 @@ final class EditionRepository extends AbstractRepository
             ];
         }
 
+        $metaQuery[] = $this->excludeFromCatalogMetaQuery();
+
         return $this->teaserQuery($metaQuery, $limit);
     }
 
@@ -282,6 +318,7 @@ final class EditionRepository extends AbstractRepository
             'value'   => $ids,
             'compare' => 'IN',
         ];
+        $metaQuery[] = $this->excludeFromCatalogMetaQuery();
 
         return $this->teaserQuery($metaQuery, $limit);
     }

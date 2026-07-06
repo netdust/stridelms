@@ -448,6 +448,25 @@ function stridence_prefetch_course_cards(array $course_ids, ?int $user_id = null
                 'value'   => OfferingStatus::activeValues(),
                 'compare' => 'IN',
             ],
+            // exclude_from_catalog (§6.1): keep flagged editions off the course
+            // cards. $prefix is already the CPT's _ntdst_ meta_prefix (line 426),
+            // so this resolves to the literal _ntdst_exclude_from_catalog the
+            // field persists under (gotcha_cpt_getfields_ntdst_prefix) — same
+            // pattern as the course_id/status clauses above, not a new hardcode.
+            // NOT EXISTS (never flagged) OR != '1' (flag off, stored as ''); only
+            // value === '1' (flagged true) is excluded. Listing-only.
+            [
+                'relation' => 'OR',
+                [
+                    'key'     => $prefix . 'exclude_from_catalog',
+                    'compare' => 'NOT EXISTS',
+                ],
+                [
+                    'key'     => $prefix . 'exclude_from_catalog',
+                    'value'   => '1',
+                    'compare' => '!=',
+                ],
+            ],
         ],
     ]);
     stridence_catalog_warn_if_capped($edition_ids, 'course-card pre-pass editions');
