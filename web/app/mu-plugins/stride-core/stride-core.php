@@ -134,6 +134,12 @@ add_action('ntdst/core_ready', function () use ($config): void {
     ntdst_set(\Stride\Modules\Invoicing\VoucherRepository::class);
     ntdst_set(\Stride\Modules\Trajectory\TrajectoryRepository::class);
 
+    // Enroll-time profile-type policy (INV-12). Plain-DI collaborator, not a
+    // booted service — resolved on demand alongside the repositories it reads,
+    // never in the eager services[] list. Autowired (its deps are the two repos
+    // registered above + ProfileTypeService).
+    ntdst_set(\Stride\Modules\User\ProfileTypePolicy::class);
+
     // AttendanceRepository registered by AttendanceService::init()
 
     // Register interface bindings

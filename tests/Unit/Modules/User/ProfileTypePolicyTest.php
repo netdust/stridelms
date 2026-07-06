@@ -290,4 +290,84 @@ class ProfileTypePolicyTest extends TestCase
             'vad_edition postType MUST resolve rules from the EditionRepository.',
         );
     }
+
+    // ── 8. Corrupt data fail-open (M1): a non-array rule row must not deny ─────
+    //
+    // Regression pins (Cluster-1 review, code-review S2). A rules map whose slug
+    // maps to a SCALAR instead of {block,minimal,voucher} — e.g. from malformed
+    // stored JSON — must fail OPEN across all three methods, never fatal, warn,
+    // or truthily coerce a string into a block. Would go RED if resolveRule's
+    // `is_array($row) ? $row : []` normalization were removed (a scalar row
+    // makes `$row['block']` a TypeError / `(bool) $row` truthy).
+
+    public function testMalformedScalarRuleRowDoesNotBlock(): void
+    {
+        $this->userHasType(7, 'werknemer');
+        $this->editionRules(['werknemer' => 'block']); // scalar, not the expected array
+
+        $this->assertFalse(
+            $this->policy()->blocksEnrollment(7, 100, self::EDITION),
+            'A corrupt (scalar) rule row MUST fail open — enrollment is not denied.',
+        );
+    }
+
+    public function testMalformedScalarRuleRowHasNoAutoVoucher(): void
+    {
+        $this->userHasType(7, 'werknemer');
+        $this->editionRules(['werknemer' => 'CODEA']); // scalar string, not an array
+
+        $this->assertNull($this->policy()->autoVoucherCode(7, 100, self::EDITION));
+    }
+
+    public function testMalformedScalarRuleRowUsesFullForm(): void
+    {
+        $this->userHasType(7, 'werknemer');
+        $this->editionRules(['werknemer' => 'minimal']); // scalar, not an array
+
+        $this->assertFalse($this->policy()->usesMinimalForm(7, 100, self::EDITION));
+    }
+
+    // ── 9. Null/0 user fail-open on the OTHER two methods (security S2) ────────
+    //
+    // Regression pins. Only blocksEnrollment previously had null/0 user tests;
+    // extend the same never-call-getUserType(0) guarantee to usesMinimalForm and
+    // autoVoucherCode. Would go RED if currentUserType's `$userId === null ||
+    // $userId === 0` short-circuit were removed (getUserType(0) is then called
+    // and the guarantee breaks).
+
+    public function testNullUserUsesFullForm(): void
+    {
+        $this->editionRules([
+            'werknemer' => ['block' => false, 'minimal' => true, 'voucher' => null],
+        ]);
+
+        $this->assertFalse($this->policy()->usesMinimalForm(null, 100, self::EDITION));
+    }
+
+    public function testZeroUserUsesFullForm(): void
+    {
+        $this->editionRules([
+            'werknemer' => ['block' => false, 'minimal' => true, 'voucher' => null],
+        ]);
+
+        $this->assertFalse($this->policy()->usesMinimalForm(0, 100, self::EDITION));
+    }
+
+    public function testNullUserHasNoAutoVoucher(): void
+    {
+        $this->editionRules([
+            'werknemer' => ['block' => false, 'minimal' => false, 'voucher' => 'CODEA'],
+        ]);
+
+        $this->assertNull($this->policy()->autoVoucherCode(null, 100, self::EDITION));
+    }
+
+    public function testZeroUserHasNoAutoVoucher(): void
+    {
+        $this->editionRules([
+            'werknemer' => ['block' => false, 'minimal' => false, 'voucher' => 'CODEA'],
+        ]);
+
+        $this->assertNull($this->policy()->autoVoucherCode(0, 100, self::EDITION));
+    }
 }

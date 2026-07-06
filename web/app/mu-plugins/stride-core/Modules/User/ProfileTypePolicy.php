@@ -8,22 +8,26 @@ use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Trajectory\TrajectoryRepository;
 
 /**
- * Enroll-time profile-type policy (plain DI class — NOT a service, no boot hooks).
+ * Enroll-time profile-type policy (plain DI collaborator — NOT an NTDST service:
+ * inert constructor, no boot hooks). Resolved on demand via the container
+ * (registered alongside the repositories in stride-core.php's ntdst/core_ready
+ * block), never eagerly booted.
  *
- * Single convergence point for "for this user's profile type + this enrollable,
- * does enrollment block / use minimal form / auto-apply a voucher?" — read at the
- * enroll seam and the form resolver. No surface re-derives it from raw meta.
+ * INV-12 convergence point: the single place "for this user's profile type +
+ * this enrollable, does enrollment block / use the minimal form / auto-apply a
+ * voucher?" is decided. Consulted at the enroll seams (T4 enroll-time denial,
+ * T7–T9 form resolver / voucher application). No surface re-derives this from
+ * raw meta — they all route through this class.
  *
  * Rules map shape (per enrollable, keyed on profile-type slug):
  *   { "<slug>": { "block": bool, "minimal": bool, "voucher": "<code>|null" }, ... }
- * Resolution keys on the USER'S STORED type slug (via currentUserType). Fail-open:
- * no rule / no user / deleted type ⇒ not blocked, full form, no voucher.
+ * Resolution keys on the USER'S STORED type slug (via currentUserType), and the
+ * $postType routes which repository supplies the rules map.
  *
- * ⚠️ SIGNATURE SHELL (test-author, RED phase). The four method bodies are
- * sentinels so the T2 contract test fails BEHAVIORALLY, not "class not found".
- * The implementer (T2-green) fills these bodies with the real resolution logic
- * WITHOUT editing or weakening the handed-over test. Do NOT register in
- * plugin-config.php here — that is the implementer's wiring.
+ * Fail-open is deliberate everywhere: no rule for the user's type / no user /
+ * deleted type / unknown postType / corrupt (non-array) rule row ⇒ not blocked,
+ * full form, no voucher. Enrollment is never denied by missing or malformed
+ * policy data — only by an explicit `block: true` on the user's resolved type.
  */
 final class ProfileTypePolicy
 {
@@ -84,10 +88,22 @@ final class ProfileTypePolicy
             return [];
         }
 
-        $rules = $postType === 'vad_trajectory'
-            ? $this->trajectories->getProfiletypeRules($enrollableId)
-            : $this->editions->getProfiletypeRules($enrollableId);
+        // Explicit postType routing. The default arm is an INTENTIONAL fail-open
+        // (empty rules ⇒ not blocked / full form / no voucher) for any postType
+        // that is not an enrollable — never a silent fall-through to the edition
+        // repo. NOTE: resolveRule is called once per public method; the enforcing
+        // callers (T4/T7) resolve once and reuse — no memoization needed here.
+        $rules = match ($postType) {
+            'vad_trajectory' => $this->trajectories->getProfiletypeRules($enrollableId),
+            'vad_edition'    => $this->editions->getProfiletypeRules($enrollableId),
+            default          => [],
+        };
 
-        return $rules[$slug] ?? [];
+        $row = $rules[$slug] ?? [];
+
+        // Corrupt data fail-open: a rule row that is not the expected
+        // {block, minimal, voucher} array (e.g. a scalar from malformed stored
+        // JSON) must not fatal or be truthily coerced — treat it as "no rule".
+        return is_array($row) ? $row : [];
     }
 }
