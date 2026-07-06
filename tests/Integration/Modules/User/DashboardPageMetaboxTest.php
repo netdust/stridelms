@@ -298,6 +298,7 @@ final class DashboardPageMetaboxTest extends IntegrationTestCase
         $this->assertContainsOnly(
             'string',
             $stored,
+            null,
             'the stored value must be an array of clean slug strings',
         );
         foreach ($stored as $slug) {
