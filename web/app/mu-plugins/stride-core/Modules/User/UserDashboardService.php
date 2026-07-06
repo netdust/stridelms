@@ -132,7 +132,35 @@ final class UserDashboardService
             'active_enrollments'   => $activeEnrollments,
             'active_trajectories'  => $trajectories,
             'recent_certificates'  => $certificates,
+            'for_you'              => $this->getForYouPages($userId),
         ];
+    }
+
+    /**
+     * SIGNATURE SHELL (T11 — RED contract, ForYouPagesTest).
+     *
+     * Curated dashboard "Voor jou" links: return link cards to WP pages whose
+     * `_stride_dashboard_profiletypes` meta contains the user's STORED profile
+     * type slug (resolved server-side via ProfileTypeService::getUserType — never
+     * a request param). Pure curation, additive: pages are never hidden or gated.
+     *
+     * Contract (assert in tests/Integration/Modules/User/ForYouPagesTest.php):
+     *  - user of type X sees pages promoting X (incl. multi-slug X+Y), NOT Y-only pages
+     *  - MANDATORY negative: user of type Y does NOT see an X-only page
+     *  - no stored type OR no promoted pages → []
+     *  - each card = ['id' => int, 'title' => string, 'url' => string(permalink)]
+     *
+     * Implementer: replace this body with the get_posts serialized-array LIKE
+     * meta_query (pattern '%"' . esc_like($slug) . '"%', compare LIKE) per §6.4.
+     * This test is IMMUTABLE — green it without weakening.
+     *
+     * @return array<int, array{id: int, title: string, url: string}>
+     */
+    public function getForYouPages(int $userId): array
+    {
+        // Sentinel: unconditionally empty so the RED failure is BEHAVIORAL
+        // (userX expects promoted pages, gets none) — not "method not found".
+        return [];
     }
 
     /**
