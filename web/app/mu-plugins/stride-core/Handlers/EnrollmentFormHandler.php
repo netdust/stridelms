@@ -446,7 +446,14 @@ final class EnrollmentFormHandler
                 $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
                 $autoCode = $policy->autoVoucherCode($userId, $trajectoryId, 'vad_trajectory');
                 if ($autoCode !== null) {
-                    $applied = $quoteService->applyVoucher($quoteId, $autoCode);
+                    // editionScoped:false — the trajectory quote stores the
+                    // trajectoryId in its edition_id field, which is NOT a real
+                    // edition. Validate + prorate with NO edition scope, matching
+                    // the manual trajectory path above (validateVoucher(code, null)).
+                    // Without this an edition-scoped voucher is compared against the
+                    // trajectoryId and wrongly rejected, or a single_session voucher
+                    // prorates over 0 sessions → full discount.
+                    $applied = $quoteService->applyVoucher($quoteId, $autoCode, editionScoped: false);
                     if (is_wp_error($applied)) {
                         // Resolved code invalid/expired/over-cap: the enrollment +
                         // quote STAND, just without the discount. Log, do not fail.

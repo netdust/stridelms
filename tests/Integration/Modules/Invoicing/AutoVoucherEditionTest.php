@@ -63,6 +63,8 @@ use Stride\Modules\User\ProfileTypeService;
  */
 final class AutoVoucherEditionTest extends IntegrationTestCase
 {
+    use CleansUpLeakedQuotesTrait;
+
     private const GRANT_SLUG = 'vrijwilliger';   // type whose rule carries a voucher
     private const OTHER_SLUG = 'werknemer';       // type with NO voucher
 
@@ -102,25 +104,10 @@ final class AutoVoucherEditionTest extends IntegrationTestCase
         global $wpdb;
 
         // Delete the quotes the handler created for THIS suite's registrations
-        // BEFORE the registration rows go away. The registrations table's
-        // AUTO_INCREMENT id is reused across runs (rows are hard-deleted here),
-        // so a leaked quote whose `registration_id` meta = a low, reused id
-        // collides with a LATER run's fresh registration: findByRegistration()
-        // then returns the stale quote and onRegistrationCreated short-circuits
-        // on "quote already exists" — the auto-voucher never applies and the
-        // discount assertion fails (cross-run pollution, not a code bug).
-        // Cleaning the quote posts keyed on our own registration ids closes it.
-        // (Same class of leak as lesson_integration_test_registration_cleanup.)
-        foreach ($this->createdRegistrationIds as $regId) {
-            $quotePosts = $wpdb->get_col($wpdb->prepare(
-                "SELECT post_id FROM {$wpdb->postmeta}
-                 WHERE meta_key = 'registration_id' AND meta_value = %s",
-                (string) $regId,
-            ));
-            foreach ($quotePosts as $quotePostId) {
-                wp_delete_post((int) $quotePostId, true);
-            }
-        }
+        // BEFORE the registration rows go away (shared with the trajectory
+        // sibling via CleansUpLeakedQuotesTrait — see the trait for why the
+        // registration-id-reuse leak flakes the money assertions).
+        $this->deleteQuotesForRegistrations($this->createdRegistrationIds);
 
         foreach ($this->createdRegistrationIds as $id) {
             $wpdb->delete($wpdb->prefix . 'vad_registrations', ['id' => $id]);
@@ -175,6 +162,63 @@ final class AutoVoucherEditionTest extends IntegrationTestCase
             1,
             (int) get_post_meta($voucherId, '_ntdst_used_count', true),
             'REDEMPTION must move used_count — a calculated-only discount does not close the M3 gap',
+        );
+    }
+
+    // === 1b. BULK — each attendee redeems their OWN discount (money bug [8]) =
+
+    /**
+     * Regression for cluster-3 money bug [8]: an admin bulk-enrolls N colleagues
+     * (enrolled_by = admin) each of the voucher-granting type. Each attendee's
+     * quote must get the discount AND the voucher's used_count must move by N —
+     * one redemption per attendee, keyed on the ATTENDEE, not the shared payer.
+     *
+     * Pre-fix: applyVoucher redeems against the quote's user_id (= the payer for
+     * a colleague enroll). redeemVoucher's per-user "already redeemed" check then
+     * keys on the admin: attendee 1 redeems, attendees 2..N get already_redeemed
+     * → swallowed as invalid → those attendees silently enroll WITHOUT their
+     * entitled discount and used_count stalls at 1.
+     *
+     * @test
+     */
+    public function bulkEnrolledColleaguesEachRedeemTheirOwnAutoVoucher(): void
+    {
+        $code      = $this->uniqueCode('BULK');
+        $voucherId = $this->createTenPercentVoucher($code);
+        $editionId = $this->createEditionGranting(self::GRANT_SLUG, $code);
+
+        // One admin/payer enrolls two colleagues, both of the granting type.
+        $adminId      = $this->createUserOfType(self::OTHER_SLUG); // payer, not attendee
+        $colleagueOne = $this->createUserOfType(self::GRANT_SLUG);
+        $colleagueTwo = $this->createUserOfType(self::GRANT_SLUG);
+
+        $regOne = $this->seedRegistration($colleagueOne, $editionId, $adminId);
+        $regTwo = $this->seedRegistration($colleagueTwo, $editionId, $adminId);
+
+        // Fire both enrollments as the SAME payer (enrolled_by = admin).
+        $this->fireRegistrationCreated($regOne, $colleagueOne, $editionId, ['enrolled_by' => $adminId]);
+        $this->fireRegistrationCreated($regTwo, $colleagueTwo, $editionId, ['enrolled_by' => $adminId]);
+
+        $quoteOne = $this->quotes->getQuoteByRegistration($regOne);
+        $quoteTwo = $this->quotes->getQuoteByRegistration($regTwo);
+        self::assertIsArray($quoteOne, 'colleague 1 must get a quote');
+        self::assertIsArray($quoteTwo, 'colleague 2 must get a quote');
+
+        self::assertGreaterThan(
+            0,
+            (int) ($quoteOne['discount'] ?? 0),
+            'colleague 1 must receive the auto-voucher discount',
+        );
+        self::assertGreaterThan(
+            0,
+            (int) ($quoteTwo['discount'] ?? 0),
+            'colleague 2 must ALSO receive the auto-voucher discount — not just the first attendee',
+        );
+
+        self::assertSame(
+            2,
+            (int) get_post_meta($voucherId, '_ntdst_used_count', true),
+            'each attendee counts as one redemption — used_count must move by 2, not stall at 1',
         );
     }
 
@@ -381,14 +425,18 @@ final class AutoVoucherEditionTest extends IntegrationTestCase
         return $editionId;
     }
 
-    private function seedRegistration(int $userId, int $editionId): int
+    private function seedRegistration(int $userId, int $editionId, ?int $enrolledBy = null): int
     {
-        $regId = $this->registrations->create([
+        $fields = [
             'user_id'        => $userId,
             'edition_id'     => $editionId,
             'status'         => 'confirmed',
             'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
-        ]);
+        ];
+        if ($enrolledBy !== null) {
+            $fields['enrolled_by'] = $enrolledBy;
+        }
+        $regId = $this->registrations->create($fields);
         self::assertIsInt($regId, 'fixture: could not seed registration');
         $this->createdRegistrationIds[] = $regId;
         return $regId;

@@ -145,7 +145,12 @@ final class EnrollmentQuoteHandler
                 $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
                 $autoCode = $policy->autoVoucherCode($userId, $editionId, 'vad_edition');
                 if ($autoCode !== null) {
-                    $applied = $quotes->applyVoucher($quoteId, $autoCode);
+                    // Redeem against the ATTENDEE ($userId), NOT the quote owner
+                    // ($quoteUserId = the payer). For a bulk enroll of N colleagues
+                    // by one admin the voucher is each attendee's own entitlement:
+                    // keying redemption on the payer would collide on redeemVoucher's
+                    // per-user cap and silently drop attendees 2..N's discount.
+                    $applied = $quotes->applyVoucher($quoteId, $autoCode, redeemAsUserId: $userId);
                     if (is_wp_error($applied)) {
                         // Resolved code invalid/expired/over-cap: enrollment + quote
                         // STAND, just without the discount. Log, do not fail the enroll.

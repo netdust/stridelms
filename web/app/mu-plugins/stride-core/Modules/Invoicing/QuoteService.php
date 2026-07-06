@@ -598,8 +598,35 @@ final class QuoteService extends AbstractService
     /**
      * Apply a voucher code to a draft quote.
      */
-    public function applyVoucher(int $quoteId, string $voucherCode): bool|WP_Error
-    {
+    /**
+     * Apply (validate + redeem) a voucher to a quote.
+     *
+     * @param int         $quoteId        the draft quote to apply the code to
+     * @param string      $voucherCode    the voucher code to apply
+     * @param int|null    $redeemAsUserId MONEY-IDENTITY: the user the redemption
+     *        (and redeemVoucher's per-user "already redeemed" cap) is keyed on.
+     *        Defaults to the quote's user_id (the payer). For a colleague/bulk
+     *        enroll the payer owns the quote but the DISCOUNT belongs to the
+     *        ATTENDEE, so the edition auto-voucher path passes the attendee id
+     *        explicitly — without this, attendee 2..N of a single-payer bulk
+     *        enroll collide on the payer's redemption and silently lose their
+     *        entitled discount (cluster-3 money bug [8]).
+     * @param bool        $editionScoped  MONEY-SCOPE: whether the quote's stored
+     *        edition_id is a REAL edition id that voucher scope + single-session
+     *        proration should apply to. Trajectory quotes reuse the edition_id
+     *        column to hold a trajectoryId, which is NOT an edition — passing
+     *        false makes validation/proration run with NO edition scope, matching
+     *        the manual trajectory path (EnrollmentFormHandler:394 passes null).
+     *        Without this an edition-scoped voucher is compared against the
+     *        trajectoryId and wrongly rejected, or a single_session voucher
+     *        prorates over 0 sessions → full discount (cluster-3 money bug [4]).
+     */
+    public function applyVoucher(
+        int $quoteId,
+        string $voucherCode,
+        ?int $redeemAsUserId = null,
+        bool $editionScoped = true,
+    ): bool|WP_Error {
         $quote = $this->repository->find($quoteId);
 
         if (is_wp_error($quote)) {
@@ -618,10 +645,13 @@ final class QuoteService extends AbstractService
             return new WP_Error('invalid_status', 'Alleen concept-offertes kunnen worden aangepast');
         }
 
-        // Validate and get voucher through VoucherService
+        // Validate and get voucher through VoucherService.
+        // For a trajectory quote ($editionScoped === false) the stored edition_id
+        // is a trajectoryId, not a real edition — validate + prorate with NO
+        // edition scope, matching the manual trajectory path (which passes null).
         $voucherService = $this->voucherService;
-        $editionId = (int) ($meta['edition_id'] ?? 0);
-        $voucher = $voucherService->validateVoucher($voucherCode, $editionId);
+        $editionId = $editionScoped ? (int) ($meta['edition_id'] ?? 0) : 0;
+        $voucher = $voucherService->validateVoucher($voucherCode, $editionScoped ? $editionId : null);
 
         if (is_wp_error($voucher)) {
             ntdst_log('invoicing')->error('Voucher application failed', [
@@ -632,20 +662,31 @@ final class QuoteService extends AbstractService
             return $voucher;
         }
 
+        // Redemption identity: default to the quote owner (the payer), but let
+        // the caller override to the ATTENDEE (edition bulk enroll) — see the
+        // $redeemAsUserId docblock. release + redeem must key on the SAME id so
+        // a replaced voucher is reversed for whoever it was redeemed against.
+        $redemptionUserId = $redeemAsUserId ?? (int) ($meta['user_id'] ?? 0);
+
         // If the quote already has a voucher, release it first so the
         // previous redemption + used_count are reversed. Without this the
         // replaced voucher stays "redeemed" against the quote forever and
         // its quota silently drains.
         $previousCode = (string) ($meta['voucher_code'] ?? '');
-        $userIdForRedemption = (int) ($meta['user_id'] ?? 0);
-        if ($previousCode !== '' && $previousCode !== $voucherCode && $userIdForRedemption > 0) {
-            $voucherService->releaseVoucher($previousCode, $userIdForRedemption, $quoteId);
+        if ($previousCode !== '' && $previousCode !== $voucherCode && $redemptionUserId > 0) {
+            $voucherService->releaseVoucher($previousCode, $redemptionUserId, $quoteId);
         }
 
-        // Calculate discount
+        // Calculate discount. Edition scope (and single_session proration) only
+        // applies when the quote's edition_id is a REAL edition — a trajectory
+        // quote ($editionScoped === false) prorates/validates with no edition.
         $subtotalCents = (int) ($meta['subtotal'] ?? 0);
         $subtotal = Money::cents($subtotalCents);
-        $discount = $voucherService->calculateDiscount($voucher, $subtotal, $editionId > 0 ? $editionId : null);
+        $discount = $voucherService->calculateDiscount(
+            $voucher,
+            $subtotal,
+            ($editionScoped && $editionId > 0) ? $editionId : null,
+        );
 
         // Recalculate totals. Fixed/Full/Percentage discounts are pre-capped
         // by VoucherService::calculateDiscount, but the clamp inside
@@ -664,8 +705,9 @@ final class QuoteService extends AbstractService
         // code was already released above; if this new redeem fails the discount
         // write never runs, so the quote's meta keeps its PRIOR funded state
         // (old voucher_code + old discount) rather than an unfunded new discount.
-        $userId = (int) ($meta['user_id'] ?? 0);
-        $redemption = $voucherService->redeemVoucher($voucherCode, $userId, $quoteId);
+        // Redeem against $redemptionUserId (attendee for bulk enroll, else payer)
+        // so redeemVoucher's per-user cap counts each attendee once.
+        $redemption = $voucherService->redeemVoucher($voucherCode, $redemptionUserId, $quoteId);
 
         if (is_wp_error($redemption)) {
             ntdst_log('invoicing')->error('Voucher application failed', [

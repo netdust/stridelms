@@ -70,7 +70,17 @@ final class ProfiletypeRulesSanitizer
                 continue;
             }
 
-            $voucher = sanitize_text_field((string) ($row['voucher'] ?? ''));
+            // Callers pass the raw slashed $_POST['ntdst_fields'] array. wp_unslash
+            // BEFORE sanitizing (matching the JSON-string branch above) so a
+            // voucher code containing an escaped char (apostrophe/backslash) is not
+            // stored with a stray backslash and then fails to resolve at enroll.
+            // Guard the non-string case: (string) on an ARRAY emits an "Array to
+            // string conversion" warning and stores literal "Array" — a non-string
+            // voucher is simply dropped to empty.
+            $rawVoucher = $row['voucher'] ?? '';
+            $voucher = is_string($rawVoucher)
+                ? sanitize_text_field(wp_unslash($rawVoucher))
+                : '';
 
             $clean[$slug] = [
                 'block'   => (bool) ($row['block'] ?? false),

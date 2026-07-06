@@ -156,8 +156,14 @@ final class EnrollmentFormResolver
         $base['is_online'] = false;
         $base['form_type'] = $trajectoryService->getEnrollmentForm($trajectoryId);
 
+        // Early-return on closed BEFORE the minimal override, matching
+        // resolveEdition() (which returns at its own closed branch): a closed
+        // enrollable never renders a form, so the profile-type minimal override
+        // below must not run for it. Fixes the resolveEdition/resolveTrajectory
+        // divergence (finding [5]).
         if ($mode === 'closed') {
             $base['state'] = 'closed';
+            return $base;
         }
 
         // M2 parity with resolveEdition(): the user's stored profile type can force

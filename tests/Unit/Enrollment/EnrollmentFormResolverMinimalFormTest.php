@@ -137,7 +137,7 @@ final class EnrollmentFormResolverMinimalFormTest extends TestCase
         $this->assertSame(
             'minimal',
             $args['form_type'],
-            'Policy minimal:true must force form_type to "minimal" on the edition path, overriding the stored "default".'
+            'Policy minimal:true must force form_type to "minimal" on the edition path, overriding the stored "default".',
         );
     }
 
@@ -153,7 +153,7 @@ final class EnrollmentFormResolverMinimalFormTest extends TestCase
         $this->assertSame(
             'default',
             $args['form_type'],
-            'Policy minimal:false must NOT force minimal — the stored form_type ("default") stands.'
+            'Policy minimal:false must NOT force minimal — the stored form_type ("default") stands.',
         );
     }
 
@@ -169,7 +169,7 @@ final class EnrollmentFormResolverMinimalFormTest extends TestCase
         $this->assertSame(
             'minimal',
             $args['form_type'],
-            'Policy minimal:true must force form_type to "minimal" on the trajectory path too (parity).'
+            'Policy minimal:true must force form_type to "minimal" on the trajectory path too (parity).',
         );
     }
 
@@ -185,7 +185,34 @@ final class EnrollmentFormResolverMinimalFormTest extends TestCase
         $this->assertSame(
             'default',
             $args['form_type'],
-            'Trajectory: policy minimal:false must leave the stored form_type ("default") in place.'
+            'Trajectory: policy minimal:false must leave the stored form_type ("default") in place.',
+        );
+    }
+
+    // ── 3c. Closed trajectory: the minimal override must NOT run (finding [5]) ──
+    // resolveEdition() early-returns on a closed edition BEFORE its minimal
+    // override; resolveTrajectory() diverged — it set state 'closed' but fell
+    // through to the override. A closed enrollable renders no form, so the
+    // profile-type minimal override must not touch its form_type. With the policy
+    // saying minimal:true, a pre-fix resolveTrajectory would still flip form_type
+    // to 'minimal'; post-fix it early-returns and leaves the stored 'default'.
+    public function testClosedTrajectoryDoesNotApplyMinimalOverride(): void
+    {
+        // Force mode 'closed': a Completed trajectory with enrollment not open.
+        $this->trajectoryService->shouldReceive('getTrajectory')
+            ->andReturn(['status_enum' => OfferingStatus::Completed]);
+        $this->trajectoryService->shouldReceive('isEnrollmentOpen')->andReturn(false);
+
+        // Policy WOULD force minimal if the override ran — it must not, on closed.
+        $this->policy->shouldReceive('usesMinimalForm')->andReturn(true);
+
+        $args = $this->resolver->resolveTemplateArgs($this->trajectoryPost(), 'trajectory');
+
+        $this->assertSame('closed', $args['state'], 'a closed trajectory must resolve to the closed state');
+        $this->assertSame(
+            'default',
+            $args['form_type'],
+            'a closed trajectory must NOT apply the minimal override — resolveTrajectory must early-return on closed like resolveEdition.',
         );
     }
 
@@ -218,7 +245,7 @@ final class EnrollmentFormResolverMinimalFormTest extends TestCase
         $this->assertSame(
             'default',
             $args['form_type'],
-            'A client-supplied form_type must have NO channel into the decision — value is stored-form + policy only.'
+            'A client-supplied form_type must have NO channel into the decision — value is stored-form + policy only.',
         );
     }
 }

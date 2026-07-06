@@ -295,6 +295,22 @@ if (!function_exists('sanitize_text_field')) {
     }
 }
 
+if (!function_exists('wp_unslash')) {
+    /**
+     * Mirror of WP's wp_unslash for the raw-slash sanitizer contract: strips one
+     * level of slashes added by WP's magic-quotes-style request handling.
+     *
+     * @param string|array<mixed> $value
+     * @return string|array<mixed>
+     */
+    function wp_unslash($value)
+    {
+        return is_array($value)
+            ? array_map('wp_unslash', $value)
+            : stripslashes((string) $value);
+    }
+}
+
 if (!function_exists('sanitize_title')) {
     /**
      * Simplified stub of WP sanitize_title.

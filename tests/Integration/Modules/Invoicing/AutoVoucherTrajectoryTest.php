@@ -57,6 +57,8 @@ use Stride\Modules\User\ProfileTypeService;
  */
 final class AutoVoucherTrajectoryTest extends IntegrationTestCase
 {
+    use CleansUpLeakedQuotesTrait;
+
     private const GRANT_SLUG = 'vrijwilliger';   // type whose rule carries a voucher
     private const OTHER_SLUG = 'werknemer';      // type with NO voucher
 
@@ -88,6 +90,12 @@ final class AutoVoucherTrajectoryTest extends IntegrationTestCase
     protected function tearDown(): void
     {
         global $wpdb;
+
+        // Purge the quotes this suite's enrollments produced BEFORE the
+        // registration rows go away — without this the trajectory test leaks
+        // vad_quote posts keyed on reused registration ids and flakes the
+        // edition sibling's money assertions (finding [6]). See the trait.
+        $this->deleteQuotesForRegistrations($this->createdRegistrationIds);
 
         foreach ($this->createdRegistrationIds as $id) {
             $wpdb->delete($wpdb->prefix . 'vad_registrations', ['id' => $id]);
@@ -138,6 +146,74 @@ final class AutoVoucherTrajectoryTest extends IntegrationTestCase
             1,
             (int) get_post_meta($voucherId, '_ntdst_used_count', true),
             'REDEMPTION must move used_count on the trajectory path — calculate-only does not close the M3 gap',
+        );
+    }
+
+    // === 1c. SCOPE — trajectory auto-voucher validated WITHOUT edition scope =
+
+    /**
+     * Regression for cluster-3 money bug [4]: the trajectory quote stores the
+     * trajectoryId in its edition_id meta field ("using trajectory_id as
+     * edition_id"). When the trajectory auto-voucher is applied via
+     * applyVoucher, that path re-reads edition_id (= trajectoryId) and passes it
+     * to validateVoucher/calculateDiscount as if it were a real edition id.
+     *
+     * An edition-SCOPED voucher (scope_mode 'only' a specific REAL edition) is
+     * then compared allowed_edition_id != trajectoryId → wrongly REJECTED, so a
+     * trajectory the admin explicitly granted the code to gets NO discount.
+     *
+     * The MANUAL trajectory path (EnrollmentFormHandler:394) validates with
+     * edition scope = NULL — "edition scope not applicable to a trajectory".
+     * The auto path must reach the SAME outcome: an edition-scoped voucher
+     * granted to a trajectory applies to that trajectory (scope not applicable),
+     * matching what the manual trajectory voucher path already does.
+     *
+     * @test
+     */
+    public function trajectoryAutoVoucherAppliesEvenWhenVoucherIsEditionScoped(): void
+    {
+        $code = $this->uniqueCode('TSCOPE');
+
+        // A voucher scoped to ONLY some unrelated REAL edition. On a trajectory
+        // the edition scope must not apply — the manual path passes null.
+        $scopedEditionId = $this->createTestEdition();
+        $voucherId = $this->createTestVoucher([
+            'code' => $code,
+            'meta' => [
+                '_ntdst_code'           => $code,
+                '_ntdst_discount_type'  => DiscountType::Percentage->value,
+                '_ntdst_discount_value' => 10,
+                '_ntdst_usage_limit'    => 5,
+                '_ntdst_used_count'     => 0,
+                '_ntdst_scope_mode'     => 'only',
+                '_ntdst_edition_id'     => $scopedEditionId,
+            ],
+        ]);
+
+        $userId       = $this->createUserOfType(self::GRANT_SLUG);
+        $trajectoryId = $this->createTrajectoryGranting(self::GRANT_SLUG, $code);
+
+        $enrollmentId = $this->fireTrajectoryQuote($userId, $trajectoryId);
+
+        $quote = $this->quotes->getQuoteByRegistration($enrollmentId);
+        self::assertIsArray($quote, 'a quote must be created for the trajectory enrollment');
+
+        // Pre-fix: applyVoucher validates the voucher against edition_id =
+        // trajectoryId ≠ $scopedEditionId → 'wrong_edition' → discount stays 0.
+        self::assertGreaterThan(
+            0,
+            (int) ($quote['discount'] ?? 0),
+            'an edition-scoped voucher granted to a trajectory must still apply — the trajectory path must validate WITHOUT edition scope (parity with the manual path passing null)',
+        );
+        self::assertSame(
+            $code,
+            (string) ($quote['voucher_code'] ?? ''),
+            "the trajectory quote's voucher_code must be the auto-resolved code",
+        );
+        self::assertSame(
+            1,
+            (int) get_post_meta($voucherId, '_ntdst_used_count', true),
+            'redemption must move used_count on the trajectory path once scope is correctly not-applied',
         );
     }
 
