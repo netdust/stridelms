@@ -1344,10 +1344,69 @@
             var $panel = $form.find('.stride-type-panel[data-for-type="' + type + '"]');
             $panel.show();
 
+            // Attach the rich-text editor to this panel's description textarea
+            // (in_person / webinar only). Runs after the panel is visible so
+            // Pell can measure it. Idempotent — re-shows won't double-init.
+            if (type === 'in_person' || type === 'webinar') {
+                self.initPellEditor($panel);
+            }
+
             // Load lessons for online/assignment types
             if (type === 'online' || type === 'assignment') {
                 self.loadLessonsForSelect($form, type);
             }
+        },
+
+        /**
+         * Attach a Pell rich-text editor to a panel's session_description
+         * textarea. The textarea stays the source of truth (the save path
+         * reads its .val()); Pell mirrors its HTML into the textarea on every
+         * edit, and seeds itself from the textarea's current value (set by
+         * showSessionForm when editing an existing session).
+         */
+        initPellEditor: function($panel) {
+            if (typeof window.pell === 'undefined') {
+                return; // vendor script missing — plain textarea still works
+            }
+
+            var $textarea = $panel.find('textarea[name="session_description"]');
+            if (!$textarea.length) {
+                return;
+            }
+
+            var textarea = $textarea[0];
+
+            // Already initialised for this textarea: just re-sync its value
+            // (e.g. re-editing a different session reuses the same panel DOM).
+            if (textarea._pellEditor) {
+                textarea._pellEditor.content.innerHTML = $textarea.val() || '';
+                return;
+            }
+
+            // Host element for Pell, inserted right after the (now hidden) textarea.
+            var host = document.createElement('div');
+            host.className = 'stride-pell';
+            textarea.style.display = 'none';
+            textarea.parentNode.insertBefore(host, textarea.nextSibling);
+
+            var editor = window.pell.init({
+                element: host,
+                defaultParagraphSeparator: 'p',
+                onChange: function(html) {
+                    // Pell emits an empty <br>-only doc as "<br>"; normalise to ''.
+                    $textarea.val(html === '<br>' ? '' : html);
+                },
+                actions: [
+                    'bold', 'italic', 'underline',
+                    'heading1', 'heading2',
+                    'olist', 'ulist',
+                    'link'
+                ]
+            });
+
+            // Seed from the textarea's current value (set on edit).
+            editor.content.innerHTML = $textarea.val() || '';
+            textarea._pellEditor = editor;
         },
 
         /**

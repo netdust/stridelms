@@ -171,12 +171,34 @@ final class EditionAdminController
 
         // Edition admin styles (from stride-core mu-plugin)
         $basePath = dirname(__DIR__, 3);
+
+        // Pell — tiny (3KB) vendored rich-text editor for session descriptions.
+        $pellCss = $basePath . '/assets/css/vendor/pell.min.css';
+        if (file_exists($pellCss)) {
+            wp_enqueue_style(
+                'pell',
+                plugins_url('assets/css/vendor/pell.min.css', $basePath . '/stride-core.php'),
+                [],
+                filemtime($pellCss),
+            );
+        }
+        $pellJs = $basePath . '/assets/js/vendor/pell.min.js';
+        if (file_exists($pellJs)) {
+            wp_enqueue_script(
+                'pell',
+                plugins_url('assets/js/vendor/pell.min.js', $basePath . '/stride-core.php'),
+                [],
+                filemtime($pellJs),
+                true,
+            );
+        }
+
         $cssFile = $basePath . '/assets/css/admin/edition-admin.css';
         if (file_exists($cssFile)) {
             wp_enqueue_style(
                 'stride-edition-admin',
                 plugins_url('assets/css/admin/edition-admin.css', $basePath . '/stride-core.php'),
-                [],
+                ['pell'],
                 filemtime($cssFile),
             );
         }
@@ -187,7 +209,7 @@ final class EditionAdminController
             wp_enqueue_script(
                 'stride-edition-admin',
                 plugins_url('assets/js/admin/edition-admin.js', $basePath . '/stride-core.php'),
-                ['jquery', 'select2'],
+                ['jquery', 'select2', 'pell'],
                 filemtime($jsFile),
                 true,
             );
@@ -1204,13 +1226,16 @@ final class EditionAdminController
             case SessionType::InPerson:
                 $data['title'] = sanitize_text_field($input['title'] ?? '');
                 $data['location'] = sanitize_text_field($input['location'] ?? '');
-                $data['description'] = sanitize_textarea_field($input['description'] ?? '');
+                // Rich text: pass through raw — the SessionCPT `description`
+                // field's own wp_kses safelist sanitizer (the single, framework
+                // sanitize point) strips anything but the allowed formatting.
+                $data['description'] = (string) ($input['description'] ?? '');
                 break;
 
             case SessionType::Webinar:
                 $data['title'] = sanitize_text_field($input['title'] ?? '');
                 $data['webinar_link'] = esc_url_raw($input['webinar_link'] ?? '');
-                $data['description'] = sanitize_textarea_field($input['description'] ?? '');
+                $data['description'] = (string) ($input['description'] ?? '');
                 $data['location'] = 'Online';
                 break;
 

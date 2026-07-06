@@ -169,19 +169,32 @@ $type_config = match ($type) {
                     <div class="flex items-center justify-end gap-1 <?php echo esc_attr($att['class']); ?> mt-1" title="<?php echo esc_attr($att['label']); ?>">
                         <?php echo stridence_icon($att['icon'], 'w-5 h-5'); ?>
                     </div>
-                <?php elseif ($has_details) : ?>
-                    <div class="text-text-muted transition-transform mt-1" :class="{ 'rotate-180': open }">
-                        <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
-                    </div>
                 <?php endif; ?>
             </div>
+
+            <?php if ($has_details) : ?>
+                <!-- Expand affordance: its own column, vertically centred in the
+                     header row (flex items-center) — not stacked under time/
+                     location. Chevron rotates to point up when open. -->
+                <div class="shrink-0 text-text-muted transition-transform duration-fast" :class="{ 'rotate-180': open }">
+                    <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
+                </div>
+            <?php endif; ?>
         </div>
 
         <?php if ($has_details) : ?>
             <!-- Collapsible details -->
             <div x-show="open" x-collapse x-cloak class="mt-3 pl-[66px]">
                 <?php if ($description) : ?>
-                    <p class="text-sm text-text-muted"><?php echo nl2br(esc_html($description)); ?></p>
+                    <?php
+                    // Rich text: render the safelisted formatting the admin typed
+                    // (headings, bold/italic, lists, links). Sanitized on save,
+                    // re-sanitized here as defense-in-depth. `prose-session`
+                    // gives the block tags basic spacing/list styling.
+                    ?>
+                    <div class="prose-session text-sm text-text-muted">
+                        <?php echo wp_kses($description, stride_session_description_allowed_html()); ?>
+                    </div>
                 <?php endif; ?>
                 <?php if ($optional) : ?>
                     <p class="text-xs text-text-muted mt-2 flex items-center gap-1">

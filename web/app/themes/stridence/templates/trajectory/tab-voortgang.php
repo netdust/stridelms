@@ -64,10 +64,14 @@ foreach ($progress['edition_registrations'] as $edReg) {
 $trajectorySelection = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::class);
 $selectedCourseIds = $trajectorySelection->getSelectedCourseIds((int) ($enrollment->id ?? 0));
 
-// Build timeline rows: required courses in order, then one keuze row per group.
+// Build timeline rows: required courses ordered by their edition's first
+// session date (a chronological journey), then one keuze row per group.
 $timeline = [];
 
-foreach ($progress['required_courses'] as $course) {
+// Course rows collected with a sort key, then ordered by session date before
+// the keuze rows are appended.
+$courseRows = [];
+foreach ($progress['required_courses'] as $orderIndex => $course) {
     if (in_array($course->ID, $completedIds, true)) {
         $state = 'done';
     } elseif (in_array($course->ID, $inProgressIds, true)) {
@@ -76,12 +80,42 @@ foreach ($progress['required_courses'] as $course) {
         $state = 'upcoming';
     }
 
-    $timeline[] = [
+    // Resolve the edition once (registered edition, else the course's next
+    // visible edition) so both the sort key and the render reuse it.
+    $editionId = $editionByCourse[$course->ID] ?? 0;
+    if ($editionId === 0) {
+        $editionId = stridence_trajectory_elective_edition_id((int) $course->ID);
+    }
+
+    $courseRows[] = [
         'type' => 'course',
         'state' => $state,
         'course' => $course,
+        'edition_id' => $editionId,
+        'sort_date' => stridence_trajectory_edition_sort_date($editionId),
+        'order_index' => $orderIndex, // stable tie-break for undated rows
     ];
 }
+
+// Chronological by session date; undated rows (sort_date '') fall to the end,
+// keeping their original schema order via the stable order_index tie-break.
+usort($courseRows, static function (array $a, array $b): int {
+    $ad = $a['sort_date'];
+    $bd = $b['sort_date'];
+    if ($ad === $bd) {
+        return $a['order_index'] <=> $b['order_index'];
+    }
+    if ($ad === '') {
+        return 1;
+    }
+    if ($bd === '') {
+        return -1;
+    }
+
+    return strcmp($ad, $bd);
+});
+
+$timeline = $courseRows;
 
 foreach ($progress['elective_groups'] as $groupIndex => $group) {
     $courses = $group['courses'] ?? [];
@@ -123,6 +157,21 @@ $keuzesUrl = add_query_arg('tab', 'keuzes');
 $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1';
 ?>
 
+<?php
+// Row counts per view — a filter pill is only useful when it has rows.
+$doneCount = 0;
+$todoCount = 0;
+foreach ($timeline as $row) {
+    if ($row['type'] === 'course' && $row['state'] === 'done') {
+        $doneCount++;
+    } else {
+        // electives + not-done courses are "still to do"
+        $todoCount++;
+    }
+}
+$showViewToggle = $doneCount > 0 && $todoCount > 0;
+?>
+
 <?php if ($rowCount === 0) : ?>
     <?php
     stridence_template_part('partials/empty-state', null, [
@@ -132,7 +181,40 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
     ]);
     ?>
 <?php else : ?>
-    <div class="flex flex-col">
+    <div x-data="{ view: 'alles' }">
+        <?php if ($showViewToggle) : ?>
+            <?php
+            // Segmented view filter. Rows carry data-state; Alpine toggles
+            // visibility client-side (theme rule: Alpine for UI state only).
+            $segBase = 'px-3.5 py-1.5 text-[13px] font-semibold rounded-full transition-colors duration-fast';
+            $segOn = 'bg-primary text-white';
+            $segOff = 'text-text-muted hover:text-text';
+            ?>
+            <div class="flex justify-end mb-4">
+                <div class="inline-flex items-center gap-1 bg-surface-alt rounded-full p-1">
+                    <button type="button"
+                            @click="view = 'alles'"
+                            :class="view === 'alles' ? '<?php echo esc_attr($segOn); ?>' : '<?php echo esc_attr($segOff); ?>'"
+                            class="<?php echo esc_attr($segBase); ?>">
+                        <?php esc_html_e('Alles', 'stridence'); ?>
+                    </button>
+                    <button type="button"
+                            @click="view = 'todo'"
+                            :class="view === 'todo' ? '<?php echo esc_attr($segOn); ?>' : '<?php echo esc_attr($segOff); ?>'"
+                            class="<?php echo esc_attr($segBase); ?>">
+                        <?php esc_html_e('Nog te doen', 'stridence'); ?>
+                    </button>
+                    <button type="button"
+                            @click="view = 'done'"
+                            :class="view === 'done' ? '<?php echo esc_attr($segOn); ?>' : '<?php echo esc_attr($segOff); ?>'"
+                            class="<?php echo esc_attr($segBase); ?>">
+                        <?php esc_html_e('Afgerond', 'stridence'); ?>
+                    </button>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <div class="flex flex-col">
         <?php foreach ($timeline as $index => $row) :
             $isLast = ($index === $rowCount - 1);
 
@@ -140,8 +222,14 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
             // soft below the current/upcoming ones.
             // elective rows keep the soft rail even when confirmed — pending visual decision, see /shakeout F8
             $lineClass = $row['state'] === 'done' ? 'bg-primary' : 'bg-border-soft';
+
+            // View bucket for the filter: 'done' for completed courses,
+            // 'todo' for everything else (upcoming/active courses + electives).
+            $rowGroup = ($row['type'] === 'course' && $row['state'] === 'done') ? 'done' : 'todo';
+            $rowShow = "view === 'alles' || view === '" . $rowGroup . "'";
             ?>
-            <div class="flex gap-[18px]">
+            <div class="flex gap-[18px]"
+                 <?php echo $showViewToggle ? 'x-show="' . esc_attr($rowShow) . '"' : ''; ?>>
                 <!-- Connector rail -->
                 <div class="flex flex-col items-center w-7 shrink-0">
                     <?php if ($row['state'] === 'done') : ?>
@@ -163,56 +251,100 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
 
                 <?php if ($row['type'] === 'course') :
                     $course = $row['course'];
+                    // Edition resolved once during timeline assembly (registered
+                    // edition, else the course's next visible edition) — reused
+                    // here so the sort order and the rendered metadata agree.
+                    $editionId = (int) ($row['edition_id'] ?? 0);
+
+                    // The whole card is a link to the edition detail page when
+                    // one exists; rows with no edition (pure-LD / unscheduled)
+                    // stay static. `$cardTag` swaps <a>/<div> so each state
+                    // block below stays identical apart from the wrapper.
+                    $cardUrl = $editionId > 0 ? get_permalink($editionId) : '';
+                    $cardTag = $cardUrl !== '' ? 'a' : 'div';
+                    $cardHref = $cardUrl !== '' ? ' href="' . esc_url($cardUrl) . '"' : '';
+                    // Subtle hover affordance only when the card is a link
+                    // (matches the theme's card hover pattern, e.g. card-edition).
+                    $cardHover = $cardUrl !== ''
+                        ? ' transition-shadow duration-normal ease-out hover:shadow-elevated cursor-pointer'
+                        : '';
                     ?>
                     <?php if ($row['state'] === 'done') :
                         $completedOn = LearnDashHelper::getCompletionDate($course->ID, $user->ID);
+                        // A completed course shows ONLY its format + completion
+                        // date. Its edition metadata (sessions/venue/next-session)
+                        // would describe the next UPCOMING edition — a future
+                        // offering the learner never attended — so it is omitted:
+                        // "afgerond op <date>" before its own session is nonsense.
+                        $metaParts = [];
+                        if ($editionId > 0) {
+                            $metaParts[] = ntdst_get(EditionService::class)->isOnline($editionId)
+                                ? __('Online', 'stridence')
+                                : __('Klassikaal', 'stridence');
+                        }
+                        if ($completedOn) {
+                            $metaParts[] = sprintf(
+                                /* translators: %s: completion date */
+                                __('afgerond op %s', 'stridence'),
+                                date_i18n('j F Y', $completedOn),
+                            );
+                        }
+                        $metaLine = implode(' · ', $metaParts);
                         ?>
-                        <div class="flex-1 bg-surface-card rounded-[14px] shadow-card p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5">
+                        <<?php echo $cardTag . $cardHref; ?> class="flex-1 bg-surface-card rounded-[14px] shadow-card p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5<?php echo esc_attr($cardHover); ?>">
                             <div class="flex-1 min-w-[200px]">
                                 <h3 class="text-[15px] font-bold text-text">
                                     <?php echo esc_html($course->post_title); ?>
                                 </h3>
-                                <?php if ($completedOn) : ?>
+                                <?php if ($metaLine !== '') : ?>
                                     <p class="text-[13px] text-text-muted mt-0.5">
-                                        <?php
-                                        printf(
-                                            /* translators: %s: completion date */
-                                            esc_html__('Afgerond op %s', 'stridence'),
-                                            esc_html(date_i18n('j F Y', $completedOn)),
-                                        );
-                                    ?>
+                                        <?php echo esc_html($metaLine); ?>
                                     </p>
                                 <?php endif; ?>
                             </div>
                             <span class="<?php echo esc_attr($pillSm); ?> bg-badge-open-bg text-badge-open-text">
                                 <?php esc_html_e('Afgerond', 'stridence'); ?>
                             </span>
-                        </div>
+                        </<?php echo $cardTag; ?>>
                     <?php elseif ($row['state'] === 'active') :
-                        $editionId = $editionByCourse[$course->ID] ?? 0;
                         $ctaUrl = $editionId ? get_permalink($editionId) : get_permalink($course);
+                        // Subline: format · sessions · volgende sessie <date> · venue.
+                        $metaLine = stridence_trajectory_meta_line($editionId, true);
                         ?>
-                        <div class="flex-1 bg-badge-online-bg rounded-[14px] p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5">
+                        <<?php echo $cardTag . $cardHref; ?> class="flex-1 bg-badge-online-bg rounded-[14px] p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5<?php echo esc_attr($cardHover); ?>">
                             <div class="flex-1 min-w-[200px]">
                                 <h3 class="text-[15px] font-bold text-text">
                                     <?php echo esc_html($course->post_title); ?>
                                 </h3>
+                                <?php if ($metaLine !== '') : ?>
+                                    <p class="text-[13px] text-text-muted mt-0.5">
+                                        <?php echo esc_html($metaLine); ?>
+                                    </p>
+                                <?php endif; ?>
                             </div>
-                            <a href="<?php echo esc_url($ctaUrl); ?>" class="btn-primary btn-sm">
+                            <span class="btn-primary btn-sm">
                                 <?php esc_html_e('Bekijk editie', 'stridence'); ?> &rarr;
-                            </a>
-                        </div>
-                    <?php else : ?>
-                        <div class="flex-1 border border-border-soft bg-surface-card rounded-[14px] p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5">
+                            </span>
+                        </<?php echo $cardTag; ?>>
+                    <?php else :
+                        // Subline: format · sessions when scheduled, else the bare
+                        // "Nog te starten" label (no-edition graceful fallback).
+                        $metaLine = stridence_trajectory_meta_line($editionId);
+                        ?>
+                        <<?php echo $cardTag . $cardHref; ?> class="flex-1 border border-border-soft bg-surface-card rounded-[14px] p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5<?php echo esc_attr($cardHover); ?>">
                             <div class="flex-1 min-w-[200px]">
                                 <h3 class="text-[15px] font-bold text-text-muted">
                                     <?php echo esc_html($course->post_title); ?>
                                 </h3>
                                 <p class="text-[13px] text-text-muted mt-0.5">
-                                    <?php esc_html_e('Nog te starten', 'stridence'); ?>
+                                    <?php
+                                    echo $metaLine !== ''
+                                        ? esc_html($metaLine . ' · ' . __('nog te starten', 'stridence'))
+                                        : esc_html__('Nog te starten', 'stridence');
+                                    ?>
                                 </p>
                             </div>
-                        </div>
+                        </<?php echo $cardTag; ?>>
                     <?php endif; ?>
                 <?php else :
                     if ($row['name'] !== '') {
@@ -262,5 +394,6 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
                 <?php endif; ?>
             </div>
         <?php endforeach; ?>
+        </div>
     </div>
 <?php endif; ?>

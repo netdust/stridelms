@@ -204,6 +204,37 @@ final class SessionAdminAjaxTest extends IntegrationTestCase
         $this->assertSame('Fysieke uitleg', $session['description'], 'in_person session must persist the posted description');
     }
 
+    public function test_session_description_keeps_safelisted_rich_text_and_strips_the_rest(): void
+    {
+        $editionId = $this->createTestEdition();
+
+        $posted = '<h1>Dagprogramma</h1>'
+            . '<p>Met <strong>Dr. Jansen</strong> en <em>Prof. De Vos</em></p>'
+            . '<ul><li>09:00 Ontvangst</li></ul>'
+            . '<script>alert(1)</script>'
+            . '<img src="x" onerror="alert(1)">';
+
+        $sessionId = $this->addSession($editionId, [
+            'session_type' => 'in_person',
+            'title'        => 'Sessie met programma',
+            'location'     => 'Gent',
+            'description'  => $posted,
+        ]);
+
+        $description = $this->sessionService()->getSession($sessionId)['description'];
+
+        // Safelisted formatting survives so a speaker list / day programme renders.
+        $this->assertStringContainsString('<h1>Dagprogramma</h1>', $description);
+        $this->assertStringContainsString('<strong>Dr. Jansen</strong>', $description);
+        $this->assertStringContainsString('<em>Prof. De Vos</em>', $description);
+        $this->assertStringContainsString('<li>09:00 Ontvangst</li>', $description);
+
+        // Everything outside the safelist is stripped (no stored-XSS vector).
+        $this->assertStringNotContainsString('<script', $description);
+        $this->assertStringNotContainsString('<img', $description);
+        $this->assertStringNotContainsString('onerror', $description);
+    }
+
     public function test_add_webinar_session_persists_link_and_forces_online_location(): void
     {
         $editionId = $this->createTestEdition();

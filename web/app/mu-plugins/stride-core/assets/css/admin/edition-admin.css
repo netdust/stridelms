@@ -2025,3 +2025,51 @@ body.stride-modal-open { overflow: hidden; }
     background: #dcdcde;
     margin: 4px 0;
 }
+
+/* ──────────────────────────────────────────────
+   Pell rich-text editor (session description)
+   Pell renders .pell-actionbar + .pell-content INTO our host div, but
+   does not add its own .pell class to it — so the vendored border rule
+   never lands. Border the host here. And WP-admin's global reset zeroes
+   ul/ol padding + hides markers, so restore list rendering inside the
+   editor (otherwise numbers/bullets clip and an ordered list reads as
+   "always 1").
+   ────────────────────────────────────────────── */
+.stride-pell {
+    border: 1px solid #8c8f94;
+    border-radius: 3px;
+    overflow: hidden;
+    background: #fff;
+}
+.stride-pell .pell-content {
+    height: 160px;
+    min-height: 120px;
+}
+.stride-pell .pell-content ul,
+.stride-pell .pell-content ol {
+    margin: 0 0 .5em;
+    padding-left: 1.6em;
+}
+.stride-pell .pell-content ul {
+    list-style: disc outside;
+}
+.stride-pell .pell-content ol {
+    list-style: decimal outside;
+}
+.stride-pell .pell-content li {
+    display: list-item;
+    margin: 0;
+}
+.stride-pell .pell-content h1 {
+    font-size: 1.3em;
+    font-weight: 700;
+    margin: 0 0 .4em;
+}
+.stride-pell .pell-content h2 {
+    font-size: 1.1em;
+    font-weight: 700;
+    margin: 0 0 .4em;
+}
+.stride-pell .pell-content p {
+    margin: 0 0 .5em;
+}
