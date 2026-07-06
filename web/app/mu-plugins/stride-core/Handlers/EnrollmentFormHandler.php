@@ -434,6 +434,13 @@ final class EnrollmentFormHandler
         );
 
         if (!is_wp_error($quoteId)) {
+            // KNOWN LIMITATION: this auto-voucher fires ONLY on the web-form path.
+            // createTrajectoryQuote is inline (called from the enrollment form
+            // handler), NOT event-driven like the edition path
+            // (EnrollmentQuoteHandler on stride/registration/created). A Partner-API
+            // trajectory enroll creates no quote here, so it gets no auto-voucher.
+            // Backlog: unify trajectory quoting onto the edition event path
+            // (separate feature).
             // Auto-apply the profile-type voucher (M3) — parity with the edition
             // path (EnrollmentQuoteHandler::onRegistrationCreated, T8). Resolved
             // server-side from the ATTENDEE's STORED profile type ($userId, never

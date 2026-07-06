@@ -53,15 +53,17 @@ class ProfileTypeService implements \NTDST_Service_Meta
     }
 
     /**
-     * Discard the per-instance memoised type list so the next getTypes() re-reads
-     * the 'stride_profile_types' option from scratch.
+     * Test-support only: no production caller. Discards the per-instance memoised
+     * type list so the next getTypes() re-reads the 'stride_profile_types' option
+     * from scratch.
      *
      * The service is a process-wide DI singleton and getTypes() memoises into
-     * $cachedTypes on first read; it never re-reads when the option changes.
-     * Tests that mutate the option mid-run (update_option) MUST call this after
-     * the write, or a cache warmed by a prior test class leaks its type set into
-     * theirs — masking a real denial-path assertion behind ordering luck. Cheap,
-     * side-effect-free, no production caller depends on the memoisation surviving.
+     * $cachedTypes on first read; it never re-reads when the option changes. Used
+     * by integration tests that mutate the 'stride_profile_types' option mid-run
+     * (update_option) to bust the per-instance memo — they MUST call this after the
+     * write, or a cache warmed by a prior test class leaks its type set into theirs,
+     * masking a real denial-path assertion behind ordering luck. Cheap,
+     * side-effect-free; do not remove (tests depend on it).
      */
     public function resetCache(): void
     {

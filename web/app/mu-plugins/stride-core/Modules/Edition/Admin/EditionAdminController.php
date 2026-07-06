@@ -627,6 +627,16 @@ final class EditionAdminController
 
     public function renderDroppedSlugNotice(): void
     {
+        // Screen-guard: only surface on this CPT's own edit screen. admin_notices
+        // fires on every admin page, and both this and the trajectory renderer read
+        // the SAME user-scoped transient key — guarding each to its own screen keeps
+        // the notice on the relevant page and stops one renderer consuming the
+        // other's key.
+        $screen = get_current_screen();
+        if (!$screen || $screen->post_type !== EditionCPT::POST_TYPE) {
+            return;
+        }
+
         $key    = 'stride_dropped_profiletype_slugs_' . get_current_user_id();
         $slugs  = get_transient($key);
 
