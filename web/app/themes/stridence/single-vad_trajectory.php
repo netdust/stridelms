@@ -52,6 +52,14 @@ $is_enrolled       = is_user_logged_in()
     && $enrollmentService->hasActiveRegistration(get_current_user_id(), null, $trajectory_id);
 $account_url       = home_url('/mijn-account/trajecten/' . get_post_field('post_name', $trajectory_id) . '/');
 
+// Profile-type enroll gate (T6, M4) — DEFENSE-IN-DEPTH UX ONLY. The authoritative
+// block is the server-side WP_Error at TrajectorySelection::enroll() (T4); this is
+// the cosmetic locked state. Computed ONCE (prefetch discipline) and threaded into
+// the CTA branches below. Blocked replaces the ENROLL affordance only; it never
+// overrides the already-enrolled CTA.
+$is_blocked = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class)
+    ->blocksEnrollment(get_current_user_id() ?: null, $trajectory_id, 'vad_trajectory');
+
 // Enrolled CTA. Unlike an edition, a trajectory parent row carries no
 // completion_tasks (cascade children + the account /voortgang view own
 // task/progress), so the CTA is progress-derived rather than task-derived:
@@ -253,6 +261,13 @@ get_header();
                             <p class="text-xs text-text-muted mt-3 text-center">
                                 <?php esc_html_e('Je bent ingeschreven voor dit traject.', 'stridence'); ?>
                             </p>
+                        <?php elseif ($is_blocked) : ?>
+                            <?php /* T6/M4: blocked profile type — cosmetic locked state
+                                     replacing the enroll button. Server (T4) is the
+                                     authoritative block. */ ?>
+                            <button type="button" class="btn btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
+                                <?php esc_html_e('Niet beschikbaar voor jouw profieltype', 'stridence'); ?>
+                            </button>
                         <?php elseif ($can_enroll) : ?>
                             <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center block">
                                 <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
@@ -298,6 +313,13 @@ get_header();
             <a href="<?php echo esc_url($enrolled_cta['url']); ?>" class="btn-primary w-full text-center">
                 <?php echo esc_html($enrolled_cta['label']); ?>
             </a>
+        </div>
+    <?php elseif ($is_blocked) : ?>
+        <?php /* T6/M4: blocked profile type — cosmetic locked sticky bar. */ ?>
+        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
+            <button type="button" class="btn btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
+                <?php esc_html_e('Niet beschikbaar voor jouw profieltype', 'stridence'); ?>
+            </button>
         </div>
     <?php elseif ($can_enroll) : ?>
         <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
