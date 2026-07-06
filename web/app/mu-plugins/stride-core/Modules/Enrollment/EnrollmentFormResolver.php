@@ -7,6 +7,7 @@ namespace Stride\Modules\Enrollment;
 use Stride\Domain\OfferingStatus;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Trajectory\TrajectoryService;
+use Stride\Modules\User\ProfileTypePolicy;
 use WP_Post;
 
 /**
@@ -115,7 +116,19 @@ final class EnrollmentFormResolver
             return $base;
         }
 
-        if ($base['form_type'] === 'direct') {
+        // M2: the form_type is SERVER-decided. If the user's stored profile type
+        // routes to a minimal form for this edition, force it — this overrides the
+        // edition's stored form_type and is never client-selectable. Read the
+        // stored value's 'direct' intent BEFORE the override so the direct-state
+        // dispatch below stays coherent (a direct enrollable still drives the
+        // no-form side-effect; a minimal profile only changes which form renders).
+        $wantsDirect = $base['form_type'] === 'direct';
+
+        if (ntdst_get(ProfileTypePolicy::class)->usesMinimalForm($userId, $editionId, 'vad_edition')) {
+            $base['form_type'] = 'minimal';
+        }
+
+        if ($wantsDirect) {
             $base['state'] = 'direct';
         }
 
@@ -130,6 +143,7 @@ final class EnrollmentFormResolver
     {
         $trajectoryService = ntdst_get(TrajectoryService::class);
         $trajectoryId = (int) $trajectory->ID;
+        $userId = get_current_user_id();
 
         $mode = $this->computeEnrollmentMode(
             $trajectoryService->getTrajectory($trajectoryId)['status_enum'] ?? OfferingStatus::Draft,
@@ -144,6 +158,13 @@ final class EnrollmentFormResolver
 
         if ($mode === 'closed') {
             $base['state'] = 'closed';
+        }
+
+        // M2 parity with resolveEdition(): the user's stored profile type can force
+        // a minimal form for this trajectory, overriding the stored form_type.
+        // Server-decided, never client-selectable.
+        if (ntdst_get(ProfileTypePolicy::class)->usesMinimalForm($userId, $trajectoryId, 'vad_trajectory')) {
+            $base['form_type'] = 'minimal';
         }
 
         return $base;
