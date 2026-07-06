@@ -172,6 +172,13 @@ add_action('ntdst/features_ready', function () use ($config): void {
     ntdst_set(\Stride\Modules\User\QuotesShortcode::class);
     ntdst_get(\Stride\Modules\User\QuotesShortcode::class);
 
+    // Dashboard "Voor jou" page metabox (T10, M5). Plain-DI class that MUST hook
+    // at boot (save_post_page + init/registerMeta + the page metabox render), so
+    // it is eager-booted here like DashboardShortcode — NOT an on-demand
+    // collaborator (autowired dep: ProfileTypeService).
+    ntdst_set(\Stride\Modules\User\DashboardPageMetabox::class);
+    ntdst_get(\Stride\Modules\User\DashboardPageMetabox::class);
+
     ntdst_set(\Stride\Modules\Audit\ActivityShortcode::class);
     ntdst_get(\Stride\Modules\Audit\ActivityShortcode::class);
 
