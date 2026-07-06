@@ -100,6 +100,9 @@ if ($hasContent) {
         <!-- Stat cards -->
         <?php stridence_template_part('templates/dashboard/partials/stat-cards', null, ['stats' => $stats]); ?>
 
+        <!-- Voor jou — curated links for the user's profile type (renders nothing when empty) -->
+        <?php stridence_template_part('templates/dashboard/partials/voor-jou', null, ['links' => $home_data['for_you'] ?? []]); ?>
+
         <!-- Acties nodig -->
         <?php stridence_template_part('templates/dashboard/partials/action-items', null, ['items' => $actions]); ?>
 
