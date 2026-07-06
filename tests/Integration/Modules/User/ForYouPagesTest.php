@@ -204,6 +204,42 @@ final class ForYouPagesTest extends IntegrationTestCase
     }
 
     /**
+     * Cluster-4 render fix: an empty-title promoted page must NOT be surfaced.
+     *
+     * getForYouPages emits one card per promoted published page. A page with an
+     * empty post_title has no meaningful link label — voor-jou.php `continue`s it
+     * per-card, leaving a bare "Voor jou" heading with no cards beneath. Fix at the
+     * SOURCE: skip empty-title pages before building the card, so the for_you array
+     * stays honest (only renderable cards) and the section's non-empty gate is
+     * accurate. This is the behavioral contract of the fix.
+     *
+     * @test
+     */
+    public function emptyTitlePromotedPageIsExcluded(): void
+    {
+        // A page promoted to type X, but with a blank title — currently returned
+        // (breaks the render), must be excluded after the fix.
+        $emptyTitlePage = wp_insert_post([
+            'post_type'   => 'page',
+            'post_title'  => '   ', // whitespace-only ⇒ no meaningful label
+            'post_status' => 'publish',
+        ]);
+        $this->assertIsInt($emptyTitlePage, 'empty-title page created');
+        update_post_meta($emptyTitlePage, self::META_KEY, [self::TYPE_X]);
+        $this->createdPages[] = $emptyTitlePage;
+
+        $ids = $this->pageIds($this->dashboard->getForYouPages($this->userX));
+
+        $this->assertNotContains(
+            $emptyTitlePage,
+            $ids,
+            'a promoted page with an empty/whitespace title must NOT be surfaced (no bare heading)',
+        );
+        // Positive control so this is not vacuously true: the titled X pages still show.
+        $this->assertContains($this->pageA, $ids, 'the normal titled X page is still surfaced');
+    }
+
+    /**
      * Seam / wiring assertion: getHomeData() exposes the curated links under
      * `for_you`, populated for a promoted user and empty for a typeless one — so
      * the partial can gate on non-empty and stay absent (no empty shell).
@@ -279,6 +315,6 @@ final class ForYouPagesTest extends IntegrationTestCase
      */
     private function pageIds(array $cards): array
     {
-        return array_map(static fn (array $c): int => (int) $c['id'], $cards);
+        return array_map(static fn(array $c): int => (int) $c['id'], $cards);
     }
 }

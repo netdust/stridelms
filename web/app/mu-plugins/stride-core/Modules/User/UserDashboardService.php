@@ -192,6 +192,13 @@ final class UserDashboardService
 
         $cards = [];
         foreach ($pages as $page) {
+            // An untitled page has no meaningful link label — surfacing it would
+            // render a "Voor jou" heading with a bare/empty card beneath it. Skip
+            // at the source so the for_you array stays honest (only renderable
+            // cards) and the section's non-empty gate is accurate.
+            if (trim((string) $page->post_title) === '') {
+                continue;
+            }
             $cards[] = [
                 'id'    => (int) $page->ID,
                 'title' => $page->post_title,

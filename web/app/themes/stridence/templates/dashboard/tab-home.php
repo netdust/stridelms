@@ -30,13 +30,22 @@ $actions      = $home_data['actions'] ?? [];
 $sessions     = $home_data['upcoming_sessions'] ?? [];
 $enrollments  = $home_data['active_enrollments'] ?? [];
 $certificates = $home_data['recent_certificates'] ?? [];
+$forYou       = $home_data['for_you'] ?? [];
 $permalink    = get_permalink();
 
-$hasContent = !empty($actions) || !empty($sessions) || !empty($enrollments) || !empty($certificates);
+// Activity = the user has real enrollments/sessions/actions/certificates. This
+// gates the hero + stat cards + activity sections. "Voor jou" curated links are
+// NOT activity — they render on their own non-empty gate below, so a brand-new
+// user with only curated links sees them WITHOUT zeroed-out stat cards.
+$hasActivity = !empty($actions) || !empty($sessions) || !empty($enrollments) || !empty($certificates);
+
+// The welcome empty-state fires only when there is truly nothing to show —
+// neither activity NOR curated "Voor jou" links.
+$isEmpty = !$hasActivity && empty($forYou);
 
 // Stat cards — derived from the home payload itself (no new data flow).
 $stats = [];
-if ($hasContent) {
+if ($hasActivity) {
     $taskActionCount = count(array_filter($actions, fn($a) => ($a['type'] ?? '') !== 'online_lesson'));
 
     $stats[] = [
@@ -78,7 +87,7 @@ if ($hasContent) {
 ?>
 
 <div class="flex flex-col gap-6" x-data="dashboardHome()">
-    <?php if ($hasContent) : ?>
+    <?php if ($hasActivity) : ?>
 
         <!-- Greeting -->
         <?php if ($greeting && $firstName) : ?>
@@ -99,9 +108,6 @@ if ($hasContent) {
 
         <!-- Stat cards -->
         <?php stridence_template_part('templates/dashboard/partials/stat-cards', null, ['stats' => $stats]); ?>
-
-        <!-- Voor jou — curated links for the user's profile type (renders nothing when empty) -->
-        <?php stridence_template_part('templates/dashboard/partials/voor-jou', null, ['links' => $home_data['for_you'] ?? []]); ?>
 
         <!-- Acties nodig -->
         <?php stridence_template_part('templates/dashboard/partials/action-items', null, ['items' => $actions]); ?>
@@ -234,9 +240,21 @@ if ($hasContent) {
             </section>
         <?php endif; ?>
 
-    <?php else : ?>
+    <?php endif; ?>
 
-        <!-- Welcome empty state -->
+    <!--
+        Voor jou — curated links for the user's profile type. Gated on its OWN
+        non-empty check, INDEPENDENT of activity: a brand-new user with only
+        curated links sees this section (and no zeroed-out stat cards), while a
+        user with activity sees it below their activity. Empty ⇒ renders nothing.
+    -->
+    <?php if (!empty($forYou)) : ?>
+        <?php stridence_template_part('templates/dashboard/partials/voor-jou', null, ['links' => $forYou]); ?>
+    <?php endif; ?>
+
+    <?php if ($isEmpty) : ?>
+
+        <!-- Welcome empty state — only when there is neither activity nor curated links -->
         <?php
         stridence_template_part('partials/empty-state', null, [
             'icon'    => 'book-open',
