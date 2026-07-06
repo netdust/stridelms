@@ -97,6 +97,25 @@ final class ExcludeFromCatalogTest extends IntegrationTestCase
     }
 
     /**
+     * Catalog-eligible edition with exclude_from_catalog EXPLICITLY set false
+     * THROUGH THE FIELD (not raw meta), so the `_ntdst_exclude_from_catalog`
+     * meta row EXISTS carrying the bool-false representation. This exercises the
+     * `!= '1'` OR-branch of excludeFromCatalogMetaQuery() — the "flag present but
+     * false" case the NOT-EXISTS-only fixtures never reach. A `bool` field's
+     * false persists as '' (empty string, meta present), verified below.
+     */
+    private function catalogEligibleEditionFieldFalse(): int
+    {
+        $id = $this->catalogEligibleEdition(false); // no exclude meta yet
+
+        // Write through the CPT field so it goes through the bool sanitizer and
+        // the model's meta-write path exactly as an admin save would.
+        ntdst_data()->get('vad_edition')->update($id, ['exclude_from_catalog' => false]);
+
+        return $id;
+    }
+
+    /**
      * Teaser-eligible edition: the teaser query filters on ACTIVE STATUS (no
      * date WINDOW — a past-end active classroom edition still shows) but orders
      * by `_ntdst_start_date` with an EXISTS join, so a fully-dateless edition is
@@ -171,7 +190,7 @@ final class ExcludeFromCatalogTest extends IntegrationTestCase
         $this->assertNotContains(
             $flagged,
             $ids,
-            'exclude_from_catalog=true must hide the edition from the primary catalog list'
+            'exclude_from_catalog=true must hide the edition from the primary catalog list',
         );
 
         // Negative control: the unflagged sibling — identical but for the flag —
@@ -179,7 +198,41 @@ final class ExcludeFromCatalogTest extends IntegrationTestCase
         $this->assertContains(
             $unflagged,
             $ids,
-            'An unflagged, otherwise-identical edition must stay in the catalog list'
+            'An unflagged, otherwise-identical edition must stay in the catalog list',
+        );
+    }
+
+    /**
+     * Pins the `!= '1'` OR-branch of excludeFromCatalogMetaQuery(): an edition
+     * whose exclude flag is PRESENT-but-false (meta row exists, value '') must
+     * stay in the catalog. The other tests only ever write NO exclude meta, so
+     * they cover the NOT-EXISTS branch alone — if someone deleted the `!= '1'`
+     * clause, a flagged-then-unflagged edition (meta present, '') would be
+     * wrongly EXCLUDED and every other test would stay green. This one goes RED.
+     */
+    public function test_edition_with_flag_present_but_false_stays_in_the_primary_catalog_list(): void
+    {
+        $presentFalse = $this->catalogEligibleEditionFieldFalse();
+
+        // Confirm the representation the branch depends on: the meta row EXISTS
+        // (so NOT EXISTS does NOT match it) and carries the bool-false value ''.
+        $this->assertTrue(
+            metadata_exists('post', $presentFalse, '_ntdst_exclude_from_catalog'),
+            'field=false must leave the meta row PRESENT (not delete it) so the != 1 branch is what keeps it',
+        );
+        $this->assertSame(
+            '',
+            get_post_meta($presentFalse, '_ntdst_exclude_from_catalog', true),
+            'A bool field false persists as an empty string; the != 1 branch must match it',
+        );
+
+        $ids = $this->editions()->findCatalogEligibleIds();
+
+        // The present-but-false edition must be KEPT — only value === '1' hides.
+        $this->assertContains(
+            $presentFalse,
+            $ids,
+            'An edition with exclude_from_catalog PRESENT but false (!= 1) must stay in the catalog list',
         );
     }
 
@@ -198,7 +251,7 @@ final class ExcludeFromCatalogTest extends IntegrationTestCase
         $this->assertInstanceOf(
             \WP_Post::class,
             $post,
-            'exclude_from_catalog is listing-only; find($id) must still return the edition'
+            'exclude_from_catalog is listing-only; find($id) must still return the edition',
         );
         $this->assertSame($flagged, $post->ID);
     }
@@ -217,12 +270,12 @@ final class ExcludeFromCatalogTest extends IntegrationTestCase
         $this->assertNotContains(
             $flagged,
             $ids,
-            'exclude_from_catalog=true must hide the edition from the homepage teaser strip'
+            'exclude_from_catalog=true must hide the edition from the homepage teaser strip',
         );
         $this->assertContains(
             $unflagged,
             $ids,
-            'An unflagged, otherwise teaser-eligible edition must stay in the teaser strip'
+            'An unflagged, otherwise teaser-eligible edition must stay in the teaser strip',
         );
     }
 
@@ -240,12 +293,12 @@ final class ExcludeFromCatalogTest extends IntegrationTestCase
         $this->assertNotContains(
             $flagged,
             $activeIds,
-            'exclude_from_catalog=true must hide the trajectory from the active-trajectory cards'
+            'exclude_from_catalog=true must hide the trajectory from the active-trajectory cards',
         );
         $this->assertContains(
             $unflagged,
             $activeIds,
-            'An unflagged, active trajectory must stay in the trajectory cards'
+            'An unflagged, active trajectory must stay in the trajectory cards',
         );
     }
 }

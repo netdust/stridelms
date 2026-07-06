@@ -71,8 +71,13 @@ final class ProfiletypeEnrollGateTest extends IntegrationTestCase
             ['slug' => self::BLOCKED_SLUG, 'label' => 'Werknemer', 'description' => '', 'color' => '', 'icon' => '', 'order' => 1],
             ['slug' => self::ALLOWED_SLUG, 'label' => 'Zelfstandige', 'description' => '', 'color' => '', 'icon' => '', 'order' => 2],
         ]);
-        // ProfileTypeService memoises getTypes() per-instance; force a fresh read.
-        ntdst_get(ProfileTypeService::class)->getTypes();
+        // ProfileTypeService memoises getTypes() into a per-instance cache and is
+        // a process-wide DI singleton — a prior test class may have warmed it with
+        // a DIFFERENT type set. Calling getTypes() alone would NOT re-read (the
+        // memo short-circuits); resetCache() discards the memo so the werknemer /
+        // zelfstandige slugs written just above actually load. Without this the
+        // denial tests can fail open (getUserType → null) purely by suite ordering.
+        ntdst_get(ProfileTypeService::class)->resetCache();
     }
 
     protected function tearDown(): void
@@ -91,6 +96,9 @@ final class ProfiletypeEnrollGateTest extends IntegrationTestCase
         $this->createdUserIds = [];
 
         delete_option('stride_profile_types');
+        // Discard our warmed cache too, so this suite cannot leak its type set
+        // into a later class the same way a prior one could have leaked into us.
+        ntdst_get(ProfileTypeService::class)->resetCache();
         wp_set_current_user(0);
 
         parent::tearDown();
@@ -111,7 +119,7 @@ final class ProfiletypeEnrollGateTest extends IntegrationTestCase
         $this->assertSame(self::WP_ERROR_CODE, $result->get_error_code());
         $this->assertNull(
             $this->repo->findByUserAndEdition($userId, $editionId),
-            'No registration row may be created when enrollment is blocked'
+            'No registration row may be created when enrollment is blocked',
         );
     }
 
@@ -202,12 +210,12 @@ final class ProfiletypeEnrollGateTest extends IntegrationTestCase
         $this->assertSame(self::WP_ERROR_CODE, $result->get_error_code());
         $this->assertNull(
             $this->repo->findByUserAndTrajectory($userId, $trajectoryId),
-            'No trajectory registration may be created when blocked'
+            'No trajectory registration may be created when blocked',
         );
         $this->assertSame(
             [],
             $this->repo->findByUser($userId),
-            'No cascade child registrations may be created when the parent is blocked'
+            'No cascade child registrations may be created when the parent is blocked',
         );
     }
 
@@ -252,13 +260,13 @@ final class ProfiletypeEnrollGateTest extends IntegrationTestCase
 
         $this->assertNotWPError(
             $result,
-            'Admin promotion of a blocked-type waitlist row must SUCCEED — the block is user-level, not admin-level: ' . $this->err($result)
+            'Admin promotion of a blocked-type waitlist row must SUCCEED — the block is user-level, not admin-level: ' . $this->err($result),
         );
         $row = $this->repo->find($regId);
         $this->assertSame(
             RegistrationStatus::Confirmed->value,
             $row->status,
-            'Promotion must transition the blocked-type user to Confirmed'
+            'Promotion must transition the blocked-type user to Confirmed',
         );
     }
 

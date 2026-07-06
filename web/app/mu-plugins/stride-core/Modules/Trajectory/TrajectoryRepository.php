@@ -65,13 +65,20 @@ final class TrajectoryRepository extends AbstractRepository
         // has no meta row at all, so a bare != '1' clause would WRONGLY drop it —
         // WP's != compare requires the meta to exist). orWhere() would OR the
         // whole query and break the status AND. The set is bounded (limit(-1) =
-        // all ACTIVE trajectories, a small catalog set), so filtering in PHP via
-        // the prefix-aware getExcludeFromCatalog() accessor is cheap and correct.
+        // all ACTIVE trajectories, a small catalog set), so filtering in PHP is
+        // cheap and correct.
+        //
+        // withMeta() already materialised each row's meta under RAW _ntdst_-
+        // prefixed keys (gotcha_withmeta_prefixed_keys), so we read the flag
+        // straight off $row['meta'] instead of re-querying it per row via
+        // getExcludeFromCatalog() (getField()->getMeta()->find()). Coerce to bool
+        // exactly as that accessor does: absent key ⇒ null ⇒ false ⇒ kept
+        // (fail-open); '' ⇒ false ⇒ kept; '1' ⇒ true ⇒ dropped.
+        $flagKey = $this->getMetaPrefix() . 'exclude_from_catalog';
+
         return array_values(array_filter(
             $rows,
-            fn(array $row): bool => !$this->getExcludeFromCatalog(
-                (int) ($row['id'] ?? $row['ID'] ?? 0),
-            ),
+            fn(array $row): bool => !((bool) ($row['meta'][$flagKey] ?? false)),
         ));
     }
 

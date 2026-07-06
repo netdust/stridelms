@@ -261,6 +261,19 @@ get_header();
                             <p class="text-xs text-text-muted mt-3 text-center">
                                 <?php esc_html_e('Je bent ingeschreven voor dit traject.', 'stridence'); ?>
                             </p>
+                        <?php elseif ($status_enum->allowsInterest()) : ?>
+                            <?php /* Interest is checked BEFORE $is_blocked: the server
+                                     (T4 blockedTypeCanRegisterInterest) exempts interest
+                                     from the profile-type block, so a blocked user on an
+                                     announcement trajectory must still see this, not the
+                                     locked bar. The block replaces the ENROLL affordance
+                                     only. */ ?>
+                            <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center block">
+                                <?php esc_html_e('Interesse melden', 'stridence'); ?>
+                            </a>
+                            <p class="text-xs text-text-muted mt-3 text-center">
+                                <?php esc_html_e('Dit traject is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
+                            </p>
                         <?php elseif ($is_blocked) : ?>
                             <?php /* T6/M4: blocked profile type — cosmetic locked state
                                      replacing the enroll button. Server (T4) is the
@@ -272,13 +285,6 @@ get_header();
                             <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center block">
                                 <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
                             </a>
-                        <?php elseif ($status_enum->allowsInterest()) : ?>
-                            <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center block">
-                                <?php esc_html_e('Interesse melden', 'stridence'); ?>
-                            </a>
-                            <p class="text-xs text-text-muted mt-3 text-center">
-                                <?php esc_html_e('Dit traject is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
-                            </p>
                         <?php else : ?>
                             <button type="button" class="btn-secondary w-full text-center opacity-50 cursor-not-allowed" disabled>
                                 <?php esc_html_e('Niet beschikbaar', 'stridence'); ?>
@@ -314,6 +320,15 @@ get_header();
                 <?php echo esc_html($enrolled_cta['label']); ?>
             </a>
         </div>
+    <?php elseif ($status_enum->allowsInterest()) : ?>
+        <?php /* Interest is checked BEFORE $is_blocked (server T4 exempts interest
+                 from the profile-type block): a blocked user on an announcement
+                 trajectory still sees "Interesse melden", not the locked bar. */ ?>
+        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
+            <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center">
+                <?php esc_html_e('Interesse melden', 'stridence'); ?>
+            </a>
+        </div>
     <?php elseif ($is_blocked) : ?>
         <?php /* T6/M4: blocked profile type — cosmetic locked sticky bar. */ ?>
         <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
@@ -325,12 +340,6 @@ get_header();
         <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
             <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center">
                 <?php esc_html_e('Nu inschrijven', 'stridence'); ?>
-            </a>
-        </div>
-    <?php elseif ($status_enum->allowsInterest()) : ?>
-        <div class="fixed bottom-0 left-0 right-0 bg-surface border-t border-border p-4 lg:hidden z-40 safe-area-bottom">
-            <a href="<?php echo esc_url(stride_enrollment_url($trajectory_id, 'trajectory')); ?>" class="btn-primary w-full text-center">
-                <?php esc_html_e('Interesse melden', 'stridence'); ?>
             </a>
         </div>
     <?php endif; ?>

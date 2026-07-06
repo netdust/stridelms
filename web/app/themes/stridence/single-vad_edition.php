@@ -249,24 +249,29 @@ $capacity_fill     = $show_capacity_bar
 // Warning colour mirrors the badge partial's few-threshold (spots 1-5).
 $spots_few = $spots !== null && $spots > 0 && $spots <= 5;
 
-// Mobile sticky CTA — SAME branch logic/order as before the redesign
-// (enrolled → past:none → enroll → interest → waitlist), hoisted so the
-// article wrapper only reserves bottom padding when a bar actually renders.
+// Mobile sticky CTA — branch order: enrolled → past:none → interest →
+// blocked → enroll → waitlist. Interest is checked BEFORE the block because
+// the SERVER exempts interest from the profile-type block (T4
+// blockedTypeCanRegisterInterest): a blocked user on an announcement edition
+// must still see "Interesse melden", not the locked bar. The block replaces
+// the ENROLL affordance only. Hoisted so the article wrapper only reserves
+// bottom padding when a bar actually renders.
 // $mobile_locked: blocked profile type — render a disabled locked bar instead of
-// the enroll link (T6/M4). Only when NOT enrolled and NOT past; blocked never
-// overrides the enrolled CTA. Server (T4) is authoritative regardless of this.
+// the enroll link (T6/M4). Only when NOT enrolled, NOT past, NOT interest-eligible;
+// blocked never overrides the enrolled CTA. Server (T4) is authoritative regardless.
 $mobile_cta = null;
 $mobile_locked = false;
 if ($enrolled_cta) {
     $mobile_cta = $enrolled_cta;
 } elseif ($is_past) {
     $mobile_cta = null; // Past editions show no sticky CTA.
+} elseif ($status->allowsInterest()) {
+    // Interest is exempt from the block (server T4) — it wins over $is_blocked.
+    $mobile_cta = ['label' => __('Interesse melden', 'stridence'), 'url' => home_url('/interesse/?editie=' . $edition_id)];
 } elseif ($is_blocked) {
     $mobile_locked = true; // Blocked replaces the enroll affordance.
 } elseif ($can_enroll) {
     $mobile_cta = ['label' => __('Schrijf je in', 'stridence'), 'url' => stride_enrollment_url($edition_id)];
-} elseif ($status->allowsInterest()) {
-    $mobile_cta = ['label' => __('Interesse melden', 'stridence'), 'url' => home_url('/interesse/?editie=' . $edition_id)];
 } elseif ($status->allowsWaitlist()) {
     $mobile_cta = ['label' => __('Op wachtlijst plaatsen', 'stridence'), 'url' => home_url('/wachtlijst/?editie=' . $edition_id)];
 }
@@ -683,6 +688,19 @@ get_header();
                                 <button type="button" class="btn-primary w-full text-center" disabled>
                                     <?php esc_html_e('Editie is afgelopen', 'stridence'); ?>
                                 </button>
+                            <?php elseif ($status->allowsInterest()) : ?>
+                                <?php /* Interest is checked BEFORE $is_blocked: the server
+                                         (T4 blockedTypeCanRegisterInterest) exempts interest
+                                         from the profile-type block, so a blocked user on an
+                                         announcement edition must still see this, not the
+                                         locked bar. The block replaces the ENROLL affordance
+                                         only. */ ?>
+                                <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center block">
+                                    <?php esc_html_e('Interesse melden', 'stridence'); ?>
+                                </a>
+                                <p class="text-xs text-text-muted text-center">
+                                    <?php esc_html_e('Deze editie is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
+                                </p>
                             <?php elseif ($is_blocked) : ?>
                                 <?php /* T6/M4: blocked profile type — cosmetic locked
                                          state replacing the enroll button. Server (T4)
@@ -694,13 +712,6 @@ get_header();
                                 <a href="<?php echo esc_url(stride_enrollment_url($edition_id)); ?>" class="btn-primary w-full text-center">
                                     <?php esc_html_e('Schrijf je in', 'stridence'); ?>
                                 </a>
-                            <?php elseif ($status->allowsInterest()) : ?>
-                                <a href="<?php echo esc_url(home_url('/interesse/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center block">
-                                    <?php esc_html_e('Interesse melden', 'stridence'); ?>
-                                </a>
-                                <p class="text-xs text-text-muted text-center">
-                                    <?php esc_html_e('Deze editie is nog in voorbereiding. Meld je interesse en we houden je op de hoogte.', 'stridence'); ?>
-                                </p>
                             <?php elseif ($status->allowsWaitlist()) : ?>
                                 <a href="<?php echo esc_url(home_url('/wachtlijst/?editie=' . $edition_id)); ?>" class="btn-primary w-full text-center block">
                                     <?php esc_html_e('Op wachtlijst plaatsen', 'stridence'); ?>
