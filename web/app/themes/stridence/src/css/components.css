@@ -308,6 +308,34 @@
     @apply border-l-4 border-primary/30 pl-4 italic text-text-muted;
   }
 
+  /* Compact rich text inside a session-description dropdown — smaller
+     headings and tighter spacing than .prose-stride (which is sized for
+     full page bodies). Restores list markers the base reset removes. */
+  .prose-session h1,
+  .prose-session h2,
+  .prose-session h3 {
+    @apply font-heading text-[14px] font-bold text-text mt-3 mb-1 first:mt-0;
+  }
+  .prose-session h4 {
+    @apply font-heading text-[13px] font-semibold text-text mt-2.5 mb-1 first:mt-0;
+  }
+  .prose-session p {
+    @apply mb-2 last:mb-0;
+  }
+  .prose-session ul {
+    @apply list-disc pl-5 mb-2 last:mb-0 space-y-0.5;
+  }
+  .prose-session ol {
+    @apply list-decimal pl-5 mb-2 last:mb-0 space-y-0.5;
+  }
+  .prose-session a {
+    @apply text-primary underline hover:text-primary-dark;
+  }
+  .prose-session strong,
+  .prose-session b {
+    @apply font-semibold text-text;
+  }
+
   /* ══════════════════════════════════════
      NAVIGATION
      ══════════════════════════════════════ */

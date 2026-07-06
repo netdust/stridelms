@@ -186,7 +186,15 @@ $type_config = match ($type) {
             <!-- Collapsible details -->
             <div x-show="open" x-collapse x-cloak class="mt-3 pl-[66px]">
                 <?php if ($description) : ?>
-                    <p class="text-sm text-text-muted"><?php echo nl2br(esc_html($description)); ?></p>
+                    <?php
+                    // Rich text: render the safelisted formatting the admin typed
+                    // (headings, bold/italic, lists, links). Sanitized on save,
+                    // re-sanitized here as defense-in-depth. `prose-session`
+                    // gives the block tags basic spacing/list styling.
+                    ?>
+                    <div class="prose-session text-sm text-text-muted">
+                        <?php echo wp_kses($description, stride_session_description_allowed_html()); ?>
+                    </div>
                 <?php endif; ?>
                 <?php if ($optional) : ?>
                     <p class="text-xs text-text-muted mt-2 flex items-center gap-1">

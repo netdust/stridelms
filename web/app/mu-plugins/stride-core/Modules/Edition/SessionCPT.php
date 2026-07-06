@@ -72,6 +72,11 @@ final class SessionCPT
             'description' => [
                 'type' => 'textarea',
                 'label' => 'Omschrijving',
+                // Rich text: override the textarea default sanitizer (which
+                // strips ALL html) with the shared session safelist so the
+                // Pell-authored formatting (headings, bold/italic, lists,
+                // links) survives the Data API write. Single sanitize point.
+                'sanitizer' => static fn ($v): string => wp_kses((string) $v, stride_session_description_allowed_html()),
             ],
             'webinar_link' => [
                 'type' => 'url',

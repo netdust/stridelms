@@ -52,3 +52,46 @@ if (!function_exists('stride_format_date')) {
         return $formatted;
     }
 }
+
+if (!function_exists('stride_session_description_allowed_html')) {
+    /**
+     * The HTML tag safelist for a session description (rich text).
+     *
+     * Single source of truth shared by the SAVE path (wp_kses on the admin
+     * AJAX input) and the RENDER path (wp_kses in the theme's session-row
+     * partial) so what an admin can store and what a visitor sees agree
+     * exactly. Allows only basic block/inline formatting — headings, bold,
+     * italic, ordered/unordered lists, paragraphs, line breaks and links —
+     * so an admin can type a speaker list or a simple day programme; anything
+     * else (scripts, styles, event handlers, iframes) is stripped.
+     *
+     * @return array<string, array<string, bool>> wp_kses allowed-HTML map.
+     */
+    function stride_session_description_allowed_html(): array
+    {
+        return [
+            'p'      => [],
+            'br'     => [],
+            'strong' => [],
+            'b'      => [],
+            'em'     => [],
+            'i'      => [],
+            'u'      => [],
+            // Pell's heading buttons emit h1/h2; h3/h4 kept for hand-written
+            // or pasted markup. All render compactly via .prose-session.
+            'h1'     => [],
+            'h2'     => [],
+            'h3'     => [],
+            'h4'     => [],
+            'ul'     => [],
+            'ol'     => [],
+            'li'     => [],
+            'a'      => [
+                'href'   => true,
+                'title'  => true,
+                'target' => true,
+                'rel'    => true,
+            ],
+        ];
+    }
+}
