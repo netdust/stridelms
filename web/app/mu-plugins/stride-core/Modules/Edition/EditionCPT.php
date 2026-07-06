@@ -246,6 +246,16 @@ final class EditionCPT
                 'label' => 'Documenten',
                 'description' => 'Attachment IDs of course documents (PDFs, presentations, etc.)',
             ],
+            'exclude_from_catalog' => [
+                'type' => 'bool',
+                'label' => __('Niet in catalogus tonen', 'stride'),
+                'description' => __('Editie verbergen uit /klassikaal, /online, teasers en cursuskaarten. Blijft bereikbaar via directe link.', 'stride'),
+            ],
+            'profiletype_rules' => [
+                'type' => 'json',
+                'label' => __('Profieltype-regels', 'stride'),
+                'description' => __('Per-profieltype inschrijfregels: {"<slug>":{"block":bool,"minimal":bool,"voucher":"<code>|null"}}. Leeg = iedereen schrijft normaal in.', 'stride'),
+            ],
         ];
     }
 }

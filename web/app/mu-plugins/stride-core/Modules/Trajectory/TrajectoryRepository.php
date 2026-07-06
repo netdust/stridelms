@@ -430,4 +430,33 @@ final class TrajectoryRepository extends AbstractRepository
 
         return $posts;
     }
+
+    /**
+     * Per-profiletype enrollment rules for this trajectory.
+     *
+     * Thin typed wrapper over the `profiletype_rules` (json) field. Shape:
+     * { "<slug>": { "block": bool, "minimal": bool, "voucher": "<code>|null" } }.
+     * Empty / absent / legacy non-array value coerces to [] (erosion guard —
+     * never null, never a raw string). No prefix hardcoded: getField() applies
+     * the CPT meta_prefix (_ntdst_).
+     *
+     * @return array<string, mixed>
+     */
+    public function getProfiletypeRules(int $trajectoryId): array
+    {
+        $rules = $this->getField($trajectoryId, 'profiletype_rules', []);
+
+        return is_array($rules) ? $rules : [];
+    }
+
+    /**
+     * Whether this trajectory is excluded from the public catalog listing.
+     *
+     * Thin typed wrapper over the `exclude_from_catalog` (bool) field. Absent
+     * or falsey ⇒ false (listed). Not a security boundary — a listing flag.
+     */
+    public function getExcludeFromCatalog(int $trajectoryId): bool
+    {
+        return (bool) $this->getField($trajectoryId, 'exclude_from_catalog', false);
+    }
 }

@@ -197,6 +197,16 @@ final class TrajectoryCPT
                 'label' => 'Aftekenen door beheerder',
                 'description' => 'Post-trajectory admin sign-off required',
             ],
+            'exclude_from_catalog' => [
+                'type' => 'bool',
+                'label' => __('Niet in catalogus tonen', 'stride'),
+                'description' => __('Traject verbergen uit de catalogus en teasers. Blijft bereikbaar via directe link.', 'stride'),
+            ],
+            'profiletype_rules' => [
+                'type' => 'json',
+                'label' => __('Profieltype-regels', 'stride'),
+                'description' => __('Per-profieltype inschrijfregels: {"<slug>":{"block":bool,"minimal":bool,"voucher":"<code>|null"}}. Leeg = iedereen schrijft normaal in.', 'stride'),
+            ],
         ];
     }
 
