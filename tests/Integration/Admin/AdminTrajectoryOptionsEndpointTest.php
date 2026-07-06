@@ -32,6 +32,12 @@ final class AdminTrajectoryOptionsEndpointTest extends IntegrationTestCase
     private static ?int $searchAlphaId = null;
     private static ?int $searchBetaId = null;
     private static string $searchToken = '';
+    // Shared unique token on the open+terminal scope fixtures, so scope tests can
+    // find them via q= instead of relying on page-1 presence. The endpoint pages
+    // (per_page=50, ORDER BY post_title ASC); a shared dev DB can hold >50 other
+    // trajectories that push these fixtures off page 1 — searching the token is
+    // paging-proof and mirrors the already-robust qPerformsServerSideTitleSearch.
+    private static string $scopeToken = '';
 
     public static function setUpBeforeClass(): void
     {
@@ -61,15 +67,19 @@ final class AdminTrajectoryOptionsEndpointTest extends IntegrationTestCase
             throw new \RuntimeException('Could not create plain user: ' . self::$plainUserId->get_error_message());
         }
 
+        // Shared unique token on the scope fixtures — lets scope tests locate them
+        // by q= (paging-proof) rather than assuming page-1 presence.
+        self::$scopeToken = 'Scopemark' . substr(uniqid(), -6);
+
         // Open (active) trajectory.
         $open = wp_insert_post([
-            'post_title'  => 'Trajectory Open T14b',
+            'post_title'  => self::$scopeToken . ' Open T14b',
             'post_type'   => 'vad_trajectory',
             'post_status' => 'publish',
         ]);
         // Terminal (archived) trajectory.
         $terminal = wp_insert_post([
-            'post_title'  => 'Trajectory Archived T14b',
+            'post_title'  => self::$scopeToken . ' Archived T14b',
             'post_type'   => 'vad_trajectory',
             'post_status' => 'publish',
         ]);
@@ -188,8 +198,11 @@ final class AdminTrajectoryOptionsEndpointTest extends IntegrationTestCase
      */
     public function returnsLightweightOptionsForAdmin(): void
     {
+        // Search the scope token so paging on a populated shared DB can't hide the
+        // fixture (the endpoint returns page 1 of ORDER BY post_title ASC).
         $response = $this->dispatch('GET', '/stride/v1/admin/trajectories/options', [
             'scope' => 'all',
+            'q'     => self::$scopeToken,
         ]);
 
         $this->assertEquals(200, $response->get_status(), 'Coordinator must receive 200');
@@ -229,7 +242,11 @@ final class AdminTrajectoryOptionsEndpointTest extends IntegrationTestCase
      */
     public function scopeActiveExcludesTerminalStatus(): void
     {
-        $active = $this->dispatch('GET', '/stride/v1/admin/trajectories/options');
+        // q= the shared scope token in BOTH scopes so the fixtures are findable
+        // regardless of how many other trajectories the shared DB holds (paging).
+        $active = $this->dispatch('GET', '/stride/v1/admin/trajectories/options', [
+            'q' => self::$scopeToken,
+        ]);
         $this->assertEquals(200, $active->get_status());
         $activeItems = $active->get_data()['items'];
 
@@ -242,7 +259,10 @@ final class AdminTrajectoryOptionsEndpointTest extends IntegrationTestCase
             'Archived (terminal) trajectory must be EXCLUDED from default active scope',
         );
 
-        $all = $this->dispatch('GET', '/stride/v1/admin/trajectories/options', ['scope' => 'all']);
+        $all = $this->dispatch('GET', '/stride/v1/admin/trajectories/options', [
+            'scope' => 'all',
+            'q'     => self::$scopeToken,
+        ]);
         $this->assertEquals(200, $all->get_status());
         $allItems = $all->get_data()['items'];
 

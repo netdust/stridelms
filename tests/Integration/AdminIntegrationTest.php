@@ -489,6 +489,11 @@ class AdminIntegrationTest extends IntegrationTestCase
         $openId = wp_insert_post(['post_type' => 'vad_trajectory', 'post_status' => 'publish', 'post_title' => 'Scope Open Traject']);
         $closedId = wp_insert_post(['post_type' => 'vad_trajectory', 'post_status' => 'publish', 'post_title' => 'Scope Closed Traject']);
         $unsetId = wp_insert_post(['post_type' => 'vad_trajectory', 'post_status' => 'publish', 'post_title' => 'Scope Unset Traject']);
+        // Register for suite teardown so these fixtures don't leak into the DB
+        // (raw wp_insert_post bypasses createTest* tracking — see bootstrap tearDownAfterClass).
+        self::$testPosts[] = $openId;
+        self::$testPosts[] = $closedId;
+        self::$testPosts[] = $unsetId;
         update_post_meta($openId, '_ntdst_status', 'open');
         update_post_meta($closedId, '_ntdst_status', 'closed');
         // $unsetId intentionally has NO _ntdst_status row.
