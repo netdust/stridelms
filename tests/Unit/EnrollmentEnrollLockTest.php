@@ -12,6 +12,7 @@ use Stride\Domain\OfferingStatus;
 use Stride\Modules\Enrollment\EnrollmentCompletion;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\User\ProfileTypePolicy;
 use Stride\Tests\TestCase;
 use WP_Error;
 
@@ -79,6 +80,14 @@ final class EnrollmentEnrollLockTest extends TestCase
         $completion->shouldReceive('hasRequirements')->andReturn(false)->byDefault();
         $completion->shouldReceive('initializeForRegistration')->byDefault();
         $this->registerService(EnrollmentCompletion::class, $completion);
+
+        // enroll() resolves the profile-type gate (INV-12) via ntdst_get()
+        // before the duplicate check; register a fail-open mock so this
+        // lock-seam test isn't gated (the gate's own behaviour is covered by
+        // ProfileTypePolicyTest + ProfiletypeEnrollGateTest).
+        $policy = Mockery::mock(ProfileTypePolicy::class);
+        $policy->shouldReceive('blocksEnrollment')->andReturn(false)->byDefault();
+        $this->registerService(ProfileTypePolicy::class, $policy);
     }
 
     protected function tearDown(): void
