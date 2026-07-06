@@ -255,6 +255,19 @@ $showViewToggle = $doneCount > 0 && $todoCount > 0;
                     // edition, else the course's next visible edition) — reused
                     // here so the sort order and the rendered metadata agree.
                     $editionId = (int) ($row['edition_id'] ?? 0);
+
+                    // The whole card is a link to the edition detail page when
+                    // one exists; rows with no edition (pure-LD / unscheduled)
+                    // stay static. `$cardTag` swaps <a>/<div> so each state
+                    // block below stays identical apart from the wrapper.
+                    $cardUrl = $editionId > 0 ? get_permalink($editionId) : '';
+                    $cardTag = $cardUrl !== '' ? 'a' : 'div';
+                    $cardHref = $cardUrl !== '' ? ' href="' . esc_url($cardUrl) . '"' : '';
+                    // Subtle hover affordance only when the card is a link
+                    // (matches the theme's card hover pattern, e.g. card-edition).
+                    $cardHover = $cardUrl !== ''
+                        ? ' transition-shadow duration-normal ease-out hover:shadow-elevated cursor-pointer'
+                        : '';
                     ?>
                     <?php if ($row['state'] === 'done') :
                         $completedOn = LearnDashHelper::getCompletionDate($course->ID, $user->ID);
@@ -278,7 +291,7 @@ $showViewToggle = $doneCount > 0 && $todoCount > 0;
                         }
                         $metaLine = implode(' · ', $metaParts);
                         ?>
-                        <div class="flex-1 bg-surface-card rounded-[14px] shadow-card p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5">
+                        <<?php echo $cardTag . $cardHref; ?> class="flex-1 bg-surface-card rounded-[14px] shadow-card p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5<?php echo esc_attr($cardHover); ?>">
                             <div class="flex-1 min-w-[200px]">
                                 <h3 class="text-[15px] font-bold text-text">
                                     <?php echo esc_html($course->post_title); ?>
@@ -292,13 +305,13 @@ $showViewToggle = $doneCount > 0 && $todoCount > 0;
                             <span class="<?php echo esc_attr($pillSm); ?> bg-badge-open-bg text-badge-open-text">
                                 <?php esc_html_e('Afgerond', 'stridence'); ?>
                             </span>
-                        </div>
+                        </<?php echo $cardTag; ?>>
                     <?php elseif ($row['state'] === 'active') :
                         $ctaUrl = $editionId ? get_permalink($editionId) : get_permalink($course);
                         // Subline: format · sessions · volgende sessie <date> · venue.
                         $metaLine = stridence_trajectory_meta_line($editionId, true);
                         ?>
-                        <div class="flex-1 bg-badge-online-bg rounded-[14px] p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5">
+                        <<?php echo $cardTag . $cardHref; ?> class="flex-1 bg-badge-online-bg rounded-[14px] p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5<?php echo esc_attr($cardHover); ?>">
                             <div class="flex-1 min-w-[200px]">
                                 <h3 class="text-[15px] font-bold text-text">
                                     <?php echo esc_html($course->post_title); ?>
@@ -309,16 +322,16 @@ $showViewToggle = $doneCount > 0 && $todoCount > 0;
                                     </p>
                                 <?php endif; ?>
                             </div>
-                            <a href="<?php echo esc_url($ctaUrl); ?>" class="btn-primary btn-sm">
+                            <span class="btn-primary btn-sm">
                                 <?php esc_html_e('Bekijk editie', 'stridence'); ?> &rarr;
-                            </a>
-                        </div>
+                            </span>
+                        </<?php echo $cardTag; ?>>
                     <?php else :
                         // Subline: format · sessions when scheduled, else the bare
                         // "Nog te starten" label (no-edition graceful fallback).
                         $metaLine = stridence_trajectory_meta_line($editionId);
                         ?>
-                        <div class="flex-1 border border-border-soft bg-surface-card rounded-[14px] p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5">
+                        <<?php echo $cardTag . $cardHref; ?> class="flex-1 border border-border-soft bg-surface-card rounded-[14px] p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5<?php echo esc_attr($cardHover); ?>">
                             <div class="flex-1 min-w-[200px]">
                                 <h3 class="text-[15px] font-bold text-text-muted">
                                     <?php echo esc_html($course->post_title); ?>
@@ -331,7 +344,7 @@ $showViewToggle = $doneCount > 0 && $todoCount > 0;
                                     ?>
                                 </p>
                             </div>
-                        </div>
+                        </<?php echo $cardTag; ?>>
                     <?php endif; ?>
                 <?php else :
                     if ($row['name'] !== '') {
