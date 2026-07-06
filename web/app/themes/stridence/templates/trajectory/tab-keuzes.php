@@ -145,6 +145,11 @@ $selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::c
                     <div class="grid gap-3.5 [grid-template-columns:repeat(auto-fit,minmax(260px,1fr))]">
                         <?php foreach ($courses as $course) :
                             $isSelected = in_array((int) $course->ID, $selectedCourseIds, true);
+                            // Metadata subline from the elective's next upcoming
+                            // edition (format · sessions · venue). Empty for a
+                            // pure-LD elective with no edition — line hidden then.
+                            $electiveEditionId = stridence_trajectory_elective_edition_id((int) $course->ID);
+                            $electiveMeta = stridence_trajectory_meta_line($electiveEditionId);
                             ?>
                             <label class="bg-surface-card rounded-[14px] border border-border-soft hover:border-border p-5 flex flex-col gap-2.5 cursor-pointer transition-all duration-fast has-[:checked]:border-primary has-[:checked]:shadow-[0_0_0_2px_rgb(var(--color-primary)/0.25)]">
                                 <span class="flex items-start justify-between gap-2.5">
@@ -160,6 +165,11 @@ $selectedCourseIds = ntdst_get(\Stride\Modules\Trajectory\TrajectorySelection::c
                                 <?php if (!empty($course->post_excerpt)) : ?>
                                     <span class="text-[13px] text-text-muted leading-relaxed">
                                         <?php echo esc_html($course->post_excerpt); ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if ($electiveMeta !== '') : ?>
+                                    <span class="text-[12px] text-text-faint">
+                                        <?php echo esc_html($electiveMeta); ?>
                                     </span>
                                 <?php endif; ?>
                             </label>

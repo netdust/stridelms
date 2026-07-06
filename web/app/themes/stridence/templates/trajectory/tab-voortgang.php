@@ -163,24 +163,39 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
 
                 <?php if ($row['type'] === 'course') :
                     $course = $row['course'];
+                    // Prefer the edition the user is actually registered in; fall
+                    // back to the course's next visible edition (same lookup the
+                    // Keuzes cards use) so the metadata subline still renders when
+                    // no child-edition registration row exists yet.
+                    $editionId = $editionByCourse[$course->ID]
+                        ?? 0;
+                    if ($editionId === 0) {
+                        $editionId = stridence_trajectory_elective_edition_id((int) $course->ID);
+                    }
                     ?>
                     <?php if ($row['state'] === 'done') :
                         $completedOn = LearnDashHelper::getCompletionDate($course->ID, $user->ID);
+                        // Subline: format · sessions [· afgerond op <date>]. The
+                        // completion date rides the same line as one more part,
+                        // falling back to the bare date when there's no edition.
+                        $metaParts = stridence_trajectory_meta_parts($editionId);
+                        if ($completedOn) {
+                            $metaParts[] = sprintf(
+                                /* translators: %s: completion date */
+                                __('afgerond op %s', 'stridence'),
+                                date_i18n('j F Y', $completedOn),
+                            );
+                        }
+                        $metaLine = implode(' · ', $metaParts);
                         ?>
                         <div class="flex-1 bg-surface-card rounded-[14px] shadow-card p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5">
                             <div class="flex-1 min-w-[200px]">
                                 <h3 class="text-[15px] font-bold text-text">
                                     <?php echo esc_html($course->post_title); ?>
                                 </h3>
-                                <?php if ($completedOn) : ?>
+                                <?php if ($metaLine !== '') : ?>
                                     <p class="text-[13px] text-text-muted mt-0.5">
-                                        <?php
-                                        printf(
-                                            /* translators: %s: completion date */
-                                            esc_html__('Afgerond op %s', 'stridence'),
-                                            esc_html(date_i18n('j F Y', $completedOn)),
-                                        );
-                                    ?>
+                                        <?php echo esc_html($metaLine); ?>
                                     </p>
                                 <?php endif; ?>
                             </div>
@@ -189,27 +204,41 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
                             </span>
                         </div>
                     <?php elseif ($row['state'] === 'active') :
-                        $editionId = $editionByCourse[$course->ID] ?? 0;
                         $ctaUrl = $editionId ? get_permalink($editionId) : get_permalink($course);
+                        // Subline: format · sessions · volgende sessie <date> · venue.
+                        $metaLine = stridence_trajectory_meta_line($editionId, true);
                         ?>
                         <div class="flex-1 bg-badge-online-bg rounded-[14px] p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5">
                             <div class="flex-1 min-w-[200px]">
                                 <h3 class="text-[15px] font-bold text-text">
                                     <?php echo esc_html($course->post_title); ?>
                                 </h3>
+                                <?php if ($metaLine !== '') : ?>
+                                    <p class="text-[13px] text-text-muted mt-0.5">
+                                        <?php echo esc_html($metaLine); ?>
+                                    </p>
+                                <?php endif; ?>
                             </div>
                             <a href="<?php echo esc_url($ctaUrl); ?>" class="btn-primary btn-sm">
                                 <?php esc_html_e('Bekijk editie', 'stridence'); ?> &rarr;
                             </a>
                         </div>
-                    <?php else : ?>
+                    <?php else :
+                        // Subline: format · sessions when scheduled, else the bare
+                        // "Nog te starten" label (no-edition graceful fallback).
+                        $metaLine = stridence_trajectory_meta_line($editionId);
+                        ?>
                         <div class="flex-1 border border-border-soft bg-surface-card rounded-[14px] p-5<?php echo $isLast ? '' : ' mb-3.5'; ?> flex flex-wrap items-center gap-3.5">
                             <div class="flex-1 min-w-[200px]">
                                 <h3 class="text-[15px] font-bold text-text-muted">
                                     <?php echo esc_html($course->post_title); ?>
                                 </h3>
                                 <p class="text-[13px] text-text-muted mt-0.5">
-                                    <?php esc_html_e('Nog te starten', 'stridence'); ?>
+                                    <?php
+                                    echo $metaLine !== ''
+                                        ? esc_html($metaLine . ' · ' . __('nog te starten', 'stridence'))
+                                        : esc_html__('Nog te starten', 'stridence');
+                                    ?>
                                 </p>
                             </div>
                         </div>
