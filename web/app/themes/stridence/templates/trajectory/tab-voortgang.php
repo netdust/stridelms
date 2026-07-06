@@ -157,6 +157,21 @@ $keuzesUrl = add_query_arg('tab', 'keuzes');
 $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1';
 ?>
 
+<?php
+// Row counts per view — a filter pill is only useful when it has rows.
+$doneCount = 0;
+$todoCount = 0;
+foreach ($timeline as $row) {
+    if ($row['type'] === 'course' && $row['state'] === 'done') {
+        $doneCount++;
+    } else {
+        // electives + not-done courses are "still to do"
+        $todoCount++;
+    }
+}
+$showViewToggle = $doneCount > 0 && $todoCount > 0;
+?>
+
 <?php if ($rowCount === 0) : ?>
     <?php
     stridence_template_part('partials/empty-state', null, [
@@ -166,7 +181,40 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
     ]);
     ?>
 <?php else : ?>
-    <div class="flex flex-col">
+    <div x-data="{ view: 'alles' }">
+        <?php if ($showViewToggle) : ?>
+            <?php
+            // Segmented view filter. Rows carry data-state; Alpine toggles
+            // visibility client-side (theme rule: Alpine for UI state only).
+            $segBase = 'px-3.5 py-1.5 text-[13px] font-semibold rounded-full transition-colors duration-fast';
+            $segOn = 'bg-primary text-white';
+            $segOff = 'text-text-muted hover:text-text';
+            ?>
+            <div class="flex justify-end mb-4">
+                <div class="inline-flex items-center gap-1 bg-surface-alt rounded-full p-1">
+                    <button type="button"
+                            @click="view = 'alles'"
+                            :class="view === 'alles' ? '<?php echo esc_attr($segOn); ?>' : '<?php echo esc_attr($segOff); ?>'"
+                            class="<?php echo esc_attr($segBase); ?>">
+                        <?php esc_html_e('Alles', 'stridence'); ?>
+                    </button>
+                    <button type="button"
+                            @click="view = 'todo'"
+                            :class="view === 'todo' ? '<?php echo esc_attr($segOn); ?>' : '<?php echo esc_attr($segOff); ?>'"
+                            class="<?php echo esc_attr($segBase); ?>">
+                        <?php esc_html_e('Nog te doen', 'stridence'); ?>
+                    </button>
+                    <button type="button"
+                            @click="view = 'done'"
+                            :class="view === 'done' ? '<?php echo esc_attr($segOn); ?>' : '<?php echo esc_attr($segOff); ?>'"
+                            class="<?php echo esc_attr($segBase); ?>">
+                        <?php esc_html_e('Afgerond', 'stridence'); ?>
+                    </button>
+                </div>
+            </div>
+        <?php endif; ?>
+
+        <div class="flex flex-col">
         <?php foreach ($timeline as $index => $row) :
             $isLast = ($index === $rowCount - 1);
 
@@ -174,8 +222,14 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
             // soft below the current/upcoming ones.
             // elective rows keep the soft rail even when confirmed — pending visual decision, see /shakeout F8
             $lineClass = $row['state'] === 'done' ? 'bg-primary' : 'bg-border-soft';
+
+            // View bucket for the filter: 'done' for completed courses,
+            // 'todo' for everything else (upcoming/active courses + electives).
+            $rowGroup = ($row['type'] === 'course' && $row['state'] === 'done') ? 'done' : 'todo';
+            $rowShow = "view === 'alles' || view === '" . $rowGroup . "'";
             ?>
-            <div class="flex gap-[18px]">
+            <div class="flex gap-[18px]"
+                 <?php echo $showViewToggle ? 'x-show="' . esc_attr($rowShow) . '"' : ''; ?>>
                 <!-- Connector rail -->
                 <div class="flex flex-col items-center w-7 shrink-0">
                     <?php if ($row['state'] === 'done') : ?>
@@ -204,10 +258,17 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
                     ?>
                     <?php if ($row['state'] === 'done') :
                         $completedOn = LearnDashHelper::getCompletionDate($course->ID, $user->ID);
-                        // Subline: format · sessions [· afgerond op <date>]. The
-                        // completion date rides the same line as one more part,
-                        // falling back to the bare date when there's no edition.
-                        $metaParts = stridence_trajectory_meta_parts($editionId);
+                        // A completed course shows ONLY its format + completion
+                        // date. Its edition metadata (sessions/venue/next-session)
+                        // would describe the next UPCOMING edition — a future
+                        // offering the learner never attended — so it is omitted:
+                        // "afgerond op <date>" before its own session is nonsense.
+                        $metaParts = [];
+                        if ($editionId > 0) {
+                            $metaParts[] = ntdst_get(EditionService::class)->isOnline($editionId)
+                                ? __('Online', 'stridence')
+                                : __('Klassikaal', 'stridence');
+                        }
                         if ($completedOn) {
                             $metaParts[] = sprintf(
                                 /* translators: %s: completion date */
@@ -320,5 +381,6 @@ $pillSm = 'text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex item
                 <?php endif; ?>
             </div>
         <?php endforeach; ?>
+        </div>
     </div>
 <?php endif; ?>
