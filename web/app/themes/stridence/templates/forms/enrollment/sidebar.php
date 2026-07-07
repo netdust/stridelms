@@ -36,7 +36,7 @@ $course_data  = $args['course_data'] ?? [];
             </div>
         </div>
 
-        <!-- Sessions -->
+        <!-- Sessions (edition) -->
         <?php if (!empty($edition_data['sessions'])) : ?>
             <div class="mb-6 pt-4 border-t border-border">
                 <h4 class="text-sm font-medium text-text mb-3">Sessies</h4>
@@ -54,6 +54,39 @@ $course_data  = $args['course_data'] ?? [];
                                     </span>
                                 <?php endif; ?>
                             </span>
+                        </li>
+                    <?php endforeach; ?>
+                </ul>
+            </div>
+        <?php endif; ?>
+
+        <!-- Required courses (trajectory) — one resolved edition per course,
+             same rule as the public trajectory page. Electives are chosen
+             AFTER enrolling (Keuzes tab), so they're not previewed here. -->
+        <?php if (!empty($edition_data['courses'])) : ?>
+            <div class="mb-6 pt-4 border-t border-border">
+                <h4 class="text-sm font-medium text-text mb-3">Verplichte cursussen</h4>
+                <ul class="text-sm text-text-muted space-y-3">
+                    <?php foreach ($edition_data['courses'] as $course) : ?>
+                        <li>
+                            <div class="text-text font-medium"><?= esc_html($course['title']) ?></div>
+                            <div class="flex flex-wrap items-center gap-x-3 gap-y-0.5 mt-0.5">
+                                <?php if (!empty($course['start_date'])) : ?>
+                                    <span class="flex items-center gap-1">
+                                        <?= stridence_icon('calendar', 'w-3.5 h-3.5 shrink-0') ?>
+                                        <?= esc_html(stride_format_date($course['start_date'])) ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if (!empty($course['venue'])) : ?>
+                                    <span class="flex items-center gap-1">
+                                        <?= stridence_icon('map-pin', 'w-3.5 h-3.5 shrink-0') ?>
+                                        <?= esc_html($course['venue']) ?>
+                                    </span>
+                                <?php endif; ?>
+                                <?php if (empty($course['start_date'])) : ?>
+                                    <span class="italic"><?php esc_html_e('Nog in te plannen', 'stridence'); ?></span>
+                                <?php endif; ?>
+                            </div>
                         </li>
                     <?php endforeach; ?>
                 </ul>

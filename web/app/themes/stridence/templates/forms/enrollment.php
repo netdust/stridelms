@@ -12,6 +12,7 @@
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Questionnaire\QuestionnaireRepository;
+use Stride\Modules\Trajectory\TrajectoryRepository;
 use Stride\Modules\Trajectory\TrajectoryService;
 
 if (!is_user_logged_in()) {
@@ -98,6 +99,43 @@ if ($item_type === 'edition' && $item_id) {
             'price'      => $price > 0 ? stride_format_money($price) : '',
             'sessions'   => [],
         ];
+
+        // Required-course preview: same one-resolved-edition-per-course rule
+        // as the public trajectory page (helpers/templates.php — soonest
+        // canEnroll()-eligible edition). Electives aren't shown: they're
+        // chosen AFTER enrolling (the Keuzes tab), so previewing "some"
+        // option here would misrepresent an unmade choice. No sessions/
+        // date/venue at the trajectory level itself — a trajectory has no
+        // single date, only its courses do.
+        $editionService    = ntdst_get(EditionService::class);
+        $editionRepository = ntdst_get(EditionRepository::class);
+        $requiredCourses   = ntdst_get(TrajectoryRepository::class)->getRequiredCourses($item_id);
+
+        foreach ($requiredCourses as $course) {
+            $courseEditions  = $editionRepository->findByCourse((int) $course->ID);
+            $activeEditionId = null;
+            $activeStartDate = '';
+
+            if (is_array($courseEditions)) {
+                foreach ($courseEditions as $ed) {
+                    $edId = (int) ($ed['id'] ?? $ed['ID'] ?? 0);
+                    if (!$edId || !$editionService->canEnroll($edId)) {
+                        continue;
+                    }
+                    $edStart = (string) $editionRepository->getField($edId, 'start_date', '');
+                    if ($activeEditionId === null || ($edStart !== '' && ($activeStartDate === '' || $edStart < $activeStartDate))) {
+                        $activeEditionId = $edId;
+                        $activeStartDate = $edStart;
+                    }
+                }
+            }
+
+            $edition_data['courses'][] = [
+                'title'      => $course->post_title,
+                'start_date' => $activeStartDate ?: null,
+                'venue'      => $activeEditionId ? (string) $editionRepository->getField($activeEditionId, 'venue', '') : null,
+            ];
+        }
     }
 }
 

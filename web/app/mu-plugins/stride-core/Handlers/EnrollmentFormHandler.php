@@ -366,7 +366,10 @@ final class EnrollmentFormHandler
             'enrollment_id' => $enrollmentId,
             'quote_id' => $quoteId,
             'status' => $requiresApproval ? 'pending' : 'confirmed',
-            'redirect_url' => home_url('/mijn-account/?tab=inschrijvingen'),
+            // Trajecten tab, not Opleidingen — a trajectory enrollment lands
+            // the learner in the "Trajecten" list (page-mijn-account.php),
+            // mirroring the edition path's own tab redirect above.
+            'redirect_url' => home_url('/mijn-account/?tab=trajecten'),
         ];
     }
 
