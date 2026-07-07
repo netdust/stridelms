@@ -90,6 +90,18 @@ final class TrajectorySelection
             'trajectory_id' => $trajectoryId,
         ]);
 
+        // Dedicated event the trajectory quote path consumes (Task 2). Ids-only,
+        // all server-minted — NEVER a client-supplied voucher/price/code, so the
+        // downstream quote handler can trust it (money no-client-trust, plan §4/§5).
+        // enrolled_by is null-safe scaffolding for a future payer!=attendee path;
+        // no current caller passes it (web form + Partner both self-enroll, §4).
+        do_action('stride/trajectory/registration/created', [
+            'registration_id' => $registrationId,
+            'user_id' => $userId,
+            'trajectory_id' => $trajectoryId,
+            'enrolled_by' => $options['enrolled_by'] ?? null,
+        ]);
+
         return $registrationId;
     }
 
