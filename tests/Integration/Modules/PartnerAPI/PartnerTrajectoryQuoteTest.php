@@ -74,6 +74,33 @@ final class PartnerTrajectoryQuoteTest extends IntegrationTestCase
     {
         parent::setUpBeforeClass();
 
+        // Purge ORPHAN vad_quote posts before this suite runs. The full integration
+        // suite hard-deletes vad_registrations rows in tearDown, so the table's
+        // AUTO_INCREMENT id gets REUSED across test classes. A quote another class'
+        // enroll handler created and left behind — keyed on a low, reused
+        // registration_id — then collides with THIS suite's freshly-minted
+        // registration id: TrajectoryQuoteHandler's idempotency guard
+        // (getQuoteByRegistration early-return, TrajectoryQuoteHandler.php:56) sees
+        // the stale quote, skips, and the Partner enroll produces NO new quote →
+        // getQuoteByRegistration returns null → the gap-closer assertion flakes
+        // (~1-in-11 full-suite runs). Deleting quotes whose registration_id points
+        // at no live registration closes that collision window deterministically.
+        // Production is unaffected — real registration ids are monotonic and never
+        // reused, so the collision cannot occur there
+        // (gotcha_leaked_quotes_registration_id_reuse).
+        global $wpdb;
+        $regTable = $wpdb->prefix . 'vad_registrations';
+        $orphanQuoteIds = $wpdb->get_col(
+            "SELECT pm.post_id
+               FROM {$wpdb->postmeta} pm
+               JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_quote'
+              WHERE pm.meta_key = 'registration_id'
+                AND CAST(pm.meta_value AS UNSIGNED) NOT IN (SELECT id FROM {$regTable})",
+        );
+        foreach ($orphanQuoteIds as $orphanId) {
+            wp_delete_post((int) $orphanId, true);
+        }
+
         // The partner user: has `partner` role + `_stride_company_id`. Reused across
         // this suite's tests (matching PartnerAPIIntegrationTest's static partner).
         $username = 'ptqt_partner_' . time() . '_' . wp_generate_password(4, false);
