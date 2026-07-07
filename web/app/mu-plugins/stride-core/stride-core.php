@@ -185,6 +185,7 @@ add_action('ntdst/features_ready', function () use ($config): void {
     // Register handlers (all handlers in one place for explicit configuration)
     $handlers = [
         \Stride\Handlers\EnrollmentQuoteHandler::class,
+        \Stride\Handlers\TrajectoryQuoteHandler::class,
         \Stride\Handlers\EnrollmentFormHandler::class,
         \Stride\Handlers\QuoteUpdateHandler::class,
         \Stride\Handlers\ProfileHandler::class,

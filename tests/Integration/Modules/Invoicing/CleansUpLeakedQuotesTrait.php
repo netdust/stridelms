@@ -45,4 +45,35 @@ trait CleansUpLeakedQuotesTrait
             }
         }
     }
+
+    /**
+     * Purge ORPHAN vad_quote posts — quotes whose registration_id meta points at
+     * no live vad_registrations row — before a suite runs.
+     *
+     * Per-test tearDown (deleteQuotesForRegistrations) only cleans a suite's OWN
+     * ids; it cannot clean a quote leaked by ANOTHER test class. When a suite
+     * creates registrations via a path whose id it can't pre-choose (the REST /
+     * enroll seam), a stale orphan quote on the reused AUTO_INCREMENT id trips the
+     * enroll handlers' idempotency guard (getQuoteByRegistration early-return) and
+     * the enroll builds NO quote → the gap-closer assertion flakes ~1-in-11
+     * full-suite runs. Call this from setUpBeforeClass to close the window
+     * deterministically. Production is unaffected — real registration ids are
+     * monotonic and never reused (gotcha_leaked_quotes_registration_id_reuse).
+     */
+    protected static function purgeOrphanQuotes(): void
+    {
+        global $wpdb;
+
+        $regTable = $wpdb->prefix . 'vad_registrations';
+        $orphanQuoteIds = $wpdb->get_col(
+            "SELECT pm.post_id
+               FROM {$wpdb->postmeta} pm
+               JOIN {$wpdb->posts} p ON p.ID = pm.post_id AND p.post_type = 'vad_quote'
+              WHERE pm.meta_key = 'registration_id'
+                AND CAST(pm.meta_value AS UNSIGNED) NOT IN (SELECT id FROM {$regTable})",
+        );
+        foreach ($orphanQuoteIds as $orphanId) {
+            wp_delete_post((int) $orphanId, true);
+        }
+    }
 }

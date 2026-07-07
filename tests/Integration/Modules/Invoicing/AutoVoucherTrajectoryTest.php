@@ -5,9 +5,7 @@ declare(strict_types=1);
 namespace Stride\Tests\Integration\Modules\Invoicing;
 
 use IntegrationTestCase;
-use ReflectionMethod;
 use Stride\Domain\DiscountType;
-use Stride\Handlers\EnrollmentFormHandler;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Invoicing\QuoteService;
 use Stride\Modules\Trajectory\TrajectoryCPT;
@@ -32,11 +30,15 @@ use Stride\Modules\User\ProfileTypeService;
  * the full VoucherService::validateVoucher (scope/date/usage) AND redeems
  * (used_count moves under SELECT ... FOR UPDATE).
  *
- * Seam under test: the REAL createTrajectoryQuote() private method (the exact
- * insertion point the plan pins) driven un-mocked → real createQuote → real
- * autoVoucherCode → real applyVoucher → real redeemVoucher → real used_count.
- * The auto-voucher code is NEVER passed in; it must be resolved server-side from
- * the enrolling user's stored profile type (the money + no-client-trust contract).
+ * Seam under test (MIGRATED, plan 2026-07-07 §7 Task 5): the createTrajectoryQuote()
+ * private method was DELETED in Task 3 — its logic moved into TrajectoryQuoteHandler
+ * on the `stride/trajectory/registration/created` event. This test now drives that
+ * REAL event un-mocked → registered TrajectoryQuoteHandler → real createQuote → real
+ * autoVoucherCode → real applyVoucher → real redeemVoucher → real used_count. The
+ * contract (all assertions below) is PRESERVED; only the invocation seam moved from
+ * reflection to the event. The auto-voucher code is NEVER passed in; it must be
+ * resolved server-side from the enrolling user's stored profile type (the money +
+ * no-client-trust contract).
  *
  * This test asserts, mirroring AutoVoucherEditionTest:
  *   1. CORE (gap-closer): a voucher-granting-type user's trajectory quote gets the
@@ -62,14 +64,17 @@ final class AutoVoucherTrajectoryTest extends IntegrationTestCase
     private const GRANT_SLUG = 'vrijwilliger';   // type whose rule carries a voucher
     private const OTHER_SLUG = 'werknemer';      // type with NO voucher
 
+    private const EVENT = 'stride/trajectory/registration/created';
+
     private QuoteService $quotes;
     private RegistrationRepository $registrations;
-    private EnrollmentFormHandler $handler;
 
     /** @var array<int> registration/enrollment ids to hard-delete in tearDown */
     private array $createdRegistrationIds = [];
     /** @var array<int> user ids to delete in tearDown */
     private array $createdUserIds = [];
+    /** @var array<string> transient keys to clear in tearDown */
+    private array $seededTransientKeys = [];
 
     protected function setUp(): void
     {
@@ -77,8 +82,6 @@ final class AutoVoucherTrajectoryTest extends IntegrationTestCase
 
         $this->quotes        = ntdst_get(QuoteService::class);
         $this->registrations = ntdst_get(RegistrationRepository::class);
-        // Thin handler (no DI) — the real seam under test.
-        $this->handler = new EnrollmentFormHandler();
 
         update_option('stride_profile_types', [
             ['slug' => self::GRANT_SLUG, 'label' => 'Vrijwilliger', 'description' => '', 'color' => '', 'icon' => '', 'order' => 1],
@@ -101,6 +104,11 @@ final class AutoVoucherTrajectoryTest extends IntegrationTestCase
             $wpdb->delete($wpdb->prefix . 'vad_registrations', ['id' => $id]);
         }
         $this->createdRegistrationIds = [];
+
+        foreach ($this->seededTransientKeys as $key) {
+            delete_transient($key);
+        }
+        $this->seededTransientKeys = [];
 
         require_once ABSPATH . 'wp-admin/includes/user.php';
         foreach ($this->createdUserIds as $userId) {
@@ -389,12 +397,19 @@ final class AutoVoucherTrajectoryTest extends IntegrationTestCase
     }
 
     /**
-     * Drive the REAL trajectory quote seam un-mocked: the private
-     * createTrajectoryQuote() method the plan pins as T9's insertion point.
-     * A fresh enrollment id is minted per call (createTrajectoryQuote uses it as
-     * the quote's registration_id, so getQuoteByRegistration($enrollmentId) finds
-     * the quote). The auto-voucher code is NEVER passed here — it must be resolved
-     * server-side from the user's stored type.
+     * Drive the REAL trajectory quote seam un-mocked via the EVENT (MIGRATED,
+     * plan 2026-07-07 §7 Task 5). The reflected createTrajectoryQuote() was deleted
+     * in Task 3; its logic now lives in TrajectoryQuoteHandler on
+     * `stride/trajectory/registration/created`. A fresh enrollment id is minted per
+     * call (the handler keys the quote's registration_id on it, so
+     * getQuoteByRegistration($enrollmentId) finds the quote — the return value is
+     * UNCHANGED from the reflected version). The auto-voucher code is NEVER passed
+     * on the payload — it must be resolved server-side from the user's stored type.
+     *
+     * A manual voucher is delivered the way production does it: via the NAMESPACED
+     * pending-billing transient the handler reads (`stride_pending_billing_traj_`),
+     * seeded BEFORE the event fires — the no-stacking case depends on the manual
+     * code reaching the handler through this transient.
      */
     private function fireTrajectoryQuote(int $userId, int $trajectoryId, string $manualVoucher = ''): int
     {
@@ -411,18 +426,22 @@ final class AutoVoucherTrajectoryTest extends IntegrationTestCase
         self::assertIsInt($enrollmentId, 'fixture: could not seed trajectory enrollment row');
         $this->createdRegistrationIds[] = $enrollmentId;
 
-        $method = new ReflectionMethod(EnrollmentFormHandler::class, 'createTrajectoryQuote');
-        $method->setAccessible(true);
-        $quoteId = $method->invoke(
-            $this->handler,
-            $userId,
-            $enrollmentId,
-            $trajectoryId,
-            [],             // billing data
-            $manualVoucher, // manual voucher code (empty ⇒ auto path may apply)
-        );
+        // A manual voucher travels on the namespaced pending-billing transient the
+        // handler consumes (voucher_code key) — seed it BEFORE firing so the manual
+        // / no-stacking path sees it exactly as production does.
+        if ($manualVoucher !== '') {
+            $key = 'stride_pending_billing_traj_' . $userId . '_' . $trajectoryId;
+            set_transient($key, ['voucher_code' => $manualVoucher, 'name' => 'Test Attendee'], HOUR_IN_SECONDS);
+            $this->seededTransientKeys[] = $key;
+        }
 
-        self::assertNotInstanceOf(\WP_Error::class, $quoteId, 'createTrajectoryQuote must not error');
+        // Fire the REAL event un-mocked — the registered TrajectoryQuoteHandler is
+        // the seam under test. Payload carries only server-minted ids.
+        do_action(self::EVENT, [
+            'registration_id' => $enrollmentId,
+            'user_id'         => $userId,
+            'trajectory_id'   => $trajectoryId,
+        ]);
 
         return $enrollmentId;
     }
