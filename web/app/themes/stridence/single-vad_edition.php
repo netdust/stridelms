@@ -263,6 +263,12 @@ $mobile_cta = null;
 $mobile_locked = false;
 if ($enrolled_cta) {
     $mobile_cta = $enrolled_cta;
+} elseif ($is_enrolled) {
+    // Enrolled but no certificate/task/course-action yet (e.g. in-person
+    // edition not yet completed) — the sticky bar must still show SOMETHING
+    // rather than vanish entirely, leaving an enrolled learner with no way
+    // back to their dashboard from this page (review, 2026-07-07).
+    $mobile_cta = ['label' => __('Naar mijn opleidingen', 'stridence'), 'url' => home_url('/mijn-account/?tab=inschrijvingen')];
 } elseif ($is_past) {
     $mobile_cta = null; // Past editions show no sticky CTA.
 } elseif ($status->allowsInterest()) {
@@ -681,9 +687,12 @@ get_header();
                                     <?php echo esc_html($enrolled_cta['label']); ?>
                                 </a>
                             <?php elseif ($is_enrolled) : ?>
-                                <span class="btn-secondary w-full text-center block">
-                                    <?php esc_html_e('Ingeschreven', 'stridence'); ?>
-                                </span>
+                                <?php /* Enrolled but no certificate/task/course-action yet (e.g.
+                                         in-person edition not yet completed) — still a real link
+                                         back to the learner's dashboard, not a dead-end label. */ ?>
+                                <a href="<?php echo esc_url(home_url('/mijn-account/?tab=inschrijvingen')); ?>" class="btn-secondary w-full text-center block">
+                                    <?php esc_html_e('Ingeschreven — naar mijn opleidingen', 'stridence'); ?>
+                                </a>
                             <?php elseif ($is_past) : ?>
                                 <button type="button" class="btn-primary w-full text-center" disabled>
                                     <?php esc_html_e('Editie is afgelopen', 'stridence'); ?>
@@ -781,19 +790,27 @@ get_header();
     <?php if ($mobile_cta) : ?>
         <div class="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-surface-card shadow-[0_-4px_16px_rgba(41,44,49,0.08)] px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))]">
             <div class="flex items-center gap-3.5">
-                <div class="flex-1 min-w-0">
-                    <div class="text-[17px] font-extrabold text-text">
-                        <?php echo !$price->isZero() ? esc_html(stride_format_money($price->inCents())) : esc_html__('Gratis', 'stridence'); ?>
-                    </div>
-                    <?php if ($show_capacity_bar) : ?>
-                        <div class="text-[12px] font-bold <?php echo $spots_few ? 'text-badge-few-text' : 'text-text-muted'; ?>">
-                            <?php
-                            /* translators: %d: spots remaining */
-                            echo esc_html(sprintf(_n('Nog %d plaats vrij', 'Nog %d plaatsen vrij', (int) $spots, 'stridence'), (int) $spots));
-                        ?>
+                <?php /* Price/capacity are pre-enrollment info — irrelevant (and
+                         confusing, "do I owe this again?") once already enrolled. */ ?>
+                <?php if (!$is_enrolled) : ?>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-[17px] font-extrabold text-text">
+                            <?php echo !$price->isZero() ? esc_html(stride_format_money($price->inCents())) : esc_html__('Gratis', 'stridence'); ?>
                         </div>
-                    <?php endif; ?>
-                </div>
+                        <?php if ($show_capacity_bar) : ?>
+                            <div class="text-[12px] font-bold <?php echo $spots_few ? 'text-badge-few-text' : 'text-text-muted'; ?>">
+                                <?php
+                                /* translators: %d: spots remaining */
+                                echo esc_html(sprintf(_n('Nog %d plaats vrij', 'Nog %d plaatsen vrij', (int) $spots, 'stridence'), (int) $spots));
+                            ?>
+                            </div>
+                        <?php endif; ?>
+                    </div>
+                <?php else : ?>
+                    <div class="flex-1 min-w-0 text-[13px] font-semibold text-status-success">
+                        <?php esc_html_e('Je bent ingeschreven', 'stridence'); ?>
+                    </div>
+                <?php endif; ?>
                 <a href="<?php echo esc_url($mobile_cta['url']); ?>" class="btn-primary shrink-0 text-center">
                     <?php echo esc_html($mobile_cta['label']); ?>
                 </a>
