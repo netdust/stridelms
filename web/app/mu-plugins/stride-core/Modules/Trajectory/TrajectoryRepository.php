@@ -51,12 +51,35 @@ final class TrajectoryRepository extends AbstractRepository
      */
     public function findActive(): array
     {
-        return $this->model()
+        $rows = $this->model()
             ->whereIn('status', self::ACTIVE_STATUSES)
             ->orderBy('post_title', 'ASC')
             ->limit(-1) // catalog shows ALL active trajectories — not the default page cap
             ->withMeta()
             ->get();
+
+        // exclude_from_catalog (§6.1): drop flagged trajectories from the catalog
+        // enumeration. This uses a POST-QUERY PHP filter, NOT a builder predicate,
+        // deliberately: the fluent builder can express a flat AND meta clause but
+        // NOT the required "NOT EXISTS OR != '1'" group (an unflagged trajectory
+        // has no meta row at all, so a bare != '1' clause would WRONGLY drop it —
+        // WP's != compare requires the meta to exist). orWhere() would OR the
+        // whole query and break the status AND. The set is bounded (limit(-1) =
+        // all ACTIVE trajectories, a small catalog set), so filtering in PHP is
+        // cheap and correct.
+        //
+        // withMeta() already materialised each row's meta under RAW _ntdst_-
+        // prefixed keys (gotcha_withmeta_prefixed_keys), so we read the flag
+        // straight off $row['meta'] instead of re-querying it per row via
+        // getExcludeFromCatalog() (getField()->getMeta()->find()). Coerce to bool
+        // exactly as that accessor does: absent key ⇒ null ⇒ false ⇒ kept
+        // (fail-open); '' ⇒ false ⇒ kept; '1' ⇒ true ⇒ dropped.
+        $flagKey = $this->getMetaPrefix() . 'exclude_from_catalog';
+
+        return array_values(array_filter(
+            $rows,
+            fn(array $row): bool => !((bool) ($row['meta'][$flagKey] ?? false)),
+        ));
     }
 
     /**
@@ -429,5 +452,34 @@ final class TrajectoryRepository extends AbstractRepository
         }
 
         return $posts;
+    }
+
+    /**
+     * Per-profiletype enrollment rules for this trajectory.
+     *
+     * Thin typed wrapper over the `profiletype_rules` (json) field. Shape:
+     * { "<slug>": { "block": bool, "minimal": bool, "voucher": "<code>|null" } }.
+     * Empty / absent / legacy non-array value coerces to [] (erosion guard —
+     * never null, never a raw string). No prefix hardcoded: getField() applies
+     * the CPT meta_prefix (_ntdst_).
+     *
+     * @return array<string, mixed>
+     */
+    public function getProfiletypeRules(int $trajectoryId): array
+    {
+        $rules = $this->getField($trajectoryId, 'profiletype_rules', []);
+
+        return is_array($rules) ? $rules : [];
+    }
+
+    /**
+     * Whether this trajectory is excluded from the public catalog listing.
+     *
+     * Thin typed wrapper over the `exclude_from_catalog` (bool) field. Absent
+     * or falsey ⇒ false (listed). Not a security boundary — a listing flag.
+     */
+    public function getExcludeFromCatalog(int $trajectoryId): bool
+    {
+        return (bool) $this->getField($trajectoryId, 'exclude_from_catalog', false);
     }
 }

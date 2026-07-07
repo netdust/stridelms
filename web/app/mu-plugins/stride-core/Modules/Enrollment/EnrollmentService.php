@@ -171,6 +171,15 @@ final class EnrollmentService extends AbstractService
             return new WP_Error('invalid_edition', 'Edition does not exist');
         }
 
+        // Profile-type enroll gate (INV-12 M1). A profile type marked block:true
+        // for this edition genuinely cannot self-enroll. Fail-open when no rule
+        // applies. Resolved via the container to match the on-demand collaborator
+        // pattern (matches the ntdst_get(TrajectoryService::class) resolution below).
+        $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
+        if ($policy->blocksEnrollment($userId, $editionId, 'vad_edition')) {
+            return new WP_Error('profiletype_blocked', __('Niet beschikbaar voor jouw profieltype', 'stride'));
+        }
+
         // Reject when the edition is in the past. OfferingStatus is admin-managed
         // and doesn't auto-transition when a date passes, so without this guard
         // an admin who forgot to update the status would let users enroll in
@@ -513,6 +522,13 @@ final class EnrollmentService extends AbstractService
                 return new WP_Error('invalid_edition', 'Edition does not exist');
             }
 
+            // Profile-type enroll gate (INV-12 M1): the block applies to the
+            // user-initiated waitlist self-registration too.
+            $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
+            if ($policy->blocksEnrollment($userId, $editionId, 'vad_edition')) {
+                return new WP_Error('profiletype_blocked', __('Niet beschikbaar voor jouw profieltype', 'stride'));
+            }
+
             $status = $this->editions->getStatus($editionId);
             if (!$status->allowsWaitlist()) {
                 return new WP_Error('waitlist_closed', 'Waitlist registration is not available for this edition');
@@ -528,6 +544,12 @@ final class EnrollmentService extends AbstractService
             $trajectory = $trajectoryService->getTrajectory($trajectoryId);
             if (!$trajectory) {
                 return new WP_Error('invalid_trajectory', 'Trajectory does not exist');
+            }
+
+            // Profile-type enroll gate (INV-12 M1): trajectory waitlist too.
+            $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
+            if ($policy->blocksEnrollment($userId, $trajectoryId, 'vad_trajectory')) {
+                return new WP_Error('profiletype_blocked', __('Niet beschikbaar voor jouw profieltype', 'stride'));
             }
 
             $status = $trajectory['status_enum'] ?? null;

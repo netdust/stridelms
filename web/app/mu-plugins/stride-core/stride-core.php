@@ -134,6 +134,17 @@ add_action('ntdst/core_ready', function () use ($config): void {
     ntdst_set(\Stride\Modules\Invoicing\VoucherRepository::class);
     ntdst_set(\Stride\Modules\Trajectory\TrajectoryRepository::class);
 
+    // Enroll-time profile-type policy (INV-12). Plain-DI collaborator, not a
+    // booted service — resolved on demand alongside the repositories it reads,
+    // never in the eager services[] list. Autowired (its deps are the two repos
+    // registered above + ProfileTypeService).
+    ntdst_set(\Stride\Modules\User\ProfileTypePolicy::class);
+
+    // Metabox rules sanitizer (M5). Plain-DI collaborator shared by the Edition +
+    // Trajectory admin handleSave paths — the single place the profiletype_rules
+    // shape + allowlist-drop lives. Autowired (dep: ProfileTypeService).
+    ntdst_set(\Stride\Modules\User\ProfiletypeRulesSanitizer::class);
+
     // AttendanceRepository registered by AttendanceService::init()
 
     // Register interface bindings
@@ -160,6 +171,13 @@ add_action('ntdst/features_ready', function () use ($config): void {
 
     ntdst_set(\Stride\Modules\User\QuotesShortcode::class);
     ntdst_get(\Stride\Modules\User\QuotesShortcode::class);
+
+    // Dashboard "Voor jou" page metabox (T10, M5). Plain-DI class that MUST hook
+    // at boot (save_post_page + init/registerMeta + the page metabox render), so
+    // it is eager-booted here like DashboardShortcode — NOT an on-demand
+    // collaborator (autowired dep: ProfileTypeService).
+    ntdst_set(\Stride\Modules\User\DashboardPageMetabox::class);
+    ntdst_get(\Stride\Modules\User\DashboardPageMetabox::class);
 
     ntdst_set(\Stride\Modules\Audit\ActivityShortcode::class);
     ntdst_get(\Stride\Modules\Audit\ActivityShortcode::class);

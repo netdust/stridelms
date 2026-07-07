@@ -7,6 +7,7 @@ namespace Stride\Modules\Enrollment;
 use Stride\Domain\OfferingStatus;
 use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Trajectory\TrajectoryService;
+use Stride\Modules\User\ProfileTypePolicy;
 use WP_Post;
 
 /**
@@ -115,7 +116,26 @@ final class EnrollmentFormResolver
             return $base;
         }
 
-        if ($base['form_type'] === 'direct') {
+        // M2: the form_type is SERVER-decided. If the user's stored profile type
+        // routes to a minimal form for this edition, force it — this overrides the
+        // edition's stored form_type and is never client-selectable. Read the
+        // stored value's 'direct' intent BEFORE the override so the direct-state
+        // dispatch below stays coherent (a direct enrollable still drives the
+        // no-form side-effect; a minimal profile only changes which form renders).
+        $wantsDirect = $base['form_type'] === 'direct';
+
+        $forcedMinimal = ntdst_get(ProfileTypePolicy::class)->usesMinimalForm($userId, $editionId, 'vad_edition');
+        if ($forcedMinimal) {
+            $base['form_type'] = 'minimal';
+        }
+
+        // A minimal-routed profile type must SEE the minimal form even on a
+        // direct-configured edition — minimal is a deliberate "these users provide
+        // the reduced field set" signal. If we still set state='direct' here, the
+        // router fires handleDirectEnrollment and enrolls with NO form, discarding
+        // the minimal form the policy requested. So: minimal WINS over direct — only
+        // drive the direct state when minimal was NOT forced.
+        if ($wantsDirect && !$forcedMinimal) {
             $base['state'] = 'direct';
         }
 
@@ -130,6 +150,7 @@ final class EnrollmentFormResolver
     {
         $trajectoryService = ntdst_get(TrajectoryService::class);
         $trajectoryId = (int) $trajectory->ID;
+        $userId = get_current_user_id();
 
         $mode = $this->computeEnrollmentMode(
             $trajectoryService->getTrajectory($trajectoryId)['status_enum'] ?? OfferingStatus::Draft,
@@ -142,8 +163,21 @@ final class EnrollmentFormResolver
         $base['is_online'] = false;
         $base['form_type'] = $trajectoryService->getEnrollmentForm($trajectoryId);
 
+        // Early-return on closed BEFORE the minimal override, matching
+        // resolveEdition() (which returns at its own closed branch): a closed
+        // enrollable never renders a form, so the profile-type minimal override
+        // below must not run for it. Fixes the resolveEdition/resolveTrajectory
+        // divergence (finding [5]).
         if ($mode === 'closed') {
             $base['state'] = 'closed';
+            return $base;
+        }
+
+        // M2 parity with resolveEdition(): the user's stored profile type can force
+        // a minimal form for this trajectory, overriding the stored form_type.
+        // Server-decided, never client-selectable.
+        if (ntdst_get(ProfileTypePolicy::class)->usesMinimalForm($userId, $trajectoryId, 'vad_trajectory')) {
+            $base['form_type'] = 'minimal';
         }
 
         return $base;

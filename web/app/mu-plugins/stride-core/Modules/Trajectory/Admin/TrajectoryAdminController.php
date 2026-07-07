@@ -48,6 +48,7 @@ final class TrajectoryAdminController
         add_action('add_meta_boxes', [$this, 'registerMetaboxes']);
         add_action('save_post_' . TrajectoryCPT::POST_TYPE, [$this, 'handleSave'], 10, 2);
         add_action('admin_enqueue_scripts', [$this, 'enqueueAssets']);
+        add_action('admin_notices', [$this, 'renderDroppedSlugNotice']);
 
         // AJAX endpoints
         add_action('wp_ajax_stride_search_courses', [$this, 'ajaxSearchCourses']);
@@ -249,6 +250,7 @@ final class TrajectoryAdminController
                 <div class="stride-tab active" data-tab="general"><?php esc_html_e('Algemeen', 'stride'); ?></div>
                 <div class="stride-tab" data-tab="description"><?php esc_html_e('Beschrijving', 'stride'); ?></div>
                 <div class="stride-tab" data-tab="deadlines"><?php esc_html_e('Deadlines', 'stride'); ?></div>
+                <div class="stride-tab" data-tab="toegang"><?php esc_html_e('Toegang', 'stride'); ?></div>
             </div>
 
             <!-- Tab: General -->
@@ -402,6 +404,16 @@ final class TrajectoryAdminController
                         </div>
                     </div>
                 </div>
+            </div>
+
+            <!-- Tab: Toegang (profile-type enroll rules + catalog flag) -->
+            <div class="stride-tab-content" data-tab="toegang">
+                <?php
+                \Stride\Modules\User\ProfiletypeRulesMetaboxFields::render(
+                    $this->repository->getProfiletypeRules($post->ID),
+                    $this->repository->getExcludeFromCatalog($post->ID),
+                );
+        ?>
             </div>
         </div>
         <?php
@@ -1238,9 +1250,76 @@ final class TrajectoryAdminController
             }
         }
 
-        if (!empty($updateData)) {
-            $this->repository->update($postId, $updateData);
+        // Per-profile-type enrollment rules (M5) — parity with EditionAdmin.
+        // Sanitized + allowlist-dropped through the shared sanitizer; rides inside
+        // the nonce + cap guards above. Unknown slugs dropped + surfaced.
+        if (isset($fields['profiletype_rules'])) {
+            $sanitizer = ntdst_get(\Stride\Modules\User\ProfiletypeRulesSanitizer::class);
+            $updateData['profiletype_rules'] = $sanitizer->sanitize($fields['profiletype_rules']);
+            $this->flagDroppedProfiletypeSlugs($sanitizer->getDroppedSlugs());
         }
+
+        // Catalog-listing flag (concept A). A blunt bool; not a security boundary.
+        // ALWAYS write it (outside the isset guard): the metabox renders a BARE
+        // checkbox, so an unticked box POSTs no key — guarding on isset would leave
+        // a stored '1' un-clearable → a hidden trajectory could never be un-hidden.
+        // This save path is already nonce + cap gated above.
+        $updateData['exclude_from_catalog'] = (bool) ($fields['exclude_from_catalog'] ?? false);
+
+        // $updateData always carries at least the catalog flag now, so the write
+        // always runs (the prior !empty guard is a dead no-op after that change).
+        $this->repository->update($postId, $updateData);
+    }
+
+    /**
+     * Stash dropped-slug names for the next admin_notices render (M5 secondary:
+     * surface which unknown profile-type slugs were rejected). User-scoped
+     * transient so it survives the save→redirect and shows once.
+     *
+     * @param array<int, string> $slugs
+     */
+    private function flagDroppedProfiletypeSlugs(array $slugs): void
+    {
+        if ($slugs === []) {
+            return;
+        }
+
+        set_transient(
+            'stride_dropped_profiletype_slugs_' . get_current_user_id(),
+            array_map('sanitize_key', $slugs),
+            60,
+        );
+    }
+
+    public function renderDroppedSlugNotice(): void
+    {
+        // Screen-guard: only surface on this CPT's own edit screen. admin_notices
+        // fires on every admin page, and both this and the edition renderer read the
+        // SAME user-scoped transient key — guarding each to its own screen keeps the
+        // notice on the relevant page and stops one renderer consuming the other's
+        // key.
+        $screen = get_current_screen();
+        if (!$screen || $screen->post_type !== TrajectoryCPT::POST_TYPE) {
+            return;
+        }
+
+        $key   = 'stride_dropped_profiletype_slugs_' . get_current_user_id();
+        $slugs = get_transient($key);
+
+        if (empty($slugs) || !is_array($slugs)) {
+            return;
+        }
+
+        delete_transient($key);
+
+        printf(
+            '<div class="notice notice-warning is-dismissible"><p>%s</p></div>',
+            esc_html(sprintf(
+                /* translators: %s: comma-separated list of unknown profile-type slugs */
+                __('Onbekende profieltypes genegeerd bij het opslaan van de inschrijvingsregels: %s', 'stride'),
+                implode(', ', $slugs),
+            )),
+        );
     }
 
     /**

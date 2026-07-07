@@ -132,7 +132,75 @@ final class UserDashboardService
             'active_enrollments'   => $activeEnrollments,
             'active_trajectories'  => $trajectories,
             'recent_certificates'  => $certificates,
+            'for_you'              => $this->getForYouPages($userId),
         ];
+    }
+
+    /**
+     * Curated dashboard "Voor jou" links: return link cards to WP pages whose
+     * `_stride_dashboard_profiletypes` meta contains the user's STORED profile
+     * type slug (resolved server-side via ProfileTypeService::getUserType — never
+     * a request param). Pure curation, additive: pages are never hidden or gated.
+     *
+     * Contract:
+     *  - user of type X sees pages promoting X (incl. multi-slug X+Y), NOT Y-only pages
+     *  - user of type Y does NOT see an X-only page
+     *  - no stored type OR no promoted pages → []
+     *  - each card = ['id' => int, 'title' => string, 'url' => string(permalink)]
+     *
+     * @return array<int, array{id: int, title: string, url: string}>
+     */
+    public function getForYouPages(int $userId): array
+    {
+        // Logged-out / invalid id has no stored type → no curated links.
+        if ($userId <= 0) {
+            return [];
+        }
+
+        // Resolve the user's STORED type slug server-side (never a request
+        // param) — this is what makes the read per-user data-scoped: a user
+        // can only ever surface pages promoting THEIR type.
+        $type = ntdst_get(ProfileTypeService::class)->getUserType($userId);
+        $slug = $type['slug'] ?? null;
+        if ($slug === null || $slug === '') {
+            return []; // no type → no promoted pages (empty case)
+        }
+
+        // Pages whose _stride_dashboard_profiletypes serialized-array meta
+        // contains this slug. T10 stores the slugs via update_post_meta with
+        // an array value, so WP serializes it: a slug `arts` appears as the
+        // quoted element `"arts"`. Passing '"' . $slug . '"' as the LIKE value
+        // (WP wraps it with %...% and esc_like's it — see WP_Meta_Query) matches
+        // that exact quoted element, so `arts` never matches `huisarts`. Mirrors
+        // ProfileTypeService::countUsersWithType's serialized-array LIKE idiom.
+        $pages = get_posts([
+            'post_type'   => 'page',
+            'post_status' => 'publish',
+            'numberposts' => -1,
+            'meta_query'  => [[
+                'key'     => DashboardPageMetabox::META_KEY,
+                'value'   => '"' . $slug . '"',
+                'compare' => 'LIKE',
+            ]],
+        ]);
+
+        $cards = [];
+        foreach ($pages as $page) {
+            // An untitled page has no meaningful link label — surfacing it would
+            // render a "Voor jou" heading with a bare/empty card beneath it. Skip
+            // at the source so the for_you array stays honest (only renderable
+            // cards) and the section's non-empty gate is accurate.
+            if (trim((string) $page->post_title) === '') {
+                continue;
+            }
+            $cards[] = [
+                'id'    => (int) $page->ID,
+                'title' => $page->post_title,
+                'url'   => (string) get_permalink($page->ID),
+            ];
+        }
+
+        return $cards;
     }
 
     /**

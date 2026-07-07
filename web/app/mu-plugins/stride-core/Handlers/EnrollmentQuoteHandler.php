@@ -134,6 +134,35 @@ final class EnrollmentQuoteHandler
         );
 
         if (!is_wp_error($quoteId)) {
+            // Auto-apply the profile-type voucher (M3). Resolved server-side from
+            // the ATTENDEE's STORED profile type ($userId, never the enrolling
+            // $quoteUserId and never client/request input); applied via
+            // applyVoucher which validates + REDEEMS (moves used_count) — closing
+            // the createQuote-doesn't-redeem gap. Skip when a manual voucher was
+            // already supplied on this quote so the auto path never stacks a
+            // second redemption (manual takes precedence).
+            if (empty($voucherCode)) {
+                $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
+                $autoCode = $policy->autoVoucherCode($userId, $editionId, 'vad_edition');
+                if ($autoCode !== null) {
+                    // Redeem against the ATTENDEE ($userId), NOT the quote owner
+                    // ($quoteUserId = the payer). For a bulk enroll of N colleagues
+                    // by one admin the voucher is each attendee's own entitlement:
+                    // keying redemption on the payer would collide on redeemVoucher's
+                    // per-user cap and silently drop attendees 2..N's discount.
+                    $applied = $quotes->applyVoucher($quoteId, $autoCode, redeemAsUserId: $userId);
+                    if (is_wp_error($applied)) {
+                        // Resolved code invalid/expired/over-cap: enrollment + quote
+                        // STAND, just without the discount. Log, do not fail the enroll.
+                        ntdst_log('invoicing')->info('Auto-voucher not applied (invalid/exhausted)', [
+                            'quote_id' => $quoteId,
+                            'code' => $autoCode,
+                            'reason' => $applied->get_error_message(),
+                        ]);
+                    }
+                }
+            }
+
             // Link quote back to registration
             $registrationRepo = ntdst_get(\Stride\Modules\Enrollment\RegistrationRepository::class);
             $registrationRepo->update($registrationId, ['quote_id' => $quoteId]);
