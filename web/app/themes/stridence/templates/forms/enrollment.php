@@ -198,8 +198,8 @@ $enrollment_js_ver = file_exists($enrollment_js) ? filemtime($enrollment_js) : '
     <!-- Two Column Layout -->
     <div class="grid lg:grid-cols-3 gap-8 lg:gap-12">
 
-        <!-- Main Form Column (2/3) -->
-        <div class="lg:col-span-2">
+        <!-- Main Form Column (2/3) — on mobile the summary sits above the form -->
+        <div class="lg:col-span-2 order-2 lg:order-1">
             <?php $is_minimal = $form_type === 'minimal'; ?>
             <form @submit.prevent="submitForm" novalidate class="bg-surface-card rounded-[16px] shadow-card p-6 md:p-8">
                 <?php if (!$is_online && !$is_minimal) : ?>
@@ -219,8 +219,8 @@ $enrollment_js_ver = file_exists($enrollment_js) ? filemtime($enrollment_js) : '
             </form>
         </div>
 
-        <!-- Sidebar (1/3) -->
-        <div class="lg:col-span-1">
+        <!-- Sidebar (1/3) — order-1 on mobile so the summary/price is visible first -->
+        <div class="lg:col-span-1 order-1 lg:order-2">
             <?php stridence_template_part('templates/forms/enrollment/sidebar', null, [
                 'edition_data' => $edition_data,
                 'course_data'  => $course_data,
