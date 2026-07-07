@@ -328,6 +328,55 @@ final class TrajectoryQuoteHandlerEventTest extends IntegrationTestCase
         );
     }
 
+    /**
+     * The BITING no-throw test (test-effectiveness audit 2026-07-07): the sibling
+     * above drives an unresolvable trajectory, which hits the handler's graceful
+     * not-found early-return (:69) BEFORE any throwing line — so it would stay green
+     * even if the entire try/catch(\Throwable) were deleted. That is a blind guard.
+     *
+     * This case forces a genuine throw PAST the early returns: a VALID, priced,
+     * resolvable trajectory (so getTrajectory returns non-null and the body proceeds
+     * to createQuote), with a `save_post_vad_quote` hook that throws when createQuote
+     * inserts the quote post. The throw originates deep inside createQuote — exactly
+     * the class of failure the A3 wrap exists to contain. Contract: do_action returns
+     * normally, no exception propagates to the (non-transactional) enroll() caller.
+     * Delete the try/catch(\Throwable) and this test goes RED (the throw escapes).
+     *
+     * @test
+     */
+    public function aGenuineThrowInsideCreateQuoteIsCaughtAndNeverEscapesDoAction(): void
+    {
+        $userId       = $this->createUserOfType(self::GRANT_SLUG);
+        $trajectoryId = $this->createTrajectoryGranting(self::GRANT_SLUG, ''); // priced, resolvable
+        $registrationId = $this->seedRegistration($userId, $trajectoryId);
+
+        // Force a throw from DEEP inside createQuote's wp_insert_post — past every
+        // early return. Fires only for vad_quote inserts so it can't disturb fixtures.
+        $thrower = static function (int $postId, \WP_Post $post): void {
+            if ($post->post_type === 'vad_quote') {
+                throw new \RuntimeException('injected failure inside createQuote');
+            }
+        };
+        add_action('save_post_vad_quote', $thrower, 10, 2);
+
+        $threw = null;
+        try {
+            $this->dispatch($userId, $trajectoryId, $registrationId);
+        } catch (\Throwable $e) {
+            $threw = $e;
+        } finally {
+            remove_action('save_post_vad_quote', $thrower, 10);
+        }
+
+        self::assertNull(
+            $threw,
+            'a genuine throw inside createQuote must be caught by the handler\'s '
+                . 'try/catch(\Throwable) and NEVER escape do_action (A3) — else it '
+                . 'orphans the committed registration and 500s the enroll() caller. '
+                . 'Got: ' . ($threw ? $threw::class . ': ' . $threw->getMessage() : ''),
+        );
+    }
+
     // === 7. SCOPE — edition-scoped voucher on a trajectory still applies ======
 
     /**
