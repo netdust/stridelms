@@ -180,6 +180,27 @@ if (!function_exists('is_wp_error')) {
     }
 }
 
+if (!function_exists('wp_list_pluck')) {
+    /**
+     * @param array<int, mixed> $list
+     * @return array<int|string, mixed>
+     */
+    function wp_list_pluck(array $list, int|string $field, int|string|null $indexKey = null): array
+    {
+        $result = [];
+        foreach ($list as $key => $item) {
+            $value = is_object($item) ? ($item->$field ?? null) : ($item[$field] ?? null);
+            if ($indexKey !== null) {
+                $indexValue = is_object($item) ? ($item->$indexKey ?? null) : ($item[$indexKey] ?? null);
+                $result[$indexValue] = $value;
+            } else {
+                $result[$key] = $value;
+            }
+        }
+        return $result;
+    }
+}
+
 if (!function_exists('wp_is_json_media_type')) {
     /**
      * Mirrors real WP (wp-includes/load.php:1962) — the regex is copied
@@ -250,6 +271,18 @@ if (!function_exists('get_the_excerpt')) {
         $postId = is_object($post) ? $post->ID : (int) $post;
         $p = $_test_posts[$postId] ?? null;
         return $p->post_excerpt ?? '';
+    }
+}
+
+if (!function_exists('get_the_terms')) {
+    /**
+     * @return array<int, object>|false
+     */
+    function get_the_terms($post, string $taxonomy): array|false
+    {
+        global $_test_post_terms;
+        $postId = is_object($post) ? $post->ID : (int) $post;
+        return $_test_post_terms[$postId][$taxonomy] ?? false;
     }
 }
 

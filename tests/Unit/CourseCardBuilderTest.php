@@ -217,7 +217,7 @@ final class CourseCardBuilderTest extends TestCase
 
     // --- from_trajectory_course: required course with editions ---
 
-    public function test_trajectory_required_course_with_editions_populates_body_editions(): void
+    public function test_trajectory_required_course_with_one_edition_resolves_to_its_permalink(): void
     {
         $course = $this->createMock(\WP_Post::class);
         $course->ID = 50;
@@ -225,9 +225,9 @@ final class CourseCardBuilderTest extends TestCase
         $course->post_name = 'verplichte-basiscursus';
 
         // Stride/EditionService is invoked via ntdst_get(); see _registerEditionServiceStub() helper
+        $this->createEdition(['ID' => 100]); // so get_permalink(100) resolves for detail_url
         $this->_registerEditionServiceStub([
             ['id' => 100, 'start_date' => '2026-06-10', 'venue' => 'Brussel', 'can_enroll' => true],
-            ['id' => 101, 'start_date' => '2026-07-15', 'venue' => 'Gent',    'can_enroll' => true],
         ]);
 
         $pill = ['label' => 'Verplicht', 'tone' => 'primary'];
@@ -235,15 +235,35 @@ final class CourseCardBuilderTest extends TestCase
 
         $this->assertSame('public', $args['type']);
         $this->assertFalse($args['enrolled']);
-        $this->assertSame($pill, $args['status_pill']);
-        $this->assertCount(2, $args['body']['upcoming_editions']);
+        $this->assertSame(100, $args['body']['edition']['id']);
         $this->assertSame('2026-06-10', $args['meta']['start_date']);
-        // This is a READ-ONLY overview card: no enrol buttons. The "full course"
-        // link is rendered inline via body.course_url, not as a secondary_cta
-        // button — both CTAs stay null (builder shape since the overview redesign).
+        $this->assertFalse($args['body']['has_multiple_editions']);
+        // Exactly one active edition: deep-links straight to it, not the
+        // course's edition-picker route.
+        $this->assertSame(get_permalink(100), $args['body']['detail_url']);
+        // Read-only overview card: no enrol buttons.
         $this->assertNull($args['body']['primary_cta']);
         $this->assertNull($args['body']['secondary_cta']);
-        $this->assertSame(home_url('/edities/' . $course->post_name . '/'), $args['body']['course_url']);
+    }
+
+    // --- from_trajectory_course: multiple active editions falls back to the course picker ---
+
+    public function test_trajectory_course_with_multiple_editions_falls_back_to_course_url(): void
+    {
+        $course = $this->createMock(\WP_Post::class);
+        $course->ID = 53;
+        $course->post_title = 'Cursus met meerdere edities';
+        $course->post_name = 'cursus-meerdere-edities';
+
+        $this->_registerEditionServiceStub([
+            ['id' => 100, 'start_date' => '2026-06-10', 'venue' => 'Brussel', 'can_enroll' => true],
+            ['id' => 101, 'start_date' => '2026-07-15', 'venue' => 'Gent',    'can_enroll' => true],
+        ]);
+
+        $args = \stridence_build_course_card_args_from_trajectory_course($course, ['label' => 'Verplicht', 'tone' => 'primary']);
+
+        $this->assertTrue($args['body']['has_multiple_editions']);
+        $this->assertSame(home_url('/edities/' . $course->post_name . '/'), $args['body']['detail_url']);
     }
 
     // --- from_trajectory_course: course with no editions ---
@@ -258,11 +278,11 @@ final class CourseCardBuilderTest extends TestCase
 
         $args = \stridence_build_course_card_args_from_trajectory_course($course, ['label' => 'Keuzevak', 'tone' => 'accent']);
 
-        $this->assertSame([], $args['body']['upcoming_editions']);
+        $this->assertNull($args['body']['edition']);
         $this->assertNull($args['meta']['start_date']);
     }
 
-    // --- from_trajectory_course: status pill passes through unchanged ---
+    // --- from_trajectory_course: status pill still threaded through (call-site compat) ---
 
     public function test_trajectory_course_passes_status_pill_through(): void
     {
