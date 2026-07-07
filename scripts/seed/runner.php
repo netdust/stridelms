@@ -20,6 +20,7 @@ final class StrideSeedRunner
         'sessions' => [], 'registrations' => [], 'trajectories' => [],
         'trajectory_enrollments' => [],
         'vouchers' => [], 'quotes' => [], 'questionnaire_groups' => [],
+        'dashboard_pages' => [], 'site_pages' => [],
     ];
     /** @var array<string,int> login => user_id, plus 'admin' => 1 */
     private array $userMap = ['admin' => 1];
@@ -32,6 +33,26 @@ final class StrideSeedRunner
     {
         echo "\n=== Stride LMS Feature-Matrix Seed ===\n\n";
         $this->builders->ensureTaxonomyTerms();
+        // Site-structure pages (routing/shortcode scaffolding) + primary menu,
+        // BEFORE everything else — a fresh WP install has none of this, and
+        // later steps (e.g. catalog pages) assume the site is navigable.
+        $sitePageIds = [];
+        foreach (($this->matrix['site_pages'] ?? []) as $p) {
+            $id = $this->builders->buildSitePage($p);
+            if ($id) {
+                $this->created['site_pages'][] = $id;
+                $sitePageIds[$p['slug']] = $id;
+            }
+        }
+        if (!empty($this->matrix['site_menu'])) {
+            $this->builders->buildSiteMenu($this->matrix['site_menu'], $sitePageIds);
+        }
+        // Profile types (stride_profile_types option) BEFORE users, so
+        // buildUser's _stride_profile_type meta references a defined type set.
+        if (!empty($this->matrix['profile_types'])) {
+            update_option('stride_profile_types', $this->matrix['profile_types']);
+            echo '  + Profile types: ' . implode(', ', array_column($this->matrix['profile_types'], 'slug')) . "\n";
+        }
         foreach ($this->matrix['users'] as $u) {
             $id = $this->builders->buildUser($u);
             if ($id) {
@@ -70,6 +91,13 @@ final class StrideSeedRunner
             if ($id) {
                 $this->created['vouchers'][] = $id;
                 $this->covers["voucher:$id"] = $v['covers'] ?? [];
+            }
+        }
+        // Dashboard "Voor jou" curated pages (concept C).
+        foreach (($this->matrix['dashboard_pages'] ?? []) as $p) {
+            $id = $this->builders->buildDashboardPage($p);
+            if ($id) {
+                $this->created['dashboard_pages'][] = $id;
             }
         }
         update_option('stride_company_details', $this->matrix['company_details']);

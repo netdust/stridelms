@@ -284,6 +284,10 @@ final class StrideSeedBuilders
             if (isset($userData['company_id'])) {
                 update_user_meta($existing->ID, '_stride_company_id', $userData['company_id']);
             }
+            if (isset($userData['profile_type'])) {
+                // _stride_profile_type is an ARRAY of slugs; getUserType reads [0].
+                update_user_meta($existing->ID, '_stride_profile_type', [$userData['profile_type']]);
+            }
             return (int) $existing->ID;
         }
 
@@ -306,6 +310,10 @@ final class StrideSeedBuilders
         if (isset($userData['company_id'])) {
             update_user_meta($userId, '_stride_company_id', $userData['company_id']);
         }
+        if (isset($userData['profile_type'])) {
+            // _stride_profile_type is an ARRAY of slugs; getUserType reads [0].
+            update_user_meta($userId, '_stride_profile_type', [$userData['profile_type']]);
+        }
 
         // Activate users for auth (ntdst-auth requires activation)
         update_user_meta($userId, 'ntdst_auth_activated', true);
@@ -313,6 +321,142 @@ final class StrideSeedBuilders
 
         echo "  + Created: {$userData['login']} (ID: {$userId})\n";
         return (int) $userId;
+    }
+
+    /**
+     * Build a WP page promoted to profile types on the dashboard (concept C).
+     * Sets _stride_dashboard_profiletypes = [slug,...] (DashboardPageMetabox::META_KEY).
+     * Idempotent by title. Not access control — the page is a normal published page.
+     *
+     * @param array{title:string,content?:string,profile_types:string[]} $pageData
+     */
+    public function buildDashboardPage(array $pageData): ?int
+    {
+        $existing = $this->findIdByTitle('page', $pageData['title']);
+        if ($existing) {
+            update_post_meta($existing, '_stride_dashboard_profiletypes', $pageData['profile_types']);
+            echo "  - Page '{$pageData['title']}' exists (ID: {$existing}) — profiletypes updated\n";
+            return $existing;
+        }
+
+        $pageId = wp_insert_post([
+            'post_type'    => 'page',
+            'post_status'  => 'publish',
+            'post_title'   => $pageData['title'],
+            'post_content' => $pageData['content'] ?? '',
+        ], true);
+
+        if (is_wp_error($pageId)) {
+            echo "  ! Failed page '{$pageData['title']}': {$pageId->get_error_message()}\n";
+            return null;
+        }
+
+        update_post_meta($pageId, StrideSeedRunner::SEED_META_KEY, true);
+        update_post_meta($pageId, '_stride_dashboard_profiletypes', $pageData['profile_types']);
+        echo "  + Created page: {$pageData['title']} (ID: {$pageId}) → " . implode(',', $pageData['profile_types']) . "\n";
+
+        return (int) $pageId;
+    }
+
+    /**
+     * Build a core site-structure page (routing/shortcode/static-front-page
+     * scaffolding a fresh WP install never gets on its own). Idempotent by
+     * slug — re-running syncs title/content/template on the existing page
+     * rather than duplicating it.
+     *
+     * @param array{slug:string,title:string,content:string,template:string} $pageData
+     */
+    public function buildSitePage(array $pageData): ?int
+    {
+        $existing = get_page_by_path($pageData['slug'], OBJECT, 'page');
+
+        if ($existing) {
+            wp_update_post([
+                'ID'           => $existing->ID,
+                'post_title'   => $pageData['title'],
+                'post_content' => $pageData['content'],
+                'post_status'  => 'publish',
+            ]);
+            $pageId = $existing->ID;
+            echo "  - Page '{$pageData['title']}' exists (ID: {$pageId}) — synced\n";
+        } else {
+            $pageId = wp_insert_post([
+                'post_type'    => 'page',
+                'post_status'  => 'publish',
+                'post_title'   => $pageData['title'],
+                'post_name'    => $pageData['slug'],
+                'post_content' => $pageData['content'],
+            ], true);
+
+            if (is_wp_error($pageId)) {
+                echo "  ! Failed page '{$pageData['title']}': {$pageId->get_error_message()}\n";
+                return null;
+            }
+
+            update_post_meta($pageId, StrideSeedRunner::SEED_META_KEY, true);
+            echo "  + Created page: {$pageData['title']} (/{$pageData['slug']}/)\n";
+        }
+
+        if (!empty($pageData['template'])) {
+            update_post_meta($pageId, '_wp_page_template', $pageData['template']);
+        }
+
+        return (int) $pageId;
+    }
+
+    /**
+     * Set the static front page and (re)build the primary nav menu.
+     * $pageIds maps site_pages slug => page ID, populated by buildSitePage.
+     *
+     * @param array{name:string,location:string,items:array} $menuData
+     * @param array<string,int> $pageIds
+     */
+    public function buildSiteMenu(array $menuData, array $pageIds): void
+    {
+        if (isset($pageIds['home'])) {
+            update_option('show_on_front', 'page');
+            update_option('page_on_front', $pageIds['home']);
+            echo "  + Static front page: Home (ID: {$pageIds['home']})\n";
+        }
+
+        $menu = wp_get_nav_menu_object($menuData['name']);
+        $menuId = $menu ? $menu->term_id : wp_create_nav_menu($menuData['name']);
+
+        if (is_wp_error($menuId)) {
+            echo "  ! Failed menu '{$menuData['name']}': {$menuId->get_error_message()}\n";
+            return;
+        }
+
+        // Idempotent: clear existing items before re-adding (avoids duplicates on re-run).
+        foreach (wp_get_nav_menu_items($menuId) ?: [] as $item) {
+            wp_delete_post($item->ID, true);
+        }
+
+        foreach ($menuData['items'] as $position => $item) {
+            $args = [
+                'menu-item-title'    => $item['title'],
+                'menu-item-status'   => 'publish',
+                'menu-item-position' => $position + 1,
+            ];
+
+            if ($item['type'] === 'page' && isset($pageIds[$item['page_slug']])) {
+                $args['menu-item-object']     = 'page';
+                $args['menu-item-object-id']  = $pageIds[$item['page_slug']];
+                $args['menu-item-type']       = 'post_type';
+            } else {
+                $args['menu-item-url']  = $item['url'];
+                $args['menu-item-type'] = 'custom';
+            }
+
+            wp_update_nav_menu_item($menuId, 0, $args);
+        }
+
+        set_theme_mod('nav_menu_locations', array_merge(
+            get_theme_mod('nav_menu_locations', []),
+            [$menuData['location'] => $menuId],
+        ));
+
+        echo "  + Menu '{$menuData['name']}' → {$menuData['location']} (" . count($menuData['items']) . " items)\n";
     }
 
     /** Returns ['created' => [...], 'covers' => [...]] for one matrix course entry. */
@@ -874,6 +1018,47 @@ final class StrideSeedBuilders
     }
 
     /**
+     * Auto-fill a session's description with speaker info + a short day
+     * programme for full-day in-person sessions (>= 6h), so the demo doesn't
+     * ship full-day sessions with an empty, collapsed description block.
+     * Half-day/short sessions and non-in_person types are left to the matrix
+     * ($sessionData['description'] override) — a one-line webinar/assignment
+     * doesn't need a programme. Uses the edition's 'speakers' repeater
+     * (never the shared cross-edition session arrays, which have no speaker
+     * of their own) so the same hoisted $xSessions array correctly picks up
+     * a different edition's speaker each time it's reused.
+     */
+    private function buildSessionDescription(array $editionData, array $sessionData): string
+    {
+        if (($sessionData['type'] ?? null) !== 'in_person') {
+            return '';
+        }
+
+        $minutes = (strtotime($sessionData['end']) - strtotime($sessionData['start'])) / 60;
+        if ($minutes < 360) {
+            return '';
+        }
+
+        $speakers = $editionData['speakers'] ?? [];
+        $speakerLine = '';
+        if (!empty($speakers)) {
+            $names = array_map(
+                static fn (array $s): string => trim(($s['name'] ?? '') . (!empty($s['role']) ? ' (' . $s['role'] . ')' : '')),
+                $speakers,
+            );
+            $label = count($names) > 1 ? 'Docenten' : 'Docent';
+            $speakerLine = "<p><strong>{$label}:</strong> " . implode(', ', $names) . '</p>';
+        }
+
+        $location = $sessionData['location'] ?? $editionData['venue'] ?? '';
+        $programme = "<p>Volledige lesdag van {$sessionData['start']} tot {$sessionData['end']}"
+            . ($location ? " in {$location}" : '')
+            . ". Inloop en registratie vanaf een kwartier voor aanvang; voorzie een pauze rond de middag.</p>";
+
+        return $speakerLine . $programme;
+    }
+
+    /**
      * Port of createSession. All four SessionType values are accepted:
      * in_person | online | webinar | assignment.
      *
@@ -903,6 +1088,11 @@ final class StrideSeedBuilders
         }
         if (!empty($sessionData['slot'])) {
             $createData['slot'] = $sessionData['slot'];
+        }
+
+        $description = $sessionData['description'] ?? $this->buildSessionDescription($editionData, $sessionData);
+        if ($description !== '') {
+            $createData['description'] = $description;
         }
 
         $session = $sessionService->createSession($createData);

@@ -89,8 +89,8 @@ return [
         ['login' => 'seed_student5', 'email' => 'student5@seed.test', 'role' => 'subscriber', 'first' => 'Wout', 'last' => 'Claes'],
         ['login' => 'seed_coordinator', 'email' => 'seed_coordinator@seed.test', 'role' => 'stride_coordinator', 'first' => 'Coordinator', 'last' => 'Seed'],
         ['login' => 'seed_supervisor', 'email' => 'seed_supervisor@seed.test', 'role' => 'stride_supervisor', 'first' => 'Supervisor', 'last' => 'Seed'],
-        ['login' => 'seed_enrolled_user', 'email' => 'seed_enrolled_user@seed.test', 'role' => 'subscriber', 'first' => 'Enrolled', 'last' => 'User'],
-        ['login' => 'seed_completed_user', 'email' => 'seed_completed_user@seed.test', 'role' => 'subscriber', 'first' => 'Completed', 'last' => 'User'],
+        ['login' => 'seed_enrolled_user', 'email' => 'seed_enrolled_user@seed.test', 'role' => 'subscriber', 'first' => 'Enrolled', 'last' => 'User', 'profile_type' => 'werknemer'],
+        ['login' => 'seed_completed_user', 'email' => 'seed_completed_user@seed.test', 'role' => 'subscriber', 'first' => 'Completed', 'last' => 'User', 'profile_type' => 'zelfstandige'],
         // Capacity fillers for the real-users full edition (Task 8 references these)
         ['login' => 'seed_filler1', 'email' => 'filler1@seed.test', 'role' => 'subscriber', 'first' => 'Filler', 'last' => 'Een'],
         ['login' => 'seed_filler2', 'email' => 'filler2@seed.test', 'role' => 'subscriber', 'first' => 'Filler', 'last' => 'Twee'],
@@ -1043,5 +1043,78 @@ return [
         'name' => 'BWEEG vzw', 'address' => 'Sportstraat 42', 'postal_code' => '9000',
         'city' => 'Gent', 'country' => 'België', 'vat' => 'BE0420.798.935',
         'email' => 'info@bweeg.be', 'phone' => '+32 9 234 56 78', 'bank_account' => 'BE68 0682 0553 5765',
+    ],
+
+    // Profile types (stride_profile_types option) — the ProfileTypeService type
+    // set. Users carry ONE via 'profile_type' above (_stride_profile_type meta,
+    // [slug]). Drives the enroll gate (block/minimal-form/auto-voucher rules on
+    // enrollables) + dashboard "Voor jou" page curation. Shape mirrors
+    // StrideSettingsService::sanitizeProfileTypes: slug/label/description/color(hex)/icon/order.
+    'profile_types' => [
+        ['slug' => 'werknemer',    'label' => 'Werknemer',    'description' => 'In loondienst bij een organisatie', 'color' => '#3B82F6', 'icon' => 'users',    'order' => 0],
+        ['slug' => 'zelfstandige', 'label' => 'Zelfstandige', 'description' => 'Zelfstandige ondernemer',            'color' => '#10B981', 'icon' => 'briefcase', 'order' => 1],
+        ['slug' => 'student',      'label' => 'Student',       'description' => 'Student of stagiair',                'color' => '#F59E0B', 'icon' => 'book',      'order' => 2],
+    ],
+
+    // Dashboard "Voor jou" curated pages (concept C). Each is a normal WP page
+    // with _stride_dashboard_profiletypes = [slug,...] — surfaced on the
+    // dashboard home of users whose profile type is in the list. NOT access
+    // control: the page is always directly reachable; it's only PROMOTED.
+    // 'seed_enrolled_user' (werknemer) sees the first; 'seed_completed_user'
+    // (zelfstandige) sees the second.
+    'dashboard_pages' => [
+        [
+            'title'          => 'Voordelen voor werknemers',
+            'content'        => 'Als werknemer geniet je van extra ondersteuning: terugbetaling via je werkgever, groepskortingen en een aangepast opleidingstraject.',
+            'profile_types'  => ['werknemer'],
+        ],
+        [
+            'title'          => 'Ondernemersgids voor zelfstandigen',
+            'content'        => 'Speciaal voor zelfstandigen: fiscaal aftrekbare opleidingen, flexibele planning en een netwerk van collega-ondernemers.',
+            'profile_types'  => ['zelfstandige'],
+        ],
+    ],
+
+    // Core site-structure pages every Stride install needs (routing, static
+    // front page, shortcode-driven flows). Not "seed data" in the demo-content
+    // sense — these are site scaffolding that a fresh WP install never gets
+    // on its own. Idempotent by slug. 'home' is set as the static front page;
+    // 'primary' menu items are created pointing at the resulting page IDs.
+    'site_pages' => [
+        ['slug' => 'home', 'title' => 'Home', 'content' => '', 'template' => ''],
+        ['slug' => 'klassikaal', 'title' => 'Klassikaal', 'content' => '', 'template' => 'page-klassikaal.php'],
+        ['slug' => 'online', 'title' => 'Online', 'content' => '', 'template' => 'page-online.php'],
+        ['slug' => 'interesse', 'title' => 'Interesse', 'content' => '[stride_interest]', 'template' => ''],
+        ['slug' => 'inschrijven', 'title' => 'Inschrijven', 'content' => '[stride_enrollment]', 'template' => 'page-inschrijven.php'],
+        ['slug' => 'mijn-account', 'title' => 'Mijn Account', 'content' => '[stride_dashboard]', 'template' => ''],
+        ['slug' => 'wachtlijst', 'title' => 'Wachtlijst', 'content' => '[stride_waitlist]', 'template' => ''],
+        [
+            'slug' => 'agenda', 'title' => 'Agenda', 'template' => '',
+            'content' => "<!-- wp:heading {\"level\":1} -->\n<h1 class=\"wp-block-heading\">Agenda</h1>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>Bekijk alle geplande vormingen op de <a href=\"/klassikaal/\">klassikale</a> en <a href=\"/online/\">online</a> overzichtspagina's. Daar vind je de eerstvolgende sessies en kun je je direct inschrijven.</p>\n<!-- /wp:paragraph -->",
+        ],
+        [
+            'slug' => 'contact', 'title' => 'Contact', 'template' => 'page-contact.php',
+            'content' => "<!-- wp:heading {\"level\":1} -->\n<h1 class=\"wp-block-heading\">Contact</h1>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>Heb je een vraag over een vorming, een inschrijving of een factuur? Neem contact op via je organisatie of de contactgegevens onderaan deze pagina.</p>\n<!-- /wp:paragraph -->",
+        ],
+        [
+            'slug' => 'faq', 'title' => 'Veelgestelde vragen', 'template' => '',
+            'content' => "<!-- wp:heading {\"level\":1} -->\n<h1 class=\"wp-block-heading\">Veelgestelde vragen</h1>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>Heb je een praktische vraag over inschrijven, betalen of een vorming volgen? Bekijk eerst de informatie bij de betreffende vorming. Vind je daar geen antwoord, neem dan <a href=\"/contact/\">contact</a> op.</p>\n<!-- /wp:paragraph -->",
+        ],
+        [
+            'slug' => 'over-ons', 'title' => 'Over ons', 'template' => 'page-over-ons.php',
+            'content' => "<!-- wp:heading {\"level\":1} -->\n<h1 class=\"wp-block-heading\">Over ons</h1>\n<!-- /wp:heading -->\n\n<!-- wp:paragraph -->\n<p>Dit platform brengt het volledige vormingsaanbod samen — klassikaal en online. Hier kun je je inschrijven, je leertraject opvolgen en je certificaten downloaden.</p>\n<!-- /wp:paragraph -->",
+        ],
+    ],
+
+    // Primary nav menu (location: primary). Items reference site_pages by
+    // slug (resolved to the created page ID) or 'custom' for a raw URL.
+    'site_menu' => [
+        'name'      => 'Hoofdmenu',
+        'location'  => 'primary',
+        'items'     => [
+            ['type' => 'custom', 'title' => 'Trajecten', 'url' => '/trajecten/'],
+            ['type' => 'page', 'title' => 'Klassikaal', 'page_slug' => 'klassikaal'],
+            ['type' => 'page', 'title' => 'Online', 'page_slug' => 'online'],
+        ],
     ],
 ];

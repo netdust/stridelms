@@ -55,6 +55,9 @@ tests/_output/
 /vendor
 auth.json
 
+# Local credentials (never commit — live API tokens)
+docs/token
+
 # Node
 node_modules/
 
