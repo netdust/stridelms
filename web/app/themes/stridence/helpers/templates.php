@@ -270,11 +270,22 @@ function stridence_build_course_card_args_from_enrollment(array $enrollment, boo
  * Build course-card partial args from a trajectory course WP_Post.
  *
  * Used by `templates/trajectory/course-groups.php` to render each required or
- * elective course as an expandable card. Always produces the 'public' mode
- * (no per-user state, no progress, secondary "Bekijk cursus" CTA only).
+ * elective course as an expandable EDITION card. A trajectory course almost
+ * always resolves to exactly one edition to follow — this is a READ-ONLY
+ * overview (the learner enrols in the trajectory, not per edition), so the
+ * card previews that one edition directly (its date/venue collapsed, its
+ * session programme on expand — the same idiom as the klassikaal page), and
+ * always deep-links to /edities/<course-slug>/. EditionRouter (Modules/
+ * Edition/EditionRouter.php) resolves that path straight to the single active
+ * edition's own permalink when there's exactly one — the common case — and
+ * only falls back to the course's edition-picker page when there are 0 or
+ * several (rare; e.g. a course reused across multiple trajectory cohorts).
+ * Always produces the 'public' mode (no per-user state, no progress).
  *
  * @param \WP_Post $course      Course post (sfwd-courses)
- * @param array    $statusPill  ['label' => string, 'tone' => 'primary'|'accent']
+ * @param array    $statusPill  ['label' => string, 'tone' => 'primary'|'accent'] — unused by the
+ *                               card itself (the section header already states this); kept in the
+ *                               signature for call-site compatibility.
  * @return array                See card-course-expandable.php docblock for the full contract.
  */
 function stridence_build_course_card_args_from_trajectory_course(\WP_Post $course, array $statusPill): array
@@ -283,73 +294,97 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
     $courseTitle = (string) $course->post_title;
     $thumbnailId = (int) get_post_thumbnail_id($courseId);
 
+    // Course-level format (not edition-level — this must resolve even when
+    // no edition exists yet) drives the header icon: book-open for online/
+    // e-learning/webinar, map-pin for in-person/classroom. Mirrors the same
+    // slug set EditionService::isOnline() checks and session-row.php's own
+    // per-type icon choice.
+    $formats    = get_the_terms($courseId, 'stride_format');
+    $formatSlugs = ($formats && !is_wp_error($formats)) ? wp_list_pluck($formats, 'slug') : [];
+    $isOnlineCourse = (bool) array_intersect($formatSlugs, ['online', 'webinar', 'e-learning']);
+
     // Excerpt: prefer the WP excerpt, fall back to trimmed content
     $excerpt = has_excerpt($courseId)
         ? get_the_excerpt($courseId)
         : wp_trim_words(get_post_field('post_content', $courseId), 25);
 
-    // Upcoming editions via repository; canEnroll() stays on the service.
-    // This is a READ-ONLY overview surface — the learner enrols in the
-    // trajectory, not in individual editions. The editions list below is an
-    // informational preview only (no enrol CTA). Edition/session choice is a
-    // gated completion task AFTER the trajectory enrolment form.
+    // Resolve THE edition this course means in this trajectory — the soonest
+    // active one. canEnroll() stays on the service. Multiple active editions
+    // is rare (a course reused across cohorts); we still preview the soonest
+    // one but flag it so the card can point to the course's edition picker
+    // instead of a single, possibly-wrong, edition permalink.
     $editionService    = ntdst_get(\Stride\Modules\Edition\EditionService::class);
     $editionRepository = ntdst_get(\Stride\Modules\Edition\EditionRepository::class);
     $sessionService    = ntdst_get(\Stride\Modules\Edition\SessionService::class);
     $allEditions       = $editionRepository->findByCourse($courseId);
-    $upcomingEditions  = [];
-    $nextStartDate     = null;
+    $activeEditionIds  = [];
 
     if (is_array($allEditions)) {
         foreach ($allEditions as $ed) {
             $editionId = (int) ($ed['id'] ?? $ed['ID'] ?? 0);
-            if (!$editionId || !$editionService->canEnroll($editionId)) {
-                continue;
-            }
-            $startDate = (string) ($ed['start_date'] ?? $editionRepository->getField($editionId, 'start_date', ''));
-            $venue     = (string) ($ed['venue'] ?? $editionRepository->getField($editionId, 'venue', ''));
-
-            // Time window comes from the edition's first session — the edition
-            // itself carries no start_time/end_time. Mirrors "09:00 – 12:30".
-            $startTime = null;
-            $endTime   = null;
-            $sessions  = $sessionService->getSessionsForEdition($editionId);
-            if (!empty($sessions)) {
-                $first     = $sessions[0];
-                $startTime = !empty($first['start_time']) ? substr((string) $first['start_time'], 0, 5) : null;
-                $endTime   = !empty($first['end_time']) ? substr((string) $first['end_time'], 0, 5) : null;
-            }
-
-            // Places remaining (capacity − registered); null when uncapped.
-            $capacity        = $editionService->getCapacity($editionId);
-            $placesRemaining = $capacity > 0
-                ? max(0, $capacity - $editionService->getRegisteredCount($editionId))
-                : null;
-
-            $upcomingEditions[] = [
-                'id'               => $editionId,
-                'start_date'       => $startDate ?: null,
-                'venue'            => $venue ?: null,
-                'start_time'       => $startTime,
-                'end_time'         => $endTime,
-                'places_remaining' => $placesRemaining,
-            ];
-            if ($nextStartDate === null && $startDate) {
-                $nextStartDate = $startDate;
-            }
-            if (count($upcomingEditions) >= 3) {
-                break;
+            if ($editionId && $editionService->canEnroll($editionId)) {
+                $activeEditionIds[] = $editionId;
             }
         }
+    }
+
+    $edition = null;
+    $sessions = [];
+    $hasMultipleEditions = count($activeEditionIds) > 1;
+
+    if (!empty($activeEditionIds)) {
+        // Soonest start_date first; undated editions sort last.
+        usort($activeEditionIds, static function (int $a, int $b) use ($editionRepository): int {
+            $da = (string) $editionRepository->getField($a, 'start_date', '');
+            $db = (string) $editionRepository->getField($b, 'start_date', '');
+            if ($da === $db) {
+                return 0;
+            }
+            if ($da === '') {
+                return 1;
+            }
+            if ($db === '') {
+                return -1;
+            }
+
+            return strcmp($da, $db);
+        });
+
+        $editionId = $activeEditionIds[0];
+        $startDate = (string) $editionRepository->getField($editionId, 'start_date', '');
+        $venue     = (string) $editionRepository->getField($editionId, 'venue', '');
+        $sessions  = $sessionService->getSessionsForEdition($editionId);
+
+        $startTime = null;
+        $endTime   = null;
+        if (!empty($sessions)) {
+            $first     = $sessions[0];
+            $startTime = !empty($first['start_time']) ? substr((string) $first['start_time'], 0, 5) : null;
+            $endTime   = !empty($first['end_time']) ? substr((string) $first['end_time'], 0, 5) : null;
+        }
+
+        // Places remaining (capacity − registered); null when uncapped.
+        $capacity        = $editionService->getCapacity($editionId);
+        $placesRemaining = $capacity > 0
+            ? max(0, $capacity - $editionService->getRegisteredCount($editionId))
+            : null;
+
+        $edition = [
+            'id'               => $editionId,
+            'start_date'       => $startDate ?: null,
+            'venue'            => $venue ?: null,
+            'start_time'       => $startTime,
+            'end_time'         => $endTime,
+            'places_remaining' => $placesRemaining,
+        ];
     }
 
     // Informational planning state shown on the right of the collapsed header.
     // "✓ Afgerond" wins when the logged-in learner already completed the course;
     // otherwise it reflects scheduling: a date when an edition exists, else
     // "Nog in te plannen".
-    $editionCount = count($upcomingEditions);
-    $userId       = get_current_user_id();
-    $isComplete   = $userId > 0
+    $userId     = get_current_user_id();
+    $isComplete = $userId > 0
         && \Stride\Integrations\LearnDash\LearnDashHelper::isComplete($courseId, $userId);
 
     if ($isComplete) {
@@ -361,10 +396,10 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
                 : __('Afgerond', 'stridence'),
             'icon' => 'check-circle',
         ];
-    } elseif ($nextStartDate) {
+    } elseif ($edition !== null && $edition['start_date']) {
         $statusLabel = [
             'tone' => 'muted',
-            'text' => sprintf(__('vanaf %s', 'stridence'), stride_format_date($nextStartDate)),
+            'text' => sprintf(__('vanaf %s', 'stridence'), stride_format_date($edition['start_date'])),
             'icon' => null,
         ];
     } else {
@@ -375,10 +410,14 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
         ];
     }
 
-    // Course detail link — always /edities/<course-slug>/, never the raw LD
-    // permalink. EditionRouter renders the course in place when no edition
-    // exists. Rendered inline in the body as "Bekijk de volledige cursus →".
-    $courseUrl = home_url('/edities/' . $course->post_name . '/');
+    // Detail link: the specific edition when there's exactly one active
+    // (the common case — EditionRouter would resolve /edities/<slug>/ to it
+    // anyway, but linking straight to it skips that redirect hop) — else
+    // /edities/<course-slug>/, which EditionRouter sends to the course's own
+    // edition-picker page (0 or several active editions).
+    $detailUrl = ($edition !== null && !$hasMultipleEditions)
+        ? get_permalink($edition['id'])
+        : home_url('/edities/' . $course->post_name . '/');
 
     return [
         'course_id'    => $courseId,
@@ -389,26 +428,27 @@ function stridence_build_course_card_args_from_trajectory_course(\WP_Post $cours
         'enrolled'     => false,
         'initial_open' => false,
         'meta'         => [
-            'start_date'          => $nextStartDate,
-            'venue'               => null,
+            'start_date'          => $edition['start_date'] ?? null,
+            'venue'               => $edition['venue'] ?? null,
             'progress_label'      => null,
             'days_remaining'      => null,
             'pending_tasks_count' => null,
             'imminence'           => null,
             // Overview-only additions:
-            'edition_count'       => $editionCount,
             'status_label'        => $statusLabel,
+            'is_online'           => $isOnlineCourse,
         ],
         'body'         => [
-            'excerpt'           => $excerpt ?: null,
-            'progress_pct'      => null,
-            'sessions'          => [],
-            'upcoming_editions' => $upcomingEditions,
-            'task_summary'      => null,
-            'primary_cta'       => null,
-            // Inline detail link rendered after the excerpt, not as a button.
-            'course_url'        => $courseUrl,
-            'secondary_cta'     => null,
+            'excerpt'              => $excerpt ?: null,
+            'progress_pct'         => null,
+            'task_summary'         => null,
+            'primary_cta'          => null,
+            'secondary_cta'        => null,
+            // Overview-only additions (edition-first preview):
+            'edition'              => $edition,
+            'edition_sessions'     => $sessions,
+            'has_multiple_editions' => $hasMultipleEditions,
+            'detail_url'           => $detailUrl,
         ],
     ];
 }

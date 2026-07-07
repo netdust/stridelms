@@ -86,7 +86,7 @@ $type_config = match ($type) {
 
 <?php if ($type->trackedByLMS()) : ?>
     <!-- Online / Assignment session -->
-    <div class="bg-surface-card rounded-[12px] shadow-card flex items-center gap-4 px-[18px] py-[14px]">
+    <div class="bg-surface-card rounded-[12px] shadow-card border border-border-soft flex items-center gap-4 px-[18px] py-[14px]">
         <!-- Icon block (square, badge-online colours) -->
         <div class="w-[50px] h-[50px] rounded-[11px] bg-badge-online-bg text-badge-online-text flex flex-col items-center justify-center shrink-0">
             <?php echo stridence_icon($type_config['icon'], 'w-5 h-5'); ?>
@@ -126,7 +126,7 @@ $type_config = match ($type) {
 
 <?php else : ?>
     <!-- In-person / Webinar session -->
-    <div class="bg-surface-card rounded-[12px] shadow-card px-[18px] py-[14px]"
+    <div class="bg-surface-card rounded-[12px] shadow-card border border-border-soft px-[18px] py-[14px]"
          <?php if ($has_details) : ?>x-data="{ open: false }"<?php endif; ?>>
         <div class="flex items-center gap-4 <?php echo $has_details ? 'cursor-pointer' : ''; ?>"
              <?php if ($has_details) : ?>@click="open = !open"<?php endif; ?>>

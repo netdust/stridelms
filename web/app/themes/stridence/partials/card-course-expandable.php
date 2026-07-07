@@ -5,7 +5,9 @@
  * Renders a collapsible course card. Three modes via $args['type']:
  *   - 'edition'  : enrolled classroom edition (sessions, tasks, CTA)
  *   - 'online'   : enrolled online course (progress bar, resume CTA)
- *   - 'public'   : course in trajectory context (excerpt, upcoming editions)
+ *   - 'public'   : course in trajectory context — EDITION-first preview
+ *                  (excerpt + the one resolved edition's date/venue/session
+ *                  programme, deep-linking straight to that edition)
  *
  * Contract: see docs/superpowers/specs/2026-05-16-unified-course-card-design.md
  *
@@ -37,17 +39,22 @@ $progressLabel     = $meta['progress_label'] ?? null;
 $daysRemaining     = $meta['days_remaining'] ?? null;
 $pendingTasksCount = (int) ($meta['pending_tasks_count'] ?? 0);
 $imminence         = $meta['imminence'] ?? null;
-$editionCount      = $meta['edition_count'] ?? null;   // overview only
 $statusLabel       = $meta['status_label'] ?? null;    // overview only
+$isOnline          = (bool) ($meta['is_online'] ?? false); // overview only
 
-$excerpt          = $body['excerpt'] ?? null;
-$progressPct      = $body['progress_pct'] ?? null;
-$sessions         = $body['sessions'] ?? [];
-$upcomingEditions = $body['upcoming_editions'] ?? [];
-$taskSummary      = $body['task_summary'] ?? null;
-$primaryCta       = $body['primary_cta'] ?? null;
-$secondaryCta     = $body['secondary_cta'] ?? null;
-$courseUrl        = $body['course_url'] ?? null;       // overview only
+$excerpt         = $body['excerpt'] ?? null;
+$progressPct     = $body['progress_pct'] ?? null;
+$sessions        = $body['sessions'] ?? [];
+$taskSummary     = $body['task_summary'] ?? null;
+$primaryCta      = $body['primary_cta'] ?? null;
+$secondaryCta    = $body['secondary_cta'] ?? null;
+// Overview (trajectory) only — the single resolved edition this course means,
+// its session programme, and the deep-link (edition permalink, or the
+// course's edition picker in the rare multi-edition case).
+$edition               = $body['edition'] ?? null;
+$editionSessions       = $body['edition_sessions'] ?? [];
+$hasMultipleEditions   = (bool) ($body['has_multiple_editions'] ?? false);
+$detailUrl             = $body['detail_url'] ?? null;
 
 // Overview (trajectory) mode uses a distinct header/body layout: a read-only
 // course preview with no per-edition enrol action. Other modes keep their
@@ -72,48 +79,32 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
      <?php if ($courseId) : ?>data-course-id="<?php echo (int) $courseId; ?>"<?php endif; ?>
      <?php if ($editionId) : ?>data-edition-id="<?php echo (int) $editionId; ?>"<?php endif; ?>>
     <?php if ($isOverview) : ?>
-    <!-- ── Overview (trajectory) header ───────────────────────────────────
-         Read-only course preview. Badge sits on its own line under the title;
-         "N editie(s) · date" meta; informational planning label on the right;
-         circular chevron. No enrol action anywhere on this surface. -->
+    <!-- ── Overview (trajectory) header — EDITION-first ───────────────────
+         Icon reflects the COURSE type (book-open for online/e-learning,
+         map-pin for in-person/classroom) — same idiom as session-row.php's
+         per-type icon. The date lives on the session rows inside, not here
+         (a course can have several sessions; one date on the header would
+         misrepresent multi-day editions). Expanding shows the excerpt +
+         that edition's session programme. No enrol action anywhere on this
+         surface — the learner enrols in the trajectory as a whole. -->
     <button type="button"
-            class="w-full p-5 flex items-start gap-4 text-left cursor-pointer"
+            class="w-full p-5 flex items-center gap-4 text-left cursor-pointer"
             @click="toggle()">
-        <!-- Icon -->
-        <div class="w-14 h-14 rounded-xl overflow-hidden flex-shrink-0">
-            <?php if ($thumbnailId) : ?>
-                <?php echo wp_get_attachment_image($thumbnailId, 'thumbnail', false, ['class' => 'w-full h-full object-cover']); ?>
-            <?php else : ?>
-                <div class="w-full h-full bg-primary/10 flex items-center justify-center">
-                    <?php echo stridence_icon('book-open', 'w-6 h-6 text-primary'); ?>
-                </div>
-            <?php endif; ?>
+        <!-- Type icon: 50px square, session-row idiom -->
+        <div class="w-[50px] h-[50px] rounded-[11px] bg-badge-online-bg text-badge-online-text flex items-center justify-center shrink-0">
+            <?php echo stridence_icon($isOnline ? 'book-open' : 'map-pin', 'w-5 h-5'); ?>
         </div>
 
-        <!-- Title + badge + meta -->
+        <!-- Title + venue -->
         <div class="flex-1 min-w-0">
-            <h4 class="font-bold text-text text-lg leading-snug">
+            <h4 class="font-bold text-text text-[15px] leading-snug truncate">
                 <?php echo esc_html($courseTitle); ?>
             </h4>
-            <div class="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1.5 text-[13px] text-text-muted">
-                <?php if ($statusPill) : ?>
-                    <span class="text-[11px] font-bold px-[9px] py-[3px] rounded-full inline-flex items-center gap-1 <?php echo esc_attr($pillClass); ?>">
-                        <?php echo esc_html($statusPill['label']); ?>
-                    </span>
-                <?php endif; ?>
-                <?php if ($editionCount !== null && $editionCount > 0) : ?>
-                    <span>
-                        <?php echo esc_html(sprintf(
-                            _n('%d editie', '%d edities', (int) $editionCount, 'stridence'),
-                            (int) $editionCount,
-                        )); ?>
-                    </span>
-                    <?php if ($startDate) : ?>
-                        <span aria-hidden="true">·</span>
-                        <span><?php echo esc_html(stride_format_date($startDate)); ?></span>
-                    <?php endif; ?>
-                <?php endif; ?>
-            </div>
+            <?php if (!empty($edition['venue'])) : ?>
+                <div class="text-[13px] text-text-muted truncate mt-0.5">
+                    <?php echo esc_html($edition['venue']); ?>
+                </div>
+            <?php endif; ?>
         </div>
 
         <!-- Status label + chevron (right) -->
@@ -128,7 +119,7 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                     <?php echo esc_html($statusLabel['text']); ?>
                 </span>
             <?php endif; ?>
-            <span class="w-9 h-9 rounded-full bg-surface-alt flex items-center justify-center text-text-muted transition-transform duration-200"
+            <span class="shrink-0 text-text-muted transition-transform duration-200"
                   :class="{ 'rotate-180': open }">
                 <?php echo stridence_icon('chevron-down', 'w-5 h-5'); ?>
             </span>
@@ -216,10 +207,12 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                 <?php if ($isOverview) : ?>
                     <p class="text-sm text-text-muted leading-relaxed">
                         <?php echo esc_html($excerpt); ?>
-                        <?php if ($courseUrl) : ?>
-                            <a href="<?php echo esc_url($courseUrl); ?>"
+                        <?php if ($detailUrl) : ?>
+                            <a href="<?php echo esc_url($detailUrl); ?>"
                                class="inline text-primary font-semibold hover:underline whitespace-nowrap">
-                                <?php esc_html_e('Bekijk de volledige cursus', 'stridence'); ?> →
+                                <?php echo $hasMultipleEditions
+                                    ? esc_html__('Bekijk alle edities', 'stridence')
+                                    : esc_html__('Bekijk de volledige editie', 'stridence'); ?> →
                             </a>
                         <?php endif; ?>
                     </p>
@@ -228,11 +221,13 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                         <?php echo esc_html($excerpt); ?>
                     </p>
                 <?php endif; ?>
-            <?php elseif ($isOverview && $courseUrl) : ?>
+            <?php elseif ($isOverview && $detailUrl) : ?>
                 <p class="text-sm">
-                    <a href="<?php echo esc_url($courseUrl); ?>"
+                    <a href="<?php echo esc_url($detailUrl); ?>"
                        class="text-primary font-semibold hover:underline">
-                        <?php esc_html_e('Bekijk de volledige cursus', 'stridence'); ?> →
+                        <?php echo $hasMultipleEditions
+                            ? esc_html__('Bekijk alle edities', 'stridence')
+                            : esc_html__('Bekijk de volledige editie', 'stridence'); ?> →
                     </a>
                 </p>
             <?php endif; ?>
@@ -301,96 +296,25 @@ $pillClass = $statusPill ? ($pillToneClasses[$statusPill['tone'] ?? 'muted'] ?? 
                 </div>
             <?php endif; ?>
 
-            <?php if (!empty($upcomingEditions) && $isOverview) : ?>
-                <!-- Read-only edition preview. No enrol CTA: the learner enrols
-                     in the trajectory; edition choice is a gated post-form task. -->
+            <?php if ($isOverview && !empty($editionSessions)) : ?>
+                <!-- Session programme — same idiom as klassikaal's edition page
+                     (partials/session-row.php), mini panel version. Read-only:
+                     no enrol CTA here, the learner enrols in the trajectory. -->
                 <div class="space-y-2">
                     <p class="text-xs font-semibold text-text-muted uppercase tracking-wider">
-                        <?php esc_html_e('Beschikbare edities', 'stridence'); ?>
+                        <?php esc_html_e('Programma', 'stridence'); ?>
                     </p>
-                    <div class="space-y-3">
-                        <?php foreach ($upcomingEditions as $ed) :
-                            $edStartTs = !empty($ed['start_date']) ? strtotime((string) $ed['start_date']) : 0;
-                            $timeRange = '';
-                            if (!empty($ed['start_time'])) {
-                                $timeRange = (string) $ed['start_time'];
-                                if (!empty($ed['end_time'])) {
-                                    $timeRange .= ' – ' . (string) $ed['end_time'];
-                                }
-                            }
-                            ?>
-                            <div class="flex items-center gap-4 p-3 rounded-xl border border-border bg-surface-alt/50">
-                                <!-- Date block -->
-                                <?php if ($edStartTs) : ?>
-                                    <div class="shrink-0 w-14 text-center rounded-lg bg-surface-card border border-border py-1.5">
-                                        <div class="text-xl font-bold text-text leading-none">
-                                            <?php echo esc_html(date_i18n('j', $edStartTs)); ?>
-                                        </div>
-                                        <div class="text-[10px] uppercase text-text-muted tracking-wide mt-0.5">
-                                            <?php echo esc_html(date_i18n('M', $edStartTs)); ?>
-                                        </div>
-                                    </div>
-                                <?php endif; ?>
-
-                                <!-- Day · date · time + venue -->
-                                <div class="flex-1 min-w-0">
-                                    <?php if ($edStartTs) : ?>
-                                        <div class="text-sm font-semibold text-text">
-                                            <?php
-                                            echo esc_html(stride_format_date((string) $ed['start_date'], 'l j F Y'));
-                                        if ($timeRange) {
-                                            echo ' · ' . esc_html($timeRange);
-                                        }
-                                        ?>
-                                        </div>
-                                    <?php endif; ?>
-                                    <?php if (!empty($ed['venue'])) : ?>
-                                        <div class="text-sm text-text-muted truncate">
-                                            <?php echo esc_html($ed['venue']); ?>
-                                        </div>
-                                    <?php endif; ?>
-                                </div>
-
-                                <!-- Places remaining (informational) -->
-                                <?php if ($ed['places_remaining'] !== null) : ?>
-                                    <div class="shrink-0 text-sm font-medium text-text-muted">
-                                        <?php echo esc_html(sprintf(
-                                            _n('Nog %d plaats', 'Nog %d plaatsen', (int) $ed['places_remaining'], 'stridence'),
-                                            (int) $ed['places_remaining'],
-                                        )); ?>
-                                    </div>
-                                <?php endif; ?>
-                            </div>
-                        <?php endforeach; ?>
+                    <div class="space-y-2">
+                        <?php foreach ($editionSessions as $s) :
+                            stridence_template_part('partials/session-row', null, [
+                                'session' => (object) $s,
+                            ]);
+                        endforeach; ?>
                     </div>
                 </div>
-            <?php elseif (!empty($upcomingEditions)) : ?>
-                <div class="space-y-2">
-                    <p class="text-xs font-medium text-text-muted uppercase tracking-wide">
-                        <?php esc_html_e('Beschikbare edities', 'stridence'); ?>
-                    </p>
-                    <div class="divide-y divide-border rounded-[12px] border border-border">
-                        <?php foreach ($upcomingEditions as $ed) : ?>
-                            <div class="p-3 flex items-center gap-3 text-sm text-text-muted">
-                                <?php if (!empty($ed['start_date'])) : ?>
-                                    <span class="flex items-center gap-1">
-                                        <?php echo stridence_icon('calendar', 'w-4 h-4'); ?>
-                                        <?php echo esc_html(stride_format_date($ed['start_date'])); ?>
-                                    </span>
-                                <?php endif; ?>
-                                <?php if (!empty($ed['venue'])) : ?>
-                                    <span class="flex items-center gap-1">
-                                        <?php echo stridence_icon('map-pin', 'w-4 h-4'); ?>
-                                        <?php echo esc_html($ed['venue']); ?>
-                                    </span>
-                                <?php endif; ?>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-                </div>
-            <?php elseif ($type === 'public') : ?>
+            <?php elseif ($isOverview) : ?>
                 <p class="text-sm text-text-muted italic">
-                    <?php esc_html_e('Nog geen edities gepland', 'stridence'); ?>
+                    <?php esc_html_e('Nog geen data gepland', 'stridence'); ?>
                 </p>
             <?php endif; ?>
 
