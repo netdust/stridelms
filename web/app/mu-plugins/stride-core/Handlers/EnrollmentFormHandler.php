@@ -335,6 +335,12 @@ final class EnrollmentFormHandler
             // cancellation in the audit trail.
             ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class)->cancel($enrollmentId);
 
+            // Clear the pending-billing transient (CR S1): the handler only clears
+            // it on a successful quote build, so on this rollback it would otherwise
+            // linger an hour. A retry writes a fresh transient, but clearing here
+            // avoids a stale voucher_code being consumed if billing changed.
+            delete_transient('stride_pending_billing_traj_' . $userId . '_' . $trajectoryId);
+
             return new WP_Error(
                 'quote_creation_failed',
                 __('De inschrijving kon niet worden afgerond omdat de offerte niet aangemaakt werd. Probeer opnieuw of contacteer ons.', 'stride'),

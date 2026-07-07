@@ -72,6 +72,12 @@ final class TrajectoryQuoteHandler
                     'trajectory_id' => $trajectoryId,
                     'price_cents' => $priceCents,
                 ]);
+                // Free/not-found = no quote will EVER come for this enroll, so the
+                // pending-billing transient the web form wrote is spent — clear it
+                // now rather than leave a stale voucher_code to be re-read by a
+                // same-hour retry (CR S1: clear on every no-quote exit, not only
+                // the success path).
+                $this->clearPendingBilling($userId, $trajectoryId);
                 return;
             }
 

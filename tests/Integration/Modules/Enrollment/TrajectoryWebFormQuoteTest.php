@@ -75,6 +75,18 @@ final class TrajectoryWebFormQuoteTest extends IntegrationTestCase
     /** @var array<int> user ids to delete in tearDown */
     private array $createdUserIds = [];
 
+    public static function setUpBeforeClass(): void
+    {
+        parent::setUpBeforeClass();
+
+        // Purge orphan vad_quote posts leaked by other test classes on reused
+        // registration ids — this suite enrolls via the real web-form seam whose
+        // registration id it can't pre-choose, so a stale orphan quote on the
+        // reused id trips the handler's idempotency guard and flakes the money
+        // assertions in a full-suite run. See the trait.
+        self::purgeOrphanQuotes();
+    }
+
     protected function setUp(): void
     {
         parent::setUp();
@@ -338,6 +350,14 @@ final class TrajectoryWebFormQuoteTest extends IntegrationTestCase
             'cancelled',
             (string) $reg->status,
             'a FREE trajectory with no quote must NOT be cancelled (A2/F1: free is not a billing failure)',
+        );
+
+        // CR S1: the handler clears the pending-billing transient on the free/no-quote
+        // skip too (not only the success path), so no stale voucher_code lingers for a
+        // same-hour retry. The web form wrote it before enroll(); it must be gone now.
+        self::assertFalse(
+            get_transient('stride_pending_billing_traj_' . $userId . '_' . $trajectoryId),
+            'the pending-billing transient must be cleared after a free-trajectory enroll (no stale carry-over)',
         );
     }
 
