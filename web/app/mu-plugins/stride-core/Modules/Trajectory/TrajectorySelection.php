@@ -633,12 +633,24 @@ final class TrajectorySelection
      * no mandatory editions (or cannot be loaded), returns an empty array — the
      * snapshot still records `type=trajectory` + the `enrollment` phase.
      *
+     * SelfPaced always returns []: it never auto-commits to a specific
+     * edition at enrollment time (TrajectoryCascadeService::cascadeOnEnrollment
+     * skips the edition-cascade entirely for that mode — the learner picks
+     * their own edition later, same as electives), so recording these IDs
+     * here would claim a selection that was never actually made
+     * (review, 2026-07-08).
+     *
      * @return array<int>
      */
     private function getMandatoryEditionIds(int $trajectoryId): array
     {
         $trajectory = $this->trajectories->getTrajectory($trajectoryId);
         if (!$trajectory) {
+            return [];
+        }
+
+        $mode = \Stride\Domain\TrajectoryMode::tryFrom((string) ($trajectory['mode'] ?? '')) ?? \Stride\Domain\TrajectoryMode::Cohort;
+        if ($mode === \Stride\Domain\TrajectoryMode::SelfPaced) {
             return [];
         }
 

@@ -158,6 +158,33 @@ final class TrajectoryCascadeEnrollmentTest extends IntegrationTestCase
         $this->assertNotEmpty($entry['granted_at']);
     }
 
+    /**
+     * SelfPaced ("zelfgestuurd, eigen edities kiezen") never auto-commits a
+     * learner to a specific edition — required courses are treated exactly
+     * like electives at enrollment time: no child registration, no LD-access
+     * grant. The learner later enrolls into their own chosen edition directly
+     * from that edition's page (review, 2026-07-08).
+     *
+     * @test
+     */
+    public function selfPacedTrajectorySkipsCascadeForRequiredCourses(): void
+    {
+        $editionCourse = $this->createTestCourse();
+        $onlineCourse = $this->createTestCourse();
+        $edition = $this->createTestEdition();
+        $trajectoryId = $this->createTrajectoryWithCourses([
+            ['type' => 'edition', 'course_id' => $editionCourse, 'edition_id' => $edition, 'required' => true, 'order' => 1],
+            ['type' => 'online', 'course_id' => $onlineCourse, 'required' => true, 'order' => 2],
+        ], mode: 'self_paced');
+
+        $parentId = $this->createParentRegistration($trajectoryId, self::$testUserId);
+
+        $this->cascade->cascadeOnEnrollment($parentId);
+
+        $this->assertCount(0, $this->repo->findByParent($parentId), 'no child registration for the edition-based required course');
+        $this->assertCount(0, $this->readMeta(), 'no LD-access grant recorded for the pure-LD required course');
+    }
+
     /** @test */
     public function pureLdMetaAppendIsIdempotentPerParent(): void
     {
@@ -314,7 +341,7 @@ final class TrajectoryCascadeEnrollmentTest extends IntegrationTestCase
     /**
      * @param array<array<string, mixed>> $courses
      */
-    private function createTrajectoryWithCourses(array $courses): int
+    private function createTrajectoryWithCourses(array $courses, string $mode = 'cohort'): int
     {
         $trajectoryId = wp_insert_post([
             'post_type' => TrajectoryCPT::POST_TYPE,
@@ -327,7 +354,7 @@ final class TrajectoryCascadeEnrollmentTest extends IntegrationTestCase
         self::$testPosts[] = $trajectoryId;
 
         $model = ntdst_data()->get(TrajectoryCPT::POST_TYPE);
-        $result = $model->update($trajectoryId, ['courses' => $courses]);
+        $result = $model->update($trajectoryId, ['courses' => $courses, 'mode' => $mode]);
         if (is_wp_error($result)) {
             $this->fail('failed to set courses meta: ' . $result->get_error_message());
         }

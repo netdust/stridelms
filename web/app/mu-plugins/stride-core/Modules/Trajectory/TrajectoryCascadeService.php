@@ -50,12 +50,25 @@ final class TrajectoryCascadeService
     /**
      * Cascade on initial trajectory enrollment.
      *
-     * Walks the trajectory's required courses:
+     * Cohort ("vaste editie-reeks"): walks the trajectory's required courses —
      *  - Course has a linked edition → create a child registration on that edition.
      *  - Course has no edition (pure LD) → grant LD access + append to user-meta.
+     * This is a real, shared schedule everyone follows, so auto-enrolling into
+     * the pre-configured edition is correct.
      *
-     * Electives are NOT handled here — see `cascadeOnSelection()`. Idempotent:
-     * re-running for the same parent skips rows that already exist.
+     * SelfPaced ("zelfgestuurd, eigen edities kiezen"): does NOTHING here —
+     * required courses are treated exactly like electives (no auto edition
+     * registration, no auto LD-access grant, regardless of whether the course
+     * even has an edition). The trajectory parent row already establishes
+     * group membership; the learner picks their own edition/timing later by
+     * enrolling directly from that edition's own page (review, 2026-07-08:
+     * auto-enrolling into whichever edition an admin happened to pre-configure
+     * contradicted "join editions whenever suits you" — there is no single
+     * "the" edition to commit to in this mode).
+     *
+     * Electives are NOT handled here regardless of mode — see
+     * `cascadeOnSelection()`. Idempotent: re-running for the same parent
+     * skips rows that already exist.
      */
     public function cascadeOnEnrollment(int $parentRegistrationId): void
     {
@@ -67,6 +80,10 @@ final class TrajectoryCascadeService
         $trajectoryId = (int) $parent->trajectory_id;
         $userId = (int) ($parent->user_id ?? 0);
         if ($userId <= 0) {
+            return;
+        }
+
+        if ($this->trajectoryMode($trajectoryId) === TrajectoryMode::SelfPaced) {
             return;
         }
 
