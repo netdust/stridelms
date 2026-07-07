@@ -10,7 +10,6 @@ use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionSelection;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
-use Stride\Modules\Invoicing\QuoteService;
 use Stride\Modules\Invoicing\VoucherService;
 use Stride\Modules\Questionnaire\QuestionnaireRepository;
 use Stride\Modules\Questionnaire\QuestionnaireValidator;
@@ -285,7 +284,18 @@ final class EnrollmentFormHandler
             'enrollment_billing'  => RegistrationRepository::wrapStage($stageData['enrollment_billing']  ?? [], $actorId),
         ];
 
-        // Create enrollment via TrajectorySelection
+        // Persist the pending billing under the NAMESPACED, server-keyed trajectory
+        // transient BEFORE enroll(). enroll() dispatches
+        // `stride/trajectory/registration/created` SYNCHRONOUSLY, and
+        // TrajectoryQuoteHandler reads this transient to build the quote (manual
+        // voucher + billing). SECURITY (Cluster-1): the key is derived from the
+        // server-side authenticated $userId (get_current_user_id() at :54), NEVER a
+        // client-supplied user_id param — mirrors EnrollmentService::storePendingBilling.
+        $this->storePendingTrajectoryBilling($userId, $trajectoryId, $billingData, (string) ($params['voucher_code'] ?? ''));
+
+        // Create enrollment via TrajectorySelection. The event-driven
+        // TrajectoryQuoteHandler builds the quote (the sole creator — the inline
+        // createTrajectoryQuote() was removed in the event-driven rewire).
         $selectionService = ntdst_get(TrajectorySelection::class);
         $enrollmentId = $selectionService->enroll($userId, $trajectoryId);
 
@@ -301,28 +311,29 @@ final class EnrollmentFormHandler
         // Update user billing info
         $this->updateUserBillingInfo($userId, $billingData);
 
-        // Create quote via QuoteService
-        $quoteId = $this->createTrajectoryQuote(
-            $userId,
-            $enrollmentId,
-            $trajectoryId,
-            $billingData,
-            $params['voucher_code'] ?? '',
-        );
+        // Re-read the registration to learn whether the event handler landed a
+        // quote. The quote_id now comes from this re-read (was the inline creator's
+        // return before the rewire).
+        $registration = ntdst_get(RegistrationRepository::class)->find($enrollmentId);
+        $quoteId = $registration?->quote_id ?? null;
 
-        if (is_wp_error($quoteId)) {
+        // PRICED ROLLBACK (A2-CRITICAL): a priced trajectory whose quote never
+        // landed must NOT let the enrollee walk past billing. Cancel + WP_Error.
+        // A FREE trajectory with no quote is LEGITIMATE — do NOT cancel.
+        $trajectory = $trajectoryService->getTrajectory($trajectoryId);
+        $isPriced = $trajectory && (int) $trajectory['price'] > 0;
+
+        if ($isPriced && empty($quoteId)) {
             ntdst_log('enrollment')->error('Trajectory quote creation failed', [
                 'user_id' => $userId,
                 'trajectory_id' => $trajectoryId,
                 'enrollment_id' => $enrollmentId,
-                'error' => $quoteId->get_error_message(),
             ]);
 
             // Roll back the enrollment so a missing quote can never let the
             // user walk past payment. The user can retry; an admin sees the
             // cancellation in the audit trail.
-            $enrollmentService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
-            $enrollmentService->cancel($enrollmentId);
+            ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class)->cancel($enrollmentId);
 
             return new WP_Error(
                 'quote_creation_failed',
@@ -334,7 +345,7 @@ final class EnrollmentFormHandler
             'user_id' => $userId,
             'trajectory_id' => $trajectoryId,
             'enrollment_id' => $enrollmentId,
-            'quote_id' => is_wp_error($quoteId) ? null : $quoteId,
+            'quote_id' => $quoteId,
         ]);
 
         // Check if trajectory requires approval
@@ -347,143 +358,48 @@ final class EnrollmentFormHandler
             'success' => true,
             'message' => $message,
             'enrollment_id' => $enrollmentId,
-            'quote_id' => is_wp_error($quoteId) ? null : $quoteId,
+            'quote_id' => $quoteId,
             'status' => $requiresApproval ? 'pending' : 'confirmed',
             'redirect_url' => home_url('/mijn-account/?tab=inschrijvingen'),
         ];
     }
 
     /**
-     * Create quote for trajectory enrollment.
+     * Persist the pending billing for the event-driven trajectory quote handler.
      *
-     * @param array<string, string> $billingData
+     * Written under the NAMESPACED, server-keyed transient
+     * `stride_pending_billing_traj_{userId}_{trajectoryId}` — the byte-identical
+     * key TrajectoryQuoteHandler::getPendingBilling reads. The $userId MUST be the
+     * server-side authenticated enrolling user, NEVER a client-supplied user_id
+     * param (Cluster-1 security contract). The manual voucher_code travels on the
+     * payload so the event handler can apply it.
+     *
+     * @param array<string, string> $billingData sanitized billing fields
      */
-    private function createTrajectoryQuote(
+    private function storePendingTrajectoryBilling(
         int $userId,
-        int $enrollmentId,
         int $trajectoryId,
         array $billingData,
         string $voucherCode,
-    ): int|WP_Error {
-        $trajectoryService = ntdst_get(TrajectoryService::class);
-        $trajectory = $trajectoryService->getTrajectory($trajectoryId);
-
-        if (!$trajectory) {
-            return new WP_Error('trajectory_not_found', 'Trajectory not found');
-        }
-
-        // Get price (could be member vs non-member in future). The stored
-        // trajectory price is canonical CENTS — use it directly, do NOT ×100.
-        $priceCents = (int) $trajectory['price'];
-
-        // Build quote items
-        $items = [
-            [
-                'title' => $trajectory['title'],
-                'quantity' => 1,
-                'unit_price' => Money::cents($priceCents),
-            ],
-        ];
-
-        // Handle voucher discount
-        $discount = null;
-        $appliedVoucherCode = null;
-
-        if (!empty($voucherCode)) {
-            $voucherService = ntdst_get(VoucherService::class);
-            $voucher = $voucherService->validateVoucher($voucherCode, null);
-
-            if (!is_wp_error($voucher)) {
-                $subtotal = Money::cents($priceCents);
-                $discount = $voucherService->calculateDiscount($voucher, $subtotal);
-                $appliedVoucherCode = $voucherCode;
-
-                ntdst_log('enrollment')->info('Voucher applied to trajectory enrollment', [
-                    'trajectory_id' => $trajectoryId,
-                    'voucher_code' => $voucherCode,
-                    'discount_cents' => $discount->inCents(),
-                ]);
-            }
-        }
-
-        // Format billing for quote
+    ): void {
         $billing = [
+            'name' => trim(($billingData['first_name'] ?? '') . ' ' . ($billingData['last_name'] ?? '')),
+            'email' => ($billingData['invoice_email'] ?? '') ?: ($billingData['email'] ?? ''),
             'company' => $billingData['company'] ?? '',
-            'email' => $billingData['invoice_email'] ?? $billingData['email'] ?? '',
             'address' => $billingData['address'] ?? '',
             'postal_code' => $billingData['postal_code'] ?? '',
             'city' => $billingData['city'] ?? '',
             'vat_number' => $billingData['vat_number'] ?? '',
             'gln_number' => $billingData['gln_number'] ?? '',
+            'po_number' => $billingData['po_number'] ?? '',
+            'voucher_code' => $voucherCode,
         ];
 
-        // Use QuoteService to create quote
-        // Note: QuoteService.createQuote expects registration_id and edition_id,
-        // but for trajectories we pass enrollment_id in place of registration_id
-        // and trajectoryId (which is stored as edition_id field for now - can be refactored later)
-        $quoteService = ntdst_get(QuoteService::class);
-
-        $quoteId = $quoteService->createQuote(
-            $userId,
-            $enrollmentId,      // Using enrollment_id as registration_id
-            $trajectoryId,      // Using trajectory_id as edition_id (item reference)
-            $items,
+        set_transient(
+            'stride_pending_billing_traj_' . $userId . '_' . $trajectoryId,
             $billing,
-            $appliedVoucherCode,
-            $discount,
+            HOUR_IN_SECONDS,
         );
-
-        if (!is_wp_error($quoteId)) {
-            // KNOWN LIMITATION: this auto-voucher fires ONLY on the web-form path.
-            // createTrajectoryQuote is inline (called from the enrollment form
-            // handler), NOT event-driven like the edition path
-            // (EnrollmentQuoteHandler on stride/registration/created). A Partner-API
-            // trajectory enroll creates no quote here, so it gets no auto-voucher.
-            // Backlog: unify trajectory quoting onto the edition event path
-            // (separate feature).
-            // Auto-apply the profile-type voucher (M3) — parity with the edition
-            // path (EnrollmentQuoteHandler::onRegistrationCreated, T8). Resolved
-            // server-side from the ATTENDEE's STORED profile type ($userId, never
-            // client/request input); applied via applyVoucher which validates +
-            // REDEEMS (moves used_count) — closing the createQuote-doesn't-redeem
-            // gap the manual validate+calculate path above leaves open. Skip when a
-            // manual voucher was already supplied so the auto path never stacks a
-            // second redemption (manual takes precedence).
-            if (empty($voucherCode)) {
-                $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
-                $autoCode = $policy->autoVoucherCode($userId, $trajectoryId, 'vad_trajectory');
-                if ($autoCode !== null) {
-                    // editionScoped:false — the trajectory quote stores the
-                    // trajectoryId in its edition_id field, which is NOT a real
-                    // edition. Validate + prorate with NO edition scope, matching
-                    // the manual trajectory path above (validateVoucher(code, null)).
-                    // Without this an edition-scoped voucher is compared against the
-                    // trajectoryId and wrongly rejected, or a single_session voucher
-                    // prorates over 0 sessions → full discount.
-                    // MONEY-IDENTITY (PR #7 finding 5, DEFERRED — latent, not
-                    // triggerable today): the trajectory web-form is SELF-ENROLL, so
-                    // here payer == attendee ($userId) and the quote's user_id already
-                    // equals the redemption id — applyVoucher's default ($redeemAsUserId
-                    // null → payer) is correct. IF a colleague/bulk trajectory web-form
-                    // is ever added (payer != attendee), this call MUST pass the ATTENDEE
-                    // via redeemAsUserId, exactly like the edition bulk path
-                    // (EnrollmentQuoteHandler:153). Without it the attendee's redemption
-                    // would key on the payer and the durable-id release symmetry breaks.
-                    $applied = $quoteService->applyVoucher($quoteId, $autoCode, editionScoped: false);
-                    if (is_wp_error($applied)) {
-                        // Resolved code invalid/expired/over-cap: the enrollment +
-                        // quote STAND, just without the discount. Log, do not fail.
-                        ntdst_log('enrollment')->info('Auto-voucher not applied to trajectory (invalid/exhausted)', [
-                            'quote_id' => $quoteId,
-                            'code' => $autoCode,
-                            'reason' => $applied->get_error_message(),
-                        ]);
-                    }
-                }
-            }
-        }
-
-        return $quoteId;
     }
 
     /**
