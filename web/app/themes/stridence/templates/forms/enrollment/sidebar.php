@@ -11,9 +11,26 @@
 $edition_data = $args['edition_data'] ?? [];
 $course_data  = $args['course_data'] ?? [];
 ?>
-<aside class="bg-surface-card rounded-[16px] shadow-card p-6 sticky top-24">
-    <h3 class="font-heading font-semibold text-lg mb-4">Samenvatting</h3>
+<aside x-data="{ summaryOpen: false }"
+       class="bg-surface-card rounded-[16px] shadow-card p-6 lg:sticky lg:top-24">
+    <!-- Header: toggles the summary on mobile, static heading on desktop.
+         On mobile the collapsed header still shows the price at a glance. -->
+    <button type="button" @click="summaryOpen = !summaryOpen"
+            class="w-full flex items-center justify-between gap-3 text-left lg:cursor-default"
+            :aria-expanded="summaryOpen ? 'true' : 'false'">
+        <h3 class="font-heading font-semibold text-lg">Samenvatting</h3>
+        <span class="flex items-center gap-3 lg:hidden">
+            <?php if (!empty($edition_data['price'])) : ?>
+                <span class="font-bold text-text"><?= esc_html($edition_data['price']) ?></span>
+            <?php endif; ?>
+            <span class="transition-transform" :class="summaryOpen && 'rotate-180'">
+                <?= stridence_icon('chevron-down', 'w-5 h-5 shrink-0 text-text-muted') ?>
+            </span>
+        </span>
+    </button>
 
+    <!-- Body: collapsed on mobile (toggle), always shown on desktop (lg:!block). -->
+    <div class="mt-4 lg:!block" :class="summaryOpen ? '' : 'hidden'">
     <?php if (!empty($edition_data['title'])) : ?>
         <!-- Course/Edition Info -->
         <div class="mb-6">
@@ -119,4 +136,5 @@ $course_data  = $args['course_data'] ?? [];
             </a>
         </div>
     <?php endif; ?>
+    </div><!-- /.summary body -->
 </aside>
