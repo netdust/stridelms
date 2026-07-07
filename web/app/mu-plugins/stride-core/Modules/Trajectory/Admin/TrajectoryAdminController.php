@@ -1260,13 +1260,15 @@ final class TrajectoryAdminController
         }
 
         // Catalog-listing flag (concept A). A blunt bool; not a security boundary.
-        if (isset($fields['exclude_from_catalog'])) {
-            $updateData['exclude_from_catalog'] = (bool) $fields['exclude_from_catalog'];
-        }
+        // ALWAYS write it (outside the isset guard): the metabox renders a BARE
+        // checkbox, so an unticked box POSTs no key — guarding on isset would leave
+        // a stored '1' un-clearable → a hidden trajectory could never be un-hidden.
+        // This save path is already nonce + cap gated above.
+        $updateData['exclude_from_catalog'] = (bool) ($fields['exclude_from_catalog'] ?? false);
 
-        if (!empty($updateData)) {
-            $this->repository->update($postId, $updateData);
-        }
+        // $updateData always carries at least the catalog flag now, so the write
+        // always runs (the prior !empty guard is a dead no-op after that change).
+        $this->repository->update($postId, $updateData);
     }
 
     /**

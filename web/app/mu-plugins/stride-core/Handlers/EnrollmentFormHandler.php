@@ -460,6 +460,15 @@ final class EnrollmentFormHandler
                     // Without this an edition-scoped voucher is compared against the
                     // trajectoryId and wrongly rejected, or a single_session voucher
                     // prorates over 0 sessions → full discount.
+                    // MONEY-IDENTITY (PR #7 finding 5, DEFERRED — latent, not
+                    // triggerable today): the trajectory web-form is SELF-ENROLL, so
+                    // here payer == attendee ($userId) and the quote's user_id already
+                    // equals the redemption id — applyVoucher's default ($redeemAsUserId
+                    // null → payer) is correct. IF a colleague/bulk trajectory web-form
+                    // is ever added (payer != attendee), this call MUST pass the ATTENDEE
+                    // via redeemAsUserId, exactly like the edition bulk path
+                    // (EnrollmentQuoteHandler:153). Without it the attendee's redemption
+                    // would key on the payer and the durable-id release symmetry breaks.
                     $applied = $quoteService->applyVoucher($quoteId, $autoCode, editionScoped: false);
                     if (is_wp_error($applied)) {
                         // Resolved code invalid/expired/over-cap: the enrollment +

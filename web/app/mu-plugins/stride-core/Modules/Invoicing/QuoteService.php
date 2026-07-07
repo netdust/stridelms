@@ -579,11 +579,18 @@ final class QuoteService extends AbstractService
         if ($result) {
             // Release any voucher attached to the cancelled quote so its
             // used_count is reversed. Otherwise quota silently drains.
+            //
+            // MONEY-IDENTITY: release against the id the voucher was actually
+            // REDEEMED against — the attendee for a bulk/colleague enroll, not the
+            // payer who owns the quote. Prefer the durably-recorded redeemed-against
+            // id; fall back to the payer (user_id) for legacy quotes predating this
+            // meta. Keying on the payer here would find no redemption row and roll
+            // back, leaving used_count stuck and the attendee capped.
             $meta = $quote->meta ?? [];
             $voucherCode = (string) ($meta['voucher_code'] ?? '');
-            $userId = (int) ($meta['user_id'] ?? 0);
-            if ($voucherCode !== '' && $userId > 0) {
-                $this->voucherService->releaseVoucher($voucherCode, $userId, $quoteId);
+            $redeemUserId = (int) ($meta['voucher_redeemed_user_id'] ?? $meta['user_id'] ?? 0);
+            if ($voucherCode !== '' && $redeemUserId > 0) {
+                $this->voucherService->releaseVoucher($voucherCode, $redeemUserId, $quoteId);
             }
 
             ntdst_log('invoicing')->info('Quote cancelled', [
@@ -666,15 +673,26 @@ final class QuoteService extends AbstractService
         // the caller override to the ATTENDEE (edition bulk enroll) — see the
         // $redeemAsUserId docblock. release + redeem must key on the SAME id so
         // a replaced voucher is reversed for whoever it was redeemed against.
+        // This is the id the NEW voucher is redeemed against + persisted below.
         $redemptionUserId = $redeemAsUserId ?? (int) ($meta['user_id'] ?? 0);
 
         // If the quote already has a voucher, release it first so the
         // previous redemption + used_count are reversed. Without this the
         // replaced voucher stays "redeemed" against the quote forever and
         // its quota silently drains.
+        //
+        // MONEY-IDENTITY: the PREVIOUS voucher must be released against the id it
+        // was actually REDEEMED against, which is NOT necessarily $redemptionUserId
+        // (the admin replace path defaults $redeemAsUserId to null → the payer, but
+        // the previous code may have been redeemed against an ATTENDEE for a bulk
+        // enroll). Read the durably-recorded redeemed-against id; fall back to the
+        // payer for legacy quotes that predate this meta. Split from $redemptionUserId
+        // so release(previous) keys on the OLD redemption and redeem(new) keys on the
+        // NEW one — otherwise the previous attendee redemption never reverses.
+        $previousRedemptionUserId = (int) ($meta['voucher_redeemed_user_id'] ?? $meta['user_id'] ?? 0);
         $previousCode = (string) ($meta['voucher_code'] ?? '');
-        if ($previousCode !== '' && $previousCode !== $voucherCode && $redemptionUserId > 0) {
-            $voucherService->releaseVoucher($previousCode, $redemptionUserId, $quoteId);
+        if ($previousCode !== '' && $previousCode !== $voucherCode && $previousRedemptionUserId > 0) {
+            $voucherService->releaseVoucher($previousCode, $previousRedemptionUserId, $quoteId);
         }
 
         // Calculate discount. Edition scope (and single_session proration) only
@@ -720,8 +738,12 @@ final class QuoteService extends AbstractService
 
         // Update quote — only reached after the redeem succeeded, so the
         // persisted discount always has a matching redemption behind it.
+        // MONEY-IDENTITY: durably record WHO this voucher was redeemed against, so
+        // the release paths (cancel + a later replace) reverse used_count for the
+        // right id even across the redeem->release gap. See $redeemAsUserId.
         $result = $this->repository->updateMeta($quoteId, [
             'voucher_code' => $voucherCode,
+            'voucher_redeemed_user_id' => $redemptionUserId,
             'discount' => $totals['discount'],
             'tax' => $totals['tax'],
             'total' => $totals['total'],

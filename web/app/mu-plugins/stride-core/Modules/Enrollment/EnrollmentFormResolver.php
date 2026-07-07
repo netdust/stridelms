@@ -124,11 +124,18 @@ final class EnrollmentFormResolver
         // no-form side-effect; a minimal profile only changes which form renders).
         $wantsDirect = $base['form_type'] === 'direct';
 
-        if (ntdst_get(ProfileTypePolicy::class)->usesMinimalForm($userId, $editionId, 'vad_edition')) {
+        $forcedMinimal = ntdst_get(ProfileTypePolicy::class)->usesMinimalForm($userId, $editionId, 'vad_edition');
+        if ($forcedMinimal) {
             $base['form_type'] = 'minimal';
         }
 
-        if ($wantsDirect) {
+        // A minimal-routed profile type must SEE the minimal form even on a
+        // direct-configured edition — minimal is a deliberate "these users provide
+        // the reduced field set" signal. If we still set state='direct' here, the
+        // router fires handleDirectEnrollment and enrolls with NO form, discarding
+        // the minimal form the policy requested. So: minimal WINS over direct — only
+        // drive the direct state when minimal was NOT forced.
+        if ($wantsDirect && !$forcedMinimal) {
             $base['state'] = 'direct';
         }
 

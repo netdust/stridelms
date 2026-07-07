@@ -160,6 +160,55 @@ final class ProfiletypeRulesMetaboxSaveTest extends IntegrationTestCase
     }
 
     // ======================================================================
+    // 1c. UN-CHECK — exclude_from_catalog can be CLEARED (PR #7 finding 1)
+    // ======================================================================
+    //
+    // The metabox renders a BARE checkbox (no hidden companion), so unticking it
+    // POSTs no exclude_from_catalog key at all. handleSave must still clear the
+    // stored flag — otherwise a hidden edition/trajectory can never be un-hidden.
+    // Pre-fix handleSave only wrote the flag inside `if (isset(...))`, so the
+    // absent key left the stored '1' untouched.
+
+    public function test_edition_exclude_from_catalog_can_be_uncleared(): void
+    {
+        $editionId = $this->createTestEdition();
+
+        // 1) Save WITH the flag set → stored true.
+        $this->saveEdition($editionId, ['exclude_from_catalog' => 1]);
+        $this->assertTrue(
+            $this->editionRepo()->getExcludeFromCatalog($editionId),
+            'precondition: exclude_from_catalog must be true after a checked save',
+        );
+
+        // 2) Save again WITHOUT the checkbox key (an unticked bare checkbox POSTs
+        //    nothing) → the flag must now be FALSE.
+        $this->saveEdition($editionId, ['profiletype_rules' => []]);
+
+        $this->assertFalse(
+            $this->editionRepo()->getExcludeFromCatalog($editionId),
+            'unticking the bare checkbox (no posted key) must CLEAR exclude_from_catalog',
+        );
+    }
+
+    public function test_trajectory_exclude_from_catalog_can_be_uncleared(): void
+    {
+        $trajectoryId = $this->createTrajectory();
+
+        $this->saveTrajectory($trajectoryId, ['exclude_from_catalog' => 1]);
+        $this->assertTrue(
+            $this->trajectoryRepo()->getExcludeFromCatalog($trajectoryId),
+            'precondition: trajectory exclude_from_catalog must be true after a checked save',
+        );
+
+        $this->saveTrajectory($trajectoryId, ['profiletype_rules' => []]);
+
+        $this->assertFalse(
+            $this->trajectoryRepo()->getExcludeFromCatalog($trajectoryId),
+            'unticking the bare checkbox must CLEAR trajectory exclude_from_catalog',
+        );
+    }
+
+    // ======================================================================
     // 2. DENIAL — bad nonce → no write (MANDATORY)
     // ======================================================================
 

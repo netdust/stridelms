@@ -141,6 +141,61 @@ final class EnrollmentFormResolverMinimalFormTest extends TestCase
         );
     }
 
+    // ── 1b. Edition direct+minimal collision (PR #7 finding 4) ──────────────
+    // A profile type marked minimal:true must SEE the minimal form even on a
+    // direct-configured edition. Pre-fix resolveEdition captured $wantsDirect from
+    // the stored 'direct' form, forced form_type='minimal', but then set
+    // state='direct' anyway → the router fired handleDirectEnrollment and enrolled
+    // with NO form, discarding the minimal form the policy requested. The minimal
+    // form must WIN: when minimal is forced, state must NOT be 'direct'.
+    public function testEditionMinimalPolicyWinsOverStoredDirectState(): void
+    {
+        // Stored form is 'direct' (a direct-configured edition)...
+        $this->editionService->shouldReceive('getEnrollmentForm')->andReturn('direct');
+        // ...but the user's profile type routes to minimal.
+        $this->policy->shouldReceive('usesMinimalForm')
+            ->with(self::USER_ID, self::EDITION_ID, 'vad_edition')
+            ->andReturn(true);
+
+        $args = $this->resolver->resolveTemplateArgs($this->editionPost(), 'edition');
+
+        $this->assertSame(
+            'minimal',
+            $args['form_type'],
+            'a minimal-routed profile type must get the minimal form even on a direct edition',
+        );
+        $this->assertNotSame(
+            'direct',
+            $args['state'] ?? null,
+            'minimal must WIN over the stored direct state — state must NOT be "direct", or the '
+            . 'router direct-enrolls with no form and discards the requested minimal form',
+        );
+    }
+
+    // ── 1c. Edition direct WITHOUT minimal still direct (regression guard) ───
+    // The non-minimal direct case must STILL resolve to state='direct' — the fix
+    // only suppresses the direct state WHEN minimal was forced.
+    public function testEditionDirectWithoutMinimalStaysDirect(): void
+    {
+        $this->editionService->shouldReceive('getEnrollmentForm')->andReturn('direct');
+        $this->policy->shouldReceive('usesMinimalForm')
+            ->with(self::USER_ID, self::EDITION_ID, 'vad_edition')
+            ->andReturn(false);
+
+        $args = $this->resolver->resolveTemplateArgs($this->editionPost(), 'edition');
+
+        $this->assertSame(
+            'direct',
+            $args['form_type'],
+            'a direct edition with no minimal policy keeps form_type "direct"',
+        );
+        $this->assertSame(
+            'direct',
+            $args['state'] ?? null,
+            'the non-minimal direct case must STILL drive the direct state',
+        );
+    }
+
     // ── 2. Edition negative: policy minimal:false → stored 'default' stands ──
     public function testEditionNonMinimalPolicyLeavesStoredFormType(): void
     {

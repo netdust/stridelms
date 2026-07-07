@@ -595,14 +595,16 @@ final class EditionAdminController
         }
 
         // Catalog-listing flag (concept A). A blunt bool; not a security boundary.
-        if (isset($fields['exclude_from_catalog'])) {
-            $updateData['exclude_from_catalog'] = (bool) $fields['exclude_from_catalog'];
-        }
+        // ALWAYS write it (outside the isset guard): the metabox renders a BARE
+        // checkbox, so an unticked box POSTs no key at all. Guarding on isset would
+        // leave a stored '1' un-clearable → a hidden edition could never be
+        // un-hidden. This save path is already nonce + cap gated above, and the
+        // profiletype metabox (which owns this checkbox) is always part of the form.
+        $updateData['exclude_from_catalog'] = (bool) ($fields['exclude_from_catalog'] ?? false);
 
-        // Update if we have data
-        if (!empty($updateData)) {
-            $this->editionRepository->updateMeta($postId, $updateData);
-        }
+        // $updateData always carries at least the catalog flag now, so the write
+        // always runs (the prior !empty guard is a dead no-op after that change).
+        $this->editionRepository->updateMeta($postId, $updateData);
     }
 
     /**

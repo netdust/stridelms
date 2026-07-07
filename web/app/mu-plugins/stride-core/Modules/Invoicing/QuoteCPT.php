@@ -90,6 +90,16 @@ final class QuoteCPT
                 'type' => 'text',
                 'label' => 'Kortingscode',
             ],
+            // MONEY-IDENTITY: durably records WHICH user the current voucher was
+            // redeemed against (the attendee for a bulk/colleague enroll, else the
+            // payer). release + redeem MUST key on the SAME id; the release paths
+            // (cancel + applyVoucher's replace-previous step) read this so a quote
+            // cancelled/replaced across the redeem→release gap reverses used_count
+            // for the id it was actually redeemed against. See applyVoucher.
+            'voucher_redeemed_user_id' => [
+                'type' => 'int',
+                'label' => 'Voucher verzilverd voor gebruiker ID',
+            ],
             'valid_until' => [
                 'type' => 'text',
                 'label' => 'Geldig tot',
