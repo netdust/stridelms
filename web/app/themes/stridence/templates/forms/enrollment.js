@@ -126,26 +126,77 @@ function enrollmentForm(config) {
         submitting: false,
         submitError: '',
 
-        // Required fields per template step (0=type, 1=personal, 2=billing).
-        // Single source of truth for both per-step "Next" gating and the
-        // final pre-submit sweep below — a gap in one can no longer let a
-        // field through that the other would have caught.
+        // Field name -> label, for fields the last isStepValid() call found
+        // missing. Drives the red :aria-invalid border + inline .input-error
+        // message on each field, and the step-level summary banner. Cleared
+        // per-field as the user types (see clearFieldError) and repopulated
+        // by isStepValid() whenever a blocked nextStep()/submitForm() runs.
+        fieldErrors: {},
+
+        get fieldErrorMessages() {
+            return Object.values(this.fieldErrors);
+        },
+
+        // Scrolls the form itself into view — not the page bottom, where the
+        // Next/Submit button that triggered the error sits. `$refs.formTop`
+        // is the <form> tag in enrollment.php.
+        scrollToFormTop() {
+            this.$nextTick(() => {
+                this.$refs.formTop?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            });
+        },
+
+        // Required fields per template step (0=type, 1=personal, 2=billing),
+        // with the Dutch label shown in the error summary. Single source of
+        // truth for per-step "Next" gating and the final pre-submit sweep
+        // below — a gap in one can no longer let a field through the other
+        // would have caught.
         requiredFieldsForStep(step) {
             if (step === 1) {
-                return ['first_name', 'last_name', 'email', 'phone'];
+                return [
+                    { name: 'first_name', label: 'Voornaam' },
+                    { name: 'last_name', label: 'Achternaam' },
+                    { name: 'email', label: 'E-mailadres' },
+                    { name: 'phone', label: 'Telefoonnummer' },
+                ];
             }
             if (step === 2) {
-                return ['company', 'invoice_email', 'address', 'postal_code', 'city'];
+                return [
+                    { name: 'company', label: 'Organisatie / Naam' },
+                    { name: 'invoice_email', label: 'E-mail voor factuur' },
+                    { name: 'address', label: 'Adres' },
+                    { name: 'postal_code', label: 'Postcode' },
+                    { name: 'city', label: 'Gemeente' },
+                ];
             }
             return [];
         },
 
         isStepValid(step) {
-            return this.requiredFieldsForStep(step).every((field) => String(this.form[field] || '').trim() !== '');
+            const missing = this.requiredFieldsForStep(step).filter(
+                (field) => String(this.form[field.name] || '').trim() === '',
+            );
+
+            missing.forEach((field) => {
+                this.fieldErrors[field.name] = field.label;
+            });
+
+            return missing.length === 0;
+        },
+
+        clearFieldError(fieldName) {
+            if (this.fieldErrors[fieldName]) {
+                delete this.fieldErrors[fieldName];
+            }
         },
 
         nextStep() {
+            // A field the user already fixed on this step should not still
+            // show as an error after navigating away and back.
+            this.requiredFieldsForStep(this.currentStep).forEach((field) => this.clearFieldError(field.name));
+
             if (!this.isStepValid(this.currentStep)) {
+                this.scrollToFormTop();
                 return;
             }
             if (this.stepIndex < this.stepMap.length - 1) {
@@ -189,8 +240,13 @@ function enrollmentForm(config) {
             // walk every step actually in this mode's flow (stepMap already
             // excludes billing for short forms / interest / waitlist) so a gap
             // in step navigation can never let an incomplete submit through.
-            const hasInvalidStep = this.stepMap.some((step) => !this.isStepValid(step));
-            if (hasInvalidStep) {
+            // isStepValid() populates fieldErrors as a side effect, so every
+            // missing field across every step is flagged, not just the first.
+            this.fieldErrors = {};
+            const invalidStepIndex = this.stepMap.findIndex((step) => !this.isStepValid(step));
+            if (invalidStepIndex !== -1) {
+                this.stepIndex = invalidStepIndex;
+                this.scrollToFormTop();
                 return;
             }
 

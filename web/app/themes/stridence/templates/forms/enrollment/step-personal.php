@@ -21,30 +21,38 @@ $form_type       = $args['form_type'] ?? 'default';
             <div>
                 <label class="input-label" for="first_name">Voornaam *</label>
                 <input type="text" id="first_name" name="first_name" x-model="form.first_name"
-                       class="input-text" required>
+                       @input="clearFieldError('first_name')"
+                       class="input-text" required :aria-invalid="!!fieldErrors.first_name">
+                <p x-show="fieldErrors.first_name" class="input-error">Voornaam is verplicht.</p>
             </div>
             <div>
                 <label class="input-label" for="last_name">Achternaam *</label>
                 <input type="text" id="last_name" name="last_name" x-model="form.last_name"
-                       class="input-text" required>
+                       @input="clearFieldError('last_name')"
+                       class="input-text" required :aria-invalid="!!fieldErrors.last_name">
+                <p x-show="fieldErrors.last_name" class="input-error">Achternaam is verplicht.</p>
             </div>
         </div>
 
         <div>
             <label class="input-label" for="email">E-mailadres *</label>
             <input type="email" id="email" name="email" x-model="form.email"
-                   class="input-text" required
+                   @input="clearFieldError('email')"
+                   class="input-text" required :aria-invalid="!!fieldErrors.email"
                    :readonly="form.enrollment_type !== 'collega'"
                    :class="form.enrollment_type !== 'collega' && 'bg-surface-alt cursor-not-allowed'">
             <p x-show="form.enrollment_type !== 'collega'" class="input-hint">
                 Dit is je account e-mailadres
             </p>
+            <p x-show="fieldErrors.email" class="input-error">E-mailadres is verplicht.</p>
         </div>
 
         <div>
             <label class="input-label" for="phone">Telefoonnummer *</label>
             <input type="tel" id="phone" name="phone" x-model="form.phone"
-                   class="input-text" required placeholder="+32 ...">
+                   @input="clearFieldError('phone')"
+                   class="input-text" required :aria-invalid="!!fieldErrors.phone" placeholder="+32 ...">
+            <p x-show="fieldErrors.phone" class="input-error">Telefoonnummer is verplicht.</p>
         </div>
 
         <?php if ($form_type !== 'minimal') : ?>

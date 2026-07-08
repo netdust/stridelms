@@ -201,7 +201,19 @@ $enrollment_js_ver = file_exists($enrollment_js) ? filemtime($enrollment_js) : '
         <!-- Main Form Column (2/3) — on mobile the summary sits above the form -->
         <div class="lg:col-span-2 order-2 lg:order-1">
             <?php $is_minimal = $form_type === 'minimal'; ?>
-            <form @submit.prevent="submitForm" novalidate class="bg-surface-card rounded-[16px] shadow-card p-6 md:p-8">
+            <form @submit.prevent="submitForm" novalidate x-ref="formTop" class="bg-surface-card rounded-[16px] shadow-card p-6 md:p-8">
+                <!-- Missing-required-fields summary — shown at the TOP of the form
+                     (scrollToFormTop() lands here) rather than only near the button
+                     that triggered it, so the user sees what's wrong immediately. -->
+                <div x-show="fieldErrorMessages.length > 0" x-transition
+                     class="mb-6 p-4 bg-error/10 border border-error/20 rounded-[12px]">
+                    <p class="text-sm font-semibold text-error mb-1">Nog niet alle verplichte velden zijn ingevuld</p>
+                    <ul class="text-sm text-error list-disc list-inside space-y-0.5">
+                        <template x-for="message in fieldErrorMessages" :key="message">
+                            <li x-text="message"></li>
+                        </template>
+                    </ul>
+                </div>
                 <?php if (!$is_online && !$is_minimal) : ?>
                     <?php stridence_template_part('templates/forms/enrollment/step-type'); ?>
                 <?php endif; ?>

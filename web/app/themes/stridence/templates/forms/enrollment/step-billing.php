@@ -16,31 +16,41 @@ $billing_groups = $args['billing_groups'] ?? [];
         <div>
             <label class="input-label" for="company">Organisatie / Naam *</label>
             <input type="text" id="company" name="company" x-model="form.company"
-                   class="input-text" required>
+                   @input="clearFieldError('company')"
+                   class="input-text" required :aria-invalid="!!fieldErrors.company">
+            <p x-show="fieldErrors.company" class="input-error">Organisatie / Naam is verplicht.</p>
         </div>
 
         <div>
             <label class="input-label" for="invoice_email">E-mail voor factuur *</label>
             <input type="email" id="invoice_email" name="invoice_email" x-model="form.invoice_email"
-                   class="input-text" required>
+                   @input="clearFieldError('invoice_email')"
+                   class="input-text" required :aria-invalid="!!fieldErrors.invoice_email">
+            <p x-show="fieldErrors.invoice_email" class="input-error">E-mail voor factuur is verplicht.</p>
         </div>
 
         <div>
             <label class="input-label" for="address">Adres *</label>
             <input type="text" id="address" name="address" x-model="form.address"
-                   class="input-text" required>
+                   @input="clearFieldError('address')"
+                   class="input-text" required :aria-invalid="!!fieldErrors.address">
+            <p x-show="fieldErrors.address" class="input-error">Adres is verplicht.</p>
         </div>
 
         <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
                 <label class="input-label" for="postal_code">Postcode *</label>
                 <input type="text" id="postal_code" name="postal_code" x-model="form.postal_code"
-                       class="input-text" required>
+                       @input="clearFieldError('postal_code')"
+                       class="input-text" required :aria-invalid="!!fieldErrors.postal_code">
+                <p x-show="fieldErrors.postal_code" class="input-error">Postcode is verplicht.</p>
             </div>
             <div>
                 <label class="input-label" for="city">Gemeente *</label>
                 <input type="text" id="city" name="city" x-model="form.city"
-                       class="input-text" required>
+                       @input="clearFieldError('city')"
+                       class="input-text" required :aria-invalid="!!fieldErrors.city">
+                <p x-show="fieldErrors.city" class="input-error">Gemeente is verplicht.</p>
             </div>
         </div>
 
