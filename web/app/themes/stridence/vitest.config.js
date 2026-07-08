@@ -1,4 +1,4 @@
 import { defineConfig } from 'vitest/config';
 export default defineConfig({
-  test: { environment: 'jsdom', include: ['src/**/*.test.js'] },
+  test: { environment: 'jsdom', include: ['src/**/*.test.js', 'templates/**/*.test.js'] },
 });

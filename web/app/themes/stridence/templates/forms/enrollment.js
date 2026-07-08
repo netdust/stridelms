@@ -126,7 +126,28 @@ function enrollmentForm(config) {
         submitting: false,
         submitError: '',
 
+        // Required fields per template step (0=type, 1=personal, 2=billing).
+        // Single source of truth for both per-step "Next" gating and the
+        // final pre-submit sweep below — a gap in one can no longer let a
+        // field through that the other would have caught.
+        requiredFieldsForStep(step) {
+            if (step === 1) {
+                return ['first_name', 'last_name', 'email', 'phone'];
+            }
+            if (step === 2) {
+                return ['company', 'invoice_email', 'address', 'postal_code', 'city'];
+            }
+            return [];
+        },
+
+        isStepValid(step) {
+            return this.requiredFieldsForStep(step).every((field) => String(this.form[field] || '').trim() !== '');
+        },
+
         nextStep() {
+            if (!this.isStepValid(this.currentStep)) {
+                return;
+            }
             if (this.stepIndex < this.stepMap.length - 1) {
                 this.stepIndex++;
             }
@@ -164,6 +185,15 @@ function enrollmentForm(config) {
         async submitForm() {
             if (!this.form.terms_accepted) return;
 
+            // Final full-form sweep, independent of per-step nextStep() gating:
+            // walk every step actually in this mode's flow (stepMap already
+            // excludes billing for short forms / interest / waitlist) so a gap
+            // in step navigation can never let an incomplete submit through.
+            const hasInvalidStep = this.stepMap.some((step) => !this.isStepValid(step));
+            if (hasInvalidStep) {
+                return;
+            }
+
             this.submitting = true;
             this.submitError = '';
 
@@ -196,4 +226,12 @@ function enrollmentForm(config) {
             }
         },
     };
+}
+
+// Classic <script> global in the browser (no bundler/module system here — see
+// enrollment.php). This guard only runs under a CommonJS host (Vitest) so the
+// factory can be unit tested against its real source; `module` is undefined
+// in the browser, so this is a no-op there.
+if (typeof module !== 'undefined' && module.exports) {
+    module.exports = enrollmentForm;
 }

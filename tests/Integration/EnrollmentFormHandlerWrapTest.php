@@ -59,6 +59,11 @@ final class EnrollmentFormHandlerWrapTest extends IntegrationTestCase
             'first_name'      => 'Jan',
             'last_name'       => 'Janssens',
             'email'           => 'jan-wrap-test@example.com',
+            'company'         => 'ACME',
+            'invoice_email'   => 'facturatie@acme.test',
+            'address'         => 'Hoofdstraat 1',
+            'postal_code'     => '1000',
+            'city'            => 'Brussel',
             'terms_accepted'  => true,
             'extra_fields'    => [
                 'organisation' => 'ACME',

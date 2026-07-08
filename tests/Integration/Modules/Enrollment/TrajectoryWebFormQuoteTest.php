@@ -423,6 +423,11 @@ final class TrajectoryWebFormQuoteTest extends IntegrationTestCase
             'first_name'     => 'Test',
             'last_name'      => 'Enrollee',
             'email'          => 'enrollee_' . wp_generate_password(4, false) . '@test.local',
+            'company'        => 'ACME',
+            'invoice_email'  => 'facturatie@acme.test',
+            'address'        => 'Hoofdstraat 1',
+            'postal_code'    => '1000',
+            'city'           => 'Brussel',
             'terms_accepted' => true,
         ], $extra);
 

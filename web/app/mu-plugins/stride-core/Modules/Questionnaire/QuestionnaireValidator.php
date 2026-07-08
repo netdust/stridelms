@@ -37,6 +37,24 @@ class QuestionnaireValidator
     ): true|WP_Error {
         $fields = $this->repository->getFlatFieldsForStage($postId, $stage, $postType);
 
+        return $this->validateFields($data, $fields);
+    }
+
+    /**
+     * Validates submitted data against an explicit field-definition list —
+     * the same {name, required, label, type} shape as a questionnaire's
+     * builder fields. Lets any caller (native form fields included) share
+     * one required/empty/range validation system instead of hand-rolling
+     * a parallel check.
+     *
+     * @param array<string, mixed> $data   Submitted form data keyed by field name.
+     * @param array<int, array<string, mixed>> $fields Field definitions.
+     *
+     * @return true|WP_Error Returns true on success, WP_Error containing all
+     *                       validation messages on failure.
+     */
+    public function validateFields(array $data, array $fields): true|WP_Error
+    {
         $errors = [];
 
         foreach ($fields as $field) {

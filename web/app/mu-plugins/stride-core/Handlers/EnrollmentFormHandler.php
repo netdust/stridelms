@@ -15,6 +15,7 @@ use Stride\Modules\Questionnaire\QuestionnaireRepository;
 use Stride\Modules\Questionnaire\QuestionnaireValidator;
 use Stride\Modules\Trajectory\TrajectorySelection;
 use Stride\Modules\Trajectory\TrajectoryService;
+use Stride\Modules\User\ProfileTypePolicy;
 use WP_Error;
 
 /**
@@ -96,7 +97,10 @@ final class EnrollmentFormHandler
 
         $enrollmentData = $this->sanitizeEnrollmentData($params, $userId, $editionId);
 
-        $validation = $this->validateEnrollmentData($enrollmentData);
+        $billingRequired = !$editions->isOnline($editionId)
+            && $this->effectiveFormType($editions->getEnrollmentForm($editionId), $userId, $editionId, 'vad_edition') !== 'minimal';
+
+        $validation = $this->validateEnrollmentData($enrollmentData, $billingRequired);
         if (is_wp_error($validation)) {
             ntdst_log('enrollment')->warning('Enrollment validation failed', [
                 'user_id' => $userId,
@@ -237,8 +241,17 @@ final class EnrollmentFormHandler
         // Sanitize billing data
         $billingData = $this->sanitizeTrajectoryBillingData($params);
 
+        // Trajectories are never online-delivered (see EnrollmentFormResolver::resolveTrajectory),
+        // so only the effective form_type (incl. the profile-type minimal override) gates billing.
+        $billingRequired = $this->effectiveFormType(
+            $trajectoryService->getEnrollmentForm($trajectoryId),
+            $userId,
+            $trajectoryId,
+            'vad_trajectory',
+        ) !== 'minimal';
+
         // Validate required fields
-        $validation = $this->validateTrajectoryEnrollmentData($billingData, $params);
+        $validation = $this->validateTrajectoryEnrollmentData($billingData, $params, $billingRequired);
         if (is_wp_error($validation)) {
             ntdst_log('enrollment')->warning('Trajectory enrollment validation failed', [
                 'user_id' => $userId,
@@ -718,16 +731,47 @@ final class EnrollmentFormHandler
     }
 
     /**
-     * Validate required billing fields.
+     * Native field definitions, in the same {name, required, label} shape
+     * QuestionnaireValidator uses for formbuilder fields — one validation
+     * system for both, so a native field can't drift from how a builder
+     * field is checked. Billing fields are required unless the resolved
+     * enrollment flow never shows that step (online edition / minimal form).
+     *
+     * @return array<int, array{name: string, required: bool, label: string}>
      */
-    private function validateRequiredBillingFields(array $data, bool $termsAccepted): true|WP_Error
+    private function nativeRequiredFieldDefinitions(bool $billingRequired): array
     {
-        if (empty($data['first_name']) || empty($data['last_name'])) {
-            return new WP_Error('validation_error', __('Voornaam en achternaam zijn vereist.', 'stride'));
+        $fields = [
+            ['name' => 'first_name', 'required' => true, 'label' => __('Voornaam', 'stride')],
+            ['name' => 'last_name', 'required' => true, 'label' => __('Achternaam', 'stride')],
+            ['name' => 'email', 'required' => true, 'label' => __('E-mailadres', 'stride')],
+        ];
+
+        if ($billingRequired) {
+            $fields = array_merge($fields, [
+                ['name' => 'company', 'required' => true, 'label' => __('Organisatie / Naam', 'stride')],
+                ['name' => 'invoice_email', 'required' => true, 'label' => __('E-mail voor factuur', 'stride')],
+                ['name' => 'address', 'required' => true, 'label' => __('Adres', 'stride')],
+                ['name' => 'postal_code', 'required' => true, 'label' => __('Postcode', 'stride')],
+                ['name' => 'city', 'required' => true, 'label' => __('Gemeente', 'stride')],
+            ]);
         }
 
-        if (empty($data['email'])) {
-            return new WP_Error('validation_error', __('E-mailadres is vereist.', 'stride'));
+        return $fields;
+    }
+
+    /**
+     * Validate required billing fields — native personal + (conditionally)
+     * billing/invoice fields, through the same QuestionnaireValidator used
+     * for formbuilder fields, plus the terms-acceptance checkbox which has
+     * no field-schema equivalent.
+     */
+    private function validateRequiredBillingFields(array $data, bool $termsAccepted, bool $billingRequired): true|WP_Error
+    {
+        $validator = ntdst_get(QuestionnaireValidator::class);
+        $result = $validator->validateFields($data, $this->nativeRequiredFieldDefinitions($billingRequired));
+        if (is_wp_error($result)) {
+            return $result;
         }
 
         if (!$termsAccepted) {
@@ -738,11 +782,26 @@ final class EnrollmentFormHandler
     }
 
     /**
+     * Resolve the effective form_type for this user + enrollable, applying
+     * the same profile-type minimal-form override EnrollmentFormResolver
+     * applies when rendering the form — so validation matches what the user
+     * actually saw, never a client-sent flag.
+     */
+    private function effectiveFormType(string $storedFormType, int $userId, int $enrollableId, string $postType): string
+    {
+        if (ntdst_get(ProfileTypePolicy::class)->usesMinimalForm($userId ?: null, $enrollableId, $postType)) {
+            return 'minimal';
+        }
+
+        return $storedFormType;
+    }
+
+    /**
      * Validate edition enrollment data.
      */
-    private function validateEnrollmentData(array $data): true|WP_Error
+    private function validateEnrollmentData(array $data, bool $billingRequired): true|WP_Error
     {
-        return $this->validateRequiredBillingFields($data, $data['terms_accepted'] ?? false);
+        return $this->validateRequiredBillingFields($data, $data['terms_accepted'] ?? false, $billingRequired);
     }
 
     /**
@@ -751,9 +810,9 @@ final class EnrollmentFormHandler
      * @param array<string, string> $billingData
      * @param array<string, mixed> $params Original params for terms check
      */
-    private function validateTrajectoryEnrollmentData(array $billingData, array $params): true|WP_Error
+    private function validateTrajectoryEnrollmentData(array $billingData, array $params, bool $billingRequired): true|WP_Error
     {
-        return $this->validateRequiredBillingFields($billingData, (bool) ($params['terms_accepted'] ?? false));
+        return $this->validateRequiredBillingFields($billingData, (bool) ($params['terms_accepted'] ?? false), $billingRequired);
     }
 
     /**

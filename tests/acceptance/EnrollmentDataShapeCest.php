@@ -143,6 +143,11 @@ class EnrollmentDataShapeCest
             comp.form.last_name       = 'Tester';
             comp.form.email           = '{$email}';
             comp.form.phone           = '+32412345678';
+            comp.form.company         = 'ACME';
+            comp.form.invoice_email   = '{$email}';
+            comp.form.address         = 'Hoofdstraat 1';
+            comp.form.postal_code     = '1000';
+            comp.form.city            = 'Brussel';
             comp.form.terms_accepted  = true;
             comp.stepIndex            = 3;  // jump to confirmation step
         JS);
