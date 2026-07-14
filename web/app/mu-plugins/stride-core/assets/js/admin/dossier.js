@@ -8,15 +8,17 @@
    — each with its own loading / empty / error state (a failed trajectory load
    never blanks the registrations, and vice-versa; AF-3 mid-flow edge).
 
-   Backend FROZEN — consumed exactly as Phase-1/D.1 emit it:
+   Backend shape (see AdminUserService::getUserDetail):
      GET /admin/users/{id}/detail
-        { user, registrations:[{ id, edition_id, edition_title, status,
+        { user, registrations:[{ id, edition_id, trajectory_id, is_trajectory,
+            edition_title, status,
             enrollment_path, registered_at, completed_at, cancelled_at?,
             attendance:{present,absent,excused,total_sessions,hours}|null,
+            tasks:[{type,label,status,completed_at,phase}],
             stages:{<key>:{submitted_at,submitted_by,data:{label:value}}|null},
             selections:[<resolved label strings>], notes,
             offerte_status, offerte_status_label }],
-          registrations_total, quotes (gated), attendance,
+          registrations_total, reg_page, reg_per_page, quotes (gated), attendance,
           audit_trail:[{id,type,text,target_url,actor_name,timestamp}] (GATED — only
             present for canSeeSensitive viewers; absent/empty → locked timeline),
           audit_trail_total }
@@ -47,7 +49,6 @@
     root.WS = root.WS || {};
     root.WS.auditToTimelineEvent = api.auditToTimelineEvent;
     root.WS.timelineForReg = api.timelineForReg;
-    root.WS.completionChecklist = api.completionChecklist;
     root.WS.avatarColor = root.WS.avatarColor || api.avatarColor;
     root.WS.initials = root.WS.initials || api.initials;
   }
@@ -216,35 +217,11 @@
       .map(auditToTimelineEvent);
   }
 
-  /* ======================================================================
-     MAPPER 3 (Tier A) — completion checklist derivation
-     ----------------------------------------------------------------------
-     Derived from data already on the registration (no extra fetch):
-       • Goedkeuring inschrijving : status !== 'pending'
-       • Intake ingevuld          : !!stages.intake.submitted_at
-       • Aanwezigheid ≥ 80%       : present / total_sessions >= 0.8
-       • Eindevaluatie            : !!stages.evaluation.submitted_at
-     A reg with no stages / no attendance → all but approval false (empty branch).
-     ====================================================================== */
-  function stageSubmitted(stages, key) {
-    const s = stages && stages[key];
-    return !!(s && s.submitted_at);
-  }
-  function completionChecklist(reg) {
-    const r = reg || {};
-    const stages = r.stages || {};
-    const att = r.attendance || null;
-    const present = att ? Number(att.present) || 0 : 0;
-    const totalSessions = att ? Number(att.total_sessions) || 0 : 0;
-    const attendanceMet = totalSessions > 0 && (present / totalSessions) >= 0.8;
-
-    return [
-      { label: 'Goedkeuring inschrijving', done: ['confirmed', 'completed'].includes(r.status) },
-      { label: 'Intake ingevuld',          done: stageSubmitted(stages, 'intake') },
-      { label: 'Aanwezigheid ≥ 80%',       done: attendanceMet },
-      { label: 'Eindevaluatie',            done: stageSubmitted(stages, 'evaluation') },
-    ];
-  }
+  /* (The former MAPPER 3 — a client-derived completion checklist with its own
+     invented rules, e.g. "Aanwezigheid ≥ 80%" — is GONE. The server now emits
+     the registration's REAL completion_tasks (`r.tasks`: type/label/status/
+     completed_at from EnrollmentCompletion), and the template renders that
+     list directly. Deriving a parallel checklist client-side was F-D4.) */
 
   /* ======================================================================
      Status-relevance gate (Tier A) — which detail sections are meaningful
@@ -537,9 +514,6 @@
         return t.charAt(0).toUpperCase() + t.slice(1);
       },
 
-      /* completion checklist (mapper 3) */
-      completionFor(r) { return completionChecklist(r); },
-
       /* status-relevance gate + the muted line for non-fulfillment statuses */
       showsFulfillment(status) { return showsFulfillment(status); },
       fulfillmentEmptyHint(status) { return fulfillmentEmptyHint(status); },
@@ -621,7 +595,6 @@
     dossier,
     auditToTimelineEvent,
     timelineForReg,
-    completionChecklist,
     showsFulfillment,
     fulfillmentEmptyHint,
     offerteClass,

@@ -213,10 +213,25 @@ final class AdminUserService
                     ];
                 }
 
+                // completion_tasks decoded ONCE per row — feeds the task list, the
+                // pending_reason, and the intake-answer fallback below. The Data
+                // layer may hand it already-decoded (array) or raw JSON (string).
+                $tasks = is_array($row->completion_tasks ?? null)
+                    ? $row->completion_tasks
+                    : (json_decode((string) ($row->completion_tasks ?? ''), true) ?: []);
+
                 // enrollment_data stages (3-key shape: {submitted_at, submitted_by, data}).
                 // Surfaced for the case view's collapsible stage panels — empty stages
                 // are filtered CLIENT-side (hidden), so only normalize the shape here.
                 $stages = $this->normalizeEnrollmentStages($row->enrollment_data ?? null);
+
+                // Intake answers live in TWO places depending on flow: the stride_intake
+                // shortcode writes enrollment_data.intake; the completion-task flow
+                // (the primary one) writes completion_tasks.questionnaire.data.answers.
+                // The dossier read only the former, so completion-flow intake answers
+                // were invisible. Merge the questionnaire answers in as the intake
+                // stage when the enrollment_data stage is empty.
+                $stages = $this->mergeQuestionnaireStage($stages, $tasks);
 
                 // selections column = session/edition IDs → resolve to titles.
                 // INV-6b: the SERVER owns the selection read; the client never parses
@@ -226,14 +241,9 @@ final class AdminUserService
                     $sessionTitlesById,
                 );
 
-                // pending_reason: only meaningful for pending rows. The Data layer
-                // may hand us completion_tasks already-decoded (array) or as the raw
-                // JSON column (string) — handle both.
+                // pending_reason: only meaningful for pending rows.
                 $pendingReason = null;
                 if ($row->status === 'pending') {
-                    $tasks = is_array($row->completion_tasks ?? null)
-                        ? $row->completion_tasks
-                        : (json_decode((string) ($row->completion_tasks ?? ''), true) ?: []);
                     $pendingReason = $completion->pendingReason($tasks);
                 }
 
@@ -260,6 +270,9 @@ final class AdminUserService
                     'cancelled_at' => $row->cancelled_at,
                     'has_sessions' => $totalSessions > 0,
                     'attendance' => $attendanceSummary,
+                    // The REAL completion tasks (Dutch label + per-task status) —
+                    // the dossier renders THIS list, never a client-derived checklist.
+                    'tasks' => $this->buildTaskList($tasks),
                     'stages' => $stages,
                     'selections' => $selectionLabels,
                     'notes' => (string) ($row->notes ?? ''),
@@ -552,14 +565,12 @@ final class AdminUserService
             if (!is_array($stage)) {
                 continue;
             }
-            // initial_selection is un-wrapped — surface its scalar/array fields as `data`
-            // so the renderer's label→value loop still works without a special case.
+            // initial_selection is un-wrapped (`{type, phases[]}`) — its phases are
+            // arrays-of-arrays, which the generic flattener reduced to an empty
+            // string (garbage panel). Build proper label→value pairs instead:
+            // one row per capture phase, values = resolved post titles.
             if ($key === 'initial_selection') {
-                $stages[$key] = [
-                    'submitted_at' => '',
-                    'submitted_by' => '',
-                    'data' => $this->flattenStageData($stage),
-                ];
+                $stages[$key] = $this->initialSelectionStage($stage);
                 continue;
             }
             $stages[$key] = [
@@ -598,6 +609,146 @@ final class AdminUserService
         }
 
         return $out;
+    }
+
+    /**
+     * The registration's completion tasks as a renderable list (Dutch label +
+     * per-task status). Insertion order is the creation order (enrollment tasks
+     * first, post-course tasks appended at completion) — kept as-is.
+     *
+     * @param  array<string,mixed> $tasks  Decoded completion_tasks column.
+     * @return list<array{type:string, label:string, status:string, completed_at:string, phase:string}>
+     */
+    private function buildTaskList(array $tasks): array
+    {
+        $list = [];
+        foreach ($tasks as $type => $task) {
+            if (!is_array($task)) {
+                continue;
+            }
+            $completedAt = (string) ($task['completed_at'] ?? '');
+            $list[] = [
+                'type' => (string) $type,
+                'label' => \Stride\Modules\Enrollment\EnrollmentCompletion::taskTypeLabel((string) $type),
+                'status' => (string) ($task['status'] ?? 'pending'),
+                'completed_at' => $completedAt !== ''
+                    ? wp_date('d/m/Y', (int) strtotime($completedAt))
+                    : '',
+                'phase' => (string) ($task['phase'] ?? 'enrollment'),
+            ];
+        }
+
+        return $list;
+    }
+
+    /**
+     * Merge completion-flow intake answers into the stage map.
+     *
+     * The `stride_intake` shortcode flow writes `enrollment_data.intake`; the
+     * completion-task flow stores the SAME questionnaire's answers in
+     * `completion_tasks.questionnaire.data.answers`. When the enrollment_data
+     * stage is empty but questionnaire answers exist, synthesize the intake
+     * stage from them so the dossier shows the answers regardless of flow.
+     * A populated enrollment_data.intake always wins (never overwritten).
+     *
+     * @param  array<string,array{submitted_at:string,submitted_by:string,data:array<string,string>}> $stages
+     * @param  array<string,mixed> $tasks  Decoded completion_tasks column.
+     * @return array<string,array{submitted_at:string,submitted_by:string,data:array<string,string>}>
+     */
+    private function mergeQuestionnaireStage(array $stages, array $tasks): array
+    {
+        if (!empty($stages['intake']['data'])) {
+            return $stages;
+        }
+
+        $answers = $tasks['questionnaire']['data']['answers'] ?? null;
+        if (!is_array($answers) || $answers === []) {
+            return $stages;
+        }
+
+        $completedAt = (string) ($tasks['questionnaire']['completed_at'] ?? '');
+        $stages['intake'] = [
+            'submitted_at' => $completedAt !== ''
+                ? wp_date('d/m/Y H:i', (int) strtotime($completedAt))
+                : '',
+            // The completion flow records no separate actor — it is always the
+            // participant; leave submitted_by empty rather than guessing.
+            'submitted_by' => '',
+            'data' => $this->flattenStageData($answers),
+        ];
+
+        return $stages;
+    }
+
+    /**
+     * Render the un-wrapped `initial_selection` (`{type, phases[]}`) as a stage.
+     *
+     * One data row per capture phase: label = phase name + capture moment,
+     * value = the chosen sessions'/editions' titles (deleted posts keep their
+     * id with a "(verwijderd)" marker — the trail must stay honest). The stage
+     * header carries the FIRST capture's moment + actor.
+     *
+     * @param  array<string,mixed> $initial
+     * @return array{submitted_at:string, submitted_by:string, data:array<string,string>}
+     */
+    private function initialSelectionStage(array $initial): array
+    {
+        $data = [];
+        $headerAt = '';
+        $headerBy = '';
+
+        foreach ((array) ($initial['phases'] ?? []) as $phase) {
+            if (!is_array($phase)) {
+                continue;
+            }
+            $ids = $phase['session_ids'] ?? $phase['edition_ids'] ?? [];
+            if (!is_array($ids)) {
+                continue;
+            }
+
+            $items = [];
+            foreach ($ids as $id) {
+                $post = get_post((int) $id);
+                $items[] = $post
+                    ? $post->post_title
+                    : sprintf(__('#%d (verwijderd)', 'stride'), (int) $id);
+            }
+
+            $label = match ($phase['phase'] ?? 'enrollment') {
+                'enrollment' => __('Bij inschrijving', 'stride'),
+                default => ucfirst(str_replace('_', ' ', (string) ($phase['phase'] ?? ''))),
+            };
+
+            $capturedAt = (string) ($phase['captured_at'] ?? '');
+            if ($capturedAt !== '') {
+                $atDisplay = wp_date('d/m/Y H:i', (int) strtotime($capturedAt));
+                $label .= ' · ' . $atDisplay;
+                if ($headerAt === '') {
+                    $headerAt = $atDisplay;
+                }
+            }
+            if ($headerBy === '' && !empty($phase['captured_by'])) {
+                $byUser = get_userdata((int) $phase['captured_by']);
+                $headerBy = $byUser ? $byUser->display_name : '';
+            }
+
+            // Two phases can share a label (same phase, same minute) — suffix
+            // instead of silently overwriting the earlier capture.
+            $key = $label;
+            $n = 2;
+            while (isset($data[$key])) {
+                $key = $label . ' (' . $n++ . ')';
+            }
+            $data[$key] = $items !== []
+                ? implode(', ', $items)
+                : __('Geen keuze', 'stride');
+        }
+
+        return [
+            'submitted_at' => $headerAt,
+            'submitted_by' => $headerBy,
+            'data' => $data,
+        ];
     }
 
     /**

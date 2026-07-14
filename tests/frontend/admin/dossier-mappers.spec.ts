@@ -25,12 +25,9 @@
  *      The DENIAL / scoping branch: an event scoped to reg A's edition must NOT
  *      appear when reg B is selected.
  *
- *   3. completionChecklist(reg) — derives the 4-item completion checklist from
- *      data already on the registration: approval (status !== 'pending'), intake
- *      submitted (!!stages.intake.submitted_at), attendance ≥ 80%
- *      (present / total_sessions >= 0.8), final evaluation submitted
- *      (!!stages.evaluation.submitted_at). The EMPTY branch: a reg with no
- *      stages and no attendance → intake/attendance/evaluation all done:false.
+ *   (The former completionChecklist mapper is GONE — the server now emits the
+ *   registration's real completion_tasks as `r.tasks` and the template renders
+ *   that list directly; there is no client-side derivation left to test.)
  *
  * No browser, no DDEV — the mappers are imported directly (UMD tail on
  * dossier.js exposes module.exports under Node, exactly like vandaag.js/grid.js).
@@ -129,68 +126,6 @@ test.describe('timelineForReg', () => {
     expect(dossier.timelineForReg([], regA)).toEqual([]);
     expect(dossier.timelineForReg(undefined, regA)).toEqual([]);
     expect(dossier.timelineForReg(events, undefined)).toEqual([]);
-  });
-});
-
-test.describe('completionChecklist', () => {
-  test('intake submitted + attendance < 80% → intake done, attendance NOT done', () => {
-    const reg = {
-      status: 'confirmed',
-      stages: {
-        intake: { submitted_at: '22 mei 2026 · 16:08', submitted_by: 'Imane', data: { q: 'a' } },
-        evaluation: null,
-      },
-      attendance: { present: 2, absent: 1, excused: 0, total_sessions: 3, hours: 6 }, // 2/3 = 66%
-    };
-    const items = dossier.completionChecklist(reg);
-    const by = (label: string) => items.find((i: any) => i.label.includes(label));
-    expect(by('Goedkeuring').done).toBe(true);   // status !== pending
-    expect(by('Intake').done).toBe(true);          // intake.submitted_at present
-    expect(by('Aanwezigheid').done).toBe(false);   // 66% < 80%
-    expect(by('Eindevaluatie').done).toBe(false);  // evaluation null
-  });
-
-  test('attendance ≥ 80% → attendance done (boundary: exactly 80%)', () => {
-    const reg = {
-      status: 'completed',
-      stages: { intake: { submitted_at: 'x', data: { q: 'a' } }, evaluation: { submitted_at: 'y', data: { q: 'b' } } },
-      attendance: { present: 4, absent: 1, excused: 0, total_sessions: 5, hours: 8 }, // 4/5 = 80%
-    };
-    const items = dossier.completionChecklist(reg);
-    const by = (label: string) => items.find((i: any) => i.label.includes(label));
-    expect(by('Aanwezigheid').done).toBe(true);
-    expect(by('Eindevaluatie').done).toBe(true);
-  });
-
-  test('pending status → approval NOT done (the denial path on the first item)', () => {
-    const reg = { status: 'pending', stages: {}, attendance: null };
-    const items = dossier.completionChecklist(reg);
-    expect(items.find((i: any) => i.label.includes('Goedkeuring')).done).toBe(false);
-  });
-
-  test('waitlist/interest/cancelled → approval NOT done (cannot be approved)', () => {
-    for (const status of ['waitlist', 'interest', 'cancelled']) {
-      const items = dossier.completionChecklist({ status, stages: {}, attendance: null });
-      expect(items.find((i: any) => i.label.includes('Goedkeuring')).done).toBe(false);
-    }
-  });
-
-  test('EMPTY branch: no stages, no attendance → only approval can be true, rest false', () => {
-    const reg = { status: 'confirmed', stages: {}, attendance: null };
-    const items = dossier.completionChecklist(reg);
-    const by = (label: string) => items.find((i: any) => i.label.includes(label));
-    expect(by('Goedkeuring').done).toBe(true);
-    expect(by('Intake').done).toBe(false);
-    expect(by('Aanwezigheid').done).toBe(false);   // no attendance summary → not met
-    expect(by('Eindevaluatie').done).toBe(false);
-    // shape: a stable 4-item checklist regardless of data presence
-    expect(items).toHaveLength(4);
-  });
-
-  test('fully empty reg ({}) → no crash, 4 items', () => {
-    const items = dossier.completionChecklist({});
-    expect(items).toHaveLength(4);
-    expect(items.every((i: any) => typeof i.done === 'boolean' && typeof i.label === 'string')).toBe(true);
   });
 });
 

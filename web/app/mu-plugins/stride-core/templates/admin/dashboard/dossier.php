@@ -342,13 +342,22 @@ defined('ABSPATH') || exit;
                                             </div>
                                             <div>
                                                 <div class="ws-section-title"><span x-html="icon('checkCircle')"></span> <?php echo esc_html__('Voltooiingstaken', 'stride'); ?> <span class="ws-section-title__line"></span></div>
-                                                <div class="ws-pill-list">
-                                                    <template x-for="(task, ti) in completionFor(r)" :key="ti">
-                                                        <span class="ws-pill" :class="task.done ? 'ws-pill--done' : 'ws-pill--todo'">
-                                                            <span x-html="icon(task.done ? 'check' : 'clock')"></span><span x-text="task.label"></span>
-                                                        </span>
-                                                    </template>
-                                                </div>
+                                                <?php // r.tasks = the registration's REAL completion_tasks
+                                                      // (server-labelled, per-task status) — never a
+                                                      // client-derived checklist. ?>
+                                                <template x-if="(r.tasks || []).length">
+                                                    <div class="ws-pill-list">
+                                                        <template x-for="task in r.tasks" :key="task.type">
+                                                            <span class="ws-pill" :class="task.status === 'completed' ? 'ws-pill--done' : 'ws-pill--todo'"
+                                                                  :title="task.completed_at ? '<?php echo esc_js(__('Afgerond', 'stride')); ?> ' + task.completed_at : ''">
+                                                                <span x-html="icon(task.status === 'completed' ? 'check' : 'clock')"></span><span x-text="task.label"></span>
+                                                            </span>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <template x-if="!(r.tasks || []).length">
+                                                    <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0"><?php echo esc_html__('Geen taken voor deze inschrijving.', 'stride'); ?></p>
+                                                </template>
                                             </div>
                                         </div>
                                     </div>
