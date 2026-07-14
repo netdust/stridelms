@@ -103,6 +103,11 @@
     return STATUS_BADGE[status] || 'completed';
   }
 
+  /* Mirror of OfferingStatus::adminClosedValues() (PHP) — the statuses the
+     active scope structurally excludes, so picking one auto-widens. Pinned
+     by TrajectenStatusVocabularyTest; never inline these strings. */
+  const ADMIN_CLOSED = ['completed', 'archived'];
+
   /* ---- mapTrajectories(payload): the list read-model ----------------------
      Reads payload.ITEMS (the real list key). Each row carries the server's
      statusLabel/modeLabel AS RECEIVED plus a derived badgeClass for the hue.
@@ -226,7 +231,7 @@
          only EVER show an empty list. */
       onFilterChange() {
         this.page = 1;
-        if (this.scope === 'active' && (this.statusFilter === 'completed' || this.statusFilter === 'archived')) {
+        if (this.scope === 'active' && ADMIN_CLOSED.includes(this.statusFilter)) {
           this.scope = 'all';
         }
         this.loadList();

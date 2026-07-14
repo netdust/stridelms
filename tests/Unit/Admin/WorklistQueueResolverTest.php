@@ -174,7 +174,7 @@ final class WorklistQueueResolverTest extends TestCase
     public function test_queue_keys_exist_in_both_client_files(): void
     {
         $gridQueueMeta = $this->extractJsBlock('grid.js', 'QUEUE_META');
-        $vandaagJs     = $this->clientJs('vandaag.js');
+        $vandaagJs     = $this->adminJs('vandaag.js');
 
         foreach (WorklistQueueResolver::QUEUES as $queue) {
             $this->assertMatchesRegularExpression(
@@ -200,7 +200,7 @@ final class WorklistQueueResolverTest extends TestCase
     public function test_queue_labels_match_between_card_and_chip(): void
     {
         $gridQueueMeta = $this->extractJsBlock('grid.js', 'QUEUE_META');
-        $vandaagJs     = $this->clientJs('vandaag.js');
+        $vandaagJs     = $this->adminJs('vandaag.js');
 
         foreach (WorklistQueueResolver::QUEUES as $queue) {
             $matched = preg_match(
@@ -256,27 +256,6 @@ final class WorklistQueueResolverTest extends TestCase
         }
     }
 
-    private function clientJs(string $file): string
-    {
-        $jsDir = dirname(__DIR__, 3) . '/web/app/mu-plugins/stride-core/assets/js/admin/';
-
-        return (string) file_get_contents($jsDir . $file);
-    }
-
-    /**
-     * Extract ONE `const <name> = { … };` object literal from a client file, so
-     * key assertions run against the actual table — not the whole file.
-     */
-    private function extractJsBlock(string $file, string $constName): string
-    {
-        $js = $this->clientJs($file);
-        $matched = preg_match(
-            '/const ' . preg_quote($constName, '/') . '\s*=\s*\{(.*?)\};/s',
-            $js,
-            $m,
-        );
-        $this->assertSame(1, $matched, "{$file} no longer defines const {$constName}");
-
-        return $m[1];
-    }
+    // adminJs()/extractJsBlock() live in the shared TestCase — one extraction
+    // helper for the whole vocabulary-contract test family.
 }

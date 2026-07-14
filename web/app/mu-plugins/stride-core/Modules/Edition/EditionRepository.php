@@ -591,9 +591,13 @@ final class EditionRepository extends AbstractRepository
      * @param string     $tagJoin      Optional taxonomy JOIN fragment ('' if none).
      * @return array<int, object{ID: int, post_title: string, start_date: ?string}>
      */
-    public function findAdminListRows(string $whereClause, array $params, string $tagJoin, int $limit, int $offset): array
+    public function findAdminListRows(string $whereClause, array $params, string $tagJoin, int $limit, int $offset, string $order = 'ASC'): array
     {
         global $wpdb;
+
+        // Direction whitelist — never interpolate caller input into ORDER BY.
+        // NULL-last stays put either way (dateless anchors close the list).
+        $order = strtoupper($order) === 'DESC' ? 'DESC' : 'ASC';
 
         $params[] = $limit;
         $params[] = $offset;
@@ -604,7 +608,7 @@ final class EditionRepository extends AbstractRepository
              LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
              {$tagJoin}
              WHERE {$whereClause}
-             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC
+             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value {$order}
              LIMIT %d OFFSET %d",
             ...$params,
         ));
@@ -652,18 +656,22 @@ final class EditionRepository extends AbstractRepository
      * One paged page of admin AGENDA-view session rows (session + edition + date).
      *
      * Companion to countAgendaRows — owns the $wpdb execution moved out of
-     * getEditionsAgendaView (INV-3). The ORDER BY (session date ASC, then
-     * edition id ASC) is reproduced VERBATIM. $limit/$offset are appended as the
-     * final two placeholders, matching the pre-extraction param order.
+     * getEditionsAgendaView (INV-3). ORDER BY session date ($order, whitelist
+     * ASC|DESC — DESC serves the scope=all "most recent first" read), then
+     * edition id ASC. $limit/$offset are appended as the final two
+     * placeholders, matching the pre-extraction param order.
      *
      * @param string      $whereClause  Pre-built, placeholdered WHERE body.
      * @param list<mixed> $params       Bound params matching the WHERE placeholders.
      * @param string      $tagJoin      Optional taxonomy JOIN fragment ('' if none).
      * @return array<int, object{session_id: int, session_title: string, edition_id: int, edition_title: string, session_date: ?string}>
      */
-    public function findAgendaRows(string $whereClause, array $params, string $tagJoin, int $limit, int $offset): array
+    public function findAgendaRows(string $whereClause, array $params, string $tagJoin, int $limit, int $offset, string $order = 'ASC'): array
     {
         global $wpdb;
+
+        // Direction whitelist — never interpolate caller input into ORDER BY.
+        $order = strtoupper($order) === 'DESC' ? 'DESC' : 'ASC';
 
         $params[] = $limit;
         $params[] = $offset;
@@ -678,7 +686,7 @@ final class EditionRepository extends AbstractRepository
              INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
              {$tagJoin}
              WHERE {$whereClause}
-             ORDER BY pm_date.meta_value ASC, pm_edition.meta_value ASC
+             ORDER BY pm_date.meta_value {$order}, pm_edition.meta_value ASC
              LIMIT %d OFFSET %d",
             ...$params,
         ));

@@ -58,18 +58,16 @@ final class EditiesStatusVocabularyTest extends TestCase
         }
     }
 
-    private function extractJsBlock(string $file, string $constName): string
+    public function test_admin_closed_mirror_matches_the_enum(): void
     {
-        $jsDir = dirname(__DIR__, 3) . '/web/app/mu-plugins/stride-core/assets/js/admin/';
-        $js = (string) file_get_contents($jsDir . $file);
-
-        $matched = preg_match(
-            '/const ' . preg_quote($constName, '/') . '\s*=\s*\{(.*?)\};/s',
-            $js,
-            $m,
+        // The scope auto-widen conditional speaks OfferingStatus::
+        // adminClosedValues() via the ADMIN_CLOSED const — a member added or
+        // removed on the PHP side without the JS mirror silently disables
+        // (or over-triggers) the widen, recreating the F-E2 dead-end.
+        $this->assertSame(
+            OfferingStatus::adminClosedValues(),
+            $this->extractJsStringArray('edities.js', 'ADMIN_CLOSED'),
+            'edities.js ADMIN_CLOSED must mirror OfferingStatus::adminClosedValues() exactly (same values, same order)',
         );
-        $this->assertSame(1, $matched, "{$file} no longer defines const {$constName}");
-
-        return $m[1];
     }
 }

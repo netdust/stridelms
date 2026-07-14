@@ -84,6 +84,12 @@
     return m ? m.cls : 'cancelled';
   }
 
+  /* Mirror of OfferingStatus::adminClosedValues() (PHP) — the statuses whose
+     rows live in the past by definition, so picking one under the upcoming
+     scope auto-widens. Pinned by EditiesStatusVocabularyTest; never inline
+     these strings in a conditional. */
+  const ADMIN_CLOSED = ['completed', 'archived'];
+
   function edities() {
     return {
       rows: [],
@@ -148,7 +154,10 @@
          - 2 dates → a range:    date_from = dates[0], date_to = dates[1]
          - 0 dates → cleared:    both empty (back to the default cutoff)
          Dates are formatted to YYYY-MM-DD via the picker so they match the
-         endpoint's date_from/date_to (sanitize_text_field, no parsing). */
+         endpoint's date_from/date_to (sanitize_text_field, no parsing).
+         The cleared branch is a no-op when both are ALREADY empty — this is
+         the guard clearAllFilters relies on (its _fp.clear() fires this
+         handler; without the guard every 'Filters wissen' double-fetched). */
       onDateChange(dates) {
         const fmt = (d) => (this._fp ? this._fp.formatDate(d, 'Y-m-d') : '');
         if (dates && dates.length === 1) {
@@ -158,6 +167,7 @@
           this.filters.dateFrom = fmt(dates[0]);
           this.filters.dateTo = fmt(dates[1]);
         } else {
+          if (!this.filters.dateFrom && !this.filters.dateTo) return;
           this.filters.dateFrom = '';
           this.filters.dateTo = '';
         }
@@ -199,12 +209,16 @@
 
       reload() { this.load(1); },
 
-      /* Picking an admin-closed status under the upcoming scope is
-         structurally near-empty (their sessions are in the past) —
-         auto-widen, same rule as the Trajecten surface. */
-      onFilterChange() {
-        const s = this.filters.status;
-        if (this.scope === 'upcoming' && (s === 'completed' || s === 'archived')) {
+      onFilterChange() { this.load(1); },
+
+      /* STATUS changes only (the select's own handler — NOT the shared
+         onFilterChange, which the Tag dropdown also fires: widening there
+         re-overrode a scope the user had explicitly narrowed back).
+         Picking an admin-closed status under the upcoming scope is
+         structurally near-empty (those rows live in the past) — auto-widen,
+         same rule as the Trajecten surface. */
+      onStatusChange() {
+        if (this.scope === 'upcoming' && ADMIN_CLOSED.includes(this.filters.status)) {
           this.scope = 'all';
         }
         this.load(1);
@@ -229,9 +243,16 @@
         return !!(f.q || f.status || f.tag || f.dateFrom || f.dateTo);
       },
       clearAllFilters() {
+        // Restore the DEFAULT surface, not just empty filters: the status
+        // auto-widen may have flipped scope to 'all', and a reset that keeps
+        // showing the full multi-year history breaks the "back to the
+        // default cutoff" promise. viewMode is a presentation choice, not a
+        // filter — it stays.
         this.filters = { q: '', status: '', tag: '', dateFrom: '', dateTo: '' };
-        // clear() fires onChange([]) → guarded to both-empty; avoid a double
-        // load by clearing the picker first, then loading once below.
+        this.scope = 'upcoming';
+        // clear() fires onChange([]) → its cleared branch no-ops when both
+        // dates are already empty (they are — we just reset them), so only
+        // the load(1) below runs. One fetch per reset.
         if (this._fp) this._fp.clear();
         this.load(1);
       },

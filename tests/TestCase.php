@@ -359,6 +359,56 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * Load a workspace admin client file (assets/js/admin/<file>) for the
+     * cross-language vocabulary contract tests.
+     */
+    protected function adminJs(string $file): string
+    {
+        $jsDir = dirname(__DIR__) . '/web/app/mu-plugins/stride-core/assets/js/admin/';
+
+        return (string) file_get_contents($jsDir . $file);
+    }
+
+    /**
+     * Extract ONE `const <name> = { … };` object literal from a client file,
+     * so key/label assertions run against the actual table — not the whole
+     * file. Shared by the vocabulary contract tests (Worklist queues,
+     * Trajecten/Edities statuses). NOTE: the non-greedy body match stops at
+     * the FIRST `};` — keep these consts flat (no nested `};` inside).
+     */
+    protected function extractJsBlock(string $file, string $constName): string
+    {
+        $matched = preg_match(
+            '/const ' . preg_quote($constName, '/') . '\s*=\s*\{(.*?)\};/s',
+            $this->adminJs($file),
+            $m,
+        );
+        $this->assertSame(1, $matched, "{$file} no longer defines const {$constName}");
+
+        return $m[1];
+    }
+
+    /**
+     * Extract ONE `const <name> = [ … ];` array literal from a client file
+     * as the list of its single-quoted string entries.
+     *
+     * @return list<string>
+     */
+    protected function extractJsStringArray(string $file, string $constName): array
+    {
+        $matched = preg_match(
+            '/const ' . preg_quote($constName, '/') . '\s*=\s*\[(.*?)\];/s',
+            $this->adminJs($file),
+            $m,
+        );
+        $this->assertSame(1, $matched, "{$file} no longer defines const {$constName}");
+
+        preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", $m[1], $strings);
+
+        return array_map('stripslashes', $strings[1]);
+    }
+
+    /**
      * Create a test voucher
      *
      * @param array $data Voucher data overrides

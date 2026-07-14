@@ -97,13 +97,46 @@ test.describe('edities() factory row helpers', () => {
     f.load = () => {}; // stub the fetch
     f.scope = 'upcoming';
     f.filters.status = 'completed';
-    f.onFilterChange();
+    f.onStatusChange();
     expect(f.scope).toBe('all');
 
     // A live status keeps the scope as-is.
     f.scope = 'upcoming';
     f.filters.status = 'open';
-    f.onFilterChange();
+    f.onStatusChange();
     expect(f.scope).toBe('upcoming');
+  });
+
+  test('the widen belongs to the STATUS handler only — a tag/filter change never re-overrides a narrowed scope', () => {
+    const f = factory();
+    f.load = () => {};
+    // status=completed auto-widened once; the user narrowed back by hand.
+    f.filters.status = 'completed';
+    f.scope = 'upcoming';
+    f.onFilterChange(); // the Tag dropdown's handler
+    expect(f.scope).toBe('upcoming');
+  });
+
+  test('clearAllFilters restores the DEFAULT surface: filters empty, scope back to upcoming, one load', () => {
+    const f = factory();
+    let loads = 0;
+    f.load = () => { loads++; };
+    f.scope = 'all';
+    f.filters = { q: 'x', status: 'completed', tag: '9', dateFrom: '2026-01-01', dateTo: '2026-02-01' };
+    // simulate flatpickr's clear() firing the cleared branch, as init wires it
+    f._fp = { clear: () => f.onDateChange([]) };
+    f.clearAllFilters();
+    expect(f.scope).toBe('upcoming');
+    expect(f.filters.status).toBe('');
+    expect(f.filters.dateFrom).toBe('');
+    expect(loads).toBe(1); // the cleared-branch guard: no double fetch
+  });
+
+  test('onDateChange([]) is a no-op when both dates are already empty (the clearAllFilters guard)', () => {
+    const f = factory();
+    let loads = 0;
+    f.load = () => { loads++; };
+    f.onDateChange([]);
+    expect(loads).toBe(0);
   });
 });

@@ -41,23 +41,33 @@ defined('ABSPATH') || exit;
         <div class="ws-toolbar__row">
             <!-- view toggle (F-E1): Agenda = one row per session date (dateless
                  editions have no session rows); Lijst = one row per edition,
-                 the ONLY view where dateless interest-anchor editions appear. -->
+                 the ONLY view where dateless interest-anchor editions appear.
+                 Static tooltips → plain title= (esc_attr, HTML context). -->
             <span class="ws-chip" :class="viewMode==='agenda' && 'is-active'" @click="setViewMode('agenda')"
-                  :title="'<?php echo esc_attr__('Eén rij per sessiedatum', 'stride'); ?>'">
+                  title="<?php echo esc_attr__('Eén rij per sessiedatum', 'stride'); ?>">
                 <span x-html="icon('calendar')" style="width:13px;height:13px"></span>
                 <?php echo esc_html__('Agenda', 'stride'); ?>
             </span>
             <span class="ws-chip" :class="viewMode==='list' && 'is-active'" @click="setViewMode('list')"
-                  :title="'<?php echo esc_attr__('Eén rij per editie, ook edities zonder datum', 'stride'); ?>'">
+                  title="<?php echo esc_attr__('Eén rij per editie, ook edities zonder datum', 'stride'); ?>">
                 <span x-html="icon('grid')" style="width:13px;height:13px"></span>
                 <?php echo esc_html__('Lijst', 'stride'); ?>
             </span>
 
             <!-- scope pill (F-E2): the 2-day-lookback default cutoff, visible
-                 and escapable instead of silent. -->
-            <span class="ws-chip" style="margin-left:var(--ws-3)" :class="scope==='upcoming' && 'is-active'" @click="toggleScope()"
-                  :title="scope==='upcoming' ? '<?php echo esc_attr__('Toon ook eerdere edities', 'stride'); ?>' : '<?php echo esc_attr__('Beperk tot aankomende edities', 'stride'); ?>'">
-                <span x-html="icon(scope==='upcoming' ? 'check' : 'archive')" style="width:13px;height:13px"></span>
+                 and escapable instead of silent. Hidden while a date filter is
+                 active — the server ignores scope then (the explicit range IS
+                 the scope), and a toggleable no-op pill reads as broken.
+                 Strings inside the Alpine :title EXPRESSION are JS-string
+                 context → esc_js (an esc_attr'd apostrophe HTML-decodes back
+                 to a raw quote and breaks the expression). x-html icons stay
+                 CONSTANT literals per INV-5 — two x-show'd spans, never a
+                 dynamic icon(cond ? … : …) expression. -->
+            <span class="ws-chip" style="margin-left:var(--ws-3)" x-show="!filters.dateFrom"
+                  :class="scope==='upcoming' && 'is-active'" @click="toggleScope()"
+                  :title="scope==='upcoming' ? '<?php echo esc_js(__('Toon ook eerdere edities', 'stride')); ?>' : '<?php echo esc_js(__('Beperk tot aankomende edities', 'stride')); ?>'">
+                <span x-show="scope==='upcoming'" x-html="icon('check')" style="width:13px;height:13px"></span>
+                <span x-show="scope!=='upcoming'" x-html="icon('archive')" style="width:13px;height:13px"></span>
                 <span x-text="scope==='upcoming' ? '<?php echo esc_js(__('Aankomend', 'stride')); ?>' : '<?php echo esc_js(__('Alles', 'stride')); ?>'"></span>
             </span>
 
@@ -71,7 +81,7 @@ defined('ABSPATH') || exit;
             <div class="ws-select-wrap">
                 <span x-html="icon('filter')" style="width:14px;height:14px"></span>
                 <?php echo esc_html__('Status', 'stride'); ?>
-                <select class="ws-select" x-model="filters.status" @change="onFilterChange()">
+                <select class="ws-select" x-model="filters.status" @change="onStatusChange()">
                     <option value=""><?php echo esc_html__('Alle statussen', 'stride'); ?></option>
                     <?php
                     // F-E2: the filter speaks the SAME vocabulary the badge
@@ -195,10 +205,14 @@ defined('ABSPATH') || exit;
         <div class="ws-empty" x-show="!loading && !error && total === 0" style="padding-top:80px">
             <div class="ws-empty__icon" x-html="icon('grid')"></div>
             <h3 x-text="emptyTitle()"></h3>
-            <p x-show="hasFilters || scope !== 'upcoming'"><?php echo esc_html__('Pas de filters aan of wis ze om meer edities te zien.', 'stride'); ?></p>
+            <!-- three-way copy: every branch offers an ACTIONABLE control or
+                 states the honest end (never "clear the filters" with no
+                 filters set and no button rendered). -->
+            <p x-show="hasFilters"><?php echo esc_html__('Pas de filters aan of wis ze om meer edities te zien.', 'stride'); ?></p>
             <!-- scope-aware empty state (F-E2): the silent 2-day cutoff may be
                  exactly why the list is empty — say so and offer the way out. -->
             <p x-show="!hasFilters && scope === 'upcoming'"><?php echo esc_html__('Alleen aankomende edities worden standaard getoond.', 'stride'); ?></p>
+            <p x-show="!hasFilters && scope !== 'upcoming'"><?php echo esc_html__('Er zijn nog geen edities.', 'stride'); ?></p>
             <button class="ws-btn ws-btn--ghost" style="margin-top:16px" x-show="hasFilters" @click="clearAllFilters()">
                 <span x-html="icon('x')"></span> <?php echo esc_html__('Filters wissen', 'stride'); ?>
             </button>

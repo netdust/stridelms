@@ -1502,9 +1502,20 @@ if (!function_exists('wp_new_user_notification')) {
 }
 
 if (!function_exists('current_time')) {
+    // Mirrors WP: 'mysql' → datetime, 'timestamp'/'U' → unix time, anything
+    // else is a PHP date FORMAT string (e.g. current_time('Y-m-d')). The old
+    // stub returned date('U') for every non-mysql type, so format-string
+    // callers got a raw timestamp that strtotime() can't parse.
     function current_time(string $type = 'mysql'): string
     {
-        return $type === 'mysql' ? date('Y-m-d H:i:s') : date('U');
+        if ($type === 'mysql') {
+            return date('Y-m-d H:i:s');
+        }
+        if ($type === 'timestamp' || $type === 'U') {
+            return date('U');
+        }
+
+        return date($type);
     }
 }
 

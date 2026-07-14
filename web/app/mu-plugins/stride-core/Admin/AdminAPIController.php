@@ -113,6 +113,11 @@ final class AdminAPIController
                     // all = no default cutoff (F-E2: the lookback was silent
                     // and had no UI escape hatch). An explicit date_from
                     // always overrides the default cutoff, either scope.
+                    // DELIBERATELY named 'upcoming', not 'active': the
+                    // typeahead's scope=active (/admin/editions/options) and
+                    // the trajecten scope are STATUS-based (not admin-closed),
+                    // while this one is a pure DATE cutoff — two different
+                    // boundaries; one word for both would conflate them.
                     'type' => 'string',
                     'default' => 'upcoming',
                     'enum' => ['upcoming', 'all'],
@@ -645,7 +650,7 @@ final class AdminAPIController
         $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
 
         if ($view === 'agenda') {
-            return $this->getEditionsAgendaView($request, $today, $twoDaysAgo);
+            return $this->getEditionsAgendaView($request, $today, $twoDaysAgo, $scope);
         }
 
         // LIST VIEW: One row per edition
@@ -676,21 +681,8 @@ final class AdminAPIController
         // diverge (e.g. stored 'open' + past dates renders "Afgelopen" but
         // matched status=open, not status=completed) — the F-T2 lesson: a
         // filter must speak the vocabulary the surface renders.
-        $statusEditionIds = $this->effectiveStatusEditionIds($status);
-        if ($statusEditionIds !== null) {
-            if ($statusEditionIds === []) {
-                return new WP_REST_Response([
-                    'items' => [],
-                    'total' => 0,
-                    'page' => $page,
-                    'perPage' => $perPage,
-                    'totalPages' => 0,
-                    'view' => 'list',
-                ]);
-            }
-            $idPlaceholders = implode(',', array_fill(0, count($statusEditionIds), '%d'));
-            $where[] = "p.ID IN ({$idPlaceholders})";
-            array_push($params, ...$statusEditionIds);
+        if (!$this->spliceEffectiveStatusFilter($status, 'p.ID', $where, $params, $filterStatusMap)) {
+            return $this->emptyEditionsResponse($page, $perPage, 'list');
         }
 
         // Date range filter
@@ -716,8 +708,13 @@ final class AdminAPIController
         // The §10.7 NULL-permitting default-scope predicate + LEFT JOIN +
         // NULL-last ordering are decided by $where/$whereClause above and
         // reproduced verbatim in the repo. Behavior-preserving move.
+        // Ordering: upcoming scope reads ASC (next first); the widened
+        // scope=all reads DESC (most recent first) — the widen exists to
+        // reach recently-finished editions, which ASC would bury behind the
+        // full history. An explicit date range keeps ASC (chronological).
+        $order = ($scope === 'all' && empty($dateFrom)) ? 'DESC' : 'ASC';
         $total = $this->editionRepository->countAdminList($whereClause, $params, $tagJoin);
-        $editions = $this->editionRepository->findAdminListRows($whereClause, $params, $tagJoin, $perPage, $offset);
+        $editions = $this->editionRepository->findAdminListRows($whereClause, $params, $tagJoin, $perPage, $offset, $order);
 
         // Format editions with meta
         $items = [];
@@ -743,10 +740,12 @@ final class AdminAPIController
         // INV-7 (C1): batch-resolve EFFECTIVE status for every visible edition,
         // the same read the typeahead (getEditionOptions) uses, so the grid and
         // the typeahead agree. Passed into the mapper $context; the mapper does
-        // NO queries.
-        $effectiveStatuses = !empty($editionIds)
-            ? ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($editionIds)
-            : [];
+        // NO queries. A status-filtered request already resolved the full
+        // corpus — reuse that map instead of resolving again.
+        $effectiveStatuses = $filterStatusMap
+            ?? (!empty($editionIds)
+                ? ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($editionIds)
+                : []);
 
         foreach ($editions as $edition) {
             $editionId = (int) $edition->ID;
@@ -779,9 +778,11 @@ final class AdminAPIController
             // past: the old string comparisons flagged it isPast ('' < today
             // is true) and, with only an end_date, even isToday (F-A8/F-E1 —
             // latent while the list view had no UI caller; it has one now).
+            // isPast delegates to THE calendar predicate the effective-status
+            // badge runs on (EditionService::isPastDates) — the row flag and
+            // the badge must never disagree.
             $isToday = $startDate !== '' && ($startDate === $today || ($endDate !== '' && $startDate <= $today && $endDate >= $today));
-            $isPast = ($startDate !== '' || $endDate !== '')
-                && (!empty($endDate) ? $endDate < $today : $startDate < $today);
+            $isPast = \Stride\Modules\Edition\EditionService::isPastDates($endDate ?: null, $startDate ?: null);
 
             // Common edition->item shaping shared with the agenda view, deduped
             // into EditionAdminMapper (id, course{id,title}, capacity,
@@ -948,8 +949,11 @@ final class AdminAPIController
 
     /**
      * Agenda view: Each session date is a row.
+     *
+     * $scope arrives validated from getEditions (the one param-assembly
+     * site) — never re-parse it here, or the two views' whitelists drift.
      */
-    private function getEditionsAgendaView(WP_REST_Request $request, string $today, string $twoDaysAgo): WP_REST_Response
+    private function getEditionsAgendaView(WP_REST_Request $request, string $today, string $twoDaysAgo, string $scope): WP_REST_Response
     {
         global $wpdb;
 
@@ -962,10 +966,6 @@ final class AdminAPIController
         $themeId = (int) $request->get_param('theme');
         $formatId = (int) $request->get_param('format');
         $tagId = (int) $request->get_param('tag');
-        $scope = (string) ($request->get_param('scope') ?? 'upcoming');
-        if (!in_array($scope, ['upcoming', 'all'], true)) {
-            $scope = 'upcoming';
-        }
         $offset = ($page - 1) * $perPage;
 
         // Build query for sessions with edition info
@@ -996,21 +996,8 @@ final class AdminAPIController
 
         // Filter by the edition's EFFECTIVE status — the badge the row
         // displays (F-E2; same rationale as the LIST view above).
-        $statusEditionIds = $this->effectiveStatusEditionIds($status);
-        if ($statusEditionIds !== null) {
-            if ($statusEditionIds === []) {
-                return new WP_REST_Response([
-                    'items' => [],
-                    'total' => 0,
-                    'page' => $page,
-                    'perPage' => $perPage,
-                    'totalPages' => 0,
-                    'view' => 'agenda',
-                ]);
-            }
-            $idPlaceholders = implode(',', array_fill(0, count($statusEditionIds), '%d'));
-            $where[] = "e.ID IN ({$idPlaceholders})";
-            array_push($params, ...$statusEditionIds);
+        if (!$this->spliceEffectiveStatusFilter($status, 'e.ID', $where, $params, $filterStatusMap)) {
+            return $this->emptyEditionsResponse($page, $perPage, 'agenda');
         }
 
         // Date range filter on session date
@@ -1034,12 +1021,15 @@ final class AdminAPIController
         $whereClause = implode(' AND ', $where);
 
         // Read SQL extracted to EditionRepository (INV-3, strangle Task 2a.5).
-        // The session->edition->date INNER JOINs + the (date ASC, edition ASC)
-        // ordering are reproduced verbatim in the repo. The controller keeps
-        // ONLY param assembly + the taxonomy-join helper (shared with the LIST
-        // view, getEditions). Behavior-preserving move.
+        // The session->edition->date INNER JOINs + the (date, edition) ordering
+        // are reproduced verbatim in the repo. The controller keeps ONLY param
+        // assembly + the taxonomy-join helper (shared with the LIST view,
+        // getEditions). Ordering direction mirrors the LIST view: scope=all
+        // without an explicit range reads DESC (most recent first — the widen
+        // targets recently-finished editions, which ASC would bury).
+        $order = ($scope === 'all' && empty($dateFrom)) ? 'DESC' : 'ASC';
         $total = $this->editionRepository->countAgendaRows($whereClause, $params, $tagJoin);
-        $sessions = $this->editionRepository->findAgendaRows($whereClause, $params, $tagJoin, $perPage, $offset);
+        $sessions = $this->editionRepository->findAgendaRows($whereClause, $params, $tagJoin, $perPage, $offset, $order);
 
         // Format items
         $items = [];
@@ -1070,9 +1060,11 @@ final class AdminAPIController
         // INV-7 (C1): batch-resolve EFFECTIVE status for every visible edition
         // (same read as the typeahead) so the agenda grid and the typeahead
         // agree. Passed into the mapper $context; the mapper does NO queries.
-        $effectiveStatuses = !empty($editionIds)
-            ? ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($editionIds)
-            : [];
+        // A status-filtered request already resolved the full corpus — reuse.
+        $effectiveStatuses = $filterStatusMap
+            ?? (!empty($editionIds)
+                ? ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($editionIds)
+                : []);
 
         foreach ($sessions as $session) {
             $sessionId = (int) $session->session_id;
@@ -1153,59 +1145,85 @@ final class AdminAPIController
     }
 
     /**
-     * Resolve the edition-id set whose EFFECTIVE status equals $status
-     * (INV-7: one decision engine — EditionService::getEffectiveStatuses).
+     * Splice the EFFECTIVE-status filter into a WHERE assembly (F-E2; INV-7:
+     * one decision engine — EditionService::findIdsByEffectiveStatus). ONE
+     * implementation for the LIST and AGENDA views, so the filter semantics
+     * can never drift between the two halves of the same toolbar dropdown.
      *
-     * Shared by the LIST and AGENDA views of GET /admin/editions so their
-     * status filter matches the badge each row displays, not the stored meta
-     * (which diverges for past-dated and sessionless editions). The corpus is
-     * small (editions number in the hundreds — the CR-2 typeahead precedent),
-     * so resolving all published ids per filtered request is cheap and keeps
-     * SQL paging intact via one IN clause.
+     * Returns FALSE when the filter matches nothing (incl. an unknown status
+     * value — matches nothing, like the old stored-meta equality did); the
+     * caller then returns the empty envelope. On a match the id set is
+     * spliced as one prepared IN clause (SQL paging stays intact) and
+     * $statusMap receives the FULL corpus effective-status map so the
+     * caller's badge shaping reuses it — never resolve twice per request.
      *
-     * @return list<int>|null null = no status filter requested;
-     *                        []   = filter set but nothing matches (incl. an
-     *                               unknown status value — matches nothing,
-     *                               like the old stored-meta equality did).
+     * @param array<int, \Stride\Domain\OfferingStatus>|null $statusMap
      */
-    private function effectiveStatusEditionIds(string $status): ?array
-    {
+    private function spliceEffectiveStatusFilter(
+        string $status,
+        string $idColumn,
+        array &$where,
+        array &$params,
+        ?array &$statusMap,
+    ): bool {
+        $statusMap = null;
         if ($status === '') {
-            return null;
-        }
-        if (\Stride\Domain\OfferingStatus::tryFrom($status) === null) {
-            return [];
+            return true;
         }
 
-        $ids = $this->editionRepository->findPublishedIds();
+        $enum = \Stride\Domain\OfferingStatus::tryFrom($status);
+        $ids = [];
+        if ($enum !== null) {
+            $result = ntdst_get(\Stride\Modules\Edition\EditionService::class)->findIdsByEffectiveStatus($enum);
+            $ids = $result['ids'];
+            $statusMap = $result['statuses'];
+        }
+
         if ($ids === []) {
-            return [];
+            return false;
         }
 
-        $statuses = ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($ids);
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $where[] = "{$idColumn} IN ({$placeholders})";
+        array_push($params, ...$ids);
 
-        return array_values(array_filter(
-            $ids,
-            static fn(int $id): bool => (($statuses[$id] ?? null)?->value) === $status,
-        ));
+        return true;
+    }
+
+    /**
+     * The shared empty paged envelope for GET /admin/editions (both views).
+     */
+    private function emptyEditionsResponse(int $page, int $perPage, string $view): WP_REST_Response
+    {
+        return new WP_REST_Response([
+            'items' => [],
+            'total' => 0,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalPages' => 0,
+            'view' => $view,
+        ]);
     }
 
     /**
      * Dutch date(-range) label for a LIST-view edition row (F-E2 — cells
-     * rendered raw ISO). '' for a dateless edition (§10.7 anchors); single
-     * date when start == end or end is missing.
+     * rendered raw ISO). '' ONLY for a truly dateless edition (§10.7
+     * anchors); a bound that exists but fails to parse falls back to its raw
+     * ISO value (the agenda path's documented behavior — never hide a date
+     * that exists), and a missing bound never leaves a dangling separator.
      */
     private function editionDateRangeLabel(string $startDate, string $endDate): string
     {
-        if ($startDate === '') {
-            return '';
-        }
-        $start = stride_format_date($startDate);
-        if ($endDate === '' || $endDate === $startDate) {
-            return $start;
+        $fmt = static fn(string $d): string => $d === '' ? '' : (stride_format_date($d) ?: $d);
+
+        $start = $fmt($startDate);
+        $end = ($endDate !== '' && $endDate !== $startDate) ? $fmt($endDate) : '';
+
+        if ($start === '') {
+            return $end;
         }
 
-        return $start . ' – ' . stride_format_date($endDate);
+        return $end === '' ? $start : $start . ' – ' . $end;
     }
 
     /**

@@ -57,9 +57,15 @@ defined('ABSPATH') || exit;
         <!-- ===== TOOLBAR: scope pill + status filter + search ===== -->
         <div class="ws-traj-toolbar">
             <!-- the "Actieve trajecten" default-scope pill (server-owned scope) -->
+            <!-- Strings inside the Alpine :title EXPRESSION are JS-string
+                 context → esc_js, not esc_attr (an esc_attr'd apostrophe
+                 HTML-decodes back to a raw quote and breaks the expression).
+                 x-html icons stay CONSTANT literals per INV-5 — two x-show'd
+                 spans, never a dynamic icon(cond ? … : …) expression. -->
             <span class="ws-chip" :class="scope==='active' && 'is-active'" @click="toggleScope()"
-                  :title="scope==='active' ? '<?php echo esc_attr__('Toon ook afgesloten trajecten', 'stride'); ?>' : '<?php echo esc_attr__('Beperk tot actieve trajecten', 'stride'); ?>'">
-                <span x-html="icon(scope==='active' ? 'check' : 'archive')" style="width:13px;height:13px"></span>
+                  :title="scope==='active' ? '<?php echo esc_js(__('Toon ook afgesloten trajecten', 'stride')); ?>' : '<?php echo esc_js(__('Beperk tot actieve trajecten', 'stride')); ?>'">
+                <span x-show="scope==='active'" x-html="icon('check')" style="width:13px;height:13px"></span>
+                <span x-show="scope!=='active'" x-html="icon('archive')" style="width:13px;height:13px"></span>
                 <span x-text="scope==='active' ? '<?php echo esc_js(__('Actieve trajecten', 'stride')); ?>' : '<?php echo esc_js(__('Alle trajecten', 'stride')); ?>'"></span>
             </span>
 
@@ -288,7 +294,7 @@ defined('ABSPATH') || exit;
                                     <template x-for="r in detail.registrations" :key="r.regId">
                                         <button class="ws-traj-rosteritem" @click="openPerson(r)"
                                                 :disabled="!r.id"
-                                                :title="r.id ? '' : '<?php echo esc_attr__('Account verwijderd — geen dossier beschikbaar', 'stride'); ?>'"
+                                                :title="r.id ? '' : '<?php echo esc_js(__('Account verwijderd — geen dossier beschikbaar', 'stride')); ?>'"
                                                 :style="r.id ? '' : 'cursor:default;opacity:.65'">
                                             <div class="ws-traj-rosteritem__body">
                                                 <div class="ws-traj-rosteritem__name" x-text="r.name"></div>
