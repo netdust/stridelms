@@ -182,21 +182,34 @@ final class RegistrationTable
         // non-strict SQL mode; backfill those rows when they are company-scoped.
         // Rollback posture: ENUM values can't be dropped while 'partner' rows
         // exist — rollback is "leave the value in place", which is safe.
-        $altered = $wpdb->query(
-            "ALTER TABLE {$table}
-            MODIFY enrollment_path ENUM('individual','colleague','trajectory','partner') DEFAULT 'individual'",
-        );
+        //
+        // Guarded via SHOW COLUMNS: a paused v5 backfill (batch cap / backoff)
+        // re-enters migrate() by design, and while the MODIFY is idempotent in
+        // RESULT it is not in COST (potential metadata lock / table copy per
+        // pass on a live table). The cheap probe skips it once applied; the
+        // partner backfill UPDATE below stays unconditional to cover the
+        // MODIFY-succeeded/backfill-failed retry edge.
+        $pathColumn = $wpdb->get_row("SHOW COLUMNS FROM {$table} LIKE 'enrollment_path'");
+        $enumHasPartner = is_object($pathColumn)
+            && str_contains((string) ($pathColumn->Type ?? ''), "'partner'");
 
-        if ($altered === false) {
-            ntdst_log('enrollment')->error('registrations schema v2 migration failed', [
-                'step' => 'alter_enrollment_path_enum',
-                'error' => $wpdb->last_error,
-            ]);
+        if (!$enumHasPartner) {
+            $altered = $wpdb->query(
+                "ALTER TABLE {$table}
+                MODIFY enrollment_path ENUM('individual','colleague','trajectory','partner') DEFAULT 'individual'",
+            );
 
-            // Don't stamp the version: retried once the backoff lapses (steps are idempotent).
-            set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+            if ($altered === false) {
+                ntdst_log('enrollment')->error('registrations schema v2 migration failed', [
+                    'step' => 'alter_enrollment_path_enum',
+                    'error' => $wpdb->last_error,
+                ]);
 
-            return;
+                // Don't stamp the version: retried once the backoff lapses (steps are idempotent).
+                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
+                return;
+            }
         }
 
         // Note: 0 affected rows is int 0, not false — only false signals a DB error.
@@ -308,7 +321,11 @@ final class RegistrationTable
                  LIMIT 500",
             );
 
-            if (!is_array($backfillRows)) {
+            // Real wpdb returns [] on a FAILED SELECT (query() flushes
+            // last_result to [] before erroring), so an empty array is
+            // indistinguishable from a drained corpus — the error signal is
+            // last_error, which query() also flushes per call.
+            if (!is_array($backfillRows) || $wpdb->last_error !== '') {
                 ntdst_log('enrollment')->error('registrations schema v5 migration failed', [
                     'step' => 'backfill_lead_identity_select',
                     'error' => $wpdb->last_error,

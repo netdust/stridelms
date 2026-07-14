@@ -157,6 +157,20 @@ test.describe('applyQueueDeepLink (the URL is the deep-link contract BOTH ways)'
     expect(g.filters.trajectory_id).toBe(5);     // new deep-link absorbed
   });
 
+  test('REGRESSION (mirror both ways): a new ?queue= DROPS a stale trajectory pin', () => {
+    // The reverse of the stale-queue bug: Trajecten's deep-link left
+    // filters.trajectory_id set; clicking a Vandaag card then composed
+    // queue AND trajectory — a subset (or empty grid) for a card that
+    // promised N rows. Deep-link params mirror the URL exactly.
+    const win = fakeWindow('http://x/?view=inschrijvingen&queue=pending');
+    const g = makeGrid(win);
+    g.filters.trajectory_id = 5;   // absorbed earlier from Trajecten
+
+    expect(g.applyQueueDeepLink()).toBe(true);
+    expect(g.queue).toBe('pending');
+    expect(g.filters.trajectory_id).toBe(0);   // stale pin dropped
+  });
+
   test('repeat activation with the SAME queue is a no-op (no reload, no filter stomp)', () => {
     const win = fakeWindow('http://x/?view=inschrijvingen&queue=nocert');
     const g = makeGrid(win);

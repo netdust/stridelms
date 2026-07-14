@@ -286,16 +286,27 @@ final class RegistrationTableMigrateGuardTest extends TestCase
             /** @var array<int|false> v5 backfill per-row UPDATE returns. */
             public array $updateResults = [];
 
-            /** v5 lead backfill SELECT — an empty lead corpus by default. */
-            public function get_results(?string $query = null): ?array
+            /** v2 enum probe — no column info, so the MODIFY path always runs. */
+            public function get_row(?string $query = null): ?object
+            {
+                return null;
+            }
+
+            /**
+             * v5 lead backfill SELECT. REAL wpdb semantics: a failed query
+             * returns [] (query() flushes last_result before erroring), and
+             * the error signal is last_error — a null queue entry models that.
+             */
+            public function get_results(?string $query = null): array
             {
                 if ($this->getResultsQueue === null) {
+                    $this->last_error = '';
                     return [];
                 }
                 $result = array_shift($this->getResultsQueue);
                 $this->last_error = ($result === null) ? $this->errorOnFailure : '';
 
-                return $result ?? null;
+                return is_array($result) ? $result : [];
             }
 
             /** v5 lead backfill per-row UPDATE. */

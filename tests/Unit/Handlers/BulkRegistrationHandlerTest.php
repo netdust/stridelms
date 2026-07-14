@@ -125,6 +125,33 @@ class BulkRegistrationHandlerTest extends TestCase
     }
 
     /**
+     * The quote actions' CR-1 pre-resolve seam (setQuoteStatusForRows calls
+     * resolveBulkIds BEFORE runBulk) must propagate a scope error as the
+     * WP_Error 400 — not fatal on `['ids']`-indexing the error object. Every
+     * other bulk action gets this via runBulk's guard; the quote path has its
+     * own call site.
+     */
+    public function test_bulk_quote_sent_select_all_with_unknown_queue_propagates_the_400(): void
+    {
+        $query = $this->createMock(\Stride\Admin\AdminRegistrationQueryService::class);
+        $query->method('applyScopePins')
+            ->willReturn(new \WP_Error('invalid_queue', 'Onbekende wachtrij.', ['status' => 400]));
+        ntdst_set(\Stride\Admin\AdminRegistrationQueryService::class, $query);
+
+        $quoteRepo = $this->createMock(QuoteRepository::class);
+        $quoteRepo->expects($this->never())->method('findQuoteIdsByRegistrations');
+        ntdst_set(QuoteRepository::class, $quoteRepo);
+
+        $result = $this->handler->handleBulkQuoteSent([], [
+            'select_all' => true,
+            'filter' => ['queue' => 'stale-or-crafted-key'],
+        ]);
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('invalid_queue', $result->get_error_code());
+    }
+
+    /**
      * B1 (M9 non-atomic): a per-row domain method that throws a raw Throwable
      * mid-batch must NOT abort the batch. Row1 succeeds, row2 throws, row3 must
      * STILL be processed. The throwing row lands in failed[] with a generic

@@ -1304,8 +1304,8 @@ final class AdminAPIController
         // Get registrations — the per-edition reg-rows query is owned by
         // RegistrationRepository::findByEdition (its SELECT * ... WHERE
         // edition_id ... ORDER BY registered_at ASC is identical to the prior
-        // inline query; INV-3). The anon enrollment_data name fallback below
-        // (user_id=0 interest/waitlist rows) is PRESERVED verbatim.
+        // inline query; INV-3). SELECT * includes the v5 lead_name/lead_email
+        // columns the anon-identity fallback below reads.
         $registrations = $this->registrationRepository->findByEdition($editionId);
 
         // Collect user IDs for batch fetch
@@ -1319,7 +1319,7 @@ final class AdminAPIController
 
         // Format registrations with pre-fetched data.
         // Anonymous interest/waitlist rows have no user record — fall back to
-        // the name/email captured in enrollment_data so admin can see them.
+        // the denormalized lead identity columns (v5) so admin can see them.
         $items = [];
         foreach ($registrations as $reg) {
             $userId = (int) $reg->user_id;
@@ -1330,19 +1330,15 @@ final class AdminAPIController
             $isAnon = !$user;
 
             if ($isAnon) {
-                $stageData = [];
-                $raw = $reg->enrollment_data ?? '';
-                if (is_string($raw) && $raw !== '') {
-                    $decoded = json_decode($raw, true);
-                    if (is_array($decoded)) {
-                        // status maps to the stage key (interest/waitlist).
-                        // Wrapped shape: $decoded[$status]['data'][field].
-                        $stageEnvelope = $decoded[$reg->status] ?? [];
-                        $stageData = is_array($stageEnvelope['data'] ?? null) ? $stageEnvelope['data'] : [];
-                    }
-                }
-                $name = $stageData['name'] ?? '(anoniem)';
-                $email = $stageData['email'] ?? '';
+                // Denormalized lead identity (schema v5) — the SAME columns the
+                // grid renders and grid search matches (INV-3: one identity
+                // definition, RegistrationRepository::extractLeadIdentity). The
+                // old status-keyed enrollment_data decode rendered '(anoniem)'
+                // in the roster for a lead whose stage had moved while the grid
+                // showed the captured name.
+                $leadName = (string) ($reg->lead_name ?? '');
+                $name  = $leadName !== '' ? $leadName : '(anoniem)';
+                $email = (string) ($reg->lead_email ?? '');
             }
 
             // Build attendance map for this user (anon rows have empty attendance)

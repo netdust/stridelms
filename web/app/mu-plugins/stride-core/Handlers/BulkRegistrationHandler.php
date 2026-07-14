@@ -159,8 +159,13 @@ final class BulkRegistrationHandler
         // runBulk re-resolves idempotently. Task 4.1 — expand select-all HERE
         // (post-deny) so the B2 reg→quote map below and runBulk both read the
         // SAME expanded id set. The quote handlers delegate their authz to this
-        // method, so this is their post-deny seam.
+        // method, so this is their post-deny seam. A scope error (unknown
+        // queue in the carried filter) must propagate as the 400 — indexing
+        // ['ids'] on a WP_Error fatals.
         $params = $this->resolveBulkIds($params);
+        if (is_wp_error($params)) {
+            return $params;
+        }
 
         $quoteRepo = ntdst_get(QuoteRepository::class);
 

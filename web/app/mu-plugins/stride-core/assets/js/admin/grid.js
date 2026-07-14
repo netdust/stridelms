@@ -403,6 +403,12 @@
         window.addEventListener('ws-view-changed', (e) => {
           if (!e || !e.detail || e.detail.view !== 'inschrijvingen') return;
           if (this.applyQueueDeepLink()) {
+            // The deep-link re-targeted the view (new/dropped queue or
+            // trajectory): a selection — especially an ARMED cross-page
+            // select-all — from the previous context must not survive onto
+            // the new id-set, or the bulk bar arrives pre-armed over rows
+            // the admin never selected. Same discipline as onFilterChange.
+            this.clearSelection();
             this.load(1);
           }
         });
@@ -447,11 +453,21 @@
         }
 
         // Trajectory deep-link ("Toon inschrijvingen" on a trajectory) — same
-        // re-activation contract as ?queue=: absorb it on every arrival so the
-        // 2nd+ jump also filters (F-T1/F-G9).
+        // MIRROR-the-URL contract as ?queue=, BOTH ways: absorb it on every
+        // arrival (the 2nd+ jump also filters, F-T1/F-G9) AND drop a stale pin
+        // when the URL no longer carries it (the shell deletes ?trajectory_id=
+        // on every switchView). Keeping it composed a lingering trajectory
+        // with a newly clicked queue card — a subset or "Geen resultaten" for
+        // a card that promised N rows (the same intersection bug as the stale
+        // queue, in the other direction).
         const trajectoryId = parseInt(p.get('trajectory_id') || '', 10);
-        if (Number.isFinite(trajectoryId) && trajectoryId > 0 && this.filters.trajectory_id !== trajectoryId) {
-          this.filters.trajectory_id = trajectoryId;
+        if (Number.isFinite(trajectoryId) && trajectoryId > 0) {
+          if (this.filters.trajectory_id !== trajectoryId) {
+            this.filters.trajectory_id = trajectoryId;
+            changed = true;
+          }
+        } else if (this.filters.trajectory_id) {
+          this.filters.trajectory_id = 0;
           changed = true;
         }
 
