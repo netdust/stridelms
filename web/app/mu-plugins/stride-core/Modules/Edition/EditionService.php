@@ -110,9 +110,15 @@ class EditionService extends AbstractService implements EditionQueryInterface
         global $wpdb;
         $table = $wpdb->prefix . 'vad_registrations';
 
+        // The seat-holding statuses come from the enum (F-V6): one capacity
+        // definition for this counter AND the capacity melding.
+        $statuses = \Stride\Domain\RegistrationStatus::capacityValues();
+        $placeholders = implode(',', array_fill(0, count($statuses), '%s'));
+
         $count = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE edition_id = %d AND status IN ('confirmed', 'completed', 'pending')",
+            "SELECT COUNT(*) FROM {$table} WHERE edition_id = %d AND status IN ({$placeholders})",
             $editionId,
+            ...$statuses,
         ));
 
         set_transient($cacheKey, $count, 60);

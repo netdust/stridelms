@@ -26,6 +26,23 @@ enum RegistrationStatus: string
     }
 
     /**
+     * SQL-ready list of the status values that hold a seat — derived from
+     * countsTowardCapacity() so every occupancy counter (capacity melding,
+     * EditionService::getRegisteredCount / hasAvailableSpots) reasons over
+     * the SAME set. Two hand-rolled lists disagreed here once (F-V6:
+     * confirmed-only vs confirmed+completed+pending).
+     *
+     * @return list<string>
+     */
+    public static function capacityValues(): array
+    {
+        return array_values(array_map(
+            static fn(self $status): string => $status->value,
+            array_filter(self::cases(), static fn(self $status): bool => $status->countsTowardCapacity()),
+        ));
+    }
+
+    /**
      * Check if user has active access.
      */
     public function hasAccess(): bool

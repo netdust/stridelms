@@ -524,8 +524,14 @@ final class AdminStatsService
 
         $data = [];
 
-        // Editions with capacity (for capacity_threshold rule)
+        // Editions with capacity (for capacity_threshold rule). Occupancy
+        // counts the enum's seat-holding statuses (F-V6) — the same
+        // definition as EditionService::getRegisteredCount/hasAvailableSpots,
+        // so a "near capacity" melding and the waitlist-open queue can never
+        // reason over two different numbers.
         if (!empty($rules['capacity_threshold']['enabled'])) {
+            $capacityStatuses = RegistrationStatus::capacityValues();
+            $statusPlaceholders = implode(',', array_fill(0, count($capacityStatuses), '%s'));
             $editions = $wpdb->get_results($wpdb->prepare(
                 "SELECT p.ID as id, p.post_title as title,
                         pm_cap.meta_value as capacity,
@@ -535,13 +541,12 @@ final class AdminStatsService
                  LEFT JOIN {$wpdb->postmeta} pm_cap ON p.ID = pm_cap.post_id AND pm_cap.meta_key = '_ntdst_capacity'
                  LEFT JOIN (
                      SELECT edition_id, COUNT(*) as cnt FROM {$registrationTable}
-                     WHERE status = 'confirmed' GROUP BY edition_id
+                     WHERE status IN ({$statusPlaceholders}) GROUP BY edition_id
                  ) rc ON rc.edition_id = p.ID
                  WHERE p.post_type = %s AND p.post_status = 'publish'
                  AND pm_date.meta_value >= %s
                  AND pm_cap.meta_value > 0",
-                EditionCPT::POST_TYPE,
-                $today,
+                ...array_merge($capacityStatuses, [EditionCPT::POST_TYPE, $today]),
             ), ARRAY_A);
             $data['editions'] = $editions ?: [];
         }
