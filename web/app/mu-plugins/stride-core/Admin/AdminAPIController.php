@@ -1330,15 +1330,12 @@ final class AdminAPIController
             $isAnon = !$user;
 
             if ($isAnon) {
-                // Denormalized lead identity (schema v5) — the SAME columns the
-                // grid renders and grid search matches (INV-3: one identity
-                // definition, RegistrationRepository::extractLeadIdentity). The
-                // old status-keyed enrollment_data decode rendered '(anoniem)'
-                // in the roster for a lead whose stage had moved while the grid
-                // showed the captured name.
-                $leadName = (string) ($reg->lead_name ?? '');
-                $name  = $leadName !== '' ? $leadName : '(anoniem)';
-                $email = (string) ($reg->lead_email ?? '');
+                // The ONE lead-identity presenter (INV-3) — the same
+                // '(anoniem)' rule the grid renders, so a row can never show
+                // two identities across admin surfaces.
+                $identity = \Stride\Modules\Enrollment\RegistrationRepository::presentLeadIdentity($reg);
+                $name  = $identity['name'];
+                $email = $identity['email'];
             }
 
             // Build attendance map for this user (anon rows have empty attendance)

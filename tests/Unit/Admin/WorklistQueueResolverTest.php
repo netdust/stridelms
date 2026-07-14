@@ -111,7 +111,7 @@ final class WorklistQueueResolverTest extends TestCase
 
         foreach (WorklistQueueResolver::QUEUES as $queue) {
             $matched = preg_match(
-                '/\b' . preg_quote($queue, '/') . "\s*:\s*'((?:[^'\\\\]|\\\\.)*)'/",
+                '/\b' . preg_quote($queue, '/') . "\s*:\s*\{\s*label:\s*'((?:[^'\\\\]|\\\\.)*)'/",
                 $gridQueueMeta,
                 $m,
             );
@@ -128,10 +128,11 @@ final class WorklistQueueResolverTest extends TestCase
 
     /**
      * Status half of the contract: every queue's server predicate starts from
-     * exactly ONE registration status (queueStatuses), and grid.js
-     * QUEUE_ROW_STATUS mirrors it so the ARMED cross-page bulk bar offers the
-     * right actions for a queue selection. A server predicate rewired to a
-     * different (or a second) status without the client half fails HERE.
+     * exactly ONE registration status (queueStatuses — statusForQueue is its
+     * public accessor), and grid.js QUEUE_META's per-key `status` mirrors it
+     * so the ARMED cross-page bulk bar offers the right actions for a queue
+     * selection. A server predicate rewired to a different (or a second)
+     * status without the client half fails HERE.
      */
     public function test_queue_row_statuses_match_the_server_predicates(): void
     {
@@ -141,18 +142,23 @@ final class WorklistQueueResolverTest extends TestCase
 
         $this->assertSame(WorklistQueueResolver::QUEUES, array_keys($serverStatuses));
 
-        $gridRowStatus = $this->extractJsBlock('grid.js', 'QUEUE_ROW_STATUS');
+        $gridQueueMeta = $this->extractJsBlock('grid.js', 'QUEUE_META');
 
         foreach ($serverStatuses as $queue => $statuses) {
             $this->assertCount(
                 1,
                 $statuses,
-                "queue '{$queue}' is no longer status-homogeneous — the client QUEUE_ROW_STATUS contract (armed bulk bar) breaks",
+                "queue '{$queue}' is no longer status-homogeneous — the client QUEUE_META.status contract (armed bulk bar) and the funnel shortcut break",
+            );
+            $this->assertSame(
+                $statuses[0],
+                WorklistQueueResolver::statusForQueue($queue),
+                'statusForQueue must expose the predicate status',
             );
             $this->assertMatchesRegularExpression(
-                '/\b' . preg_quote($queue, '/') . "\s*:\s*'" . preg_quote($statuses[0], '/') . "'/",
-                $gridRowStatus,
-                "grid.js QUEUE_ROW_STATUS['{$queue}'] must be '{$statuses[0]}' (the server predicate's status)",
+                '/\b' . preg_quote($queue, '/') . "\s*:\s*\{[^}]*status:\s*'" . preg_quote($statuses[0], '/') . "'/",
+                $gridQueueMeta,
+                "grid.js QUEUE_META['{$queue}'].status must be '{$statuses[0]}' (the server predicate's status)",
             );
         }
     }

@@ -173,9 +173,13 @@ final class RegistrationTableMigrateGuardTest extends TestCase
 
         RegistrationTable::migrate();
 
-        $this->assertFalse(
-            get_option('stride_registrations_schema_version'),
-            'A failed backfill SELECT must not stamp the version (leads would stay unfindable forever)',
+        // The per-step cursor legitimately stamps the COMPLETED prior steps
+        // (v2..v4) — the invariant is that v5 itself is never stamped, so
+        // migrate() re-enters the backfill after the backoff.
+        $this->assertLessThan(
+            RegistrationTable::SCHEMA_VERSION,
+            (int) get_option('stride_registrations_schema_version'),
+            'A failed backfill SELECT must not stamp v5 (leads would stay unfindable forever)',
         );
         $this->assertNotFalse(get_transient('stride_registrations_migration_backoff'));
         $this->assertMigrationFailureLogged('Server has gone away', 'schema v5 migration failed');
@@ -189,7 +193,10 @@ final class RegistrationTableMigrateGuardTest extends TestCase
 
         RegistrationTable::migrate();
 
-        $this->assertFalse(get_option('stride_registrations_schema_version'));
+        $this->assertLessThan(
+            RegistrationTable::SCHEMA_VERSION,
+            (int) get_option('stride_registrations_schema_version'),
+        );
         $this->assertNotFalse(get_transient('stride_registrations_migration_backoff'));
         $this->assertMigrationFailureLogged('Deadlock found', 'schema v5 migration failed');
     }
@@ -205,9 +212,10 @@ final class RegistrationTableMigrateGuardTest extends TestCase
 
         RegistrationTable::migrate();
 
-        $this->assertFalse(
-            get_option('stride_registrations_schema_version'),
-            'A capped-out backfill must NOT stamp — the remainder must be picked up by the next run',
+        $this->assertLessThan(
+            RegistrationTable::SCHEMA_VERSION,
+            (int) get_option('stride_registrations_schema_version'),
+            'A capped-out backfill must NOT stamp v5 — the remainder must be picked up by the next run',
         );
         $this->assertNotFalse(get_transient('stride_registrations_migration_backoff'));
     }

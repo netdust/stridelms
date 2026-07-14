@@ -187,11 +187,16 @@
           return;
         }
         const url = new URL(window.location.href);
-        // Clear any previous deep-link params before seeding the new ones.
+        // Clear any previous DEEP-LINK-owned params before seeding the new
+        // ones. trajectory_id is deliberately NOT in this delete list: it is a
+        // first-class grid FILTER (the Traject select) as well as a deep-link,
+        // and deleting it here wiped a user-picked filter on every view
+        // round-trip while status/edition/q survived. Like those filters it
+        // lives in the URL until the user clears its chip; the Trajecten
+        // deep-link below OVERWRITES it when a new target is passed.
         url.searchParams.delete('queue');
         url.searchParams.delete('user');
         url.searchParams.delete('reg');
-        url.searchParams.delete('trajectory_id');
         if (params && typeof params === 'object') {
           if (params.queue != null && params.queue !== '') {
             url.searchParams.set('queue', String(params.queue));

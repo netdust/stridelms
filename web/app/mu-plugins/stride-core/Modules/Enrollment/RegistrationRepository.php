@@ -115,6 +115,27 @@ final class RegistrationRepository
         return ['name' => '', 'email' => ''];
     }
 
+    /**
+     * Present a row's denormalized lead identity for an admin surface — THE
+     * single home of the '(anoniem)' fallback rule. Both admin readers (the
+     * grid's AdminRegistrationQueryService::resolveAnonymousIdentity and the
+     * edition roster in AdminAPIController) call this, so the same anonymous
+     * row can never render two different identities across surfaces (INV-3).
+     *
+     * @param  object $row Row carrying ->lead_name / ->lead_email (v5 columns).
+     * @return array{name:string, email:string}
+     */
+    public static function presentLeadIdentity(object $row): array
+    {
+        $name  = (string) ($row->lead_name ?? '');
+        $email = (string) ($row->lead_email ?? '');
+
+        return [
+            'name'  => $name !== '' ? $name : __('(anoniem)', 'stride'),
+            'email' => $email,
+        ];
+    }
+
     public static function wrapStage(array $data, ?int $submittedBy = null, ?string $submittedAt = null): array
     {
         if ($submittedBy === null) {
@@ -355,13 +376,14 @@ final class RegistrationRepository
                     ];
 
                     // Re-stamp the lead identity when the reactivated row is
-                    // still anonymous and the merged data carries it (F-G3).
+                    // still anonymous (F-G3). UNCONDITIONAL: the columns must
+                    // mirror the rewritten JSON exactly — an identity scrubbed
+                    // from enrollment_data (GDPR/privacy cleanup) must clear
+                    // the denormalized copy too, never outlive its source.
                     if (empty($existing->user_id) && $mergedData) {
                         $identity = self::extractLeadIdentity($mergedData);
-                        if ($identity['name'] !== '' || $identity['email'] !== '') {
-                            $reactivate['lead_name'] = $identity['name'];
-                            $reactivate['lead_email'] = $identity['email'];
-                        }
+                        $reactivate['lead_name'] = $identity['name'];
+                        $reactivate['lead_email'] = $identity['email'];
                     }
 
                     $result = $wpdb->update($this->table(), $reactivate, ['id' => (int) $existing->id]);
@@ -407,10 +429,8 @@ final class RegistrationRepository
             // unfindable by the name on their own form).
             if (empty($insert['user_id']) && is_array($data['enrollment_data'] ?? null)) {
                 $identity = self::extractLeadIdentity($data['enrollment_data']);
-                if ($identity['name'] !== '' || $identity['email'] !== '') {
-                    $insert['lead_name'] = $identity['name'];
-                    $insert['lead_email'] = $identity['email'];
-                }
+                $insert['lead_name'] = $identity['name'];
+                $insert['lead_email'] = $identity['email'];
             }
 
             $result = $wpdb->insert($this->table(), $insert);
@@ -1783,6 +1803,10 @@ final class RegistrationRepository
         // Anonymous lead whose enrollment_data is being (re)written: keep the
         // denormalized searchable identity in sync (F-G3). Not in $allowed —
         // derived by the repo, never caller-settable.
+        // UNCONDITIONAL stamp: the columns mirror the rewritten JSON exactly,
+        // so an identity scrubbed from enrollment_data (GDPR/privacy cleanup)
+        // clears the denormalized copy too — it must never outlive its source
+        // in the Naam column or the grid search.
         if (
             array_key_exists('enrollment_data', $update)
             && $before !== null
@@ -1790,10 +1814,8 @@ final class RegistrationRepository
             && is_array($data['enrollment_data'] ?? null)
         ) {
             $identity = self::extractLeadIdentity($data['enrollment_data']);
-            if ($identity['name'] !== '' || $identity['email'] !== '') {
-                $update['lead_name'] = $identity['name'];
-                $update['lead_email'] = $identity['email'];
-            }
+            $update['lead_name'] = $identity['name'];
+            $update['lead_email'] = $identity['email'];
         }
 
         $result = $wpdb->update($this->table(), $update, ['id' => $id]) !== false;
@@ -2227,6 +2249,12 @@ final class RegistrationRepository
             : $wpdb->get_var($countSql));
 
         // --- Aggregate SELECT: one row per group, ordered by count DESC ---
+        // Deterministic tiebreaker on the group column: tied counts (cnt=1 is
+        // common) would otherwise order arbitrarily, so paging could repeat/
+        // skip groups between requests AND offerteVerdelingByGroup's mirror of
+        // this query could resolve the same page to a DIFFERENT group set —
+        // rendering groups whose tally is missing. Same stable-pagination rule
+        // as the flat path's r.id tiebreaker.
         $aggSql = "SELECT {$groupColSql} AS group_value,
                           COUNT(*) AS cnt,
                           SUM(CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END) AS completed_count
@@ -2235,7 +2263,7 @@ final class RegistrationRepository
                    {$activeJoin}
                    {$whereClause}
                    GROUP BY {$groupColSql}
-                   ORDER BY cnt DESC
+                   ORDER BY cnt DESC, {$groupColSql} DESC
                    LIMIT %d OFFSET %d";
 
         $aggParams = array_merge($params, [$perPage, ($page - 1) * $perPage]);
@@ -2401,16 +2429,18 @@ final class RegistrationRepository
 
         // --- Resolve the visible page's groups (mirror queryForGridGrouped) ---
         // The tally must cover EXACTLY the groups the aggregate page renders, so
-        // we recompute the same paginated group set (same ORDER BY cnt DESC /
-        // LIMIT/OFFSET) and narrow to it. A NULL group_value routes via IS NULL,
-        // never IN ('') (strval(null)='' would silently miss the IS NULL rows).
+        // we recompute the same paginated group set (same ORDER BY — incl. the
+        // deterministic group-column tiebreaker, or tied counts could resolve
+        // this page to a different group set than queryForGridGrouped's — and
+        // same LIMIT/OFFSET) and narrow to it. A NULL group_value routes via
+        // IS NULL, never IN ('') (strval(null)='' would miss the IS NULL rows).
         $aggSql = "SELECT {$groupColSql} AS group_value, COUNT(*) AS cnt
                    FROM {$regTable} r
                    LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
                    {$activeJoin}
                    {$whereClause}
                    GROUP BY {$groupColSql}
-                   ORDER BY cnt DESC
+                   ORDER BY cnt DESC, {$groupColSql} DESC
                    LIMIT %d OFFSET %d";
         $aggParams = array_merge($params, [$perPage, ($page - 1) * $perPage]);
         $aggRows   = $wpdb->get_results($wpdb->prepare($aggSql, ...$aggParams));
@@ -2635,6 +2665,26 @@ final class RegistrationRepository
     private function buildGridFilters(array $filters): array
     {
         global $wpdb;
+
+        // Trip-wire (blast-radius class, 2026-07-14): every entry path that
+        // starts from CLIENT filter input must route through
+        // AdminRegistrationQueryService::applyScopePins first (it stamps this
+        // marker). This repo cannot resolve the scope itself (resolver DI
+        // would cycle), so an unmarked build — a future export/saved-view/
+        // bulk surface calling the grid family directly — logs loudly instead
+        // of silently reading the whole edition-grained table. Explicit
+        // pinned/scoped keys also count: a caller that resolved its own ids
+        // is scoped by definition.
+        if (
+            empty($filters['scope_pins_applied'])
+            && !array_key_exists('active_edition_ids', $filters)
+            && !array_key_exists('queue_ids', $filters)
+            && empty($filters['edition_id'])
+        ) {
+            ntdst_log('enrollment')->warning('grid filter built without scope pins — bounded to nothing but the base predicate', [
+                'keys' => array_keys($filters),
+            ]);
+        }
 
         $page    = max(1, absint($filters['page'] ?? 1));
         $perPage = min(100, max(1, absint($filters['per_page'] ?? 50)));

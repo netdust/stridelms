@@ -63,7 +63,14 @@ final class RegistrationTable
         $table = self::getTableName();
         $charset = $wpdb->get_charset_collate();
 
-        $sql = "CREATE TABLE IF NOT EXISTS {$table} (
+        // NO "IF NOT EXISTS": dbDelta parses the table name with a regex that
+        // captures "IF" from that form, so it never matched the existing table
+        // and never diffed columns — create() on a pre-existing older table
+        // silently no-opped and then stamped the LATEST schema version below,
+        // permanently stranding missing columns (v5 lead_name/lead_email are
+        // read by every grid SELECT). Plain CREATE TABLE is the canonical
+        // dbDelta form: it diffs an existing table and ADDs missing columns.
+        $sql = "CREATE TABLE {$table} (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             user_id BIGINT UNSIGNED NULL,
             lead_name VARCHAR(191) NULL COMMENT 'Anonymous-lead searchability (v5) — name from the interest/waitlist submission',
@@ -176,103 +183,85 @@ final class RegistrationTable
 
         $table = self::getTableName();
 
-        // v2 (audit M-4 / threat-model M7): add 'partner' to enrollment_path.
-        // Purely additive — existing values are untouched. Pre-v2, inserts using
-        // RegistrationRepository::PATH_PARTNER were coerced to '' under
-        // non-strict SQL mode; backfill those rows when they are company-scoped.
-        // Rollback posture: ENUM values can't be dropped while 'partner' rows
-        // exist — rollback is "leave the value in place", which is safe.
-        //
-        // Guarded via SHOW COLUMNS: a paused v5 backfill (batch cap / backoff)
-        // re-enters migrate() by design, and while the MODIFY is idempotent in
-        // RESULT it is not in COST (potential metadata lock / table copy per
-        // pass on a live table). The cheap probe skips it once applied; the
-        // partner backfill UPDATE below stays unconditional to cover the
-        // MODIFY-succeeded/backfill-failed retry edge.
-        $pathColumn = $wpdb->get_row("SHOW COLUMNS FROM {$table} LIKE 'enrollment_path'");
-        $enumHasPartner = is_object($pathColumn)
-            && str_contains((string) ($pathColumn->Type ?? ''), "'partner'");
+        // The version option doubles as the STEP CURSOR: each step stamps its
+        // own version on completion, so a paused v5 backfill (batch cap /
+        // backoff — a DESIGNED re-entry path) resumes at >= 4 and jumps
+        // straight to its batch loop instead of re-paying every earlier
+        // probe/ALTER on each pass. The per-step probes below stay as
+        // belt-and-braces for pre-cursor installs.
+        $from = (int) get_option(self::SCHEMA_VERSION_OPTION, 1);
 
-        if (!$enumHasPartner) {
-            $altered = $wpdb->query(
-                "ALTER TABLE {$table}
-                MODIFY enrollment_path ENUM('individual','colleague','trajectory','partner') DEFAULT 'individual'",
+        if ($from < 2) {
+            // v2 (audit M-4 / threat-model M7): add 'partner' to enrollment_path.
+            // Purely additive — existing values are untouched. Pre-v2, inserts using
+            // RegistrationRepository::PATH_PARTNER were coerced to '' under
+            // non-strict SQL mode; backfill those rows when they are company-scoped.
+            // Rollback posture: ENUM values can't be dropped while 'partner' rows
+            // exist — rollback is "leave the value in place", which is safe.
+            //
+            // MODIFY guarded via SHOW COLUMNS: idempotent in RESULT but not in
+            // COST (potential metadata lock / table copy per pass on a live
+            // table). The partner backfill UPDATE stays unconditional to cover
+            // the MODIFY-succeeded/backfill-failed retry edge.
+            $pathColumn = $wpdb->get_row("SHOW COLUMNS FROM {$table} LIKE 'enrollment_path'");
+            $enumHasPartner = is_object($pathColumn)
+                && str_contains((string) ($pathColumn->Type ?? ''), "'partner'");
+
+            if (!$enumHasPartner) {
+                $altered = $wpdb->query(
+                    "ALTER TABLE {$table}
+                    MODIFY enrollment_path ENUM('individual','colleague','trajectory','partner') DEFAULT 'individual'",
+                );
+
+                if ($altered === false) {
+                    self::failStep('v2', 'alter_enrollment_path_enum');
+                    return;
+                }
+            }
+
+            // Note: 0 affected rows is int 0, not false — only false signals a DB error.
+            $backfilled = $wpdb->query(
+                "UPDATE {$table}
+                SET enrollment_path = 'partner'
+                WHERE enrollment_path = '' AND company_id IS NOT NULL",
             );
 
-            if ($altered === false) {
-                ntdst_log('enrollment')->error('registrations schema v2 migration failed', [
-                    'step' => 'alter_enrollment_path_enum',
-                    'error' => $wpdb->last_error,
-                ]);
-
-                // Don't stamp the version: retried once the backoff lapses (steps are idempotent).
-                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
-
+            if ($backfilled === false) {
+                self::failStep('v2', 'backfill_partner_path');
                 return;
             }
+
+            update_option(self::SCHEMA_VERSION_OPTION, 2);
         }
 
-        // Note: 0 affected rows is int 0, not false — only false signals a DB error.
-        $backfilled = $wpdb->query(
-            "UPDATE {$table}
-            SET enrollment_path = 'partner'
-            WHERE enrollment_path = '' AND company_id IS NOT NULL",
-        );
-
-        if ($backfilled === false) {
-            ntdst_log('enrollment')->error('registrations schema v2 migration failed', [
-                'step' => 'backfill_partner_path',
-                'error' => $wpdb->last_error,
-            ]);
-
-            set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
-
-            return;
-        }
-
-        // v3 (perf audit #8): add idx_registered_at — the default grid sort has
-        // no index, so every filtered page is a top-N filesort. Purely additive.
-        // Idempotent via the shared ensureRegisteredAtIndex() SHOW INDEX guard:
-        // fresh tables get the index from create() directly and then may still
-        // enter migrate() (option unset on an old install path), and a lapsed-backoff
-        // retry re-enters here — the guard skips the ADD when present, avoiding the
-        // "Duplicate key name" error a bare ADD INDEX would throw.
-        if (!self::ensureRegisteredAtIndex()) {
-            ntdst_log('enrollment')->error('registrations schema v3 migration failed', [
-                'step' => 'add_registered_at_index',
-                'error' => $wpdb->last_error,
-            ]);
-
-            // Don't stamp the version: retried once the backoff lapses (step is idempotent).
-            set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
-
-            return;
-        }
-
-        // v4 (Phase 2 Task 2.1): add reminder_state JSON column, used by later
-        // reminder-send tasks as a per-registration idempotency ledger. Rebased
-        // from v3 to v4 (admin-url-filter-state took v3 for the index). Guarded
-        // via SHOW COLUMNS (same style as exists()'s SHOW TABLES probe) — unlike
-        // the v2 MODIFY above, ADD COLUMN errors if the column already exists, and
-        // the >= guard at the top of this method makes a v3 DB re-enter migrate()
-        // once SCHEMA_VERSION is bumped, so this step must tolerate running again
-        // on an already-v4 table (fresh create() already added the column).
-        $hasReminderStateColumn = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'reminder_state'");
-
-        if ($hasReminderStateColumn === null) {
-            $reminderStateAltered = $wpdb->query("ALTER TABLE {$table} ADD COLUMN reminder_state JSON NULL");
-
-            if ($reminderStateAltered === false) {
-                ntdst_log('enrollment')->error('registrations schema v4 migration failed', [
-                    'step' => 'add_reminder_state_column',
-                    'error' => $wpdb->last_error,
-                ]);
-
-                // Don't stamp the version: retried once the backoff lapses (step is idempotent).
-                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
-
+        if ($from < 3) {
+            // v3 (perf audit #8): add idx_registered_at — the default grid sort has
+            // no index, so every filtered page is a top-N filesort. Purely additive.
+            // Idempotent via the shared ensureRegisteredAtIndex() SHOW INDEX guard.
+            if (!self::ensureRegisteredAtIndex()) {
+                self::failStep('v3', 'add_registered_at_index');
                 return;
             }
+
+            update_option(self::SCHEMA_VERSION_OPTION, 3);
+        }
+
+        if ($from < 4) {
+            // v4 (Phase 2 Task 2.1): add reminder_state JSON column (reminder
+            // idempotency ledger). Guarded via SHOW COLUMNS — ADD COLUMN errors
+            // when the column already exists (fresh create() already added it).
+            $hasReminderStateColumn = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'reminder_state'");
+
+            if ($hasReminderStateColumn === null) {
+                $reminderStateAltered = $wpdb->query("ALTER TABLE {$table} ADD COLUMN reminder_state JSON NULL");
+
+                if ($reminderStateAltered === false) {
+                    self::failStep('v4', 'add_reminder_state_column');
+                    return;
+                }
+            }
+
+            update_option(self::SCHEMA_VERSION_OPTION, 4);
         }
 
         // v5 (F-G3): lead_name/lead_email columns + JSON backfill for existing
@@ -287,13 +276,7 @@ final class RegistrationTable
             );
 
             if ($leadAltered === false) {
-                ntdst_log('enrollment')->error('registrations schema v5 migration failed', [
-                    'step' => 'add_lead_identity_columns',
-                    'error' => $wpdb->last_error,
-                ]);
-
-                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
-
+                self::failStep('v5', 'add_lead_identity_columns');
                 return;
             }
         }
@@ -326,12 +309,7 @@ final class RegistrationTable
             // indistinguishable from a drained corpus — the error signal is
             // last_error, which query() also flushes per call.
             if (!is_array($backfillRows) || $wpdb->last_error !== '') {
-                ntdst_log('enrollment')->error('registrations schema v5 migration failed', [
-                    'step' => 'backfill_lead_identity_select',
-                    'error' => $wpdb->last_error,
-                ]);
-                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
-
+                self::failStep('v5', 'backfill_lead_identity_select');
                 return;
             }
 
@@ -346,13 +324,7 @@ final class RegistrationTable
                 ], ['id' => (int) $row->id]);
 
                 if ($updated === false) {
-                    ntdst_log('enrollment')->error('registrations schema v5 migration failed', [
-                        'step' => 'backfill_lead_identity_update',
-                        'registration_id' => (int) $row->id,
-                        'error' => $wpdb->last_error,
-                    ]);
-                    set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
-
+                    self::failStep('v5', 'backfill_lead_identity_update', ['registration_id' => (int) $row->id]);
                     return;
                 }
             }
@@ -372,6 +344,29 @@ final class RegistrationTable
         } while (count($backfillRows) === 500);
 
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
+    }
+
+    /**
+     * The ONE failure exit for a migrate() step (INV-4): log the DB error on
+     * the enrollment channel and arm the retry backoff. The caller returns
+     * WITHOUT stamping, so the step re-runs once the backoff lapses. Keeping
+     * the message shape ("registrations schema vN migration failed") in one
+     * place means ops greps/alerts keyed on it cannot miss a future step.
+     *
+     * @param string               $version 'v2'..'vN' — the failing schema step.
+     * @param string               $step    Machine-readable step slug for the log context.
+     * @param array<string,mixed>  $context Extra log context (merged after step/error).
+     */
+    private static function failStep(string $version, string $step, array $context = []): void
+    {
+        global $wpdb;
+
+        ntdst_log('enrollment')->error("registrations schema {$version} migration failed", array_merge([
+            'step' => $step,
+            'error' => $wpdb->last_error,
+        ], $context));
+
+        set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
     }
 
     public static function exists(): bool

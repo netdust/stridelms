@@ -65,8 +65,13 @@ final class AdminRegistrationQueryService
         // current filter set MINUS the status filter itself, so the pipeline
         // funnel shows the live distribution under the OTHER active filters
         // (F4 acceptance). Independent of the flat/grouped shape — same key on
-        // both. Existing envelope keys are unchanged.
-        $page['statusCounts'] = $this->statusCounts($params);
+        // both. Existing envelope keys are unchanged. The flat total is passed
+        // so a queue view's single-bar funnel can be derived instead of
+        // re-shipping the whole queue id-set in a second GROUP BY query.
+        $page['statusCounts'] = $this->statusCounts(
+            $params,
+            $groupBy === null ? (int) $page['total'] : null,
+        );
 
         return $page;
     }
@@ -119,6 +124,13 @@ final class AdminRegistrationQueryService
             $params['active_edition_ids'] = ntdst_get(WorklistQueueResolver::class)->activeEditionIds();
         }
 
+        // Trip-wire marker: buildGridFilters warns loudly when it receives a
+        // filter set that never passed through here — the repo API cannot
+        // enforce scope by construction (the resolver DI would cycle), so an
+        // unscoped call from a future surface must at least be a loud log,
+        // never a silent whole-table read (the 2026-07-14 blast-radius class).
+        $params['scope_pins_applied'] = true;
+
         return $params;
     }
 
@@ -129,13 +141,31 @@ final class AdminRegistrationQueryService
      * structured columns through the repo, the status filter dropped there), then
      * zero-fills every RegistrationStatus so each funnel chip always has a number.
      *
-     * @param  array<string,mixed> $params  The grid request params.
+     * QUEUE SHORTCUT: a queue view's funnel is derivable — every queue's
+     * id-set is status-homogeneous (WorklistQueueResolver::statusForQueue,
+     * contract-tested) and the queue clears the status filter, so the GROUP BY
+     * over the pinned ids could only ever return one row equal to the flat
+     * total the page already computed. Deriving it skips re-shipping the
+     * whole queue id-set as an IN() list a second time per interaction.
+     *
+     * @param  array<string,mixed> $params    The grid request params (post-applyScopePins).
+     * @param  int|null            $flatTotal The flat path's total, when known (null in grouped mode).
      * @return array<string,int>  status value => count, all enum cases present.
      */
-    private function statusCounts(array $params): array
+    private function statusCounts(array $params, ?int $flatTotal = null): array
     {
         if (!RegistrationTable::exists()) {
             return $this->zeroStatusCounts();
+        }
+
+        // Only when no status filter composes on top (the funnel drops the
+        // status filter, the flat total would not — a client never sends both,
+        // but the derivation must not silently diverge if one ever does).
+        if ($flatTotal !== null && !empty($params['queue']) && empty($params['status'])) {
+            $queueStatus = WorklistQueueResolver::statusForQueue((string) $params['queue']);
+            if ($queueStatus !== null) {
+                return array_merge($this->zeroStatusCounts(), [$queueStatus => $flatTotal]);
+            }
         }
 
         $breakdown = $this->registrations->statusBreakdown($params);
@@ -267,19 +297,23 @@ final class AdminRegistrationQueryService
             $regId     = (int) $row->id;
 
             $user   = $userId > 0 ? ($users[$userId] ?? null) : null;
-            $isAnon = $userId <= 0;
+            // Anonymous = no resolvable user RECORD, not merely user_id <= 0:
+            // a registration whose WP user was since deleted must fall back to
+            // the lead columns / '(anoniem)' exactly like the roster does —
+            // keying on the id alone rendered those rows with a blank Naam.
+            $isAnon = $user === null;
 
             // Identity. Logged-in rows resolve from the joined user record.
-            // Anonymous interest/waitlist rows (user_id 0/NULL) have no user
-            // record — fall back to the denormalized lead identity columns
-            // (v5), stamped by the SAME extractor the search columns use.
+            // Anonymous rows (no account, or a deleted account) fall back to
+            // the denormalized lead identity columns (v5), stamped by the
+            // SAME extractor the search columns use.
             if ($isAnon) {
                 $identity = $this->resolveAnonymousIdentity($row);
                 $name  = $identity['name'];
                 $email = $identity['email'];
             } else {
-                $name  = $user?->display_name ?? '';
-                $email = $user?->user_email ?? '';
+                $name  = $user->display_name ?? '';
+                $email = $user->user_email ?? '';
             }
 
             // Status
@@ -354,29 +388,22 @@ final class AdminRegistrationQueryService
     }
 
     /**
-     * Resolve the captured name/email for an anonymous (user_id 0/NULL) row
-     * from the denormalized lead_name/lead_email columns (schema v5).
+     * Resolve the captured name/email for an anonymous row from the
+     * denormalized lead_name/lead_email columns (schema v5).
      *
-     * The columns are stamped on every write path AND backfilled by the v5
-     * migration via ONE extractor (RegistrationRepository::extractLeadIdentity),
-     * so this read shares the exact identity definition the grid SEARCH matches
-     * against. The former per-row enrollment_data JSON decode keyed on the
-     * row's CURRENT status, so a lead captured at the interest stage then moved
-     * to waitlist rendered '(anoniem)' while search still found the row by its
-     * backfilled lead_name — a hit with no visible name.
+     * Thin delegate: the '(anoniem)' fallback rule lives ONCE on
+     * RegistrationRepository::presentLeadIdentity (INV-3 — the edition roster
+     * reads the same presenter, so one row can never render two identities
+     * across admin surfaces). The columns are stamped on every write path AND
+     * backfilled via ONE extractor, so this read shares the exact identity
+     * definition the grid SEARCH matches against.
      *
      * @param  object $row  Grid row with ->lead_name / ->lead_email.
      * @return array{name:string,email:string}
      */
     private function resolveAnonymousIdentity(object $row): array
     {
-        $name  = (string) ($row->lead_name ?? '');
-        $email = (string) ($row->lead_email ?? '');
-
-        return [
-            'name'  => $name !== '' ? $name : '(anoniem)',
-            'email' => $email,
-        ];
+        return RegistrationRepository::presentLeadIdentity($row);
     }
 
     // =========================================================================

@@ -134,31 +134,24 @@ test.describe('gridFilterPayload', () => {
 });
 
 /**
- * QUEUE_ROW_STATUS — the queue → single-row-status vocabulary the ARMED
- * cross-page bulk bar reasons with. Every queue's server id-set is
- * status-homogeneous (WorklistQueueResolver::queueStatuses); this table names
- * that one status per queue so the bulk bar can offer the right actions for
- * an armed queue selection. Keys MUST cover exactly the queue vocabulary
- * (the PHP contract test pins the server half).
+ * QUEUE_META — ONE closed-enum table per queue key: the Dutch chip label and
+ * the single row status the ARMED cross-page bulk bar reasons with (every
+ * queue's server id-set is status-homogeneous). Structural assertions only —
+ * the exact per-queue status values are pinned against the LIVE server
+ * predicates by the PHP contract test (WorklistQueueResolverTest), so a
+ * value-by-value copy here would only fail on correct coordinated changes.
  */
-test.describe('QUEUE_ROW_STATUS', () => {
+test.describe('QUEUE_META', () => {
   const QUEUES = ['pending', 'waitlist', 'offerte', 'nocert', 'oldinterest', 'interest_to_invite'];
 
-  test('covers every queue key with a known registration status', () => {
+  test('covers every queue key with a Dutch label and a known registration status', () => {
     const KNOWN_STATUSES = ['pending', 'waitlist', 'confirmed', 'completed', 'interest', 'cancelled'];
-    expect(Object.keys(grid.QUEUE_ROW_STATUS).sort()).toEqual([...QUEUES].sort());
+    expect(Object.keys(grid.QUEUE_META).sort()).toEqual([...QUEUES].sort());
     for (const key of QUEUES) {
-      expect(KNOWN_STATUSES).toContain(grid.QUEUE_ROW_STATUS[key]);
+      expect(typeof grid.QUEUE_META[key].label).toBe('string');
+      expect(grid.QUEUE_META[key].label.length).toBeGreaterThan(0);
+      expect(KNOWN_STATUSES).toContain(grid.QUEUE_META[key].status);
     }
-  });
-
-  test('the queue statuses match the server predicates (offerte=confirmed, nocert=completed)', () => {
-    expect(grid.QUEUE_ROW_STATUS.pending).toBe('pending');
-    expect(grid.QUEUE_ROW_STATUS.waitlist).toBe('waitlist');
-    expect(grid.QUEUE_ROW_STATUS.offerte).toBe('confirmed');
-    expect(grid.QUEUE_ROW_STATUS.nocert).toBe('completed');
-    expect(grid.QUEUE_ROW_STATUS.oldinterest).toBe('interest');
-    expect(grid.QUEUE_ROW_STATUS.interest_to_invite).toBe('interest');
   });
 });
 

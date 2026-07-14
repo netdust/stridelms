@@ -157,18 +157,19 @@ test.describe('applyQueueDeepLink (the URL is the deep-link contract BOTH ways)'
     expect(g.filters.trajectory_id).toBe(5);     // new deep-link absorbed
   });
 
-  test('REGRESSION (mirror both ways): a new ?queue= DROPS a stale trajectory pin', () => {
-    // The reverse of the stale-queue bug: Trajecten's deep-link left
-    // filters.trajectory_id set; clicking a Vandaag card then composed
-    // queue AND trajectory — a subset (or empty grid) for a card that
-    // promised N rows. Deep-link params mirror the URL exactly.
-    const win = fakeWindow('http://x/?view=inschrijvingen&queue=pending');
+  test('a user-picked trajectory FILTER survives a queue deep-link (it is a filter, not a pin)', () => {
+    // trajectory_id is a first-class grid filter (the Traject select) as well
+    // as a deep-link target: unlike ?queue= it must behave like status/
+    // edition/q — surviving view round-trips (the shell no longer deletes it)
+    // and composing VISIBLY (chips) with a newly clicked queue card, never
+    // being silently wiped.
+    const win = fakeWindow('http://x/?view=inschrijvingen&queue=pending&trajectory_id=5');
     const g = makeGrid(win);
-    g.filters.trajectory_id = 5;   // absorbed earlier from Trajecten
+    g.filters.trajectory_id = 5;   // picked in-grid earlier (URL mirrors it)
 
-    expect(g.applyQueueDeepLink()).toBe(true);
+    expect(g.applyQueueDeepLink()).toBe(true);   // the queue absorb changed state
     expect(g.queue).toBe('pending');
-    expect(g.filters.trajectory_id).toBe(0);   // stale pin dropped
+    expect(g.filters.trajectory_id).toBe(5);     // the user's filter survives
   });
 
   test('repeat activation with the SAME queue is a no-op (no reload, no filter stomp)', () => {

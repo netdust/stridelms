@@ -41,11 +41,10 @@ final class LearnDashService extends AbstractService implements LMSAdapterInterf
         // hook lives HERE (not with the other busts in AdminDashboardService)
         // because that service is admin_only while completion fires on
         // frontend page requests and REST calls; this integration service
-        // boots on every request. Mirrors AdminDashboardService's
-        // $invalidateQueue closure.
+        // boots on every request. One shared bust — never a hand-copied
+        // delete_transient list that can drift from the admin-side closure.
         add_action('learndash_course_completed', static function (): void {
-            delete_transient('stride_action_queue');
-            delete_transient(\Stride\Admin\AdminStatsService::STATS_TRANSIENT_KEY);
+            \Stride\Admin\AdminStatsService::bustCaches();
         });
     }
 

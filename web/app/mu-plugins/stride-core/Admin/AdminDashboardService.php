@@ -84,8 +84,7 @@ class AdminDashboardService extends AbstractService
         // not surface delete_transient()'s bool to the action dispatcher (an
         // action callback must return nothing).
         $invalidateQueue = static function (): void {
-            delete_transient('stride_action_queue');
-            delete_transient(\Stride\Admin\AdminStatsService::STATS_TRANSIENT_KEY);
+            \Stride\Admin\AdminStatsService::bustCaches();
         };
         add_action('stride/registration/created', $invalidateQueue);
         add_action('stride/registration/confirmed', $invalidateQueue);

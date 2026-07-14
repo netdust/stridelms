@@ -70,8 +70,10 @@ final class WorklistQueueResolver
     /**
      * The registration status(es) each queue's predicate starts from. Also
      * the client contract for a status-homogeneous armed select-all (grid.js
-     * QUEUE_STATUS mirrors the single status per queue — pinned by the
-     * cross-language contract test).
+     * QUEUE_META's per-key `status` mirrors the single status per queue —
+     * pinned by the cross-language contract test), and the funnel shortcut's
+     * source (AdminRegistrationQueryService::statusCounts derives a queue
+     * view's single-bar funnel from the flat total instead of re-querying).
      *
      * @return array<string, list<string>> queue key => registration statuses.
      */
@@ -85,6 +87,17 @@ final class WorklistQueueResolver
             'oldinterest'        => [RegistrationStatus::Interest->value],
             'interest_to_invite' => [RegistrationStatus::Interest->value],
         ];
+    }
+
+    /**
+     * The single registration status a queue's rows carry, or null for an
+     * unknown key. Public accessor for the status-homogeneity contract
+     * (every queue predicate starts from exactly one status — asserted by
+     * the contract test).
+     */
+    public static function statusForQueue(string $queue): ?string
+    {
+        return self::queueStatuses()[$queue][0] ?? null;
     }
 
     /**
@@ -151,8 +164,6 @@ final class WorklistQueueResolver
             return $this->memo[$memoKey] = $sets;
         }
 
-        $wants = array_fill_keys($queues, true);
-
         $statuses = [];
         foreach ($queues as $queue) {
             foreach (self::queueStatuses()[$queue] as $status) {
@@ -169,16 +180,38 @@ final class WorklistQueueResolver
             return $this->memo[$memoKey] = $sets;
         }
 
+        // Pre-resolve per-edition lookups ONCE per distinct edition (CR-2/CR-3).
+        // Each map is guarded by its consuming queue's presence in $sets: rows
+        // of an unrequested status were never fetched, so the unguarded form
+        // was dead-by-construction — but only after tracing the status-fetch
+        // union; the explicit guard states it.
+        $waitlistEditionIds = [];
+        $completedEditionIds = [];
+        $interestEditionIds = [];
+        foreach ($rows as $row) {
+            $editionId = (int) $row->edition_id;
+            if (isset($sets['waitlist']) && $row->status === RegistrationStatus::Waitlist->value) {
+                $waitlistEditionIds[$editionId] = true;
+            } elseif (isset($sets['nocert']) && $row->status === RegistrationStatus::Completed->value && !empty($row->completed_at)) {
+                $completedEditionIds[$editionId] = true;
+            } elseif (isset($sets['interest_to_invite']) && $row->status === RegistrationStatus::Interest->value) {
+                $interestEditionIds[$editionId] = true;
+            }
+        }
+
         // Effective status per edition (INV-7) — only the waitlist queue's
-        // open-capacity rule reads it.
-        $effectiveStatuses = isset($wants['waitlist'])
-            ? $this->editions->getEffectiveStatuses($activeEditionIds)
+        // open-capacity rule reads it, and only for editions that actually
+        // HOST a waitlist row (typically a handful): resolving it over the
+        // full admin-active set primed posts/meta/terms for hundreds of
+        // editions to answer a question about a few.
+        $effectiveStatuses = !empty($waitlistEditionIds)
+            ? $this->editions->getEffectiveStatuses(array_keys($waitlistEditionIds))
             : [];
 
         // Offerte resolver (the single paid-proxy definition) over confirmed regs.
         $offerteByReg = [];
         $exportedLabel = QuoteStatus::Exported->label();
-        if (isset($wants['offerte'])) {
+        if (isset($sets['offerte'])) {
             $confirmedRegIds = [];
             foreach ($rows as $row) {
                 if ($row->status === RegistrationStatus::Confirmed->value) {
@@ -192,38 +225,20 @@ final class WorklistQueueResolver
                 : [];
         }
 
-        // Pre-resolve per-edition lookups ONCE per distinct edition (CR-2/CR-3).
-        $waitlistEditionIds = [];
-        $completedEditionIds = [];
-        $interestEditionIds = [];
-        foreach ($rows as $row) {
-            $editionId = (int) $row->edition_id;
-            if ($row->status === RegistrationStatus::Waitlist->value) {
-                $waitlistEditionIds[$editionId] = true;
-            } elseif ($row->status === RegistrationStatus::Completed->value && !empty($row->completed_at)) {
-                $completedEditionIds[$editionId] = true;
-            } elseif ($row->status === RegistrationStatus::Interest->value) {
-                $interestEditionIds[$editionId] = true;
-            }
-        }
         $hasSpotsByEdition = [];
-        if (isset($wants['waitlist'])) {
-            foreach (array_keys($waitlistEditionIds) as $editionId) {
-                $hasSpotsByEdition[$editionId] = $this->editions->hasAvailableSpots($editionId);
-            }
+        foreach (array_keys($waitlistEditionIds) as $editionId) {
+            $hasSpotsByEdition[$editionId] = $this->editions->hasAvailableSpots($editionId);
         }
         $courseIdByEdition = [];
-        if (isset($wants['nocert'])) {
-            foreach (array_keys($completedEditionIds) as $editionId) {
-                $courseIdByEdition[$editionId] = $this->editions->getCourseId($editionId) ?? 0;
-            }
+        foreach (array_keys($completedEditionIds) as $editionId) {
+            $courseIdByEdition[$editionId] = $this->editions->getCourseId($editionId) ?? 0;
         }
 
         // interest_to_invite: per-distinct-edition planned-date presence (one
         // batched meta read, owned by the edition repo — INV-3). A dated
         // edition means the formerly dateless interest anchor is now PLANNED.
         $datedByEdition = [];
-        if (isset($wants['interest_to_invite']) && !empty($interestEditionIds)) {
+        if (!empty($interestEditionIds)) {
             $datedByEdition = array_fill_keys(
                 $this->editionRepository->filterIdsWithStartDate(array_keys($interestEditionIds)),
                 true,

@@ -166,6 +166,13 @@ final class BulkRegistrationHandler
         if (is_wp_error($params)) {
             return $params;
         }
+        // Drop select_all so runBulk's chokepoint re-resolve is a no-op: a
+        // SECOND expansion could resolve a slightly different set (a row
+        // entering the filter between the two queries), and any id in the
+        // second set but not in $map below would be falsely failed no_quote.
+        // The single-set guarantee ("the B2 map and runBulk iterate the SAME
+        // expanded ids") only holds when the ids are expanded exactly once.
+        unset($params['select_all']);
 
         $quoteRepo = ntdst_get(QuoteRepository::class);
 

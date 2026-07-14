@@ -43,10 +43,27 @@ final class AdminStatsService
     public const STATS_TRANSIENT_KEY = 'stride_admin_stats';
     private const STATS_TTL = 2 * MINUTE_IN_SECONDS;
 
+    /** Transient key for the cached action-queue items (getActionQueueItems). */
+    public const ACTION_QUEUE_TRANSIENT_KEY = 'stride_action_queue';
+
     public function __construct(
         private readonly ActionQueueService $actionQueue,
         private readonly EditionRepository $editionRepository,
     ) {}
+
+    /**
+     * Bust every cached dashboard read this service owns (stats + action
+     * queue) — THE single bust both hook sites call
+     * (AdminDashboardService::init's write-event closure and
+     * LearnDashService's course-completion hook), so a cache added here is
+     * busted everywhere at once instead of drifting between two hand-copied
+     * delete_transient lists.
+     */
+    public static function bustCaches(): void
+    {
+        delete_transient(self::ACTION_QUEUE_TRANSIENT_KEY);
+        delete_transient(self::STATS_TRANSIENT_KEY);
+    }
 
     // =========================================================================
     // DASHBOARD STATS  (GET /admin/stats)
@@ -488,7 +505,7 @@ final class AdminStatsService
         global $wpdb;
 
         // Check transient cache
-        $cached = get_transient('stride_action_queue');
+        $cached = get_transient(self::ACTION_QUEUE_TRANSIENT_KEY);
         if ($cached !== false) {
             return $cached;
         }
@@ -599,7 +616,7 @@ final class AdminStatsService
 
         $items = $this->actionQueue->evaluate($rules, $data);
 
-        set_transient('stride_action_queue', $items, 5 * MINUTE_IN_SECONDS);
+        set_transient(self::ACTION_QUEUE_TRANSIENT_KEY, $items, 5 * MINUTE_IN_SECONDS);
 
         return $items;
     }

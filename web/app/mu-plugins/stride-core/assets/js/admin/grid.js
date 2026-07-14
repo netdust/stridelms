@@ -84,39 +84,31 @@
   };
 
   /* ---- queue → endpoint params (PURE, Tier-A) ----------------------------
-     The Vandaag deep-link sends a queue KEY and the endpoint now accepts it
+     The Vandaag deep-link sends a queue KEY and the endpoint accepts it
      directly (?queue= → WorklistQueueResolver id-set server-side) — the grid
      shows EXACTLY the rows the card counted, never a lossy status
-     approximation (the old QUEUE_STATUS mapping dropped every predicate
-     except status: "Afgerond zonder certificaat: 3" opened ALL completed
-     rows). QUEUE_META is the closed-enum Dutch chip label per key; an unknown
-     key returns {} — no fabricated param, no leak. */
+     approximation. An unknown key returns {} — no fabricated param, no leak.
+
+     ONE closed-enum table per queue key: the Dutch chip label AND the single
+     registration status every row in that queue's id-set carries (each server
+     predicate is status-homogeneous — WorklistQueueResolver::queueStatuses,
+     pinned by the cross-language contract test). One table, one key-set: a
+     queue added to the label half but not the status half broke the armed
+     bulk bar silently when these were two parallel tables. `status` is NOT a
+     filter approximation (the server pins the real id-set); it only lets an
+     ARMED cross-page selection inside a queue offer the right bulk actions
+     instead of guessing from the visible page (F-G7). */
   const QUEUE_META = {
-    pending:            'Wacht op goedkeuring',
-    waitlist:           'Wachtlijst — plaatsen vrij',
-    offerte:            'Offerte-opvolging',
-    nocert:             'Afgerond zonder certificaat',
-    oldinterest:        'Oude interesse',
-    interest_to_invite: 'Interesse — editie nu gepland',
+    pending:            { label: 'Wacht op goedkeuring',          status: 'pending' },
+    waitlist:           { label: 'Wachtlijst — plaatsen vrij',    status: 'waitlist' },
+    offerte:            { label: 'Offerte-opvolging',             status: 'confirmed' },
+    nocert:             { label: 'Afgerond zonder certificaat',   status: 'completed' },
+    oldinterest:        { label: 'Oude interesse',                status: 'interest' },
+    interest_to_invite: { label: 'Interesse — editie nu gepland', status: 'interest' },
   };
   function queueToParams(queueKey) {
     return QUEUE_META[queueKey] ? { queue: queueKey } : {};
   }
-
-  /* Every queue's id-set is status-HOMOGENEOUS: each predicate starts from
-     exactly one registration status (WorklistQueueResolver::queueStatuses —
-     pinned by the cross-language contract test). This map is NOT a filter
-     approximation (the server pins the real id-set); it only names that one
-     status so an ARMED cross-page selection inside a queue can offer the
-     right bulk actions instead of guessing from the visible page (F-G7). */
-  const QUEUE_ROW_STATUS = {
-    pending:            'pending',
-    waitlist:           'waitlist',
-    offerte:            'confirmed',
-    nocert:             'completed',
-    oldinterest:        'interest',
-    interest_to_invite: 'interest',
-  };
 
   /* ---- offerte LABEL → CSS modifier key (PURE, Tier-A) -------------------
      INV-7: the label is rendered AS RECEIVED elsewhere; this maps it to a
@@ -392,7 +384,10 @@
         window.WS.lazyLoad(this, 'inschrijvingen', () => {
           this.loadEditionOptions();
           this.loadTrajectoryOptions();
-          this.load(1);
+          // No page arg: load(1) would stomp the ?p= restored by
+          // hydrateStateFromUrl — a bookmarked page-3 view must land on
+          // page 3, not silently reset (and rewrite the URL) to page 1.
+          this.load();
         });
 
         // The lazyLoad latch fires its callback ONCE. But a queue deep-link from
@@ -452,22 +447,18 @@
           }
         }
 
-        // Trajectory deep-link ("Toon inschrijvingen" on a trajectory) — same
-        // MIRROR-the-URL contract as ?queue=, BOTH ways: absorb it on every
-        // arrival (the 2nd+ jump also filters, F-T1/F-G9) AND drop a stale pin
-        // when the URL no longer carries it (the shell deletes ?trajectory_id=
-        // on every switchView). Keeping it composed a lingering trajectory
-        // with a newly clicked queue card — a subset or "Geen resultaten" for
-        // a card that promised N rows (the same intersection bug as the stale
-        // queue, in the other direction).
+        // Trajectory deep-link ("Toon inschrijvingen" on a trajectory):
+        // ABSORB-only. Unlike ?queue= (deep-link-owned — mirrored from the
+        // URL both ways), trajectory_id is ALSO a first-class grid filter
+        // (the Traject select), so it behaves like status/edition/q: it
+        // survives view round-trips until its chip is cleared, and the shell
+        // no longer deletes it on switchView. A NEW deep-link target simply
+        // overwrites it (the 2nd+ jump also filters, F-T1/F-G9); composing
+        // visibly with a queue chip is the same admin-visible composition as
+        // any other filter under a queue.
         const trajectoryId = parseInt(p.get('trajectory_id') || '', 10);
-        if (Number.isFinite(trajectoryId) && trajectoryId > 0) {
-          if (this.filters.trajectory_id !== trajectoryId) {
-            this.filters.trajectory_id = trajectoryId;
-            changed = true;
-          }
-        } else if (this.filters.trajectory_id) {
-          this.filters.trajectory_id = 0;
+        if (Number.isFinite(trajectoryId) && trajectoryId > 0 && this.filters.trajectory_id !== trajectoryId) {
+          this.filters.trajectory_id = trajectoryId;
           changed = true;
         }
 
@@ -648,7 +639,11 @@
       /* re-fetch helpers bound by the markup */
       reload() { this.load(1); },
       onFilterChange() { this.clearSelection(); this.load(1); },
-      onSearchChange() { this.load(1); },
+      // Search changes the filtered set — an ARMED cross-page select-all (or
+      // a manual selection) must not silently re-target to the new set, same
+      // discipline as onFilterChange (the armed payload is built at submit
+      // time from live state).
+      onSearchChange() { this.clearSelection(); this.load(1); },
       onGroupChange() { this.collapsed = {}; this.clearSelection(); this.load(1); },
       goPage(p) { if (p >= 1 && p <= this.pageCount && p !== this.page) this.load(p); },
       onPerPageChange() { this.load(1); },
@@ -678,7 +673,7 @@
       get activeChips() {
         const out = [];
         const f = this.filters;
-        if (this.queue && QUEUE_META[this.queue]) out.push({ k: 'queue', label: 'Wachtrij: ' + QUEUE_META[this.queue] });
+        if (this.queue && QUEUE_META[this.queue]) out.push({ k: 'queue', label: 'Wachtrij: ' + QUEUE_META[this.queue].label });
         if (f.status && STATUS_META[f.status]) out.push({ k: 'status', label: 'Status: ' + STATUS_META[f.status].label });
         if (f.edition_id) {
           const ed = this.editionOptions.find((e) => String(e.id) === String(f.edition_id));
@@ -847,7 +842,7 @@
         // it offers NO action rather than one that lies about its blast radius.
         if (this.selectAllFilter) {
           if (this.filters.status) return [this.filters.status];
-          if (this.queue && QUEUE_ROW_STATUS[this.queue]) return [QUEUE_ROW_STATUS[this.queue]];
+          if (this.queue && QUEUE_META[this.queue]) return [QUEUE_META[this.queue].status];
           return [];
         }
         // Manual selection: statuses stamped at SELECT time.
@@ -942,7 +937,15 @@
         const next = {};
         failIds.forEach((id) => { next[id] = true; });
         this.selected = next;
+        this.selectedStatusById = {};
         this.selectAllFilter = false;
+        // Re-stamp the statuses of the retry selection from the (re-loaded)
+        // visible rows — without stamps selectedStates is empty and the bulk
+        // bar offers NO action for the very rows it invites the user to
+        // retry. Off-page failed rows stay unstamped (their status is
+        // unknown client-side); the bar then honestly narrows to the
+        // stamped subset's shared actions.
+        failIds.forEach((id) => this.stampStatus(id));
         this.result = null;
       },
 
@@ -994,6 +997,6 @@
     actionsForStates,
     avatarColor,
     initials,
-    QUEUE_ROW_STATUS,
+    QUEUE_META,
   };
 });

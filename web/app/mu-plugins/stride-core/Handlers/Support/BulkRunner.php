@@ -96,6 +96,14 @@ trait BulkRunner
 
         $filter = is_array($params['filter'] ?? null) ? $params['filter'] : [];
 
+        // The id-set pin keys are SERVER vocabulary (applyScopePins output) —
+        // a client filter carrying them (stale/buggy/crafted payload) would
+        // both bypass the default scope injection (applyScopePins skips when
+        // queue_ids is present) and pin the expansion to arbitrary ids the
+        // grid never showed. Strip them so the pins can only ever be the
+        // server's own resolution of the client's queue/scope keys.
+        unset($filter['queue_ids'], $filter['active_edition_ids']);
+
         $scoped = ntdst_get(\Stride\Admin\AdminRegistrationQueryService::class)->applyScopePins($filter);
         if (is_wp_error($scoped)) {
             return $scoped;
