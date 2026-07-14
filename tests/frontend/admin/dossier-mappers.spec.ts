@@ -129,6 +129,44 @@ test.describe('timelineForReg', () => {
   });
 });
 
+test.describe('timelineForReg — server-stamped attribution (F-D7)', () => {
+  const regA = { id: 103, edition_id: 512 };
+  const regB = { id: 211, edition_id: 777 };
+
+  test('a stamped registration_id wins outright — even over a misleading target_url', () => {
+    // A quote event: its target_url carries the QUOTE post id (9999), which is
+    // exactly why URL parsing was unreliable. The stamped registration_id
+    // attributes it correctly.
+    const ev = {
+      id: 10, type: 'quote', text: 'Offerte aangemaakt', actor_name: 'X',
+      timestamp: 1748332800, target_url: 'https://x/wp/wp-admin/post.php?post=9999&action=edit',
+      registration_id: 103, edition_id: 0,
+    };
+    expect(dossier.timelineForReg([ev], regA).map((e: any) => e.id)).toEqual([10]);
+    expect(dossier.timelineForReg([ev], regB)).toEqual([]);
+  });
+
+  test('a stamped edition_id is preferred over the target_url parse', () => {
+    // completion event: URL carries the COURSE id, edition_id stamped = 777.
+    const ev = {
+      id: 11, type: 'completion', text: 'Afgerond', actor_name: 'X',
+      timestamp: 1748332800, target_url: 'https://x/wp/wp-admin/post.php?post=42&action=edit',
+      registration_id: 0, edition_id: 777,
+    };
+    expect(dossier.timelineForReg([ev], regB).map((e: any) => e.id)).toEqual([11]);
+    expect(dossier.timelineForReg([ev], regA)).toEqual([]);
+  });
+
+  test('legacy rows without stamps still fall back to the target_url parse', () => {
+    const ev = {
+      id: 12, type: 'enrollment', text: 'Legacy', actor_name: 'X',
+      timestamp: 1748332800, target_url: 'https://x/wp/wp-admin/post.php?post=512&action=edit',
+    };
+    expect(dossier.timelineForReg([ev], regA).map((e: any) => e.id)).toEqual([12]);
+    expect(dossier.timelineForReg([ev], regB)).toEqual([]);
+  });
+});
+
 test.describe('showsFulfillment', () => {
   test('showsFulfillment: only pending/confirmed/completed', () => {
     expect(['pending', 'confirmed', 'completed'].map(dossier.showsFulfillment)).toEqual([true, true, true]);

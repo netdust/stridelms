@@ -487,19 +487,22 @@ final class AdminUserService
             // Three match patterns for "this person's timeline":
             //   1. actor_id = U                          — things U did
             //   2. entity_type='user' AND entity_id = U  — user.* events about U
-            //   3. entity_type='registration' AND subject_user_id = U
-            //      — registration-scoped lifecycle events (created/confirmed/
-            //        cancelled/waitlisted, attendance.marked_*) whose
-            //        context.user_id is U. subject_user_id is the STORED
-            //        generated column over context.user_id (ntdst-audit schema
-            //        v2) — indexable AND an EXACT per-user match, so a
-            //        registration event for a DIFFERENT user can never leak
-            //        onto U's timeline (the cross-user-leak guard).
+            //   3. subject_user_id = U — ANY event whose context.user_id is U.
+            //      subject_user_id is the STORED generated column over
+            //      context.user_id (ntdst-audit schema v2) — indexable AND an
+            //      EXACT per-user match, so an event for a DIFFERENT user can
+            //      never leak onto U's timeline (the cross-user-leak guard).
+            //      Previously restricted to entity_type='registration', which
+            //      silently dropped attendance.marked_* (entity=attendance,
+            //      marked BY an admin), quote.created (entity=quote) and
+            //      completion events from the dossier — the "quote/attendance
+            //      events invisible" half of F-D7. mail.sent deliberately
+            //      records no context.user_id (audit H-4), so it stays out.
             $auditTrailTotal = (int) $wpdb->get_var($wpdb->prepare(
                 "SELECT COUNT(*) FROM {$auditTable}
                  WHERE actor_id = %d
                     OR (entity_type = 'user' AND entity_id = %d)
-                    OR (entity_type = 'registration' AND subject_user_id = %d)",
+                    OR subject_user_id = %d",
                 $userId,
                 $userId,
                 $userId,
@@ -509,7 +512,7 @@ final class AdminUserService
                 "SELECT * FROM {$auditTable}
                  WHERE actor_id = %d
                     OR (entity_type = 'user' AND entity_id = %d)
-                    OR (entity_type = 'registration' AND subject_user_id = %d)
+                    OR subject_user_id = %d
                  ORDER BY created_at DESC
                  LIMIT 50",
                 $userId,
@@ -548,6 +551,28 @@ final class AdminUserService
 
                 $auditTrail[] = AdminActivityMapper::fromAuditEntry($entry, $actorName, $targetName);
             }
+
+            // Collapse bursts of identical lines. usermeta.updated is recorded
+            // PER meta key — one profile save yields ~10 identical
+            // "Profielgegevens bijgewerkt" lines that pushed real lifecycle
+            // events out of the visible window (F-D10). Entries are DESC-
+            // ordered; keep the newest of each burst (same text + actor
+            // within 5 minutes).
+            $collapsed = [];
+            $prev = null;
+            foreach ($auditTrail as $item) {
+                if ($prev !== null
+                    && $prev['text'] === $item['text']
+                    && $prev['actor_name'] === $item['actor_name']
+                    && abs($prev['timestamp'] - $item['timestamp']) <= 300
+                ) {
+                    $prev = $item;
+                    continue;
+                }
+                $collapsed[] = $item;
+                $prev = $item;
+            }
+            $auditTrail = $collapsed;
         }
 
         return new WP_REST_Response([

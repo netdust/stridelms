@@ -49,6 +49,8 @@ final class AuditBridge extends AbstractService
         add_action('stride/voucher/released', [$this, 'onVoucherReleased']);
 
         // Quote events
+        add_action('stride/quote/created', [$this, 'onQuoteCreated']);
+        add_action('stride/quote/sent', [$this, 'onQuoteSent']);
         add_action('stride/quote/cancelled', [$this, 'onQuoteCancelled']);
         add_action('stride/quote/send_email', [$this, 'onQuoteEmailSent'], 10, 3);
         add_action('stride/quote/regenerate_pdf', [$this, 'onQuotePdfRegenerated'], 10, 1);
@@ -323,6 +325,38 @@ final class AuditBridge extends AbstractService
     }
 
     // === Quote ===
+
+    public function onQuoteCreated(array $data): void
+    {
+        // These two actions were mapped + queried (AdminActivityMapper,
+        // AdminActivityService::getNotifications, health checks) but never
+        // RECORDED — the bridge listened only to cancelled/email/pdf events,
+        // so every consumer keyed on quote.created/sent matched zero rows
+        // forever (F-D9). registration_id/edition_id ride along so the
+        // dossier timeline can attribute the event to the right registration.
+        $this->auditService->record(
+            'quote',
+            (int) ($data['quote_id'] ?? 0),
+            'quote.created',
+            null,
+            [
+                'user_id' => $data['user_id'] ?? null,
+                'registration_id' => $data['registration_id'] ?? null,
+                'edition_id' => $data['edition_id'] ?? null,
+            ],
+        );
+    }
+
+    public function onQuoteSent(array $data): void
+    {
+        $this->auditService->record(
+            'quote',
+            (int) ($data['quote_id'] ?? 0),
+            'quote.sent',
+            null,
+            [],
+        );
+    }
 
     public function onQuoteCancelled(array $data): void
     {

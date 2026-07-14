@@ -242,12 +242,16 @@
   /* ======================================================================
      MAPPER 2 (Tier A) — per-registration timeline filter
      ----------------------------------------------------------------------
-     The emitted audit entry carries NO top-level edition_id/registration_id;
-     D.1 surfaces the edition ONLY via target_url (post.php?post={editionId}).
-     So we attribute an event to a registration by the edition id parsed from
-     its target_url, matched against reg.edition_id. Events with no resolvable
-     edition (auth, user, edition-management) are reg-agnostic and show for
-     EVERY reg. Returns mapped timeline-event shape (not raw entries).
+     Attribution order (F-D7):
+       1. the server-stamped `registration_id` (registration-scoped events
+          store entity_id = registration id; quote/trajectory events carry it
+          in context) — an exact match, wins outright;
+       2. the server-stamped `edition_id` (attendance/completion events),
+          falling back to parsing target_url for LEGACY rows recorded before
+          the stamp existed — URL parsing alone was structurally unreliable
+          (quote URLs carry quote ids, completion URLs course ids);
+       3. neither → reg-agnostic (auth/user/edition-management) → shows for
+          EVERY reg. Returns mapped timeline-event shape (not raw entries).
      ====================================================================== */
   function editionIdFromUrl(url) {
     const m = /[?&]post=(\d+)/.exec(String(url || ''));
@@ -255,12 +259,14 @@
   }
   function timelineForReg(events, reg) {
     if (!Array.isArray(events) || !reg) return [];
+    const regId = Number(reg.id) || 0;
     const editionId = Number(reg.edition_id) || 0;
     return events
       .filter((e) => {
-        const evEdition = editionIdFromUrl(e && e.target_url);
-        // reg-agnostic event (no edition) shows for every reg; otherwise it must
-        // match THIS reg's edition (the scoping/denial branch).
+        const ev = e || {};
+        const evReg = Number(ev.registration_id) || 0;
+        if (evReg) return evReg === regId;
+        const evEdition = Number(ev.edition_id) || editionIdFromUrl(ev.target_url);
         return evEdition === 0 || evEdition === editionId;
       })
       .map(auditToTimelineEvent);
