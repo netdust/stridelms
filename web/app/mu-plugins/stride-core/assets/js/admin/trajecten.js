@@ -68,20 +68,33 @@
      here (the API's statusLabel wins, INV-7); this maps only the closed status
      value to a CSS hue class. An unknown status falls back to the neutral
      slate ('completed') class — never a crash, never raw passthrough. */
+  /* Two REAL vocabularies (F-T2/F-T3 — the old table knew a fictional
+     'closed' and a fictional 'active', and missed the most common actual
+     values, so confirmed/waitlist roster rows and in_progress trajectories
+     all fell through to the neutral slate):
+       - trajectory statuses = the nine OfferingStatus values, hues mirroring
+         edities.js STATUS_META (same status, same hue across surfaces);
+       - registration statuses = the six RegistrationStatus values, hues
+         mirroring grid.js STATUS_META.
+     Where the two domains share a value (completed, cancelled) the hue is
+     identical, so one flat map is safe. */
   const STATUS_BADGE = {
-    // trajectory statuses (the list + detail header badge)
-    draft: 'completed',
+    // trajectory (OfferingStatus) — the list + detail header badge
+    draft: 'cancelled',
+    announcement: 'waitlist',
     open: 'confirmed',
-    full: 'waitlist',
-    closed: 'pending',
+    full: 'pending',
+    in_progress: 'interest',
+    postponed: 'waitlist',
     archived: 'cancelled',
-    // registration statuses (the roster row badge — I-1: these were missing, so
-    // every roster badge fell through to the neutral slate hue regardless of
-    // the actual enrolment state). Distinct keys, so the two domains coexist.
-    active: 'confirmed',
+    // registration (RegistrationStatus) — the roster row badge
+    interest: 'interest',
+    waitlist: 'waitlist',
+    pending: 'pending',
+    confirmed: 'confirmed',
+    // shared values, same hue in both domains
     completed: 'completed',
     cancelled: 'cancelled',
-    pending: 'pending',
   };
   function badgeClass(status) {
     return STATUS_BADGE[status] || 'completed';
@@ -139,6 +152,8 @@
       // list state
       rows: [],
       total: 0,
+      page: 1,
+      totalPages: 1,
       loading: true,
       error: '',
 
@@ -173,7 +188,9 @@
       loadList() {
         this.loading = true;
         this.error = '';
-        const params = new URLSearchParams({ per_page: '50' });
+        // Server-paged (F-T4): the old client hard-capped at the first 50
+        // with no pager, so trajecten past 50 were unreachable.
+        const params = new URLSearchParams({ per_page: '50', page: String(this.page) });
         if (this.scope === 'active') params.set('scope', 'active');
         if (this.statusFilter) params.set('status', this.statusFilter);
         if (this.q.trim()) params.set('search', this.q.trim());
@@ -181,6 +198,7 @@
           .then((data) => {
             this.rows = window.WS.mapTrajectories(data);
             this.total = Number(data && data.total) || this.rows.length;
+            this.totalPages = Math.max(1, Number(data && data.totalPages) || 1);
           })
           .catch(() => {
             this.error = 'Kon de trajecten niet laden.';
@@ -189,10 +207,23 @@
           .finally(() => { this.loading = false; });
       },
 
-      onFilterChange() { this.loadList(); },
+      /* Filter/scope changes restart at page 1 — a page pointer past the new
+         result set would render a misleading empty list. */
+      onFilterChange() {
+        this.page = 1;
+        this.loadList();
+      },
 
       toggleScope() {
         this.scope = (this.scope === 'active' ? 'all' : 'active');
+        this.page = 1;
+        this.loadList();
+      },
+
+      goPage(delta) {
+        const next = this.page + delta;
+        if (next < 1 || next > this.totalPages) return;
+        this.page = next;
         this.loadList();
       },
 

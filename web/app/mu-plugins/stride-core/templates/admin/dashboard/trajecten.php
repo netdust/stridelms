@@ -39,6 +39,7 @@ defined('ABSPATH') || exit;
          x-show="view === 'trajecten'"
          x-data="trajecten()"
          @ws-refresh.window="if ($event.detail && $event.detail.view === 'trajecten') loadList()"
+         @keydown.escape.window="(detail || detailLoading || detailError) && closeDetail()"
          x-cloak>
     <div class="ws-stagger">
 
@@ -65,11 +66,14 @@ defined('ABSPATH') || exit;
                 <?php echo esc_html__('Status', 'stride'); ?>
                 <select class="ws-select" x-model="statusFilter" @change="onFilterChange()">
                     <option value=""><?php echo esc_html__('Alle statussen', 'stride'); ?></option>
-                    <option value="draft"><?php echo esc_html__('Concept', 'stride'); ?></option>
-                    <option value="open"><?php echo esc_html__('Open', 'stride'); ?></option>
-                    <option value="full"><?php echo esc_html__('Volzet', 'stride'); ?></option>
-                    <option value="closed"><?php echo esc_html__('Afgesloten', 'stride'); ?></option>
-                    <option value="archived"><?php echo esc_html__('Gearchiveerd', 'stride'); ?></option>
+                    <?php
+                    // The REAL trajectory vocabulary (F-T2): trajectories carry
+                    // OfferingStatus values; the old hardcoded list offered a
+                    // nonexistent 'closed' (matched nothing) and omitted
+                    // in_progress/cancelled/completed entirely.
+                    foreach (\Stride\Domain\OfferingStatus::cases() as $offeringStatus) : ?>
+                        <option value="<?php echo esc_attr($offeringStatus->value); ?>"><?php echo esc_html($offeringStatus->label()); ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
 
@@ -149,6 +153,20 @@ defined('ABSPATH') || exit;
                 <div class="ws-empty__icon" x-html="icon('route')"></div>
                 <h3><?php echo esc_html__('Geen actieve trajecten', 'stride'); ?></h3>
                 <p><?php echo esc_html__('Pas de zoekterm, status of het bereik aan.', 'stride'); ?></p>
+            </div>
+
+            <!-- pager (F-T4: the list was hard-capped at the first 50 with no way to reach the rest) -->
+            <div class="ws-traj-pager" x-show="!loading && !error && totalPages > 1"
+                 style="display:flex;align-items:center;justify-content:flex-end;gap:var(--ws-3);padding:var(--ws-3) var(--ws-5);border-top:1px solid var(--ws-border)">
+                <button class="ws-btn ws-btn--ghost" :disabled="page <= 1" @click="goPage(-1)">
+                    ‹ <?php echo esc_html__('Vorige', 'stride'); ?>
+                </button>
+                <span class="ws-muted" style="font-size:var(--ws-fs-sm)">
+                    <?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="totalPages"></b>
+                </span>
+                <button class="ws-btn ws-btn--ghost" :disabled="page >= totalPages" @click="goPage(1)">
+                    <?php echo esc_html__('Volgende', 'stride'); ?> ›
+                </button>
             </div>
         </div>
     </div>
@@ -249,11 +267,17 @@ defined('ABSPATH') || exit;
                             </div>
 
                             <!-- ENROLLED DEELNEMERS (roster) -->
-                            <div class="ws-section-title"><span x-html="icon('users')"></span> <?php echo esc_html__('Ingeschreven deelnemers', 'stride'); ?> <span class="ws-grouphead__count" x-text="(detail.registrations || []).length"></span><span class="ws-section-title__line"></span></div>
+                            <!-- Count = the REAL participant total (enrolledCount), not the
+                                 clamped roster length; when the roster is clipped at 50 the
+                                 note says so instead of silently under-reporting (F-T4). -->
+                            <div class="ws-section-title"><span x-html="icon('users')"></span> <?php echo esc_html__('Ingeschreven deelnemers', 'stride'); ?> <span class="ws-grouphead__count" x-text="detail.enrolledCount"></span><span class="ws-section-title__line"></span></div>
+                            <p class="ws-muted" style="margin:calc(-1 * var(--ws-2)) 0 var(--ws-3);font-size:var(--ws-fs-sm)"
+                               x-show="detail.enrolledCount > (detail.registrations || []).length"
+                               x-text="'<?php echo esc_js(__('De', 'stride')); ?> ' + (detail.registrations || []).length + ' <?php echo esc_js(__('recentste worden getoond.', 'stride')); ?>'"></p>
 
                             <template x-if="detail.registrations && detail.registrations.length">
                                 <div class="ws-traj-roster">
-                                    <template x-for="r in detail.registrations" :key="r.id">
+                                    <template x-for="r in detail.registrations" :key="r.regId">
                                         <button class="ws-traj-rosteritem" @click="openPerson(r)">
                                             <div class="ws-traj-rosteritem__body">
                                                 <div class="ws-traj-rosteritem__name" x-text="r.name"></div>

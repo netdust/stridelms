@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
+use Stride\Domain\OfferingStatus;
+use Stride\Domain\RegistrationStatus;
 use Stride\Domain\TrajectoryMode;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Edition\EditionCPT;
@@ -84,14 +86,18 @@ final class AdminTrajectoryService
 
         // CR-3: server-side active-scope so the active subset spans ALL pages,
         // not just the loaded one (a client-side filter over a server-paged
-        // list hid active trajectories on pages 2+). 'active' excludes the
-        // terminal statuses; a trajectory with NO _ntdst_status row counts as
-        // active (NOT terminal) — match how the tab treats an unset status.
+        // list hid active trajectories on pages 2+). 'active' = NOT
+        // admin-closed (F-T2): the SAME boundary the edition workspace scope
+        // uses (OfferingStatus::adminClosedValues — completed/archived;
+        // cancelled stays visible because it still carries cleanup work). The
+        // old hand-rolled list excluded a nonexistent 'closed' status, so
+        // completed/cancelled trajectories counted as active. A trajectory
+        // with NO _ntdst_status row counts as active (NOT closed).
         if ($scope === 'active') {
-            $terminal = ['closed', 'archived'];
-            $placeholders = implode(',', array_fill(0, count($terminal), '%s'));
+            $closed = OfferingStatus::adminClosedValues();
+            $placeholders = implode(',', array_fill(0, count($closed), '%s'));
             $where[] = "NOT EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_scope WHERE pm_scope.post_id = p.ID AND pm_scope.meta_key = '_ntdst_status' AND pm_scope.meta_value IN ({$placeholders}))";
-            array_push($params, ...$terminal);
+            array_push($params, ...$closed);
         }
 
         $whereClause = implode(' AND ', $where);
@@ -274,29 +280,35 @@ final class AdminTrajectoryService
         foreach ($trajectoryEnrollments as $enrollment) {
             $userId = (int) $enrollment->user_id;
             $user = $context['users'][$userId] ?? null;
-            if ($user) {
-                $enrolledUsers[] = [
-                    'id' => $userId,
-                    'name' => $user->display_name,
-                    'email' => $user->user_email,
-                    'status' => $enrollment->status,
-                    'enrolledAt' => $enrollment->registered_at,
-                ];
-            }
+
+            // A deleted WP account must not silently DROP the row (F-T4 —
+            // enrolledCount then exceeded the rendered roster with no hint).
+            // Identity falls back through THE one presenter, like the grid
+            // and the edition roster (lead-identity invariant 2).
+            $identity = $user
+                ? ['name' => $user->display_name, 'email' => $user->user_email]
+                : RegistrationRepository::presentLeadIdentity($enrollment);
+
+            $enrolledUsers[] = [
+                // regId is the stable row key (deleted accounts share id 0).
+                'regId' => (int) $enrollment->id,
+                'id' => $user ? $userId : 0,
+                'name' => $identity['name'],
+                'email' => $identity['email'],
+                'status' => $enrollment->status,
+                'enrolledAt' => $enrollment->registered_at,
+            ];
         }
 
         // Get description from already fetched post_content
         $description = $trajectory->post_content;
 
-        // Get status label
-        $statusLabel = match ($trajectoryStatus) {
-            'open' => 'Open',
-            'closed' => 'Gesloten',
-            'full' => 'Volzet',
-            'archived' => 'Gearchiveerd',
-            'draft' => 'Concept',
-            default => ucfirst($trajectoryStatus ?: 'draft'),
-        };
+        // Status label from THE enum (F-T2): trajectories carry OfferingStatus
+        // values; the old hand-rolled map knew a nonexistent 'closed', missed
+        // the real in_progress/cancelled/completed/announcement/postponed
+        // (rendered as ucfirst'd English slugs), and disagreed with the filter
+        // dropdown's wording. Meta-less/unknown → Concept, like everywhere else.
+        $statusLabel = (OfferingStatus::tryFrom($trajectoryStatus) ?? OfferingStatus::Draft)->label();
 
         // Get mode label
         $modeLabel = match ($mode) {
@@ -318,10 +330,15 @@ final class AdminTrajectoryService
             'courseCount' => $courseCount,
             'courses' => $coursesWithDetails,
             'enrolledUsers' => $enrolledUsers,
+            // Trajectory price meta is canonical CENTS (TrajectoryAdminController
+            // save + seed builders both write cents; the theme divides by 100).
+            // Formatting them as euros overstated every price 100× (F-T4:
+            // €1.695 rendered "169.500,00") — latent until a template renders
+            // these keys, but the payload must be truthful.
             'price' => $price,
-            'priceFormatted' => number_format($price, 2, ',', '.'),
+            'priceFormatted' => number_format($price / 100, 2, ',', '.'),
             'priceNonMember' => $priceNonMember,
-            'priceNonMemberFormatted' => number_format($priceNonMember, 2, ',', '.'),
+            'priceNonMemberFormatted' => number_format($priceNonMember / 100, 2, ',', '.'),
             'enrollmentDeadline' => $enrollmentDeadline ?: null,
             'choiceAvailableDate' => $choiceAvailableDate ?: null,
             'choiceDeadline' => $choiceDeadline ?: null,
@@ -562,17 +579,19 @@ final class AdminTrajectoryService
         ]);
 
         // Remap enrolledUsers to registrations for the slide-over template.
-        $regStatusLabels = [
-            'active' => 'Actief', 'completed' => 'Afgerond',
-            'cancelled' => 'Geannuleerd', 'pending' => 'In afwachting',
-        ];
-        $registrations = array_map(function (array $u) use ($regStatusLabels) {
+        // Labels come from THE enum (F-T3): the old hand-rolled map was keyed
+        // on a nonexistent 'active' status and rendered the most common real
+        // statuses (confirmed, waitlist, interest) as ucfirst'd English.
+        $registrations = array_map(static function (array $u) {
+            $status = RegistrationStatus::tryFrom((string) ($u['status'] ?? ''));
+
             return [
+                'regId' => $u['regId'],
                 'id' => $u['id'],
                 'name' => $u['name'],
                 'email' => $u['email'],
                 'status' => $u['status'],
-                'status_label' => $regStatusLabels[$u['status']] ?? ucfirst($u['status'] ?? ''),
+                'status_label' => $status ? $status->label() : __('Onbekend', 'stride'),
             ];
         }, $item['enrolledUsers'] ?? []);
 

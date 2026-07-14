@@ -90,10 +90,13 @@ final class TrajectoryRepository extends AbstractRepository
      *
      * - Base predicate: published trajectories of POST_TYPE.
      * - $q → server-side title LIKE, bound + esc_like (never interpolated, M4).
-     * - $activeOnly (scope=active) → EXISTS subquery restricting to the
-     *   non-terminal ACTIVE_STATUSES (this class' single source of truth, so the
-     *   typeahead and findActive never drift). No date carve-out — trajectories
-     *   have no dates. The status meta key is built from getMetaPrefix() (D1).
+     * - $activeOnly (scope=active) → NOT EXISTS subquery excluding the
+     *   ADMIN-closed statuses (OfferingStatus::adminClosedValues — the same
+     *   boundary the Trajecten list scope and the edition workspace scope
+     *   use, F-T2). Meta-less trajectories pass, like the list scope. The
+     *   PUBLIC catalog keeps its own definition (ACTIVE_STATUSES/findActive).
+     *   No date carve-out — trajectories have no dates. The status meta key
+     *   is built from getMetaPrefix() (D1).
      *
      * @return array{0: string, 1: list<mixed>}
      */
@@ -110,13 +113,21 @@ final class TrajectoryRepository extends AbstractRepository
         }
 
         if ($activeOnly) {
+            // ADMIN-active (F-T2): NOT admin-closed — the SAME boundary the
+            // Trajecten list scope and the edition workspace scope use
+            // (OfferingStatus::adminClosedValues). The old EXISTS ... IN
+            // (ACTIVE_STATUSES) was a third active-definition: it dropped
+            // meta-less trajectories (which the list scope keeps) and hid
+            // cancelled trajectories whose registrations still need cleanup.
+            // ACTIVE_STATUSES stays the PUBLIC catalog definition (findActive).
             $statusKey          = $this->getMetaPrefix() . 'status';
-            $statusPlaceholders = implode(',', array_fill(0, count(self::ACTIVE_STATUSES), '%s'));
-            $where[]            = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status
+            $closed             = OfferingStatus::adminClosedValues();
+            $statusPlaceholders = implode(',', array_fill(0, count($closed), '%s'));
+            $where[]            = "NOT EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status
                 WHERE pm_status.post_id = p.ID
                 AND pm_status.meta_key = '{$statusKey}'
                 AND pm_status.meta_value IN ({$statusPlaceholders}))";
-            foreach (self::ACTIVE_STATUSES as $st) {
+            foreach ($closed as $st) {
                 $params[] = $st;
             }
         }

@@ -1132,11 +1132,16 @@ final class RegistrationRepository
         $ids = array_map('intval', $trajectoryIds);
         $placeholders = implode(',', array_fill(0, count($ids), '%d'));
 
+        // Cancelled parents are not participants (F-T4: they inflated the
+        // Trajecten "deelnemers" count against a roster that reads as live).
+        // Same exclusion as findByTrajectoryIds — count and roster stay one
+        // population.
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT trajectory_id, COUNT(*) AS c FROM {$this->table()}
              WHERE trajectory_id IN ({$placeholders}) AND edition_id IS NULL
+               AND status != %s
              GROUP BY trajectory_id",
-            ...$ids,
+            ...array_merge($ids, [RegistrationStatus::Cancelled->value]),
         ));
 
         $out = array_fill_keys($ids, 0);
@@ -1279,11 +1284,16 @@ final class RegistrationRepository
         $ids = array_map('intval', $trajectoryIds);
         $placeholders = implode(',', array_fill(0, count($ids), '%d'));
 
+        // lead_name/lead_email ride along for the deleted-account fallback
+        // (presentLeadIdentity — one presenter); cancelled parents excluded,
+        // matching countByTrajectoryIds (count ≡ roster population, F-T4).
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, trajectory_id, user_id, status, registered_at FROM {$this->table()}
+            "SELECT id, trajectory_id, user_id, status, registered_at, lead_name, lead_email
+             FROM {$this->table()}
              WHERE trajectory_id IN ({$placeholders}) AND edition_id IS NULL
+               AND status != %s
              ORDER BY trajectory_id, registered_at DESC",
-            ...$ids,
+            ...array_merge($ids, [RegistrationStatus::Cancelled->value]),
         ));
 
         $grouped = array_fill_keys($ids, []);
