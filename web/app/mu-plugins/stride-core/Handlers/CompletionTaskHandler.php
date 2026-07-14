@@ -358,6 +358,14 @@ final class CompletionTaskHandler
         }
 
         // M2: registration owner, their enroller, or stride_manage — decided here (INV-1).
+        //
+        // OWNER DECISION (Stefan, 2026-07-14, security review): the enroller
+        // may VIEW proofs on registrations they created — including files the
+        // participant uploaded themselves, which can be certificates bearing
+        // national IDs. Accepted: the enroller is the HR/manager who set up
+        // the enrollment and already manages the documents task. If this ever
+        // needs tightening, scope the enroller to attachments they uploaded
+        // (check the attachment's post_author) — do not widen stride_manage.
         if (!$this->actorMayActOn($reg, $userId) && !current_user_can('stride_manage')) {
             ntdst_log('enrollment')->warning('proof download denied: not owner', [
                 'attachment_id' => $attachmentId,
