@@ -498,7 +498,7 @@ The Edition/Session layer separates scheduled course offerings from LearnDash co
 | `vad_session` | Meeting days with time slots and attendance tracking |
 | `vad_voucher` | Discount codes |
 | `vad_quote` | Quotes/invoices |
-| `wp_vad_registrations` | High-volume registration table |
+| `wp_vad_registrations` | High-volume registration table — **read `docs/DATA-MODEL-REGISTRATIONS.md` before writing code against it** (row kinds, column semantics, status lifecycle, JSON/M5 rules, lead-identity invariants, locking, migration checklist) |
 
 ### User Meta Keys
 
@@ -758,6 +758,7 @@ stridence_icon($name, $class)  // Inline SVG icon
 ## Related Documentation
 
 - **Operational Config (DevOps):** `site.yml` — hosting, SSH, deploy commands, DDEV config. Read this for any deployment or infrastructure questions.
+- **Registrations Table Reference:** `docs/DATA-MODEL-REGISTRATIONS.md` — required reading for any code touching `wp_vad_registrations`.
 - **V4 Project Plan (Master):** `docs/V4-PROJECT-PLAN master.md`
 - **V4 Architecture:** `docs/ARCHITECTURE-V4-PROPOSAL.md`
 - **Stridence Theme Spec:** `docs/plans/stride-theme-spec.md`

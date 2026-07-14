@@ -8,9 +8,16 @@ use Stride\Domain\RegistrationStatus;
 use WP_Error;
 
 /**
- * Repository for registration data access.
+ * Repository for registration data access — the ONLY $wpdb caller for
+ * wp_vad_registrations (INV-3). Need a query it doesn't expose? Add a method
+ * HERE; never reach around it.
  *
- * Unified table for edition and trajectory enrollments.
+ * ═══ READ docs/DATA-MODEL-REGISTRATIONS.md BEFORE ADDING QUERIES. ═══
+ * It documents the three row kinds (edition row / trajectory PARENT /
+ * cascade child — the edition_id IS NULL signature), the status lifecycle
+ * and its enum helpers, the M5 JSON rule, the five lead-identity invariants,
+ * the advisory-lock concurrency contract (no UNIQUE key — deliberately), and
+ * the applyScopePins scope contract every grid-family read must honor.
  */
 final class RegistrationRepository
 {

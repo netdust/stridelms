@@ -7,10 +7,20 @@ namespace Stride\Modules\Enrollment;
 /**
  * Unified registration table for edition and trajectory enrollments.
  *
+ * ═══ READ docs/DATA-MODEL-REGISTRATIONS.md BEFORE TOUCHING THIS TABLE. ═══
+ * It documents the three row kinds, every column's semantics, the status
+ * lifecycle, the JSON envelope shapes and M5 rule, the lead-identity
+ * invariants, WHY there is no UNIQUE(user_id, edition_id) (tried and dropped
+ * — advisory locks are the primitive), the scope contract for admin reads,
+ * and the v6+ migration checklist this class enforces.
+ *
  * Handles:
  * - Edition enrollment (edition_id set, trajectory_id null)
- * - Trajectory enrollment (trajectory_id set, edition_id null)
- * - Edition via trajectory (both set)
+ * - Trajectory enrollment (trajectory_id set, edition_id null — the PARENT row)
+ * - Edition via trajectory (both set / parent_registration_id → parent)
+ *
+ * This class is the ONLY place that issues DDL for the table (INV-3);
+ * RegistrationRepository is the only query surface.
  */
 final class RegistrationTable
 {
