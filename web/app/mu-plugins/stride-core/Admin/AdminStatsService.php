@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stride\Admin;
 
 use Stride\Domain\QuoteStatus;
+use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\EditionRepository;
@@ -597,18 +598,26 @@ final class AdminStatsService
             $data['starting_soon'] = $startingSoon ?: [];
         }
 
-        // Incomplete tasks (editions where last session passed, registrations with incomplete tasks)
+        // Registrations sitting on an OPEN completion task past the cutoff.
+        // Tasks are stored as {type: {status: 'pending'|'completed', …}} —
+        // the old predicate LIKE '"completed":false' matched a boolean key no
+        // writer ever produces, so this melding could never fire (F-V1).
+        // Both live phases count: pending rows (enrollment tasks) and
+        // confirmed rows (post-course tasks) — the same population as the
+        // Acties panel's per-person buckets this melding deep-links to.
         if (!empty($rules['incomplete_tasks']['enabled']) && $registrationTableExists) {
             $taskDays = (int) ($rules['incomplete_tasks']['value'] ?? 7);
             $taskCutoff = wp_date('Y-m-d', strtotime("-{$taskDays} days"));
             $incompleteTasks = $wpdb->get_results($wpdb->prepare(
                 "SELECT r.id
                  FROM {$registrationTable} r
-                 WHERE r.status = 'confirmed'
+                 WHERE r.status IN (%s, %s)
                  AND r.completion_tasks IS NOT NULL
                  AND r.completion_tasks LIKE %s
                  AND r.registered_at < %s",
-                '%"completed":false%',
+                RegistrationStatus::Pending->value,
+                RegistrationStatus::Confirmed->value,
+                '%"status":"pending"%',
                 $taskCutoff,
             ), ARRAY_A);
             $data['incomplete_tasks'] = $incompleteTasks ?: [];

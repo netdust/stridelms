@@ -32,9 +32,20 @@ final class ActionQueueService
     /**
      * Evaluate enabled rules against the provided data.
      *
+     * Each item carries at most ONE navigation affordance:
+     *  - `target` — a workspace deep-link `{view, params}` routed through the
+     *    shell's switchView (edition-scoped meldingen open the grid filtered
+     *    to that edition; the stale-tasks aggregate opens the Acties panel's
+     *    "Wacht op gebruiker" tab). Preferred: the admin stays in the
+     *    workspace instead of being bounced to legacy wp-admin edit screens.
+     *  - `url` — a raw wp-admin URL, ONLY where that screen genuinely is the
+     *    workflow (the quote edit screen).
+     *  - neither — the melding is informational (e.g. a session whose edition
+     *    meta is missing: the old code linked post.php?post=0).
+     *
      * @param array<string, array{enabled: bool, value?: int}> $rules  Rule configurations.
      * @param array<string, array>                              $data   Pre-fetched data keyed by data type.
-     * @return array<int, array{rule: string, priority: string, text: string, subject_id: int|null, url: string}>
+     * @return array<int, array{rule: string, priority: string, text: string, subject_id: int|null, url: string, target: array{view: string, params: array<string, int|string>}|null}>
      */
     public function evaluate(array $rules, array $data): array
     {
@@ -92,12 +103,16 @@ final class ActionQueueService
 
             if ($percentage >= $threshold) {
                 $title = $edition['title'] ?? '';
+                $editionId = (int) ($edition['id'] ?? 0);
                 $items[] = [
                     'rule'       => 'capacity_threshold',
                     'priority'   => $percentage >= 100 ? 'red' : 'amber',
                     'text'       => sprintf('%s: %d/%d plaatsen bezet (%d%%)', $title, $registered, $capacity, (int) $percentage),
-                    'subject_id' => $edition['id'] ?? null,
-                    'url'        => sprintf('/wp/wp-admin/post.php?post=%d&action=edit', $edition['id'] ?? 0),
+                    'subject_id' => $editionId ?: null,
+                    'url'        => '',
+                    'target'     => $editionId > 0
+                        ? ['view' => 'inschrijvingen', 'params' => ['edition_id' => $editionId]]
+                        : null,
                 ];
             }
         }
@@ -116,12 +131,18 @@ final class ActionQueueService
         foreach ($sessions as $session) {
             $title = $session['edition_title'] ?? '';
             $date = $session['date'] ?? '';
+            // A session without edition meta gets NO link at all — the old
+            // sprintf produced post.php?post=0&action=edit (a dead edit screen).
+            $editionId = (int) ($session['edition_id'] ?? 0);
             $items[] = [
                 'rule'       => 'session_approaching',
                 'priority'   => 'blue',
                 'text'       => sprintf('Sessie "%s" op %s nadert', $title, $date),
                 'subject_id' => $session['id'] ?? null,
-                'url'        => sprintf('/wp/wp-admin/post.php?post=%d&action=edit', $session['edition_id'] ?? 0),
+                'url'        => '',
+                'target'     => $editionId > 0
+                    ? ['view' => 'inschrijvingen', 'params' => ['edition_id' => $editionId]]
+                    : null,
             ];
         }
 
@@ -139,6 +160,8 @@ final class ActionQueueService
             return [];
         }
 
+        // Quote workflow lives on the wp-admin quote screens — the one melding
+        // family that keeps a raw URL instead of a workspace target.
         if ($count === 1) {
             $quote = $quotes[0];
             return [[
@@ -147,6 +170,7 @@ final class ActionQueueService
                 'text'       => sprintf('Offerte %s wacht op actie', $quote['number'] ?? ''),
                 'subject_id' => $quote['id'] ?? null,
                 'url'        => sprintf('/wp/wp-admin/post.php?post=%d&action=edit', $quote['id'] ?? 0),
+                'target'     => null,
             ]];
         }
 
@@ -156,6 +180,7 @@ final class ActionQueueService
             'text'       => sprintf('%d offertes wachten op actie', $count),
             'subject_id' => null,
             'url'        => '/wp/wp-admin/edit.php?post_type=vad_quote',
+            'target'     => null,
         ]];
     }
 
@@ -170,12 +195,16 @@ final class ActionQueueService
         foreach ($editions as $edition) {
             $title = $edition['title'] ?? '';
             $date = $edition['start_date'] ?? '';
+            $editionId = (int) ($edition['id'] ?? 0);
             $items[] = [
                 'rule'       => 'edition_starting',
                 'priority'   => 'blue',
                 'text'       => sprintf('Editie "%s" start op %s', $title, $date),
-                'subject_id' => $edition['id'] ?? null,
-                'url'        => sprintf('/wp/wp-admin/post.php?post=%d&action=edit', $edition['id'] ?? 0),
+                'subject_id' => $editionId ?: null,
+                'url'        => '',
+                'target'     => $editionId > 0
+                    ? ['view' => 'inschrijvingen', 'params' => ['edition_id' => $editionId]]
+                    : null,
             ];
         }
 
@@ -196,10 +225,13 @@ final class ActionQueueService
         return [[
             'rule'       => 'incomplete_tasks',
             'priority'   => 'amber',
-            'text'       => sprintf('%d openstaande ta%s', $count, $count > 1 ? 'ken' : 'ak'),
+            'text'       => sprintf('%d inschrijving%s met openstaande taken', $count, $count > 1 ? 'en' : ''),
             'subject_id' => null,
-            // Deep-link to "Wacht op gebruiker" tab of the actie-vereist card.
-            'url'        => '/wp/wp-admin/admin.php?page=stride-dashboard#action-required-stale_user',
+            'url'        => '',
+            // The per-person list is the Acties panel's "Wacht op gebruiker"
+            // tab, one panel over — the old link was a dead #action-required
+            // anchor from the pre-workspace dashboard.
+            'target'     => ['view' => 'vandaag', 'params' => ['tab' => 'gebruiker']],
         ]];
     }
 }

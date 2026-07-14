@@ -198,18 +198,24 @@
   }
 
   /* ---- meldingen ← /admin/action-queue (flat aggregate alert rows) ------
-     The action-queue is a flat array [{rule, priority, text, subject_id, url}].
-     Mapped to the same row shape the Acties markup renders. `regId` = a stable
-     key (rule+subject); these rows are aggregate, so name = the alert text and
-     there is no avatar/person link — they open their own url. */
+     The action-queue is a flat array
+     [{rule, priority, text, subject_id, url, target}]. Mapped to the same row
+     shape the Acties markup renders. `regId` = a stable key (rule+subject);
+     these rows are aggregate, so name = the alert text and there is no
+     avatar/person link. Navigation: `target` ({view, params}) routes through
+     the shell's switchView (stays in the workspace); `url` is the wp-admin
+     fallback (quotes); neither → informational, no navigation. */
   function mapMeldingen(actionQueue) {
     const arr = Array.isArray(actionQueue) ? actionQueue : [];
     return arr.map((a) => ({
       regId: `${a.rule}-${a.subject_id || 0}`,
+      rule: a.rule || '',
+      subjectId: a.subject_id || 0,
       name: a.text || '',
       meta: '',
       age: '',
       url: a.url || '',
+      target: (a.target && a.target.view) ? a.target : null,
       priority: a.priority || 'blue',
       isMelding: true,
     }));
@@ -300,9 +306,20 @@
       /* Click an Acties row → that person's dossier (cluster D reads ?user=),
          deep-linked to the SPECIFIC waiting registration via ?reg= so the
          dossier opens the right edition rather than the person's newest one.
-         Meldingen rows open their own url instead. */
+         Meldingen rows route their workspace `target` through switchView
+         (a `vandaag` target is a LOCAL tab switch — e.g. the stale-tasks
+         aggregate opens "Wacht op gebruiker" one tab over); `url` opens the
+         wp-admin fallback (quotes); neither → informational, no-op. */
       openAction(item) {
         if (item.isMelding) {
+          if (item.target) {
+            if (item.target.view === 'vandaag') {
+              this.actTab = (item.target.params && item.target.params.tab) || 'gebruiker';
+            } else {
+              this.switchView(item.target.view, item.target.params || {});
+            }
+            return;
+          }
           if (item.url) window.open(item.url, '_blank', 'noopener');
           return;
         }

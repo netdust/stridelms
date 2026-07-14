@@ -136,7 +136,9 @@ defined('ABSPATH') || exit;
                                       x-show="item.deadline"
                                       :class="item.deadline && item.deadline.kind === 'overdue' ? 'ws-badge--overdue' : 'ws-badge--due-soon'"
                                       x-text="item.deadline && item.deadline.label"></span>
-                                <span x-html="icon('chevRight')" style="width:16px;height:16px;color:var(--ws-text-3)"></span>
+                                <!-- No affordance on informational meldingen (no target and no url) -->
+                                <span x-show="!item.isMelding || item.target || item.url"
+                                      x-html="icon('chevRight')" style="width:16px;height:16px;color:var(--ws-text-3)"></span>
                             </a>
                         </template>
                         <div x-show="aq[actTab].length===0" class="ws-empty" style="padding:32px">

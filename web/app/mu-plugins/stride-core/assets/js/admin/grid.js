@@ -462,6 +462,17 @@
           changed = true;
         }
 
+        // Edition deep-link (Vandaag meldingen: capacity / editie-start
+        // alerts open the grid scoped to that edition). Same absorb-only
+        // contract as trajectory_id above: it is also a first-class filter,
+        // survives round-trips until its chip is cleared, and a NEW deep-link
+        // target simply overwrites it.
+        const editionId = parseInt(p.get('edition_id') || '', 10);
+        if (Number.isFinite(editionId) && editionId > 0 && this.filters.edition_id !== editionId) {
+          this.filters.edition_id = editionId;
+          changed = true;
+        }
+
         return changed;
       },
 

@@ -217,6 +217,14 @@
           if (params.trajectory_id != null && params.trajectory_id !== '' && Number(params.trajectory_id) > 0) {
             url.searchParams.set('trajectory_id', String(params.trajectory_id));
           }
+          // ?edition_id=<id> deep-links the grid scoped to one edition
+          // (Vandaag meldingen: capacity / editie-start alerts). Same
+          // contract as trajectory_id: it is ALSO a first-class grid filter,
+          // so it is absorb-only — set when a deep-link passes it, never
+          // deleted here (the grid owns clearing via its filter chip).
+          if (params.edition_id != null && params.edition_id !== '' && Number(params.edition_id) > 0) {
+            url.searchParams.set('edition_id', String(params.edition_id));
+          }
         }
         window.history.replaceState(null, '', url.toString());
         this.view = view;
