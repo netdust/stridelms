@@ -453,6 +453,26 @@ final class AdminRegistrationQueryService
             }
         }
 
+        // Server-resolved group display labels (F-G10 tail): the client used to
+        // resolve edition group headers against its capped edition-options
+        // list, degrading unlisted editions to "Editie #123". One batched read
+        // over THIS page's group values instead.
+        $groupLabels = [];
+        if ($groupBy === 'edition_id') {
+            $editionIds = array_values(array_filter(array_map(
+                static fn($row) => (int) ($row->group_value ?? 0),
+                $aggRows,
+            )));
+            $editionPosts = !empty($editionIds)
+                ? BatchQueryHelper::batchGetPosts($editionIds, EditionCPT::POST_TYPE)
+                : [];
+            foreach ($editionIds as $editionId) {
+                $groupLabels[$editionId] = isset($editionPosts[$editionId])
+                    ? (string) $editionPosts[$editionId]->post_title
+                    : sprintf(__('Editie #%d', 'stride'), $editionId);
+            }
+        }
+
         // Compose aggregate items, attaching each group's composed child rows.
         $items = [];
         foreach ($aggRows as $row) {
@@ -477,6 +497,9 @@ final class AdminRegistrationQueryService
 
             $items[] = [
                 'group_value'        => $row->group_value,
+                // Server-resolved header label (edition groups only — status
+                // labels are a closed client enum, company has no name entity).
+                'group_label'        => $groupLabels[(int) ($row->group_value ?? 0)] ?? null,
                 'count'              => $count,
                 'pct_afgerond'       => $pctAfgerond,
                 'avg_attendance_pct' => null,  // Deferred: cross-edition avg requires per-row resolution

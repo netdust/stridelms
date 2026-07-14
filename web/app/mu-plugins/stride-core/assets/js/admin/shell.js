@@ -191,6 +191,7 @@
         url.searchParams.delete('queue');
         url.searchParams.delete('user');
         url.searchParams.delete('reg');
+        url.searchParams.delete('trajectory_id');
         if (params && typeof params === 'object') {
           if (params.queue != null && params.queue !== '') {
             url.searchParams.set('queue', String(params.queue));
@@ -203,6 +204,13 @@
           // right edition instead of defaulting to the person's newest one.
           if (params.reg != null && params.reg !== '') {
             url.searchParams.set('reg', String(params.reg));
+          }
+          // ?trajectory_id=<id> deep-links the grid scoped to a trajectory's
+          // child edition-rows ("Toon inschrijvingen" on the Trajecten
+          // slide-over). The old whitelist silently DROPPED it, so that button
+          // switched views without filtering anything (F-T1).
+          if (params.trajectory_id != null && params.trajectory_id !== '' && Number(params.trajectory_id) > 0) {
+            url.searchParams.set('trajectory_id', String(params.trajectory_id));
           }
         }
         window.history.replaceState(null, '', url.toString());

@@ -234,6 +234,7 @@
     return {
       key: String(g.group_value ?? ''),
       group_value: g.group_value,      // passthrough so groupLabel(g) still resolves
+      group_label: g.group_label || '', // server-resolved header label (edition groups)
       rows,
       count: g.count,
       rowTotal,
@@ -256,8 +257,12 @@
     { id: 'stride_bulk_quote_sent',          label: 'Offerte verzonden',        icon: 'send',        states: ['confirmed'] },
     { id: 'stride_bulk_quote_exported',      label: 'Offerte verwerkt',         icon: 'checkCircle', states: ['confirmed'] },
     { id: 'stride_bulk_approve_post_course', label: 'Goedkeuren na cursus',     icon: 'award',       states: ['confirmed', 'completed'] },
-    { id: 'stride_bulk_message',             label: 'Bericht sturen',           icon: 'mail',        states: ['confirmed', 'completed', 'interest', 'pending', 'waitlist'] },
-    { id: 'stride_bulk_generate_doc',        label: 'Document genereren',       icon: 'fileText',    states: ['completed'] },
+    // deferred: the handlers are honest server stubs (fail every row with
+    // not_available) — render DISABLED with a "volgt binnenkort" tooltip,
+    // never a live button whose only outcome is a full-red failure modal
+    // (F-G6, decision 2026-07-14).
+    { id: 'stride_bulk_message',             label: 'Bericht sturen',           icon: 'mail',        states: ['confirmed', 'completed', 'interest', 'pending', 'waitlist'], deferred: true },
+    { id: 'stride_bulk_generate_doc',        label: 'Document genereren',       icon: 'fileText',    states: ['completed'], deferred: true },
     { id: 'stride_bulk_cancel',              label: 'Annuleren',                icon: 'xCircle',     states: ['pending', 'interest', 'confirmed', 'waitlist'], danger: true },
   ];
   const LIFECYCLE_TARGET = {
@@ -313,16 +318,27 @@
       // historical registrations unreachable with zero explanation (F-G2).
       editionScope: 'active',
 
-      /* filter sources (edition options from the server; companies derived from
-         the loaded page since there is no company-options endpoint) */
+      /* filter sources. Editions come from the SERVER TYPEAHEAD
+         (/admin/editions/options?q= — it was always searchable server-side;
+         the grid consumed it once as a flat 100-cap dropdown, so editions
+         beyond the first 100 could never be filtered on, F-G10). Trajectories
+         are a small flat set (/admin/trajectories/options). Companies stay
+         un-listed (a company is a bare int — no name entity exists). */
       editionOptions: [],
+      editionQuery: '',
+      editionPickerOpen: false,
+      editionPickerLabel: '',      // the picked edition's title (chip + input display)
+      trajectoryOptions: [],
+      trajectoryLabelById: {},
 
       /* per-surface load state — a failed load shows its own banner, never blanks */
       loading: false,
       error: '',
+      loadSeq: 0,                  // monotonic load token (stale-response guard, F-G8)
 
       /* selection + bulk */
       selected: {},                // id -> true
+      selectedStatusById: {},      // id -> status value, stamped at SELECT time (F-G7)
       selectAllFilter: false,      // armed cross-page select-all
       busyAction: null,
       overflowOpen: false,
@@ -351,6 +367,7 @@
         // user who never opens this surface.
         window.WS.lazyLoad(this, 'inschrijvingen', () => {
           this.loadEditionOptions();
+          this.loadTrajectoryOptions();
           this.load(1);
         });
 
@@ -374,6 +391,8 @@
          switchView wrote ?queue= (plan §5 / shell contract). */
       applyQueueDeepLink() {
         const p = new URLSearchParams(window.location.search);
+        let changed = false;
+
         const q = p.get('queue');
         if (q) {
           const qp = queueToParams(q);
@@ -383,16 +402,26 @@
             // would double-filter the pinned id-set (each queue is
             // single-status anyway; the funnel reflects it via statusCounts).
             this.filters.status = '';
-            return true;
+            changed = true;
           }
-          return false;
+        } else {
+          const directStatus = p.get('status');
+          if (!this.filters.status && directStatus && STATUS_META[directStatus]) {
+            this.filters.status = directStatus;
+            changed = true;
+          }
         }
-        const directStatus = p.get('status');
-        if (!this.filters.status && directStatus && STATUS_META[directStatus]) {
-          this.filters.status = directStatus;
-          return true;
+
+        // Trajectory deep-link ("Toon inschrijvingen" on a trajectory) — same
+        // re-activation contract as ?queue=: absorb it on every arrival so the
+        // 2nd+ jump also filters (F-T1/F-G9).
+        const trajectoryId = parseInt(p.get('trajectory_id') || '', 10);
+        if (Number.isFinite(trajectoryId) && trajectoryId > 0 && this.filters.trajectory_id !== trajectoryId) {
+          this.filters.trajectory_id = trajectoryId;
+          changed = true;
         }
-        return false;
+
+        return changed;
       },
 
       /* Restore the grid's view state from the URL on cold init — the read half
@@ -421,6 +450,10 @@
         // cleanly (learned from cluster B — a stale error must not survive a
         // now-successful load).
         this.error = '';
+        // Race token: rapid filter/search changes can overlap requests; a slow
+        // OLDER response resolving last must never overwrite the newer view
+        // (the classic "filters don't work" symptom, F-G8).
+        const seq = ++this.loadSeq;
 
         const params = new URLSearchParams();
         params.set('page', String(this.page));
@@ -446,6 +479,7 @@
 
         try {
           const data = await this.api(`/admin/registrations?${params.toString()}`);
+          if (seq !== this.loadSeq) return;   // superseded by a newer load()
           if (this.groupBy) {
             this.groups = data.items || [];
             this.rows = [];
@@ -459,12 +493,13 @@
           this.perPage = data.perPage || this.perPage;
           this.pageCount = data.totalPages || 1;
         } catch (e) {
+          if (seq !== this.loadSeq) return;   // a stale failure must not blank the newer view
           this.error = (e && e.message) ? e.message : 'Kon de inschrijvingen niet laden.';
           this.rows = [];
           this.groups = [];
           this.total = 0;
         } finally {
-          this.loading = false;
+          if (seq === this.loadSeq) this.loading = false;
         }
       },
 
@@ -492,12 +527,46 @@
         window.history.replaceState(null, '', url.toString());
       },
 
+      /* Edition typeahead: every (debounced) keystroke queries the server-side
+         searchable options endpoint — no client-side 100-cap corpus. */
       async loadEditionOptions() {
         try {
-          const data = await this.api('/admin/editions/options?scope=all&per_page=100');
+          const q = encodeURIComponent(this.editionQuery || '');
+          const data = await this.api(`/admin/editions/options?scope=all&per_page=25&q=${q}`);
           this.editionOptions = data.items || [];
         } catch (e) {
           this.editionOptions = [];
+        }
+      },
+      openEditionPicker() {
+        this.editionPickerOpen = true;
+        if (!this.editionOptions.length) this.loadEditionOptions();
+      },
+      pickEdition(e) {
+        this.filters.edition_id = Number(e.id) || 0;
+        this.editionPickerLabel = e.title || '';
+        this.editionQuery = e.title || '';
+        this.editionPickerOpen = false;
+        this.onFilterChange();
+      },
+      clearEditionPick() {
+        this.filters.edition_id = 0;
+        this.editionPickerLabel = '';
+        this.editionQuery = '';
+        this.editionPickerOpen = false;
+        this.onFilterChange();
+      },
+
+      /* Trajectory filter — small set, one lazy fetch (F-G9: the server join
+         existed all along; the UI control and chip did not). */
+      async loadTrajectoryOptions() {
+        try {
+          const data = await this.api('/admin/trajectories/options?scope=all&per_page=100');
+          this.trajectoryOptions = data.items || [];
+          this.trajectoryLabelById = {};
+          this.trajectoryOptions.forEach((t) => { this.trajectoryLabelById[t.id] = t.title; });
+        } catch (e) {
+          this.trajectoryOptions = [];
         }
       },
 
@@ -538,7 +607,10 @@
         if (f.status && STATUS_META[f.status]) out.push({ k: 'status', label: 'Status: ' + STATUS_META[f.status].label });
         if (f.edition_id) {
           const ed = this.editionOptions.find((e) => String(e.id) === String(f.edition_id));
-          out.push({ k: 'edition_id', label: 'Editie: ' + (ed ? ed.title : ('#' + f.edition_id)) });
+          out.push({ k: 'edition_id', label: 'Editie: ' + (this.editionPickerLabel || (ed ? ed.title : ('#' + f.edition_id))) });
+        }
+        if (f.trajectory_id) {
+          out.push({ k: 'trajectory_id', label: 'Traject: ' + (this.trajectoryLabelById[f.trajectory_id] || ('#' + f.trajectory_id)) });
         }
         if (f.company_id) out.push({ k: 'company_id', label: 'Organisatie #' + f.company_id });
         if (f.q) out.push({ k: 'q', label: '"' + f.q + '"' });
@@ -546,7 +618,8 @@
       },
       removeChip(k) {
         if (k === 'queue') this.queue = '';
-        else if (k === 'edition_id' || k === 'company_id' || k === 'trajectory_id') this.filters[k] = 0;
+        else if (k === 'edition_id') { this.filters.edition_id = 0; this.editionPickerLabel = ''; this.editionQuery = ''; }
+        else if (k === 'company_id' || k === 'trajectory_id') this.filters[k] = 0;
         else this.filters[k] = '';
         this.onFilterChange();
       },
@@ -554,6 +627,8 @@
         this.filters = { status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' };
         this.queue = '';
         this.editionScope = 'active';   // back to the announced default
+        this.editionPickerLabel = '';
+        this.editionQuery = '';
         this.onFilterChange();
       },
 
@@ -587,6 +662,10 @@
         const v = g.group_value;
         if (this.groupBy === 'status') return (STATUS_META[v] && STATUS_META[v].label) || v || '—';
         if (this.groupBy === 'edition_id') {
+          // Server-resolved label first (batched over THIS page's groups) —
+          // the client options list is a capped typeahead result, so falling
+          // back to it degraded unlisted editions to "Editie #123".
+          if (g.group_label) return g.group_label;
           const ed = this.editionOptions.find((e) => String(e.id) === String(v));
           return ed ? ed.title : (v ? ('Editie #' + v) : 'Geen editie');
         }
@@ -636,7 +715,19 @@
       get selectedCount() { return this.selectAllFilter ? this.total : this.selectedIds.length; },
       get selectedRows() { return this.allVisibleRows.filter((r) => this.selected[r.id]); },
       isSelected(id) { return !!this.selected[id]; },
-      toggle(id) { this.selected[id] = !this.selected[id]; if (!this.selected[id]) this.selectAllFilter = false; },
+      /* Selection stamps the row's STATUS at select time (selectedStatusById):
+         deriving states from visible rows only meant a cross-page selection's
+         bulk bar reflected just the current page — an action could be offered
+         for (and sent to) off-screen rows in other states (F-G7). */
+      stampStatus(id) {
+        const row = this.allVisibleRows.find((r) => r.id === Number(id));
+        if (row && row.status) this.selectedStatusById[id] = row.status.value;
+      },
+      toggle(id) {
+        this.selected[id] = !this.selected[id];
+        if (this.selected[id]) this.stampStatus(id);
+        else { delete this.selectedStatusById[id]; this.selectAllFilter = false; }
+      },
       get pageAllSelected() {
         const ids = this.allVisibleRows.map((r) => r.id);
         return ids.length > 0 && ids.every((id) => this.selected[id]);
@@ -647,25 +738,33 @@
       },
       togglePage() {
         const target = !this.pageAllSelected;
-        this.allVisibleRows.forEach((r) => { this.selected[r.id] = target; });
+        this.allVisibleRows.forEach((r) => {
+          this.selected[r.id] = target;
+          if (target) this.stampStatus(r.id);
+          else delete this.selectedStatusById[r.id];
+        });
         if (!target) this.selectAllFilter = false;
       },
       /* arm the cross-page select-all: the bulk action carries the FILTER, the
          server expands the blast radius over the whole filtered set. */
       selectAllFiltered() {
         this.selectAllFilter = true;
-        this.allVisibleRows.forEach((r) => { this.selected[r.id] = true; });
+        this.allVisibleRows.forEach((r) => { this.selected[r.id] = true; this.stampStatus(r.id); });
         this.toast('mixed', String(this.total), `inschrijvingen geselecteerd over alle pagina's. De bulkactie draagt het filter, niet ${this.total} rijen.`);
       },
-      clearSelection() { this.selected = {}; this.selectAllFilter = false; },
+      clearSelection() { this.selected = {}; this.selectedStatusById = {}; this.selectAllFilter = false; },
 
       /* ===== state-aware bulk bar (intersection of selected statuses) ===== */
       get canManage() { return !!(window.StrideConfig || {}).canManage; },
       get selectedStates() {
-        // Across pages the armed filter may have a single status filter; on a
-        // page we read the loaded rows' statuses.
+        // Across pages the armed filter may have a single status filter; a
+        // manual selection derives from the statuses stamped at SELECT time —
+        // reading visible rows only ignored off-page selections (F-G7).
         if (this.selectAllFilter && this.filters.status) return [this.filters.status];
-        return [...new Set(this.selectedRows.map((r) => r.status.value))];
+        const stamped = this.selectedIds
+          .map((id) => this.selectedStatusById[id])
+          .filter(Boolean);
+        return [...new Set(stamped)];
       },
       get bulkActions() { return actionsForStates(this.selectedStates); },
       get topActions() { return this.bulkActions.slice(0, 3); },
@@ -757,10 +856,13 @@
         this.result = null;
       },
 
-      /* row click → the person's dossier (cluster D reads ?user=) */
+      /* row click → the person's dossier (cluster D reads ?user=). An
+         anonymous lead has NO account and thus no dossier — say so instead of
+         a silent no-op on a row that looks clickable (F-G14). */
       openRow(r) {
         const id = r && r.user && r.user.id;
         if (id) this.switchView('dossier', { user: id });
+        else this.toast('mixed', '', 'Anonieme lead — er is nog geen account en dus geen dossier.');
       },
 
       /* ===== presentational helpers ===== */

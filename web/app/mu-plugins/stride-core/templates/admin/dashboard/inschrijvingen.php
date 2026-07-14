@@ -106,13 +106,36 @@ defined('ABSPATH') || exit;
                        x-model="filters.q" @input.debounce.350ms="onSearchChange()">
             </div>
 
-            <!-- edition filter (server typeahead source: GET /admin/editions/options) -->
-            <div class="ws-select-wrap">
+            <!-- edition filter: a real server-side TYPEAHEAD. The old flat
+                 <select> was fed by ONE capped fetch (first 100, oldest
+                 first) — current editions were unpickable at scale (F-G10). -->
+            <div class="ws-select-wrap" style="position:relative" @click.outside="editionPickerOpen = false">
                 <span x-html="icon('grid')" style="width:14px;height:14px"></span>
-                <?php echo esc_html__('Editie', 'stride'); ?>
-                <select class="ws-select" x-model.number="filters.edition_id" @change="onFilterChange()">
-                    <option value="0"><?php echo esc_html__('Alle edities', 'stride'); ?></option>
-                    <template x-for="e in editionOptions" :key="e.id"><option :value="e.id" x-text="e.title"></option></template>
+                <input type="text" class="ws-select" style="min-width:180px"
+                       placeholder="<?php echo esc_attr__('Editie — typ om te zoeken…', 'stride'); ?>"
+                       x-model="editionQuery"
+                       @focus="openEditionPicker()"
+                       @input.debounce.300ms="loadEditionOptions(); editionPickerOpen = true">
+                <div class="ws-menu__pop" x-show="editionPickerOpen" x-transition
+                     style="position:absolute;top:100%;left:0;right:0;max-height:260px;overflow-y:auto;z-index:30">
+                    <button type="button" class="ws-menu__item" x-show="filters.edition_id" @click="clearEditionPick()">
+                        <span x-html="icon('x')"></span> <?php echo esc_html__('Editiefilter wissen', 'stride'); ?>
+                    </button>
+                    <template x-for="e in editionOptions" :key="e.id">
+                        <button type="button" class="ws-menu__item" @click="pickEdition(e)" x-text="e.title"></button>
+                    </template>
+                    <div class="ws-menu__label" x-show="!editionOptions.length"><?php echo esc_html__('Geen edities gevonden', 'stride'); ?></div>
+                </div>
+            </div>
+
+            <!-- trajectory filter (small flat set; the server-side parent→child
+                 join existed all along — the control and chip did not, F-G9) -->
+            <div class="ws-select-wrap">
+                <span x-html="icon('route')" style="width:14px;height:14px"></span>
+                <?php echo esc_html__('Traject', 'stride'); ?>
+                <select class="ws-select" x-model.number="filters.trajectory_id" @change="onFilterChange()">
+                    <option value="0"><?php echo esc_html__('Alle trajecten', 'stride'); ?></option>
+                    <template x-for="t in trajectoryOptions" :key="t.id"><option :value="t.id" x-text="t.title"></option></template>
                 </select>
             </div>
 
@@ -183,7 +206,7 @@ defined('ABSPATH') || exit;
                 <tr>
                     <th class="ws-col-check">
                         <input type="checkbox" class="ws-check"
-                               :checked="pageAllSelected" :indeterminate="pageSomeSelected" @click="togglePage()">
+                               :checked="pageAllSelected" x-effect="$el.indeterminate = pageSomeSelected" @click="togglePage()">
                     </th>
                     <th class="is-sortable" :class="sortKey==='name' && 'is-sorted'" @click="sort('name')">
                         <?php echo esc_html__('Naam', 'stride'); ?>
@@ -312,10 +335,16 @@ defined('ABSPATH') || exit;
                 </span>
             </template>
 
+            <?php // Deferred actions (a.deferred) render DISABLED with a
+                  // "volgt binnenkort" tooltip — a live button that fails 100%
+                  // of rows reads as broken, not as a roadmap (F-G6). ?>
             <div class="ws-bulkbar__actions">
                 <template x-for="(a, i) in topActions" :key="a.id">
-                    <button class="ws-bbtn" :class="i===0 && !a.danger ? 'ws-bbtn--primary' : (a.danger ? 'ws-bbtn--danger' : '')"
-                            :disabled="busyAction" @click="runBulk(a.id)">
+                    <button class="ws-bbtn" :class="i===0 && !a.danger && !a.deferred ? 'ws-bbtn--primary' : (a.danger ? 'ws-bbtn--danger' : '')"
+                            :disabled="busyAction || a.deferred"
+                            :style="a.deferred ? 'opacity:.5;cursor:not-allowed' : ''"
+                            :title="a.deferred ? '<?php echo esc_js(__('Volgt binnenkort — nog niet beschikbaar.', 'stride')); ?>' : a.label"
+                            @click="!a.deferred && runBulk(a.id)">
                         <template x-if="busyAction===a.id"><span x-html="icon('refresh')" style="animation:spin 0.8s linear infinite"></span></template>
                         <template x-if="busyAction!==a.id"><span x-html="icon(a.icon)"></span></template>
                         <span x-text="a.label"></span>
@@ -327,7 +356,11 @@ defined('ABSPATH') || exit;
                     <div class="ws-menu__pop" x-show="overflowOpen" x-transition>
                         <div class="ws-menu__label"><?php echo esc_html__('Acties', 'stride'); ?></div>
                         <template x-for="a in overflowActions" :key="a.id">
-                            <button class="ws-menu__item" :class="a.danger && 'ws-menu__item--danger'" @click="runBulk(a.id)">
+                            <button class="ws-menu__item" :class="a.danger && 'ws-menu__item--danger'"
+                                    :disabled="a.deferred"
+                                    :style="a.deferred ? 'opacity:.5;cursor:not-allowed' : ''"
+                                    :title="a.deferred ? '<?php echo esc_js(__('Volgt binnenkort — nog niet beschikbaar.', 'stride')); ?>' : a.label"
+                                    @click="!a.deferred && runBulk(a.id)">
                                 <span x-html="icon(a.icon)"></span> <span x-text="a.label"></span>
                             </button>
                         </template>

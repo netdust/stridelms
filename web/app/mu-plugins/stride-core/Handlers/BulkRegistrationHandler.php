@@ -172,6 +172,16 @@ final class BulkRegistrationHandler
         $map = $quoteRepo->findQuoteIdsByRegistrations($ids); // regId => quoteId (V11)
 
         return $this->runBulk($params, function (int $id, object $reg) use ($quoteRepo, $status, $map): true|WP_Error {
+            // Quote workflow actions belong to LIVE enrollments (spec §2.1:
+            // offered for confirmed; completed keeps its quote actionable for
+            // late follow-up). The action was status-BLIND, so a cross-page
+            // selection whose bulk bar was derived from other rows could mark
+            // a pending/interest row's quote as sent (F-G7 server half).
+            $rowStatus = (string) $reg->status;
+            if (!in_array($rowStatus, [RegistrationStatus::Confirmed->value, RegistrationStatus::Completed->value], true)) {
+                return new WP_Error('invalid_status', __('Offerte-acties zijn enkel mogelijk voor bevestigde of afgeronde inschrijvingen.', 'stride'));
+            }
+
             $quoteId = (int) ($map[$id] ?? 0);
             if (!$quoteId) {
                 return new WP_Error('no_quote', __('Geen offerte voor deze inschrijving.', 'stride'));

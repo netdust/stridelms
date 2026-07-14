@@ -198,8 +198,14 @@ defined('ABSPATH') || exit;
                         </div>
 
                         <div class="ws-slideover__body">
-                            <!-- jump to the grid filtered to this trajectory -->
-                            <button class="ws-btn" style="width:100%;margin-bottom:var(--ws-5)" @click="switchView('inschrijvingen')">
+                            <!-- jump to the grid SCOPED to this trajectory: the
+                                 trajectory_id deep-link rides switchView (shell
+                                 whitelist) and the grid absorbs it on activation
+                                 (child edition-rows via the parent→child join).
+                                 It used to pass NOTHING — a plain view switch
+                                 that landed on the unfiltered grid (F-T1). -->
+                            <button class="ws-btn" style="width:100%;margin-bottom:var(--ws-5)"
+                                    @click="switchView('inschrijvingen', { trajectory_id: detail && detail.id })">
                                 <span x-html="icon('grid')"></span> <?php echo esc_html__('Toon inschrijvingen', 'stride'); ?>
                             </button>
 
