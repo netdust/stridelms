@@ -1986,21 +1986,20 @@ final class RegistrationRepository
      *  - M5: NO code path puts enrollment_data/selections/completion_tasks into
      *        WHERE/ORDER/GROUP BY.
      *
-     * Active-scope predicate mirrors AdminAPIController::getEditions() (commit e2ace22b):
-     *  - LEFT JOIN on _ntdst_start_date.
-     *  - WHERE: start_date >= twoDaysAgo OR start_date IS NULL (sessionless carve-out §10.7).
-     *  - Bypassed when edition_scope='all' or an explicit edition_id is passed.
-     *
-     * trajectory_id filter is intentionally deferred to Task 1.4b (parent→child join).
-     * A naive WHERE trajectory_id=X would be wrong for trajectory enrollments.
+     * Active-edition scope is an ID-SET the caller passes (active_edition_ids,
+     * resolved by AdminRegistrationQueryService from
+     * EditionRepository::findActiveDateScopedIds — status-based, decision
+     * 2026-07-14). This repo carries NO scope predicate of its own; the
+     * service omits the key for edition_scope='all', an explicit edition_id,
+     * or a queue pin (whose ids already encode the scope).
      *
      * @param array $filters Accepts ONLY these keys (everything else ignored):
      *   status (string ∈ RegistrationStatus values),
      *   edition_id (int), company_id (int),
-     *   trajectory_id (int — deferred to Task 1.4b; accept+ignore),
-     *   offerte_status (string — endpoint-layer concern; ignore if passed),
+     *   trajectory_id (int — parent→child join, Task 1.4b),
      *   q (string, name search bound via prepare %s),
-     *   edition_scope ('active'|'all', default 'active'),
+     *   active_edition_ids (list<int> — the resolved admin-active scope),
+     *   queue_ids (list<int> — a WorklistQueueResolver id-set pin),
      *   sort (string ∈ SORT_ALLOWLIST), order ('asc'|'desc'),
      *   group_by (string ∈ GROUP_BY_ALLOWLIST),
      *   page (int ≥1), per_page (int, capped at 100, default 50).
@@ -2478,12 +2477,11 @@ final class RegistrationRepository
      * Corpus & scope semantics (by design):
      *  - Base predicate `r.edition_id IS NOT NULL` excludes trajectory PARENT rows
      *    from EVERY scope — they are never an edition-grained grid row.
-     *  - The default 'active' scope JOINs editions with post_status='publish'. A
-     *    registration on a NON-published edition (trashed/draft) therefore gets
-     *    `ae.ID IS NULL` and is EXCLUDED from the default view (mirrors archived-
-     *    edition hiding). Such registrations remain reachable via an explicit
-     *    edition_id (which bypasses active scope) or edition_scope='all'. This is
-     *    intentional: a trashed edition is also absent from the picker.
+     *  - The default 'active' scope pins to the caller-resolved id-set
+     *    (active_edition_ids — published, admin-not-closed editions). A
+     *    registration on a NON-published or closed edition is EXCLUDED from the
+     *    default view but remains reachable via an explicit edition_id (the
+     *    service omits the scope key then) or edition_scope='all'.
      *
      * @param  array<string,mixed> $filters
      * @return array{active_join:string,where_clause:string,params:array,page:int,per_page:int}
@@ -2560,11 +2558,6 @@ final class RegistrationRepository
         // q: name search (M4 — bound via prepare %s, never interpolated).
         $q = !empty($filters['q']) ? (string) $filters['q'] : null;
 
-        // edition_scope: 'active' (default) or 'all'.
-        // Active scope is bypassed when an explicit edition_id is provided.
-        $editionScope   = (string) ($filters['edition_scope'] ?? 'active');
-        $useActiveScope = ($editionScope !== 'all') && ($editionId === null);
-
         // M5: enrollment_data, selections, completion_tasks, offerte_status are
         // explicitly NOT read here. trajectory_id IS now read (task 1.4b) — but
         // only structured FK columns (trajectory_id, parent_registration_id,
@@ -2585,20 +2578,22 @@ final class RegistrationRepository
         // longer form.)
         $where[] = 'r.edition_id IS NOT NULL';
 
-        // Active-edition scope predicate (mirrors getEditions() commit e2ace22b).
-        // LEFT JOIN on start_date; WHERE start_date >= twoDaysAgo OR IS NULL.
-        // The dateless-edition carve-out (sessionless §10.7) rides on
-        // pm_start.meta_value IS NULL (edition_id SET, no _ntdst_start_date) —
-        // NOT on an edition_id-NULL disjunct (parents are already excluded above).
+        // Active-edition scope: the CALLER passes the resolved admin-active
+        // edition-id set (EditionRepository::findActiveDateScopedIds via
+        // AdminRegistrationQueryService — status-based, decision 2026-07-14).
+        // Pinning to the id-set keeps ONE scope definition; this repo no longer
+        // carries its own SQL twin of the predicate (the old start_date join
+        // drifted from the counts' rule by construction). An EMPTY set yields
+        // zero rows — a scope that resolves to nothing must never mean "all".
         $activeJoin = '';
-        if ($useActiveScope) {
-            $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
-            $activeJoin
-                = "LEFT JOIN {$wpdb->posts} ae ON ae.ID = r.edition_id AND ae.post_type = 'vad_edition' AND ae.post_status = 'publish'
-                 LEFT JOIN {$wpdb->postmeta} pm_start ON pm_start.post_id = ae.ID AND pm_start.meta_key = '_ntdst_start_date'";
-            $where[]  = 'ae.ID IS NOT NULL';
-            $where[]  = '(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)';
-            $params[] = $twoDaysAgo;
+        if (array_key_exists('active_edition_ids', $filters) && is_array($filters['active_edition_ids'])) {
+            $activeIds = array_values(array_unique(array_map('intval', $filters['active_edition_ids'])));
+            if ($activeIds === []) {
+                $where[] = '1 = 0';
+            } else {
+                $where[] = 'r.edition_id IN (' . implode(',', array_fill(0, count($activeIds), '%d')) . ')';
+                $params = array_merge($params, $activeIds);
+            }
         }
 
         // Trajectory scope (task 1.4b) — routes through the verified parent→child

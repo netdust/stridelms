@@ -162,6 +162,7 @@
     const f = s.filters || {};
     const out = {};
     if (s.queue && QUEUE_META[s.queue]) out.queue = s.queue;
+    if (s.editionScope === 'all') out.edition_scope = 'all';
     if (f.status) out.status = f.status;
     if (f.edition_id) out.edition_id = String(f.edition_id);
     if (f.company_id) out.company_id = String(f.company_id);
@@ -202,6 +203,7 @@
       },
       sortKey: p.get('sort') || '',
       sortDir: order === 'desc' ? 'desc' : 'asc',
+      editionScope: p.get('edition_scope') === 'all' ? 'all' : 'active',
       groupBy: GROUP_BY_ALLOWLIST.includes(gb) ? gb : '',
       page: toInt(p.get('p'), 1),   // `p` — NOT `page` (WP admin routing param)
       perPage: toInt(p.get('per_page'), DEFAULT_PER_PAGE),
@@ -305,6 +307,11 @@
       groupBy: '',                 // '' | 'edition_id' | 'status' | 'company_id' (real GROUP_BY_ALLOWLIST)
       collapsed: {},
       queue: '',                   // active worklist context (from ?queue=)
+      // Edition scope: 'active' (default — published editions the admin has
+      // not closed) or 'all'. The DEFAULT is announced by a dismissable
+      // "Actieve edities" pill (spec §10.4) — the old invisible scope made
+      // historical registrations unreachable with zero explanation (F-G2).
+      editionScope: 'active',
 
       /* filter sources (edition options from the server; companies derived from
          the loaded page since there is no company-options endpoint) */
@@ -399,6 +406,7 @@
         this.filters = s.filters;
         this.sortKey = s.sortKey;
         this.sortDir = s.sortDir;
+        this.editionScope = s.editionScope;
         this.groupBy = s.groupBy;
         this.page = s.page;
         this.perPage = s.perPage;
@@ -419,6 +427,7 @@
         params.set('per_page', String(this.perPage));
         const f = this.filters;
         if (this.queue) params.set('queue', this.queue);
+        if (this.editionScope === 'all') params.set('edition_scope', 'all');
         if (f.status) params.set('status', f.status);
         if (f.edition_id) params.set('edition_id', String(f.edition_id));
         if (f.company_id) params.set('company_id', String(f.company_id));
@@ -476,7 +485,7 @@
         // it from the URL or a reload would resurrect the dismissed queue.
         // Pagination is `p`, NEVER `page` — `page` is WP admin's routing param
         // (?page=stride-dashboard); deleting it here blanks the dashboard on reload.
-        ['queue', 'status', 'edition_id', 'company_id', 'trajectory_id', 'q', 'sort', 'order', 'group_by', 'p', 'per_page']
+        ['queue', 'edition_scope', 'status', 'edition_id', 'company_id', 'trajectory_id', 'q', 'sort', 'order', 'group_by', 'p', 'per_page']
           .forEach((k) => url.searchParams.delete(k));
         const gridParams = gridStateToParams(this);
         Object.keys(gridParams).forEach((k) => url.searchParams.set(k, gridParams[k]));
@@ -544,8 +553,17 @@
       clearAllFilters() {
         this.filters = { status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' };
         this.queue = '';
+        this.editionScope = 'active';   // back to the announced default
         this.onFilterChange();
       },
+
+      /* ===== edition scope pill (spec §10.4) =====
+         The DEFAULT scope is announced, dismissable, and restorable — never
+         invisible. Hidden while a queue pin or an explicit edition filter is
+         active (both bypass the scope; showing the pill then would lie). */
+      get scopePillVisible() { return !this.queue && !this.filters.edition_id; },
+      widenScope() { this.editionScope = 'all'; this.onFilterChange(); },
+      narrowScope() { this.editionScope = 'active'; this.onFilterChange(); },
 
       /* ===== pagination model (compact 1 … cur-1 cur cur+1 … last) ===== */
       get rangeFrom() { return this.total === 0 ? 0 : (this.page - 1) * this.perPage + 1; },

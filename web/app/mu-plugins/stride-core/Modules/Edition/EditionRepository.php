@@ -50,14 +50,14 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
-     * Canonical "active by date" edition-ID set — the single source of the
-     * date-scoped active rule (CR-6). Active = published editions whose
-     * start_date is within the grace window OR has NO start_date (the
-     * sessionless/dateless interest anchors — §10.7 carve-out,
-     * bug_sessionless_edition_cutoff). A bare `start_date >= X` filter would
-     * silently drop dateless editions; the NULL-permitting predicate lives
-     * HERE so every count surface (worklist queues, stats) routes through one
-     * definition instead of re-deriving it.
+     * Canonical ADMIN-ACTIVE edition-ID set — the single source of the
+     * admin-workspace scope rule (CR-6). Active = published editions the
+     * admin has NOT closed (status outside OfferingStatus::adminClosedValues).
+     * Dateless editions (the sessionless interest anchors, §10.7) are active
+     * by construction — the rule never looks at dates. Every scope consumer
+     * (worklist queues, stats, the grid's default scope via
+     * AdminRegistrationQueryService) routes through THIS set instead of
+     * re-deriving a predicate.
      *
      * @return list<int>
      */
@@ -65,17 +65,30 @@ final class EditionRepository extends AbstractRepository
     {
         global $wpdb;
 
-        $cutoff = wp_date('Y-m-d', strtotime('-' . max(0, $graceDays) . ' days'));
+        // REDEFINED (decision 2026-07-14, F-V3): "active" is STATUS-based, not
+        // date-based. The old predicate (start_date >= today − 2d) dropped an
+        // edition out of every worklist queue and the default grid TWO DAYS
+        // AFTER ITS FIRST SESSION — exactly when the post-course work the
+        // queues describe (approvals, quote follow-up, certificates) happens;
+        // the nocert queue was structurally ~0 for dated editions. An edition
+        // now stays active until the ADMIN closes it (status completed /
+        // archived — OfferingStatus::adminClosedValues; stored status only
+        // changes by admin action, there is no auto-recompute cron). Editions
+        // without a status meta row count as active (defensive: a missing row
+        // must never hide live work). $graceDays is retained for signature
+        // compatibility but no longer used.
+        unset($graceDays);
         $prefix = $this->getMetaPrefix();
+        $closed = \Stride\Domain\OfferingStatus::adminClosedValues();
+        $closedIn = implode(',', array_fill(0, count($closed), '%s'));
 
         $ids = $wpdb->get_col($wpdb->prepare(
             "SELECT p.ID FROM {$wpdb->posts} p
-             LEFT JOIN {$wpdb->postmeta} pm_start
-                    ON p.ID = pm_start.post_id AND pm_start.meta_key = '{$prefix}start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_status
+                    ON p.ID = pm_status.post_id AND pm_status.meta_key = '{$prefix}status'
              WHERE p.post_type = %s AND p.post_status = 'publish'
-               AND (pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)",
-            EditionCPT::POST_TYPE,
-            $cutoff,
+               AND (pm_status.meta_value IS NULL OR pm_status.meta_value NOT IN ({$closedIn}))",
+            array_merge([EditionCPT::POST_TYPE], $closed),
         ));
 
         return array_map('intval', $ids);

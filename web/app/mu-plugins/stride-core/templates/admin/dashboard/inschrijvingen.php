@@ -119,9 +119,25 @@ defined('ABSPATH') || exit;
             </div>
         </div>
 
-        <!-- active filter chips -->
-        <div class="ws-toolbar__row" x-show="activeChips.length" style="padding-top:2px">
+        <!-- scope pill + active filter chips. The edition scope is ALWAYS
+             announced (spec §10.4): the default "Actieve edities" pill is
+             dismissable (widens to everything, incl. afgesloten/gearchiveerde
+             edities), and the widened state offers the way back — the scope is
+             never an invisible reason rows are missing. -->
+        <div class="ws-toolbar__row" x-show="activeChips.length || scopePillVisible" style="padding-top:2px">
             <span class="ws-filterbar__label" x-html="icon('filter')" style="width:14px;height:14px;color:var(--ws-text-3)"></span>
+            <template x-if="scopePillVisible && editionScope === 'active'">
+                <span class="ws-chip is-active" :title="'<?php echo esc_js(__('Standaard tonen we enkel actieve edities. Klik op ✕ om ook afgesloten en gearchiveerde edities te tonen.', 'stride')); ?>'">
+                    <span><?php echo esc_html__('Actieve edities', 'stride'); ?></span>
+                    <span class="ws-chip__x" @click="widenScope()" x-html="icon('x')"></span>
+                </span>
+            </template>
+            <template x-if="scopePillVisible && editionScope === 'all'">
+                <span class="ws-chip">
+                    <span><?php echo esc_html__('Alle edities (ook afgesloten)', 'stride'); ?></span>
+                    <span class="ws-chip__x" @click="narrowScope()" :title="'<?php echo esc_js(__('Terug naar enkel actieve edities', 'stride')); ?>'" x-html="icon('x')"></span>
+                </span>
+            </template>
             <template x-for="chip in activeChips" :key="chip.k">
                 <span class="ws-chip is-active">
                     <span x-text="chip.label"></span>
@@ -245,6 +261,12 @@ defined('ABSPATH') || exit;
             <div class="ws-empty__icon" x-html="icon('inbox')"></div>
             <h3 x-text="emptyTitle()"></h3>
             <p><?php echo esc_html__('Pas de filters aan of wis ze om meer inschrijvingen te zien.', 'stride'); ?></p>
+            <?php // The scope is a REASON rows can be missing — say so and offer
+                  // the one-click widen instead of blaming the user's filters. ?>
+            <p class="ws-muted" x-show="scopePillVisible && editionScope === 'active'" style="font-size:var(--ws-fs-sm)">
+                <?php echo esc_html__('Tip: je kijkt enkel naar actieve edities.', 'stride'); ?>
+                <a href="#" @click.prevent="widenScope()"><?php echo esc_html__('Toon ook afgesloten edities', 'stride'); ?></a>
+            </p>
             <button class="ws-btn ws-btn--ghost" style="margin-top:16px" x-show="hasFilters" @click="clearAllFilters()">
                 <span x-html="icon('x')"></span> <?php echo esc_html__('Filters wissen', 'stride'); ?>
             </button>

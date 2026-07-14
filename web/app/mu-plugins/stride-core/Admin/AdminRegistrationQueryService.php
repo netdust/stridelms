@@ -65,6 +65,20 @@ final class AdminRegistrationQueryService
             $params['edition_scope'] = 'all';
         }
 
+        // Active-edition scope (default): resolve the admin-active id-set ONCE
+        // (memoized in the resolver) and pin the query to it. Omitted for
+        // edition_scope=all, an explicit edition_id (a picked edition is
+        // reachable regardless of its status), or a queue pin (its ids already
+        // encode the scope). The repository carries no scope SQL of its own.
+        $editionScope = (string) ($params['edition_scope'] ?? 'active');
+        if (
+            $editionScope !== 'all'
+            && empty($params['edition_id'])
+            && !array_key_exists('queue_ids', $params)
+        ) {
+            $params['active_edition_ids'] = ntdst_get(WorklistQueueResolver::class)->activeEditionIds();
+        }
+
         $groupBy = $params['group_by'] ?? null;
 
         $page = $groupBy !== null

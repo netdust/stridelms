@@ -90,6 +90,22 @@ enum OfferingStatus: string
     }
 
     /**
+     * Statuses that mean the ADMIN has closed the book on this offering —
+     * the admin-workspace scope boundary (decision 2026-07-14): an edition
+     * stays in every worklist queue and the default registrations grid until
+     * the admin explicitly completes or archives it, so post-course work
+     * (certificates, quote follow-up) never silently drops out because a
+     * date passed. Cancelled is deliberately NOT closed: a cancelled edition
+     * still carries cleanup work (registrations to cancel/notify).
+     *
+     * @return list<string>
+     */
+    public static function adminClosedValues(): array
+    {
+        return [self::Completed->value, self::Archived->value];
+    }
+
+    /**
      * Get human-readable Dutch label.
      */
     public function label(): string

@@ -101,6 +101,21 @@ test.describe('syncStateToUrl (write half, un-mocked history)', () => {
     expect(out.get('view')).toBe('inschrijvingen'); // shell param still preserved
   });
 
+  test('edition scope: only the NON-default (all) is URL-written; active drops the key', () => {
+    const win = fakeWindow('http://x/?view=inschrijvingen&edition_scope=all');
+    const g = makeGrid(win);
+    g.filters = { status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' };
+    g.sortKey = ''; g.page = 1; g.perPage = 25; g.groupBy = '';
+
+    g.editionScope = 'all';
+    g.syncStateToUrl();
+    expect(new URL(win.location.href).searchParams.get('edition_scope')).toBe('all');
+
+    g.editionScope = 'active';   // narrowed back to the default
+    g.syncStateToUrl();
+    expect(new URL(win.location.href).searchParams.get('edition_scope')).toBeNull();
+  });
+
   test('NEGATIVE: dismissing the queue chip DROPS ?queue= (a reload must not resurrect it)', () => {
     const win = fakeWindow('http://x/?view=inschrijvingen&queue=nocert');
     const g = makeGrid(win);
