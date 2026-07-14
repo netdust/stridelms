@@ -279,12 +279,47 @@ final class QuestionnaireHandler
         }
 
         if ($row) {
+            $rowStatus = RegistrationStatus::tryFrom((string) $row->status);
+
+            // Never DOWNGRADE waitlist → interest: a waitlist row is
+            // promotion-eligible (a stronger claim than interest), so an
+            // interest submission on top of it appends its data but keeps the
+            // waitlist status. The reverse (interest → waitlist) is a normal
+            // upgrade. Applies to bound AND lead rows alike.
+            $targetStatus = ($rowStatus === RegistrationStatus::Waitlist && $status === RegistrationStatus::Interest)
+                ? RegistrationStatus::Waitlist
+                : $status;
+
             $existingData = is_array($row->enrollment_data ?? null) ? $row->enrollment_data : [];
             $existingData[$stage] = $wrapped;
-            $updated = $registrations->update((int) $row->id, [
-                'status' => $status->value,
+
+            $update = [
+                'status' => $targetStatus->value,
                 'enrollment_data' => $existingData,
-            ]);
+            ];
+
+            // Reactivating a CANCELLED row must clear the cancellation stamp
+            // (mirrors create()'s reactivate branch): a live interest/waitlist
+            // row with a stale cancelled_at renders a cancellation date in the
+            // dossier/exports, and updateStatus() only stamps cancelled_at when
+            // empty — a later cancellation would keep the OLD timestamp forever.
+            if ($rowStatus === RegistrationStatus::Cancelled) {
+                $update['cancelled_at'] = null;
+            }
+
+            // Partner scoping parity: an adopted lead row (bindLeadToUser sets
+            // only user_id) or a pre-existing account row must end up with the
+            // same company_id a fresh logged-in submission would get —
+            // otherwise the row is invisible to the Partner API depending
+            // purely on submission order.
+            if ($boundUserId && empty($row->company_id)) {
+                $companyId = CompanyAffiliation::getCompanyId($boundUserId);
+                if ($companyId) {
+                    $update['company_id'] = $companyId;
+                }
+            }
+
+            $updated = $registrations->update((int) $row->id, $update);
             if (!$updated) {
                 ntdst_log('enrollment')->error('Stage submission update failed', [
                     'registration_id' => (int) $row->id,

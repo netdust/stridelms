@@ -47,13 +47,20 @@ foreach ($rows as $row) {
     }
 
     $editionId = (int) ($row->edition_id ?? 0);
-    if ($editionId > 0 && $repo->findByUserAndEdition((int) $user->ID, $editionId)) {
+    $existing = $editionId > 0 ? $repo->findByUserAndEdition((int) $user->ID, $editionId) : null;
+    if ($existing) {
+        // Binding would create the user+edition duplicate shape — report with
+        // the existing row's status so triage is trivial: a CANCELLED existing
+        // row usually means "cancel/remove the lead row"; an active one means
+        // the lead row is redundant.
         $skippedDuplicate++;
         echo sprintf(
-            "SKIP  reg #%d: account #%d (%s) already has a registration for edition #%d — resolve manually\n",
+            "SKIP  reg #%d: account #%d (%s) already has a %s registration (#%d) for edition #%d — resolve manually\n",
             (int) $row->id,
             (int) $user->ID,
             (string) $row->lead_email,
+            (string) $existing->status,
+            (int) $existing->id,
             $editionId,
         );
         continue;

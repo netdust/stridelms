@@ -27,9 +27,11 @@ $prefill_name = '';
 $prefill_email = '';
 if (is_user_logged_in()) {
     $current_user = wp_get_current_user();
-    $prefill_name = trim(
-        get_user_meta($current_user->ID, 'first_name', true) . ' ' . get_user_meta($current_user->ID, 'last_name', true)
-    ) ?: $current_user->display_name;
+    // Same convergence point the waitlist + enrollment forms read
+    // (getEnrollmentPrefill) — a second hand-rolled meta read here would
+    // drift the sibling forms' prefill sources.
+    $meta = ntdst_get(\Stride\Modules\User\UserDashboardService::class)->getEnrollmentPrefill($current_user->ID);
+    $prefill_name = trim(($meta['first_name'] ?? '') . ' ' . ($meta['last_name'] ?? '')) ?: $current_user->display_name;
     $prefill_email = $current_user->user_email;
 }
 

@@ -720,6 +720,15 @@ final class EnrollmentService extends AbstractService
                 );
             }
 
+            // Partner scoping parity (form-identity review 2026-07-14): the
+            // freshly bound account may carry a company affiliation — stamp it
+            // like every other account path, or the promoted registration stays
+            // invisible to the Partner API purely because it started as a lead.
+            $leadCompanyId = \Stride\Modules\User\CompanyAffiliation::getCompanyId($resolved['user_id']);
+            if ($leadCompanyId) {
+                $this->registrations->update($registrationId, ['company_id' => $leadCompanyId]);
+            }
+
             // Only user_id changed; reflect it on the in-memory row (avoids an
             // unguarded re-find + an extra query that could null-deref on a
             // concurrently-deleted row).

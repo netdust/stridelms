@@ -381,7 +381,7 @@ final class AdminRegistrationQueryService
                 if ($matched !== null) {
                     $accountMatch = [
                         'id'   => (int) $matched->ID,
-                        'name' => (string) $matched->display_name,
+                        'name' => (string) ($matched->display_name ?? ''),
                     ];
                 }
             }

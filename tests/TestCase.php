@@ -44,6 +44,13 @@ abstract class TestCase extends BaseTestCase
         global $_test_new_user_notification_calls;
         global $_test_rest_routes, $_test_rest_route_calls;
         global $_test_did_action_counts, $_test_doing_it_wrong_calls;
+        global $_test_current_user_id;
+
+        // Back to the stub default (wordpress-stubs.php seeds user 1): a test
+        // that logs in as another user via $_test_current_user_id must not
+        // leak that session into later test classes (order-dependent flakes:
+        // get_current_user_id() disagreeing with an emptied $_test_users map).
+        $_test_current_user_id = 1;
 
         $_test_user_meta = [];
         $_test_post_meta = [];

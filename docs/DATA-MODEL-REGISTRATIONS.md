@@ -48,8 +48,8 @@ Hard rules that follow:
 | Column | Type | Written by | Semantics & gotchas |
 |---|---|---|---|
 | `id` | PK | — | Referenced by quotes (`registration_id` postmeta on `vad_quote`), audit context, attendance. |
-| `user_id` | BIGINT NULL | enrollment paths | **NULL/0 = anonymous lead** (interest/waitlist form without an account). May also point to a since-DELETED WP user — readers must key "anonymous" on *record absence*, not on `user_id <= 0` (the grid and roster both do; see `presentLeadIdentity`). |
-| `lead_name`, `lead_email` | VARCHAR(191) NULL, **v5** | repo write paths ONLY | Denormalized, searchable copy of the anonymous submitter's identity. See §4 — five invariants. |
+| `user_id` | BIGINT NULL | enrollment paths | **NULL/0 = lead** — a participant without an account yet (§4; a logged-in self-submission on the interest/waitlist forms is BOUND, not a lead). May also point to a since-DELETED WP user — readers must key "no account" on *record absence*, not on `user_id <= 0` (the grid and roster both do; see `presentLeadIdentity`). |
+| `lead_name`, `lead_email` | VARCHAR(191) NULL, **v5** | repo write paths ONLY | Denormalized, searchable copy of a LEAD's identity — account-less rows only; `bindLeadToUser()` clears them on bind (identity then lives on the account). See §4 — five invariants. |
 | `edition_id` | BIGINT NULL | enrollment paths | FK → `vad_edition` post. NULL ⇔ trajectory parent (§1). |
 | `trajectory_id` | BIGINT NULL | trajectory enrollment | FK → `vad_trajectory` post. |
 | `parent_registration_id` | BIGINT NULL | cascade | FK → this table (the trajectory parent row). |
@@ -170,11 +170,15 @@ columns).
    `'(anoniem)'` fallback rule. The grid and the edition roster both render
    through it; a hand-rolled fallback makes the same row show two identities
    on two screens (it already did once).
-3. **Stamped unconditionally, cleared unconditionally.** Whenever an anonymous
-   row's `enrollment_data` is (re)written, the columns are set to whatever the
-   extractor returns — INCLUDING `''`. An identity scrubbed from the JSON
-   (GDPR/privacy cleanup) must clear the denormalized copy; a "only stamp when
-   non-empty" guard makes the PII outlive its source (it already did once).
+3. **Stamped unconditionally, cleared unconditionally — on ACCOUNT-LESS rows.**
+   Whenever a lead row's `enrollment_data` is (re)written, the columns are set
+   to whatever the extractor returns — INCLUDING `''`. An identity scrubbed
+   from the JSON (GDPR/privacy cleanup) must clear the denormalized copy; a
+   "only stamp when non-empty" guard makes the PII outlive its source (it
+   already did once). On BOUND rows the columns are deliberately empty
+   (`bindLeadToUser()` clears them; identity lives on the account while the
+   captured stage data stays in `enrollment_data`) — do NOT "restore the
+   mirror" by re-stamping them from the JSON on bound rows.
 4. **Repo-derived, never caller-settable.** The columns are not in `update()`'s
    `$allowed` list; they are derived from `enrollment_data` inside the repo.
    No handler/service writes them directly.

@@ -165,6 +165,59 @@ final class QuestionnaireHandlerIdentityTest extends TestCase
         $this->assertTrue($result['success']);
     }
 
+    public function test_interest_submission_never_downgrades_a_waitlist_row(): void
+    {
+        // A waitlist row is promotion-eligible — a stronger claim than
+        // interest. The interest form appends its data but must keep the
+        // waitlist status, or the user silently drops out of every
+        // promotion query.
+        $this->loginAs(7, 'anna@example.test');
+
+        $waitlistRow = (object) ['id' => 70, 'status' => 'waitlist', 'enrollment_data' => [], 'company_id' => 5];
+
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('findByUserAndEdition')->willReturn($waitlistRow);
+        $repo->expects($this->once())->method('update')
+            ->with(70, $this->callback(
+                fn(array $u): bool => $u['status'] === 'waitlist'      // NOT downgraded
+                    && isset($u['enrollment_data']['interest'])         // data still appended
+                    && !array_key_exists('cancelled_at', $u),           // not a reactivation
+            ))
+            ->willReturn(true);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $result = $this->handler->handleSubmitInterest(null, $this->interestParams('anna@example.test'));
+
+        $this->assertIsArray($result);
+        $this->assertTrue($result['success']);
+    }
+
+    public function test_reactivating_a_cancelled_row_clears_the_cancellation_stamp(): void
+    {
+        // Mirrors create()'s reactivate branch: a live interest row must not
+        // carry a stale cancelled_at (it renders a cancellation date in the
+        // dossier/exports, and updateStatus only stamps cancelled_at when
+        // empty — a later cancellation would keep the OLD timestamp forever).
+        $this->loginAs(7, 'anna@example.test');
+
+        $cancelled = (object) ['id' => 71, 'status' => 'cancelled', 'enrollment_data' => [], 'company_id' => null];
+
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('findByUserAndEdition')->willReturn($cancelled);
+        $repo->expects($this->once())->method('update')
+            ->with(71, $this->callback(
+                fn(array $u): bool => $u['status'] === 'interest'
+                    && array_key_exists('cancelled_at', $u) && $u['cancelled_at'] === null,
+            ))
+            ->willReturn(true);
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $result = $this->handler->handleSubmitInterest(null, $this->interestParams('anna@example.test'));
+
+        $this->assertIsArray($result);
+        $this->assertTrue($result['success']);
+    }
+
     public function test_success_response_is_identical_for_lead_and_bound_submissions(): void
     {
         // Threat 1: nothing in the response may signal whether an e-mail has

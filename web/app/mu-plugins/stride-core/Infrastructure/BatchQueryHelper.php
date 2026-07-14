@@ -130,7 +130,7 @@ final class BatchQueryHelper
      * (e-mail case is not significant).
      *
      * @param  array<string> $emails
-     * @return array<string, \WP_User> Map of lower-cased email => WP_User (misses absent).
+     * @return array<string, object> Map of lower-cased email => {ID, display_name} (misses absent).
      */
     public static function batchGetUsersByEmail(array $emails): array
     {
@@ -143,26 +143,22 @@ final class BatchQueryHelper
             return [];
         }
 
-        // get_users has no email__in arg — resolve via the indexed user_email
-        // column in ONE prepared IN() query, then hydrate the matched ids.
+        // get_users has no email__in arg — resolve via ONE prepared IN() query.
+        // No LOWER() on the column: user_email's *_ci collation already matches
+        // case-insensitively AND keeps the index sargable (LOWER() would force
+        // a full wp_users scan per grid page). Minimal columns on purpose — the
+        // consumer (the grid's accountMatch) needs id + display name only; this
+        // is NOT a general user-by-email API.
         global $wpdb;
         $placeholders = implode(',', array_fill(0, count($emails), '%s'));
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT ID, user_email FROM {$wpdb->users} WHERE LOWER(user_email) IN ({$placeholders})",
+            "SELECT ID, user_email, display_name FROM {$wpdb->users} WHERE user_email IN ({$placeholders})",
             ...$emails,
         ));
 
-        if (empty($rows)) {
-            return [];
-        }
-
         $byEmail = [];
-        $userMap = self::batchGetUsers(array_map(static fn($r): int => (int) $r->ID, $rows));
-        foreach ($rows as $row) {
-            $user = $userMap[(int) $row->ID] ?? null;
-            if ($user !== null) {
-                $byEmail[strtolower((string) $row->user_email)] = $user;
-            }
+        foreach ($rows ?: [] as $row) {
+            $byEmail[strtolower((string) $row->user_email)] = $row;
         }
 
         return $byEmail;
