@@ -143,7 +143,10 @@ final class AttendanceRepository
     public function statusesByUserAndEditions(int $userId, array $editionIds): array
     {
         $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
-        if (empty($ids)) {
+        // Table guard INSIDE the repo — pre-migration installs must get [],
+        // not a failing query per dossier load (callers shouldn't each have
+        // to remember the exists() check).
+        if (empty($ids) || !AttendanceTable::exists()) {
             return [];
         }
 

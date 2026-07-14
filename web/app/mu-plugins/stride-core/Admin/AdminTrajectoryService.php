@@ -405,9 +405,9 @@ final class AdminTrajectoryService
 
                 $requiredCourses[] = [
                     'title' => $course->post_title,
-                    'edition' => $editionId,
-                    // The dossier sub-label — a TITLE, not the raw FK int the
-                    // template used to print. Post cache is warm (getProgressData).
+                    // The dossier sub-label — a TITLE, never the raw FK int
+                    // (which invited '[object 512]'-class bindings). Post cache
+                    // is warm (getProgressData).
                     'edition_title' => $editionId > 0 ? (string) get_the_title($editionId) : '',
                     'state' => $state,
                 ];
@@ -429,10 +429,8 @@ final class AdminTrajectoryService
                 $chosen = [];
                 foreach ($courses as $course) {
                     if (in_array((int) $course->ID, $selectedCourseIds, true)) {
-                        $chosen[] = [
-                            'title' => $course->post_title,
-                            'edition' => $editionByCourse[(int) $course->ID] ?? 0,
-                        ];
+                        // Title only — the raw edition FK was never rendered.
+                        $chosen[] = ['title' => $course->post_title];
                     }
                 }
 

@@ -480,7 +480,30 @@ defined('ABSPATH') || exit;
 
                     <!-- billing + identity (identity fields masked; reveal is manager-only,
                          audited + rate-limited server-side) -->
-                    <template x-if="person.billing_company || person.billing_vat || person.invoice_email || person.national_id_present || person.date_of_birth_present || person.professional_license_number_present">
+                    <?php
+                    // BOTH the card's visibility gate and the rows below derive
+                    // from these two maps — adding a field is a one-line change,
+                    // never a second edit in a hand-enumerated x-if.
+                    $billingFields = [
+                        'billing_company' => __('Bedrijf', 'stride'),
+                        'billing_vat' => __('BTW-nummer', 'stride'),
+                        'invoice_email' => __('Factuur-e-mail', 'stride'),
+                        'gln_number' => __('GLN-nummer', 'stride'),
+                    ];
+                    // Masked identity fields — value stays '••••••' until the
+                    // manager clicks Toon (server audits + rate-limits reveals).
+                    $piiFields = [
+                        'national_id' => __('Rijksregisternr.', 'stride'),
+                        'date_of_birth' => __('Geboortedatum', 'stride'),
+                        'professional_license_number' => __('Visumnummer', 'stride'),
+                    ];
+                    $cardGate = implode(' || ', array_merge(
+                        array_map(static fn(string $k): string => 'person.' . $k, array_keys($billingFields)),
+                        ['person.billing_address_1', 'person.billing_city'],
+                        array_map(static fn(string $k): string => 'person.' . $k . '_present', array_keys($piiFields)),
+                    ));
+                    ?>
+                    <template x-if="<?php echo esc_attr($cardGate); ?>">
                         <div class="ws-card" style="margin-bottom:var(--ws-4)">
                             <div class="ws-card__head">
                                 <span x-html="icon('building')" style="width:17px;height:17px;color:var(--ws-primary)"></span>
@@ -488,20 +511,11 @@ defined('ABSPATH') || exit;
                             </div>
                             <div class="ws-card__body">
                                 <dl class="ws-kv">
-                                    <template x-if="person.billing_company"><div class="ws-kv__row"><dt><?php echo esc_html__('Bedrijf', 'stride'); ?></dt><dd x-text="person.billing_company"></dd></div></template>
-                                    <template x-if="person.billing_vat"><div class="ws-kv__row"><dt><?php echo esc_html__('BTW-nummer', 'stride'); ?></dt><dd x-text="person.billing_vat"></dd></div></template>
+                                    <?php foreach ($billingFields as $bKey => $bLabel) : ?>
+                                    <template x-if="person.<?php echo esc_attr($bKey); ?>"><div class="ws-kv__row"><dt><?php echo esc_html($bLabel); ?></dt><dd x-text="person.<?php echo esc_attr($bKey); ?>"></dd></div></template>
+                                    <?php endforeach; ?>
                                     <template x-if="person.billing_address_1 || person.billing_postcode || person.billing_city"><div class="ws-kv__row"><dt><?php echo esc_html__('Adres', 'stride'); ?></dt><dd x-text="[person.billing_address_1, [person.billing_postcode, person.billing_city].filter(Boolean).join(' ')].filter(Boolean).join(', ')"></dd></div></template>
-                                    <template x-if="person.invoice_email"><div class="ws-kv__row"><dt><?php echo esc_html__('Factuur-e-mail', 'stride'); ?></dt><dd x-text="person.invoice_email"></dd></div></template>
-                                    <template x-if="person.gln_number"><div class="ws-kv__row"><dt><?php echo esc_html__('GLN-nummer', 'stride'); ?></dt><dd x-text="person.gln_number"></dd></div></template>
-                                    <?php
-                                    // Masked identity fields — value stays '••••••' until the
-                                    // manager clicks Toon (server audits + rate-limits reveals).
-                                    $piiFields = [
-                                        'national_id' => __('Rijksregisternr.', 'stride'),
-                                        'date_of_birth' => __('Geboortedatum', 'stride'),
-                                        'professional_license_number' => __('Visumnummer', 'stride'),
-                                    ];
-                                    foreach ($piiFields as $piiKey => $piiLabel) : ?>
+                                    <?php foreach ($piiFields as $piiKey => $piiLabel) : ?>
                                     <template x-if="person.<?php echo esc_attr($piiKey); ?>_present">
                                         <div class="ws-kv__row">
                                             <dt><?php echo esc_html($piiLabel); ?></dt>

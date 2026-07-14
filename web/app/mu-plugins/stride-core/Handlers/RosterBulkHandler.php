@@ -240,25 +240,10 @@ final class RosterBulkHandler
                 return $scope;
             }
 
-            // §674: derive validity from the ONE transition map, not a literal.
-            $from = RegistrationStatus::tryFrom((string) $reg->status);
-            if ($from === null || !RegistrationTransitions::isAllowed($from, RegistrationStatus::Confirmed)) {
-                return new WP_Error('invalid_status', __('Deze inschrijving kan niet goedgekeurd worden.', 'stride'));
-            }
-
-            $completion = ntdst_get(EnrollmentCompletion::class);
-            $enrollment = ntdst_get(EnrollmentService::class);
-
-            $task = $completion->completeTask($id, 'approval');
-            if (is_wp_error($task) && $task->get_error_code() !== 'task_not_required') {
-                return $task;
-            }
-            // task_not_required = no approval task on the row (legacy/admin-created
-            // pendings) — nothing to complete, still approvable; the domain
-            // confirmRegistration() re-guards the transition (same exemption as
-            // BulkRegistrationHandler::handleBulkApprove, kept in lockstep).
-
-            return $enrollment->confirmRegistration($id);
+            // Shared BulkRunner::approveRow — the ONE approve core (transition
+            // gate -> approval task with task_not_required exemption -> domain
+            // confirm) for every bulk-approve surface.
+            return $this->approveRow($id, $reg);
         }));
     }
 
@@ -337,27 +322,10 @@ final class RosterBulkHandler
                 return $scope;
             }
 
-            // §674: derive validity from the ONE transition map, not a literal.
-            $from = RegistrationStatus::tryFrom((string) $reg->status);
-            if ($from === null || !RegistrationTransitions::isAllowed($from, RegistrationStatus::Confirmed)) {
-                return new WP_Error('invalid_status', __('Deze inschrijving kan niet goedgekeurd worden.', 'stride'));
-            }
-
-            $completion = ntdst_get(EnrollmentCompletion::class);
-            $enrollment = ntdst_get(EnrollmentService::class);
-
-            $task = $completion->completeTask($id, 'approval');
-            if (is_wp_error($task) && $task->get_error_code() !== 'task_not_required') {
-                return $task;
-            }
-            // task_not_required = no approval task on the row (legacy/admin-created
-            // pendings) — nothing to complete, still approvable; the domain
-            // confirmRegistration() re-guards the transition (same exemption as
-            // BulkRegistrationHandler::handleBulkApprove, kept in lockstep).
-
-            // confirmRegistration re-guards (invalid_status for non-pending), so an
-            // already-confirmed row never double-grants.
-            return $enrollment->confirmRegistration($id);
+            // Shared BulkRunner::approveRow — the ONE approve core (transition
+            // gate -> approval task with task_not_required exemption -> domain
+            // confirm) for every bulk-approve surface.
+            return $this->approveRow($id, $reg);
         }));
     }
 

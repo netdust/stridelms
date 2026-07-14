@@ -139,6 +139,7 @@ final class AdminUserService
         $registrationsTotal = 0;
         $sessionDetailsById = [];
         $sessionStatusByEdition = [];
+        $sessionCountByEdition = [];
         $detailedEditionIds = [];
         $registrationTable = RegistrationTable::getTableName();
 
@@ -174,7 +175,6 @@ final class AdminUserService
             $editionIds = array_map(static fn($r) => (int) $r->edition_id, $regRows);
             $editionIds = array_values(array_unique(array_filter($editionIds)));
 
-            $attendanceByEdition = $this->fetchUserAttendanceByEdition($userId, $editionIds);
             $sessionCountByEdition = $this->sessions()->countByEditions($editionIds);
 
             // Session details (title/date/times) for the loaded editions — one
@@ -209,16 +209,19 @@ final class AdminUserService
                 $editionId = (int) $row->edition_id;
                 $regQuoteIdByReg[(int) $row->id] = (int) ($row->quote_id ?? 0);
                 $regEditionByReg[(int) $row->id] = $editionId;
-                $att = $attendanceByEdition[$editionId] ?? null;
                 $totalSessions = $sessionCountByEdition[$editionId] ?? 0;
                 $attendanceSummary = null;
 
                 if ($totalSessions > 0) {
                     $statusBySession = $sessionStatusByEdition[$editionId] ?? [];
+                    // Counts tallied from the SAME per-session statuses the rows
+                    // and hours read — one attendance query, no second GROUP BY
+                    // over identical rows (one row per session+user by schema).
+                    $marks = array_count_values($statusBySession);
                     $attendanceSummary = [
-                        'present' => $att['present'] ?? 0,
-                        'absent' => $att['absent'] ?? 0,
-                        'excused' => $att['excused'] ?? 0,
+                        'present' => $marks['present'] ?? 0,
+                        'absent' => $marks['absent'] ?? 0,
+                        'excused' => $marks['excused'] ?? 0,
                         'total_sessions' => $totalSessions,
                         // Real hours: sum of the present sessions' start→end durations.
                         'hours' => $this->presentHours($editionId, $statusBySession, $sessionDetailsById),
@@ -462,16 +465,16 @@ final class AdminUserService
             // Enrich with total session count + hours per edition
             $summaryEditionIds = array_keys($grouped);
             if (!empty($summaryEditionIds)) {
-                $sessionCounts = $this->sessions()->countByEditions($summaryEditionIds);
                 // Only fetch what the registrations block didn't already load —
                 // for typical users the summary set is a subset, so this is free.
                 $missing = array_values(array_diff($summaryEditionIds, $detailedEditionIds));
                 if ($missing !== []) {
+                    $sessionCountByEdition += $this->sessions()->countByEditions($missing);
                     $sessionDetailsById += $this->sessions()->detailsByEditions($missing);
                     $sessionStatusByEdition += $this->attendanceRepo()->statusesByUserAndEditions($userId, $missing);
                 }
                 foreach ($grouped as $editionId => &$row) {
-                    $row['total_sessions'] = $sessionCounts[$editionId] ?? 0;
+                    $row['total_sessions'] = $sessionCountByEdition[$editionId] ?? 0;
                     $row['hours'] = $this->presentHours($editionId, $sessionStatusByEdition[$editionId] ?? [], $sessionDetailsById);
                 }
                 unset($row);
@@ -506,17 +509,6 @@ final class AdminUserService
             // rows may carry one — the explicit guard keeps the send-log out of
             // the per-person trail regardless of row vintage, mirroring
             // NotificationService::EXCLUDED_ACTIONS).
-            $auditTrailTotal = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$auditTable}
-                 WHERE (actor_id = %d
-                    OR (entity_type = 'user' AND entity_id = %d)
-                    OR subject_user_id = %d)
-                   AND action <> 'mail.sent'",
-                $userId,
-                $userId,
-                $userId,
-            ));
-
             $auditEntries = $wpdb->get_results($wpdb->prepare(
                 "SELECT * FROM {$auditTable}
                  WHERE (actor_id = %d
@@ -529,6 +521,53 @@ final class AdminUserService
                 $userId,
                 $userId,
             ));
+
+            // Total: derivable from the window when it isn't full — the 3-arm
+            // OR COUNT is the most expensive query in this method on a grown
+            // audit table, so only pay for it when >50 rows actually exist.
+            $auditTrailTotal = count($auditEntries);
+            if ($auditTrailTotal === 50) {
+                $auditTrailTotal = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$auditTable}
+                     WHERE (actor_id = %d
+                        OR (entity_type = 'user' AND entity_id = %d)
+                        OR subject_user_id = %d)
+                       AND action <> 'mail.sent'",
+                    $userId,
+                    $userId,
+                    $userId,
+                ));
+            }
+
+            // Collapse bursts of PROFILE-WRITE rows BEFORE mapping (on the raw
+            // entries, which natively carry ->action — the mapped payload does
+            // not expose internal action slugs to the client). usermeta.updated
+            // is recorded PER meta key: one profile save yields ~10 identical
+            // "Profielgegevens bijgewerkt" lines that pushed real lifecycle
+            // events out of the visible window (F-D10). Scoped to profile
+            // actions only: other events can be text-identical yet DISTINCT
+            // (two attendance marks on different sessions of one edition) and
+            // must never be swallowed. Rows are DESC-ordered; keep the newest
+            // of each burst (same action family + actor + entity within 5 min
+            // of the kept anchor).
+            $isProfileNoise = static fn(object $row): bool => str_starts_with((string) ($row->action ?? ''), 'usermeta.')
+                || ($row->action ?? '') === 'user.profile_updated';
+            $collapsedEntries = [];
+            $prevRow = null;
+            foreach ($auditEntries as $row) {
+                if ($prevRow !== null
+                    && $isProfileNoise($row)
+                    && $isProfileNoise($prevRow)
+                    && (int) ($row->actor_id ?? 0) === (int) ($prevRow->actor_id ?? 0)
+                    && (int) ($row->entity_id ?? 0) === (int) ($prevRow->entity_id ?? 0)
+                    && abs(strtotime((string) $row->created_at) - strtotime((string) $prevRow->created_at)) <= 300
+                ) {
+                    continue;
+                }
+                $collapsedEntries[] = $row;
+                $prevRow = $row;
+            }
+            $auditEntries = $collapsedEntries;
 
             // Collect actor IDs AND target user IDs for batch fetch
             $userIdsToResolve = [];
@@ -561,33 +600,6 @@ final class AdminUserService
 
                 $auditTrail[] = AdminActivityMapper::fromAuditEntry($entry, $actorName, $targetName);
             }
-
-            // Collapse bursts of PROFILE-WRITE lines only. usermeta.updated is
-            // recorded PER meta key — one profile save yields ~10 identical
-            // "Profielgegevens bijgewerkt" lines that pushed real lifecycle
-            // events out of the visible window (F-D10). Scoped to profile
-            // actions: other events can be text-identical yet DISTINCT (two
-            // attendance marks on different sessions of the same edition render
-            // the same line) and must never be swallowed. Entries are DESC-
-            // ordered; keep the newest of each burst.
-            $isProfileNoise = static fn(array $item): bool => str_starts_with($item['action'] ?? '', 'usermeta.')
-                || ($item['action'] ?? '') === 'user.profile_updated';
-            $collapsed = [];
-            $prev = null;
-            foreach ($auditTrail as $item) {
-                if ($prev !== null
-                    && $isProfileNoise($item)
-                    && $isProfileNoise($prev)
-                    && $prev['text'] === $item['text']
-                    && $prev['actor_name'] === $item['actor_name']
-                    && abs($prev['timestamp'] - $item['timestamp']) <= 300
-                ) {
-                    continue;
-                }
-                $collapsed[] = $item;
-                $prev = $item;
-            }
-            $auditTrail = $collapsed;
         }
 
         return new WP_REST_Response([
@@ -961,48 +973,8 @@ final class AdminUserService
     // already provided the identical publish-only per-edition count; the
     // read-model now consumes the repository like everything else.)
 
-    /**
-     * Aggregate attendance COUNTS for a user across a set of editions.
-     *
-     * Returns [edition_id => [present, absent, excused]]. Editions with no
-     * recorded attendance are absent. (Hours are computed separately from the
-     * real session durations — see presentHours(); the old "present × 4h"
-     * convention fabricated hours and is gone.)
-     *
-     * @param array<int> $editionIds
-     * @return array<int, array{present:int, absent:int, excused:int}>
-     */
-    private function fetchUserAttendanceByEdition(int $userId, array $editionIds): array
-    {
-        if (empty($editionIds) || !AttendanceTable::exists()) {
-            return [];
-        }
-
-        global $wpdb;
-        $attendanceTable = AttendanceTable::getTableName();
-        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
-        $params = array_merge([$userId], $editionIds);
-
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT edition_id, status, COUNT(*) AS cnt
-             FROM {$attendanceTable}
-             WHERE user_id = %d
-               AND edition_id IN ({$placeholders})
-             GROUP BY edition_id, status",
-            ...$params,
-        ));
-
-        $map = [];
-        foreach ($rows as $row) {
-            $editionId = (int) $row->edition_id;
-            if (!isset($map[$editionId])) {
-                $map[$editionId] = ['present' => 0, 'absent' => 0, 'excused' => 0];
-            }
-            if (isset($map[$editionId][$row->status])) {
-                $map[$editionId][$row->status] = (int) $row->cnt;
-            }
-        }
-
-        return $map;
-    }
+    // (fetchUserAttendanceByEdition removed — the per-registration counts are
+    // tallied from AttendanceRepository::statusesByUserAndEditions' rows, the
+    // same read that feeds the per-session rows and hours: one attendance
+    // query per edition set instead of two over identical rows.)
 }

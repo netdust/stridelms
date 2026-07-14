@@ -24,8 +24,8 @@
           audit_trail_total }
      GET /admin/users/{id}/trajectories
         per-trajectory { trajectory:{id,title,status,mode}, completed_count,
-          in_progress_count, total_required, required_courses:[{title,edition,state}],
-          elective_groups:[{name,required,total,countChosen,isChosen,chosen:[{title,edition}]}] }
+          in_progress_count, total_required, required_courses:[{title,edition_title,state}],
+          elective_groups:[{name,required,total,countChosen,isChosen,chosen:[{title}]}] }
 
    INV-5: every x-html in dossier.php binds a CONSTANT icon name via
    icon('<literal>') / icon(<closed-enum field>); never a data field. The three
@@ -405,11 +405,15 @@
             this.load();
           }
         });
-        // Browser back/forward between two dossier deep-links (?user=A ↔ ?user=B)
-        // never changes the shell's `view` VALUE, so ws-view-changed does not
-        // fire — reload directly on popstate. load() self-guards (loadedKey +
-        // loadSeq), so a popstate that also triggers ws-view-changed costs one
-        // superseded request, never a double render.
+        // Forward-compatibility for in-app history: TODAY the shell only ever
+        // replaceState()s, so no same-document history entries exist and this
+        // listener is inert (a real browser Back is a full page load, which
+        // cold-boots correctly). The moment any surface starts pushState-ing
+        // (planned navigation work), back/forward between two dossier
+        // deep-links (?user=A ↔ ?user=B) will NOT change the shell's `view`
+        // value — ws-view-changed won't fire — and this listener becomes the
+        // thing that keeps the dossier honest. load() self-guards (loadedKey +
+        // loadSeq), so double-firing costs one superseded request at most.
         window.addEventListener('popstate', () => {
           if (this.view === 'dossier') {
             this.load();
@@ -443,6 +447,7 @@
           this.loading.trajectories = true;
           this.person = null;
           this.regs = [];
+          this.regsTotal = 0;
           this.trajectories = [];
           this.quotes = [];
           this.auditTrail = [];
@@ -471,11 +476,12 @@
           ? {}
           : Object.fromEntries(this.regs.map((r) => [r.id, r.open]));
 
-        // Soft refresh re-fetches everything already loaded (clamped at the
-        // server's 100 cap) so "Toon meer" pages survive an action refresh.
-        const perPage = targetChanged
-          ? this.regPerPage
-          : Math.min(100, Math.max(this.regPerPage, this.regs.length));
+        // Soft refresh re-fetches everything already loaded so "Toon meer"
+        // pages survive an action refresh. Known limit: beyond the server's
+        // 100-row cap a soft refresh trims the list back to 100 (the button
+        // reappears) — acceptable for the expected profile (avg 2-3
+        // registrations per person).
+        const perPage = targetChanged ? this.regPerPage : this.loadedSpanPerPage;
 
         Promise.allSettled([
           this.api(`/admin/users/${userId}/detail?reg_per_page=${perPage}`),
@@ -502,6 +508,9 @@
               open: prevOpen[r.id] !== undefined ? prevOpen[r.id] : i === openIdx,
             }));
             this.regsTotal = Number(d.registrations_total) || allRegs.length;
+            // Page size is the SERVER's (echoed back) — never a hardcoded twin
+            // of the endpoint default; the offset-derived paging math reads it.
+            this.regPerPage = Number(d.reg_per_page) || this.regPerPage;
             this.quotes = Array.isArray(d.quotes) ? d.quotes : [];
             // audit_trail is GATED for view-only roles — the explicit
             // can_see_timeline flag distinguishes "afgeschermd" from "no
@@ -538,6 +547,13 @@
       /* whether more registrations exist beyond the loaded pages */
       get hasMoreRegs() { return this.regs.length < this.regsTotal; },
 
+      /* The ONE loaded-span page-size rule (soft refresh + load-more paging):
+         big enough to cover everything already loaded, clamped at the server's
+         100 cap. Two call sites, one invariant. */
+      get loadedSpanPerPage() {
+        return Math.min(100, Math.max(this.regPerPage, this.regs.length));
+      },
+
       /* Append the next page of registrations (server pages at regPerPage,
          registered_at DESC). Deduped by id so an overlapping page can never
          duplicate a row. Guarded by loadSeq: a stale response for the PREVIOUS
@@ -548,15 +564,20 @@
           return;
         }
         this.loadingMore = true;
-        const seq = this.loadSeq;
+        // Bump the seq (not just snapshot): this supersedes any SLOWER
+        // in-flight load() that started earlier — without the bump, a soft
+        // refresh resolving after this append would pass its own seq check and
+        // replace regs with the smaller pre-append page, visibly discarding
+        // the rows just loaded.
+        const seq = ++this.loadSeq;
         // Offset-derived paging: the loaded list is always a contiguous prefix
         // (load() fetches page 1 sized to cover it), so the next chunk starts
         // at exactly regs.length. Sizing per_page to the loaded count makes
         // (page=2, per_page=N) land on offset N — no stuck-page loop when
         // dedupe leaves the count a non-multiple of 20, no missed rows after
-        // a widened soft refresh. Clamped at the server's 100 cap (beyond it
-        // the floor()-derived page overlaps slightly; dedupe absorbs that).
-        const per = Math.min(100, Math.max(this.regPerPage, this.regs.length));
+        // a widened soft refresh. Beyond the 100 cap the floor()-derived page
+        // overlaps slightly; dedupe absorbs that.
+        const per = this.loadedSpanPerPage;
         const nextPage = Math.floor(this.regs.length / per) + 1;
         try {
           const d = await this.api(
@@ -614,13 +635,6 @@
       /* status-relevance gate + the muted line for non-fulfillment statuses */
       showsFulfillment(status) { return showsFulfillment(status); },
       fulfillmentEmptyHint(status) { return fulfillmentEmptyHint(status); },
-
-      /* attendance present/total ratio for a reg, as "N/M" microcopy */
-      attSummary(r) {
-        const a = r && r.attendance;
-        if (!a || !a.total_sessions) return '';
-        return `${a.present || 0}/${a.total_sessions} aanwezig`;
-      },
 
       /* per-session attendance rows toggle (which day was missed) */
       toggleAttendance(regId) { this.openAttendance[regId] = !this.openAttendance[regId]; },

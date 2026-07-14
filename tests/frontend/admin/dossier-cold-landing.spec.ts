@@ -142,6 +142,19 @@ test.describe('Dossier surface — cold landing', () => {
     await expect(panelHeader.or(fulfillmentHint)).toBeVisible({ timeout: 15000 });
     if (await panelHeader.isVisible().catch(() => false)) {
       await expect(taskPill.or(emptyState)).toBeVisible({ timeout: 15000 });
+      // When pills DO render they must carry the server's Dutch task labels
+      // (EnrollmentCompletion::taskTypeLabel) — a payload regression that ships
+      // raw slugs or empty labels goes red here, not just in the unit test.
+      if (await taskPill.isVisible().catch(() => false)) {
+        const KNOWN = [
+          'Sessiekeuze', 'Intakevragen', 'Documenten uploaden', 'Goedkeuring',
+          'Evaluatie na opleiding', 'Documenten na opleiding', 'Aftekening',
+        ];
+        const labels = await openCard.locator('.ws-pill--done, .ws-pill--todo').allTextContents();
+        for (const label of labels.map((l) => l.trim()).filter(Boolean)) {
+          expect(KNOWN.some((k) => label.includes(k)), `unexpected task pill label: ${label}`).toBe(true);
+        }
+      }
     }
   });
 

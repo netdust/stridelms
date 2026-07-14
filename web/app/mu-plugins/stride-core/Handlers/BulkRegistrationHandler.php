@@ -105,37 +105,13 @@ final class BulkRegistrationHandler
             return $deny;
         }
 
-        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
-            // M3 / B5: a row may be approved into the pipe only if the ONE
-            // transition map (RegistrationTransitions, V15) permits
-            // <status> -> Confirmed. A confirmed/terminal row is rejected HERE,
-            // before the domain confirm path is re-entered — this is the gate that
-            // prevents a second LD grant (D2). Deriving from the map (not a
-            // hard-coded Pending|Interest literal) keeps the handler from drifting
-            // if the map changes; the domain confirmRegistration() re-guards.
-            $from = RegistrationStatus::tryFrom((string) $reg->status);
-            if ($from === null || !RegistrationTransitions::isAllowed($from, RegistrationStatus::Confirmed)) {
-                return new WP_Error('invalid_status', __('Deze inschrijving kan niet goedgekeurd worden.', 'stride'));
-            }
-
-            $completion = ntdst_get(EnrollmentCompletion::class);
-            $enrollment = ntdst_get(EnrollmentService::class);
-
-            $task = $completion->completeTask($id, 'approval');
-            if (is_wp_error($task) && $task->get_error_code() !== 'task_not_required') {
-                return $task;
-            }
-            // task_not_required = the row has NO approval task (legacy/admin-created
-            // pendings, or approval not enabled on the edition). There is nothing to
-            // complete, but the row is still legitimately approvable — proceed to the
-            // domain confirm, which re-guards the status transition itself. Failing
-            // here made such rows permanently un-approvable from the grid AND the
-            // dossier, with an untranslated internal error in the failure report.
-
-            // D2: confirmRegistration returns WP_Error('invalid_status') for non-pending,
-            // so an already-confirmed row never double-grants.
-            return $enrollment->confirmRegistration($id);
-        }));
+        // The approve core (transition gate -> approval task -> domain confirm)
+        // is the SHARED BulkRunner::approveRow — one implementation for the
+        // grid/dossier, edition-roster and trajectory-roster surfaces.
+        return $this->finishBatch($this->runBulk(
+            $params,
+            fn (int $id, object $reg): true|WP_Error => $this->approveRow($id, $reg),
+        ));
     }
 
     /**

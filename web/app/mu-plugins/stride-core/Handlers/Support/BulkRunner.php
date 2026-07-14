@@ -193,4 +193,40 @@ trait BulkRunner
 
         return $report;
     }
+
+    /**
+     * The ONE approve core every bulk-approve surface runs per row (grid,
+     * dossier single-id, edition roster, trajectory roster): transition-map
+     * gate → completeTask('approval') with the task_not_required exemption →
+     * domain confirm. Previously copy-pasted three times with "kept in
+     * lockstep" comments — this is the lockstep.
+     *
+     * task_not_required = the row has NO approval task (legacy/admin-created
+     * pendings, approval not enabled on the offering). There is nothing to
+     * complete, but the row is still legitimately approvable — the domain
+     * confirmRegistration() re-guards the status transition itself. Treating
+     * it as failure made such rows permanently un-approvable with an
+     * untranslated internal error in the failure report.
+     *
+     * @return true|WP_Error
+     */
+    private function approveRow(int $id, object $reg): true|WP_Error
+    {
+        $from = \Stride\Domain\RegistrationStatus::tryFrom((string) $reg->status);
+        if ($from === null || !\Stride\Modules\Enrollment\RegistrationTransitions::isAllowed($from, \Stride\Domain\RegistrationStatus::Confirmed)) {
+            return new WP_Error('invalid_status', __('Deze inschrijving kan niet goedgekeurd worden.', 'stride'));
+        }
+
+        $completion = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+        $enrollment = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+
+        $task = $completion->completeTask($id, 'approval');
+        if (is_wp_error($task) && $task->get_error_code() !== 'task_not_required') {
+            return $task;
+        }
+
+        // The domain confirm re-guards (invalid_status for non-pending), so an
+        // already-confirmed row never double-grants LD access.
+        return $enrollment->confirmRegistration($id);
+    }
 }

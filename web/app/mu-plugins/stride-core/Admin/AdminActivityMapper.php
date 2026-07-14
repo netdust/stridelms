@@ -29,7 +29,11 @@ final class AdminActivityMapper
         'completion.certificate_issued',
         'quote.created',
         'quote.sent',
-        'quote.email_sent',
+        // quote.email_sent is deliberately NOT in the feed list: its text
+        // carries the customer's email address, and the /admin/activity feed
+        // is gated only by stride_view — the same read-only role the dossier
+        // blocks from quote data (canSeeSensitive). It still renders on the
+        // dossier timeline, which is stride_manage-gated.
         'quote.cancelled',
         'trajectory.enrolled',
         'impersonation.started',
@@ -90,7 +94,6 @@ final class AdminActivityMapper
 
         return [
             'id'         => (int) $entry->id,
-            'action'     => (string) $entry->action,
             'type'       => $type,
             'text'       => $text,
             'target_url' => self::targetUrl($entry->action, $context),
