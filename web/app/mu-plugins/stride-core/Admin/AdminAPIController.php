@@ -450,6 +450,9 @@ final class AdminAPIController
             'args' => [
                 'id' => ['type' => 'integer', 'required' => true],
                 'reg_page' => ['type' => 'integer', 'default' => 1],
+                // Widened (clamped server-side to ≤100) by the dossier's soft
+                // refresh so already-loaded pages survive a reload in one request.
+                'reg_per_page' => ['type' => 'integer', 'default' => 20],
             ],
         ]);
 

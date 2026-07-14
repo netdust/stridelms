@@ -49,7 +49,10 @@ final class AdminUserService
 
         $userId = (int) $request->get_param('id');
         $regPage = max(1, (int) $request->get_param('reg_page'));
-        $regPerPage = 20;
+        // Default 20; the client may widen (clamped) so a soft refresh can
+        // re-fetch everything it already had loaded in ONE request instead of
+        // collapsing back to the first page.
+        $regPerPage = min(100, max(1, (int) ($request->get_param('reg_per_page') ?: 20)));
 
         // Sensitive fields (phone, audit trail, full quote listing) are only
         // returned to stride_manage. stride_view (read-only Supervisor role)
@@ -141,12 +144,18 @@ final class AdminUserService
             ));
 
             $regOffset = ($regPage - 1) * $regPerPage;
+            // tp join: trajectory-parent rows (edition_id NULL, trajectory_id set —
+            // the cascade parent of a trajectory enrollment) previously fell through
+            // to "Onbekend" because only the edition title was selected. The
+            // trajectory title is the row's real name for those rows.
             $regRows = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.id, r.edition_id, r.status, r.enrollment_path, r.registered_at,
-                        r.completed_at, r.cancelled_at, r.selections, r.enrollment_data,
-                        r.completion_tasks, r.notes, r.quote_id, p.post_title AS edition_title
+                "SELECT r.id, r.edition_id, r.trajectory_id, r.status, r.enrollment_path,
+                        r.registered_at, r.completed_at, r.cancelled_at, r.selections,
+                        r.enrollment_data, r.completion_tasks, r.notes, r.quote_id,
+                        p.post_title AS edition_title, tp.post_title AS trajectory_title
                  FROM {$registrationTable} r
                  LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
+                 LEFT JOIN {$wpdb->posts} tp ON r.trajectory_id = tp.ID
                  WHERE r.user_id = %d
                  ORDER BY r.registered_at DESC
                  LIMIT %d OFFSET %d",
@@ -228,10 +237,22 @@ final class AdminUserService
                     $pendingReason = $completion->pendingReason($tasks);
                 }
 
+                // Row title: edition title for edition rows; for trajectory-parent
+                // rows (edition_id NULL + trajectory_id set) the trajectory title.
+                // Only a row whose linked post was DELETED still reads "Onbekend".
+                $trajectoryId = (int) ($row->trajectory_id ?? 0);
+                $isTrajectory = $editionId === 0 && $trajectoryId > 0;
+                $rowTitle = (string) ($row->edition_title ?? '');
+                if ($rowTitle === '' && $isTrajectory) {
+                    $rowTitle = (string) ($row->trajectory_title ?? '');
+                }
+
                 $registrations[] = [
                     'id' => (int) $row->id,
                     'edition_id' => $editionId,
-                    'edition_title' => $row->edition_title ?: __('Onbekend', 'stride'),
+                    'trajectory_id' => $trajectoryId,
+                    'is_trajectory' => $isTrajectory,
+                    'edition_title' => $rowTitle !== '' ? $rowTitle : __('Onbekend', 'stride'),
                     'status' => $row->status,
                     'enrollment_path' => $row->enrollment_path,
                     'registered_at' => $row->registered_at,
@@ -494,6 +515,8 @@ final class AdminUserService
             'user' => $user,
             'registrations' => $registrations,
             'registrations_total' => $registrationsTotal,
+            'reg_page' => $regPage,
+            'reg_per_page' => $regPerPage,
             'quotes' => $canSeeSensitive ? $quotes : [],
             'attendance' => $attendance,
             'audit_trail' => $canSeeSensitive ? $auditTrail : [],

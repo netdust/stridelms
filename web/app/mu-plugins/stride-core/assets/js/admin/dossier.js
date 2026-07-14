@@ -305,6 +305,13 @@
       // faster person B would otherwise show A's dossier under B's URL).
       loadedKey: null,
       loadSeq: 0,
+      userId: 0,
+
+      // registrations pagination (server pages at 20; regsTotal is the TRUE
+      // count — the section chip and the "Toon meer" affordance read it).
+      regsTotal: 0,
+      regPerPage: 20,
+      loadingMore: false,
 
       // per-block load state — a failed block shows its OWN error, never blanks
       loading: { detail: true, trajectories: true },
@@ -399,14 +406,22 @@
           return;
         }
 
+        this.userId = userId;
+
         // Preserve which registrations are expanded across a SOFT refresh (an
         // action just ran; collapsing everything would lose the admin's place).
         const prevOpen = targetChanged
           ? {}
           : Object.fromEntries(this.regs.map((r) => [r.id, r.open]));
 
+        // Soft refresh re-fetches everything already loaded (clamped at the
+        // server's 100 cap) so "Toon meer" pages survive an action refresh.
+        const perPage = targetChanged
+          ? this.regPerPage
+          : Math.min(100, Math.max(this.regPerPage, this.regs.length));
+
         Promise.allSettled([
-          this.api(`/admin/users/${userId}/detail`),
+          this.api(`/admin/users/${userId}/detail?reg_per_page=${perPage}`),
           this.api(`/admin/users/${userId}/trajectories`),
         ]).then(([detail, trajectories]) => {
           // A newer load() superseded this one (fast target switch) — drop it.
@@ -429,6 +444,7 @@
               ...r,
               open: prevOpen[r.id] !== undefined ? prevOpen[r.id] : i === openIdx,
             }));
+            this.regsTotal = Number(d.registrations_total) || allRegs.length;
             // audit_trail is GATED — absent/empty means the viewer can't see it
             // (PII N1) OR there's simply no history. Either way: locked/empty
             // timeline, never a crash.
@@ -457,6 +473,35 @@
           }
           this.loading.trajectories = false;
         });
+      },
+
+      /* whether more registrations exist beyond the loaded pages */
+      get hasMoreRegs() { return this.regs.length < this.regsTotal; },
+
+      /* Append the next page of registrations (server pages at regPerPage,
+         registered_at DESC). Deduped by id so an overlapping page can never
+         duplicate a row. */
+      async loadMoreRegs() {
+        if (this.loadingMore || !this.userId || !this.hasMoreRegs) {
+          return;
+        }
+        this.loadingMore = true;
+        const nextPage = Math.floor(this.regs.length / this.regPerPage) + 1;
+        try {
+          const d = await this.api(
+            `/admin/users/${this.userId}/detail?reg_page=${nextPage}&reg_per_page=${this.regPerPage}`,
+          );
+          const seen = new Set(this.regs.map((r) => r.id));
+          const extra = (d.registrations || [])
+            .filter((r) => !seen.has(r.id))
+            .map((r) => ({ ...r, open: false }));
+          this.regs = this.regs.concat(extra);
+          this.regsTotal = Number(d.registrations_total) || this.regsTotal;
+        } catch (e) {
+          // Non-fatal: the loaded dossier stays; the button remains for retry.
+        } finally {
+          this.loadingMore = false;
+        }
       },
 
       /* the registration currently selected in the timeline <select> */

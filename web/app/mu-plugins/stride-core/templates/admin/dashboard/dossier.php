@@ -89,8 +89,10 @@ defined('ABSPATH') || exit;
                 <div class="ws-person-head__info">
                     <div class="ws-person-head__name" x-text="person.display_name"></div>
                     <div class="ws-person-head__meta">
-                        <span x-show="person.profile_type">
-                            <span x-html="icon('briefcase')"></span><span x-text="person.profile_type"></span>
+                        <?php // profile_type is an OBJECT {name, color} — bind .name
+                              // (a bare x-text rendered "[object Object]"). ?>
+                        <span x-show="person.profile_type && person.profile_type.name">
+                            <span x-html="icon('briefcase')"></span><span x-text="person.profile_type ? person.profile_type.name : ''"></span>
                         </span>
                         <span x-show="person.organisation || person.department">
                             <span x-html="icon('building')"></span>
@@ -217,7 +219,8 @@ defined('ABSPATH') || exit;
                     <!-- ===== REGISTRATIONS ===== -->
                     <div class="ws-section-title ws-mt-0">
                         <span x-html="icon('grid')"></span> <?php echo esc_html__('Inschrijvingen', 'stride'); ?>
-                        <span class="ws-grouphead__count" x-text="regs.length"></span>
+                        <?php // The TRUE total (server count), not the loaded page size. ?>
+                        <span class="ws-grouphead__count" x-text="regsTotal || regs.length"></span>
                         <span class="ws-section-title__line"></span>
                     </div>
 
@@ -235,7 +238,7 @@ defined('ABSPATH') || exit;
                             <div class="ws-reg__head" @click="r.open = !r.open">
                                 <span class="ws-reg__chev" x-html="icon('chevRight')"></span>
                                 <div class="ws-reg__title">
-                                    <b x-text="r.edition_title"></b>
+                                    <b x-text="r.edition_title"></b><span class="ws-badge ws-badge--lead ws-badge--dotless" x-show="r.is_trajectory"><?php echo esc_html__('Traject', 'stride'); ?></span>
                                     <small><?php echo esc_html__('ingeschreven', 'stride'); ?> <span x-text="r.registered_at"></span></small>
                                 </div>
                                 <div class="ws-reg__badges">
@@ -394,6 +397,18 @@ defined('ABSPATH') || exit;
 
                             </div>
                         </div>
+                    </template>
+
+                    <!-- more registrations than the loaded pages → load next page -->
+                    <template x-if="hasMoreRegs">
+                        <button class="ws-btn ws-btn--ghost ws-btn--sm" style="margin-top:var(--ws-3)"
+                                :disabled="loadingMore"
+                                @click="loadMoreRegs()">
+                            <span x-html="icon('chevDown')"></span>
+                            <span x-text="loadingMore
+                                ? '<?php echo esc_js(__('Laden…', 'stride')); ?>'
+                                : '<?php echo esc_js(__('Toon meer', 'stride')); ?> (' + regs.length + ' <?php echo esc_js(__('van', 'stride')); ?> ' + regsTotal + ')'"></span>
+                        </button>
                     </template>
                 </div>
 
