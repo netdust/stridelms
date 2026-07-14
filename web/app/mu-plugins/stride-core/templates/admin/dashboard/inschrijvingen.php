@@ -117,9 +117,13 @@ defined('ABSPATH') || exit;
             </div>
 
             <div class="ws-toolbar__spacer"></div>
+            <?php // Grouped mode: `total` is the DISTINCT GROUP count (server
+                  // contract) — the unit word must say so, or "Toont 1–25 van 3"
+                  // reads as nonsense (F-G5). ?>
             <div class="ws-count">
                 <?php echo esc_html__('Toont', 'stride'); ?> <b x-text="rangeFrom"></b>–<b x-text="rangeTo"></b>
                 <?php echo esc_html__('van', 'stride'); ?> <b x-text="total.toLocaleString('nl-BE')"></b>
+                <span x-show="groupBy"> <?php echo esc_html__('groepen', 'stride'); ?></span>
             </div>
         </div>
 
@@ -284,7 +288,10 @@ defined('ABSPATH') || exit;
                 <span class="ws-bulkbar__num" x-text="selectedCount"></span>
                 <span class="ws-bulkbar__label">
                     <?php echo esc_html__('geselecteerd', 'stride'); ?>
-                    <template x-if="!selectAllFilter && total > selectedIds.length && selectedIds.length > 0">
+                    <?php // Cross-page select-all is FLAT-mode only: in grouped
+                          // mode `total` counts GROUPS, so "selecteer alle 3"
+                          // would arm a blast radius the number doesn't describe. ?>
+                    <template x-if="!groupBy && !selectAllFilter && total > selectedIds.length && selectedIds.length > 0">
                         <a @click="selectAllFiltered()"><?php echo esc_html__('— selecteer alle', 'stride'); ?> <span x-text="total"></span></a>
                     </template>
                 </span>
@@ -333,9 +340,13 @@ defined('ABSPATH') || exit;
         </div>
     </template>
 
-    <!-- ===== PAGINATION ===== -->
-    <div class="ws-pager" x-show="!error && total > 0 && !groupBy">
-        <div class="ws-count"><?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="pageCount"></b></div>
+    <!-- ===== PAGINATION =====
+         One pager for BOTH modes. Groups ARE server-paginated (LIMIT/OFFSET on
+         the distinct group values); the old grouped-mode footer HID the pager
+         and claimed "paginering uit", making groups beyond the first page
+         silently unreachable (F-G5). -->
+    <div class="ws-pager" x-show="!error && total > 0">
+        <div class="ws-count"><?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="pageCount"></b><span x-show="groupBy"> — <?php echo esc_html__('groepen per pagina', 'stride'); ?></span></div>
         <div class="ws-pager__pages">
             <button class="ws-page-btn" :disabled="page===1" @click="goPage(page-1)"><span x-html="icon('chevRight')" style="transform:rotate(180deg);width:15px;height:15px"></span></button>
             <template x-for="p in pageList()" :key="p">
@@ -347,9 +358,6 @@ defined('ABSPATH') || exit;
         <div class="ws-select-wrap"><?php echo esc_html__('Per pagina', 'stride'); ?>
             <select class="ws-select" x-model.number="perPage" @change="onPerPageChange()"><option>10</option><option>25</option><option>50</option></select>
         </div>
-    </div>
-    <div class="ws-pager" x-show="!error && groupBy && total > 0" style="justify-content:center">
-        <span class="ws-muted" style="font-size:var(--ws-fs-sm)"><?php echo esc_html__('Gegroepeerd — paginering uit.', 'stride'); ?> <b x-text="total"></b> <?php echo esc_html__('inschrijvingen in', 'stride'); ?> <b x-text="groups.length"></b> <?php echo esc_html__('groepen.', 'stride'); ?></span>
     </div>
 
     <!-- ===== RESULT MODAL (partial-failure report) ===== -->

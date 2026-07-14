@@ -623,29 +623,38 @@
       },
 
       /* ===== selection ===== */
+      /* The rows selection/bulk reason over — the FLAT page, or every group's
+         embedded child rows in grouped mode. Reading bare `this.rows` here was
+         F-G4: grouped mode sets rows=[], so a homogeneous grouped selection
+         permanently degraded to "Gemengde statussen — geen gedeelde actie". */
+      get allVisibleRows() {
+        return this.groupBy
+          ? this.groups.flatMap((g) => g.rows || [])
+          : this.rows;
+      },
       get selectedIds() { return Object.keys(this.selected).filter((id) => this.selected[id]).map(Number); },
       get selectedCount() { return this.selectAllFilter ? this.total : this.selectedIds.length; },
-      get selectedRows() { return this.rows.filter((r) => this.selected[r.id]); },
+      get selectedRows() { return this.allVisibleRows.filter((r) => this.selected[r.id]); },
       isSelected(id) { return !!this.selected[id]; },
       toggle(id) { this.selected[id] = !this.selected[id]; if (!this.selected[id]) this.selectAllFilter = false; },
       get pageAllSelected() {
-        const ids = this.rows.map((r) => r.id);
+        const ids = this.allVisibleRows.map((r) => r.id);
         return ids.length > 0 && ids.every((id) => this.selected[id]);
       },
       get pageSomeSelected() {
-        const ids = this.rows.map((r) => r.id);
+        const ids = this.allVisibleRows.map((r) => r.id);
         return ids.some((id) => this.selected[id]) && !this.pageAllSelected;
       },
       togglePage() {
         const target = !this.pageAllSelected;
-        this.rows.forEach((r) => { this.selected[r.id] = target; });
+        this.allVisibleRows.forEach((r) => { this.selected[r.id] = target; });
         if (!target) this.selectAllFilter = false;
       },
       /* arm the cross-page select-all: the bulk action carries the FILTER, the
          server expands the blast radius over the whole filtered set. */
       selectAllFiltered() {
         this.selectAllFilter = true;
-        this.rows.forEach((r) => { this.selected[r.id] = true; });
+        this.allVisibleRows.forEach((r) => { this.selected[r.id] = true; });
         this.toast('mixed', String(this.total), `inschrijvingen geselecteerd over alle pagina's. De bulkactie draagt het filter, niet ${this.total} rijen.`);
       },
       clearSelection() { this.selected = {}; this.selectAllFilter = false; },
@@ -711,7 +720,7 @@
           const succeeded = report.succeeded || [];
           const failed = report.failed || [];
           const nameById = {};
-          this.rows.forEach((r) => { nameById[r.id] = (r.user && r.user.name) || ('#' + r.id); });
+          this.allVisibleRows.forEach((r) => { nameById[r.id] = (r.user && r.user.name) || ('#' + r.id); });
           const failRows = failed.map((f) => ({ ...f, name: nameById[f.id] || ('#' + f.id) }));
 
           this.result = {
