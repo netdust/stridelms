@@ -20,6 +20,21 @@ final class RegistrationRepository
     public const PATH_PARTNER = 'partner';
 
     /**
+     * Dutch display label for an enrollment_path value — the SINGLE label
+     * source (dossier read-model + exporters), next to the slugs it names.
+     */
+    public static function pathLabel(string $path): string
+    {
+        return match ($path) {
+            self::PATH_INDIVIDUAL => __('Individueel', 'stride'),
+            self::PATH_COLLEAGUE  => __('Via collega', 'stride'),
+            self::PATH_TRAJECTORY => __('Via traject', 'stride'),
+            self::PATH_PARTNER    => __('Via partner', 'stride'),
+            default => $path !== '' ? $path : '—',
+        };
+    }
+
+    /**
      * Allowlisted values for the group_by filter in admin grid queries (M4).
      * Shared between queryForGrid, queryForGridGrouped, and service-layer guards.
      * NEVER add user-supplied values here.

@@ -405,6 +405,16 @@
             this.load();
           }
         });
+        // Browser back/forward between two dossier deep-links (?user=A ↔ ?user=B)
+        // never changes the shell's `view` VALUE, so ws-view-changed does not
+        // fire — reload directly on popstate. load() self-guards (loadedKey +
+        // loadSeq), so a popstate that also triggers ws-view-changed costs one
+        // superseded request, never a double render.
+        window.addEventListener('popstate', () => {
+          if (this.view === 'dossier') {
+            this.load();
+          }
+        });
       },
 
       load() {
@@ -420,7 +430,11 @@
         // new URL. Same target → soft refresh: keep the rendered dossier (and
         // the open/collapsed state) while fresh data loads underneath.
         const key = userId + ':' + wantReg;
-        const targetChanged = key !== this.loadedKey;
+        // No rendered person = cold load, even when the key matches (a retry
+        // after a FAILED load: the key was stamped on the failed attempt).
+        // Without this, a retry cleared the error, set no loading state, and
+        // left the pane fully blank for the duration of the request.
+        const targetChanged = key !== this.loadedKey || !this.person;
         this.loadedKey = key;
         const seq = ++this.loadSeq;
 
@@ -526,17 +540,31 @@
 
       /* Append the next page of registrations (server pages at regPerPage,
          registered_at DESC). Deduped by id so an overlapping page can never
-         duplicate a row. */
+         duplicate a row. Guarded by loadSeq: a stale response for the PREVIOUS
+         person must never be appended into the current dossier (load() resets
+         the seq on every target switch). */
       async loadMoreRegs() {
         if (this.loadingMore || !this.userId || !this.hasMoreRegs) {
           return;
         }
         this.loadingMore = true;
-        const nextPage = Math.floor(this.regs.length / this.regPerPage) + 1;
+        const seq = this.loadSeq;
+        // Offset-derived paging: the loaded list is always a contiguous prefix
+        // (load() fetches page 1 sized to cover it), so the next chunk starts
+        // at exactly regs.length. Sizing per_page to the loaded count makes
+        // (page=2, per_page=N) land on offset N — no stuck-page loop when
+        // dedupe leaves the count a non-multiple of 20, no missed rows after
+        // a widened soft refresh. Clamped at the server's 100 cap (beyond it
+        // the floor()-derived page overlaps slightly; dedupe absorbs that).
+        const per = Math.min(100, Math.max(this.regPerPage, this.regs.length));
+        const nextPage = Math.floor(this.regs.length / per) + 1;
         try {
           const d = await this.api(
-            `/admin/users/${this.userId}/detail?reg_page=${nextPage}&reg_per_page=${this.regPerPage}`,
+            `/admin/users/${this.userId}/detail?reg_page=${nextPage}&reg_per_page=${per}`,
           );
+          if (seq !== this.loadSeq) {
+            return; // a newer load() superseded this dossier — drop the page.
+          }
           const seen = new Set(this.regs.map((r) => r.id));
           const extra = (d.registrations || [])
             .filter((r) => !seen.has(r.id))

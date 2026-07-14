@@ -340,6 +340,9 @@ final class AuditBridge extends AbstractService
             'quote.created',
             null,
             [
+                // quote_id repeated in context: the mapper's targetUrl reads
+                // context['quote_id'] (the entity_id is not in its reach).
+                'quote_id' => $data['quote_id'] ?? null,
                 'user_id' => $data['user_id'] ?? null,
                 'registration_id' => $data['registration_id'] ?? null,
                 'edition_id' => $data['edition_id'] ?? null,
@@ -349,12 +352,25 @@ final class AuditBridge extends AbstractService
 
     public function onQuoteSent(array $data): void
     {
+        // The event carries only quote_id — resolve the customer/registration
+        // linkage from the quote's own meta so the row is attributable on the
+        // customer's dossier timeline (subject_user_id) and linkable.
+        $quoteId = (int) ($data['quote_id'] ?? 0);
+        $userId = (int) get_post_meta($quoteId, 'user_id', true);
+        $registrationId = (int) get_post_meta($quoteId, 'registration_id', true);
+        $editionId = (int) get_post_meta($quoteId, 'edition_id', true);
+
         $this->auditService->record(
             'quote',
-            (int) ($data['quote_id'] ?? 0),
+            $quoteId,
             'quote.sent',
             null,
-            [],
+            [
+                'quote_id' => $quoteId,
+                'user_id' => $userId > 0 ? $userId : null,
+                'registration_id' => $registrationId > 0 ? $registrationId : null,
+                'edition_id' => $editionId > 0 ? $editionId : null,
+            ],
         );
     }
 

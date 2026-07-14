@@ -210,7 +210,11 @@ final class RegistrationModalController
                 }
                 $label = $post->post_title;
                 if ($post->post_type === 'vad_session') {
-                    $date = get_post_meta($post->ID, 'session_date', true);
+                    // Sessions store their date under _ntdst_date (SessionCPT
+                    // field 'date' + the layer prefix) — the old bare
+                    // 'session_date' key never existed, so the date suffix
+                    // silently never rendered here.
+                    $date = get_post_meta($post->ID, '_ntdst_date', true);
                     if ($date) {
                         $label .= ' — ' . date_i18n('d/m/Y', strtotime((string) $date));
                     }

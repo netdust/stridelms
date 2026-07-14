@@ -110,30 +110,39 @@ test.describe('Dossier surface — cold landing', () => {
     await expect(regs.first()).toBeVisible({ timeout: 15000 });
     expect(await regs.count()).toBeGreaterThan(0);
 
-    // The first card's status badge is a Dutch label rendered AS RECEIVED (INV-7).
-    const badge = dossier.locator('.ws-reg .ws-badge').first();
+    // The first card's status badge is a Dutch label rendered AS RECEIVED
+    // (INV-7). NOTE: .ws-reg__badges scopes to the header's badge cluster —
+    // the reg title now carries a separate (often hidden) 'Traject' tag whose
+    // text is not a status, so a bare .ws-badge .first() would pin that.
+    const badge = dossier.locator('.ws-reg .ws-reg__badges .ws-badge').first();
     await expect(badge).toBeVisible({ timeout: 15000 });
     const badgeText = (await badge.textContent() || '').trim();
     expect(['Interesse', 'Wachtlijst', 'In afwachting', 'Bevestigd', 'Afgerond', 'Geannuleerd']).toContain(badgeText);
   });
 
-  test('AF-3: the derived completion checklist renders (4 items per open card)', async ({ page }) => {
+  test('AF-3: the completion-task panel renders the SERVER task list (or its empty state)', async ({ page }) => {
     const user = resolveDossierUser();
     await loginAndLand(page, `view=dossier&user=${user}`);
 
     const dossier = page.locator(DOSSIER);
     await expect(dossier).toBeVisible({ timeout: 15000 });
-    // First card is open by default (idx === 0). Its completion checklist is the
-    // mapper-3 output — a stable 4-item list derived from the reg data.
+    // First card is open by default (idx === 0). The Voltooiingstaken panel
+    // renders the registration's REAL completion_tasks (r.tasks, Dutch labels
+    // from EnrollmentCompletion::taskTypeLabel) — the client-derived 4-item
+    // checklist is gone. A reg without tasks shows the explicit empty state;
+    // pre-fulfillment/terminal statuses show the fulfillment hint instead.
     const openCard = dossier.locator('.ws-reg.is-open').first();
     await expect(openCard).toBeVisible({ timeout: 15000 });
-    const checklist = openCard.locator('.ws-reg-actions').locator('xpath=preceding-sibling::*').first();
-    // The completion pills carry the four canonical labels.
-    const pills = openCard.getByText('Goedkeuring inschrijving', { exact: false });
-    await expect(pills.first()).toBeVisible({ timeout: 15000 });
-    await expect(openCard.getByText('Intake ingevuld', { exact: false }).first()).toBeVisible();
-    await expect(openCard.getByText('Aanwezigheid', { exact: false }).first()).toBeVisible();
-    void checklist;
+    const panelHeader = openCard.getByText('Voltooiingstaken', { exact: false }).first();
+    const taskPill = openCard.locator('.ws-pill--done, .ws-pill--todo').first();
+    const emptyState = openCard.getByText('Geen taken voor deze inschrijving', { exact: false }).first();
+    const fulfillmentHint = openCard.locator('.ws-muted').filter({ hasText: /wachtlijst|Interesse|Geannuleerd|voortgang/ }).first();
+    // Either the panel renders (with a pill or the empty line), or the whole
+    // fulfillment region is replaced by the status hint — never a blank hole.
+    await expect(panelHeader.or(fulfillmentHint)).toBeVisible({ timeout: 15000 });
+    if (await panelHeader.isVisible().catch(() => false)) {
+      await expect(taskPill.or(emptyState)).toBeVisible({ timeout: 15000 });
+    }
   });
 
   test('AF-3 empty edge: a user with no registrations shows the empty state, not a crash', async ({ page }) => {

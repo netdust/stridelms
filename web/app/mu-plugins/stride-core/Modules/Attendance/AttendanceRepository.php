@@ -134,6 +134,39 @@ final class AttendanceRepository
     }
 
     /**
+     * A user's per-session attendance statuses across a set of editions,
+     * in ONE query (the batched sibling of getByUserAndEdition).
+     *
+     * @param array<int> $editionIds
+     * @return array<int, array<int, string>>  edition_id => [session_id => status]
+     */
+    public function statusesByUserAndEditions(int $userId, array $editionIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT edition_id, session_id, status
+             FROM {$this->table()}
+             WHERE user_id = %d
+               AND edition_id IN ({$placeholders})",
+            array_merge([$userId], $ids),
+        ));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int) $row->edition_id][(int) $row->session_id] = (string) $row->status;
+        }
+
+        return $map;
+    }
+
+    /**
      * Get attendance records for multiple users.
      *
      * @param array<int> $userIds

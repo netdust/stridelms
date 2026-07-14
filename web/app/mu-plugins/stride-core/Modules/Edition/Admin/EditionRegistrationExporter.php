@@ -840,12 +840,10 @@ final class EditionRegistrationExporter
 
     private function enrollmentPathLabel(string $path): string
     {
-        return match ($path) {
-            'individual' => 'Individueel',
-            'colleague' => 'Collega-inschrijving',
-            'trajectory' => 'Traject',
-            default => $path ?: '—',
-        };
+        // Single label source (was a private map that had drifted from the
+        // dossier's wording and lacked 'partner' — same value exported as a
+        // raw slug).
+        return \Stride\Modules\Enrollment\RegistrationRepository::pathLabel($path);
     }
 
     /**

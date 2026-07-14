@@ -90,6 +90,7 @@ final class AdminActivityMapper
 
         return [
             'id'         => (int) $entry->id,
+            'action'     => (string) $entry->action,
             'type'       => $type,
             'text'       => $text,
             'target_url' => self::targetUrl($entry->action, $context),
@@ -214,13 +215,17 @@ final class AdminActivityMapper
                     ? "Certificaat uitgereikt aan {$name} voor {$edition}"
                     : "Certificaat uitgereikt aan {$name}"],
 
+            // NEUTRAL texts: $name is the ACTOR (the admin/system that acted),
+            // NOT the quote's customer — "aangemaakt voor {$name}" named the
+            // acting admin as the recipient. The customer is only reachable via
+            // context.user_id, which the feed does not resolve to a name.
             'quote.created'
                 => ['quote', $edition !== ''
-                    ? "Offerte aangemaakt voor {$name} — {$edition}"
-                    : "Offerte aangemaakt voor {$name}"],
+                    ? "Offerte aangemaakt — {$edition}"
+                    : __('Offerte aangemaakt', 'stride')],
 
             'quote.sent'
-                => ['quote', "Offerte verzonden naar {$name}"],
+                => ['quote', __('Offerte gemarkeerd als verzonden', 'stride')],
 
             'quote.email_sent'
                 => ['quote', ($context['to'] ?? '') !== ''

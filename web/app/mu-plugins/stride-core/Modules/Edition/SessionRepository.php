@@ -155,6 +155,61 @@ final class SessionRepository extends AbstractRepository
     }
 
     /**
+     * Session display details (title / edition / date / times) for a set of
+     * editions, in ONE query. Feeds the admin dossier's selection-label
+     * resolution, per-session attendance rows and present-hours sum. The meta
+     * keys come from the model prefix (INV-3 vocabulary — never hardcoded).
+     *
+     * @param array<int> $editionIds
+     * @return array<int, array{edition_id:int, title:string, date:string, start_time:string, end_time:string}>
+     *         Keyed by session post ID. Published sessions only.
+     */
+    public function detailsByEditions(array $editionIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        global $wpdb;
+
+        $prefix = $this->getMetaPrefix();
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT p.ID, p.post_title, pm.meta_value AS edition_id,
+                    d.meta_value AS session_date,
+                    st.meta_value AS start_time,
+                    et.meta_value AS end_time
+             FROM {$wpdb->posts} p
+             INNER JOIN {$wpdb->postmeta} pm ON pm.post_id = p.ID AND pm.meta_key = %s
+             LEFT JOIN {$wpdb->postmeta} d  ON d.post_id  = p.ID AND d.meta_key  = %s
+             LEFT JOIN {$wpdb->postmeta} st ON st.post_id = p.ID AND st.meta_key = %s
+             LEFT JOIN {$wpdb->postmeta} et ON et.post_id = p.ID AND et.meta_key = %s
+             WHERE p.post_type = %s
+               AND p.post_status = 'publish'
+               AND pm.meta_value IN ({$placeholders})",
+            array_merge(
+                [$prefix . 'edition_id', $prefix . 'date', $prefix . 'start_time', $prefix . 'end_time', $this->postType],
+                $ids,
+            ),
+        ));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int) $row->ID] = [
+                'edition_id' => (int) $row->edition_id,
+                'title' => (string) $row->post_title,
+                'date' => (string) ($row->session_date ?? ''),
+                'start_time' => (string) ($row->start_time ?? ''),
+                'end_time' => (string) ($row->end_time ?? ''),
+            ];
+        }
+
+        return $map;
+    }
+
+    /**
      * Sum total duration (hours) across a batch of sessions in a single query.
      *
      * Performance-driven: the alternative would be N find() round-trips through

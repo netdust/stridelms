@@ -32,9 +32,10 @@ final class AdminUserServiceDossierHelpersTest extends TestCase
         return $ref->invoke($this->service, ...$args);
     }
 
-    // ---- buildTaskList (F-D4: the REAL completion tasks, Dutch labels) ----
+    // ---- EnrollmentCompletion::taskDisplayList (F-D4: the REAL completion
+    // tasks, Dutch labels — the shared builder the dossier payload consumes) ----
 
-    public function test_build_task_list_maps_types_to_dutch_labels_and_statuses(): void
+    public function test_task_display_list_maps_types_to_dutch_labels_and_statuses(): void
     {
         $tasks = [
             'questionnaire' => ['status' => 'completed', 'completed_at' => '2026-05-01T10:00:00+00:00', 'phase' => 'enrollment'],
@@ -42,7 +43,7 @@ final class AdminUserServiceDossierHelpersTest extends TestCase
             'post_approval' => ['status' => 'pending', 'phase' => 'post_course'],
         ];
 
-        $list = $this->call('buildTaskList', $tasks);
+        $list = \Stride\Modules\Enrollment\EnrollmentCompletion::taskDisplayList($tasks);
 
         $this->assertCount(3, $list);
         $this->assertSame('questionnaire', $list[0]['type']);
@@ -56,13 +57,18 @@ final class AdminUserServiceDossierHelpersTest extends TestCase
         $this->assertSame('post_course', $list[2]['phase']);
     }
 
-    public function test_build_task_list_skips_malformed_entries_and_handles_empty(): void
+    public function test_task_display_list_skips_malformed_entries_and_guards_bad_dates(): void
     {
-        $this->assertSame([], $this->call('buildTaskList', []));
+        $this->assertSame([], \Stride\Modules\Enrollment\EnrollmentCompletion::taskDisplayList([]));
 
-        $list = $this->call('buildTaskList', ['approval' => 'not-an-array', 'documents' => ['status' => 'pending']]);
+        $list = \Stride\Modules\Enrollment\EnrollmentCompletion::taskDisplayList([
+            'approval' => 'not-an-array',
+            'documents' => ['status' => 'completed', 'completed_at' => 'niet-een-datum'],
+        ]);
         $this->assertCount(1, $list);
         $this->assertSame('documents', $list[0]['type']);
+        // A malformed legacy stamp renders '' — never the 01/01/1970 epoch.
+        $this->assertSame('', $list[0]['completed_at']);
     }
 
     // ---- mergeQuestionnaireStage (F-D3: completion-flow intake answers) ----
@@ -105,16 +111,17 @@ final class AdminUserServiceDossierHelpersTest extends TestCase
 
     public function test_initial_selection_renders_phase_rows_with_resolved_titles(): void
     {
-        global $_test_posts, $_test_users;
-        $_test_posts[501] = (object) ['ID' => 501, 'post_title' => 'Sessie ochtend', 'post_type' => 'vad_session', 'post_status' => 'publish'];
+        global $_test_users;
         $_test_users[7] = (object) ['ID' => 7, 'display_name' => 'Jan Peeters'];
 
+        // Title 501 comes from the batched map (no get_post round-trip);
+        // 999 is unknown everywhere → deleted marker.
         $stage = $this->call('initialSelectionStage', [
             'type' => 'session',
             'phases' => [
                 ['phase' => 'enrollment', 'session_ids' => [501, 999], 'captured_at' => '2026-05-01T10:00:00+00:00', 'captured_by' => 7],
             ],
-        ]);
+        ], [501 => 'Sessie ochtend']);
 
         $this->assertCount(1, $stage['data']);
         $label = array_key_first($stage['data']);

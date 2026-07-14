@@ -582,6 +582,38 @@ final class EnrollmentCompletion
     }
 
     /**
+     * The tasks column as a renderable admin list (Dutch label + per-task
+     * status + formatted completion date). SINGLE source for admin surfaces
+     * (dossier read-model; the edition registration modal should converge on
+     * this too) — never re-derive a parallel checklist elsewhere.
+     *
+     * @param  array<string,mixed> $tasks  Decoded completion_tasks column.
+     * @return list<array{type:string, label:string, status:string, completed_at:string, phase:string}>
+     */
+    public static function taskDisplayList(array $tasks): array
+    {
+        $list = [];
+        foreach ($tasks as $type => $task) {
+            if (!is_array($task)) {
+                continue;
+            }
+            $completedAt = (string) ($task['completed_at'] ?? '');
+            $ts = $completedAt !== '' ? strtotime($completedAt) : false;
+            $list[] = [
+                'type' => (string) $type,
+                'label' => self::taskTypeLabel((string) $type),
+                'status' => (string) ($task['status'] ?? 'pending'),
+                // Guarded: a malformed legacy stamp must render '' — never
+                // the 01/01/1970 epoch.
+                'completed_at' => $ts !== false ? wp_date('d/m/Y', (int) $ts) : '',
+                'phase' => (string) ($task['phase'] ?? 'enrollment'),
+            ];
+        }
+
+        return $list;
+    }
+
+    /**
      * Check if all tasks including approval are complete.
      */
     public function isFullyComplete(array $tasks): bool
