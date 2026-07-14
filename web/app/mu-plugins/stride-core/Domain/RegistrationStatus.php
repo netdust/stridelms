@@ -44,6 +44,20 @@ enum RegistrationStatus: string
     }
 
     /**
+     * Pre-enrollment / reopenable states: a submission or enrollment for the
+     * same (user, edition) APPENDS TO or REACTIVATES this row instead of
+     * blocking as a duplicate. Single source of the vocabulary — the repo's
+     * reactivate branch (create()), EnrollmentService::enroll()'s pre-check
+     * and the public form upsert all ask this instead of hand-rolling the
+     * list (DATA-MODEL-REGISTRATIONS.md §3: three hand-rolled lists is how
+     * the pre-slice capacity bugs happened).
+     */
+    public function isReactivatable(): bool
+    {
+        return in_array($this, [self::Cancelled, self::Interest, self::Waitlist], true);
+    }
+
+    /**
      * Get human-readable label.
      */
     public function label(): string

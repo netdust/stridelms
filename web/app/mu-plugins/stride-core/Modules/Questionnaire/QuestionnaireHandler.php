@@ -241,7 +241,13 @@ final class QuestionnaireHandler
      *     (bindLeadToUser), so one person never accumulates two rows;
      *  3. none → a new account-bound row.
      * A lead submission (visitor / on-behalf) keeps today's behavior:
-     * one lead row per e-mail per edition, stage appended on repeat.
+     * one lead row per e-mail per edition, stage appended on repeat. It
+     * deliberately does NOT dedupe against BOUND rows — that would require
+     * resolving arbitrary e-mails to accounts (threat 2) or leaking whether
+     * an e-mail has a registration (threat 1). The transient duplicate is
+     * visible in the admin grid (account-match badge) and promotion refuses
+     * to bind a lead onto an account that already holds a row for the
+     * edition (EnrollmentService::promoteFromWaitlist duplicate guard).
      *
      * @param  string $stage 'interest'|'waitlist' (also the target status).
      * @return array{0:int,1:int}|WP_Error  [registrationId, boundUserId (0 = lead)]
@@ -252,6 +258,7 @@ final class QuestionnaireHandler
         $status = $stage === 'waitlist' ? RegistrationStatus::Waitlist : RegistrationStatus::Interest;
 
         $boundUserId = $this->resolveSelfBoundUser($email);
+        $companyId = $boundUserId ? (CompanyAffiliation::getCompanyId($boundUserId) ?: null) : null;
         $row = null;
 
         if ($boundUserId) {
@@ -259,19 +266,28 @@ final class QuestionnaireHandler
 
             if (!$row) {
                 $lead = $registrations->findAnonymousForEmailAndEdition($email, $editionId);
-                if ($lead && $registrations->bindLeadToUser((int) $lead->id, $boundUserId)) {
-                    $row = $registrations->find((int) $lead->id);
-                }
-            }
-
-            if ($row) {
-                $rowStatus = RegistrationStatus::tryFrom((string) $row->status);
-                $appendable = [RegistrationStatus::Interest, RegistrationStatus::Waitlist, RegistrationStatus::Cancelled];
-                if (!in_array($rowStatus, $appendable, true)) {
-                    return new WP_Error(
-                        'already_registered',
-                        __('Je bent al ingeschreven voor deze editie.', 'stride'),
-                    );
+                if ($lead) {
+                    // Partner scoping travels IN the bind (guarded COALESCE) —
+                    // no separate stamp write, no submission-order dependence.
+                    if (!$registrations->bindLeadToUser((int) $lead->id, $boundUserId, $companyId)) {
+                        // INV-4: a failed bind (SQL error, or a concurrent bind
+                        // won the row) must never fall through to create() —
+                        // that would mint the second row the adopt exists to
+                        // prevent, or downgrade a waitlist row via create()'s
+                        // reactivate branch.
+                        ntdst_log('enrollment')->error('Self-bind lead adoption failed', [
+                            'registration_id' => (int) $lead->id,
+                            'user_id' => $boundUserId,
+                            'edition_id' => $editionId,
+                        ]);
+                        return new WP_Error('update_failed', __('Je aanmelding kon niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
+                    }
+                    // Only user_id/company changed, nothing below reads them
+                    // stale — reflect in memory instead of an unguarded
+                    // re-find whose null return would fall through to create().
+                    $row = $lead;
+                    $row->user_id = $boundUserId;
+                    $row->company_id = $row->company_id ?: $companyId;
                 }
             }
         } else {
@@ -281,55 +297,105 @@ final class QuestionnaireHandler
         if ($row) {
             $rowStatus = RegistrationStatus::tryFrom((string) $row->status);
 
-            // Never DOWNGRADE waitlist → interest: a waitlist row is
-            // promotion-eligible (a stronger claim than interest), so an
-            // interest submission on top of it appends its data but keeps the
-            // waitlist status. The reverse (interest → waitlist) is a normal
-            // upgrade. Applies to bound AND lead rows alike.
-            $targetStatus = ($rowStatus === RegistrationStatus::Waitlist && $status === RegistrationStatus::Interest)
-                ? RegistrationStatus::Waitlist
-                : $status;
-
-            $existingData = is_array($row->enrollment_data ?? null) ? $row->enrollment_data : [];
-            $existingData[$stage] = $wrapped;
-
-            $update = [
-                'status' => $targetStatus->value,
-                'enrollment_data' => $existingData,
-            ];
-
-            // Reactivating a CANCELLED row must clear the cancellation stamp
-            // (mirrors create()'s reactivate branch): a live interest/waitlist
-            // row with a stale cancelled_at renders a cancellation date in the
-            // dossier/exports, and updateStatus() only stamps cancelled_at when
-            // empty — a later cancellation would keep the OLD timestamp forever.
-            if ($rowStatus === RegistrationStatus::Cancelled) {
-                $update['cancelled_at'] = null;
+            if ($boundUserId && (!$rowStatus || !$rowStatus->isReactivatable())) {
+                // Active enrollment on the OWN account — friendly error (own
+                // state, no info leak about other accounts).
+                return new WP_Error(
+                    'already_registered',
+                    __('Je bent al ingeschreven voor deze editie.', 'stride'),
+                );
             }
 
-            // Partner scoping parity: an adopted lead row (bindLeadToUser sets
-            // only user_id) or a pre-existing account row must end up with the
-            // same company_id a fresh logged-in submission would get —
-            // otherwise the row is invisible to the Partner API depending
-            // purely on submission order.
-            if ($boundUserId && empty($row->company_id)) {
-                $companyId = CompanyAffiliation::getCompanyId($boundUserId);
-                if ($companyId) {
-                    $update['company_id'] = $companyId;
-                }
-            }
+            // A cancelled ACCOUNT row reactivates through create(): its
+            // reactivate branch runs under the enroll lock and does the FULL
+            // reset — cancelled_at, stale quote_id/selections/completion_tasks/
+            // completed_at, and a fresh registered_at (waitlist seniority is
+            // registered_at ASC; keeping the old stamp would let a returning
+            // user queue-jump everyone who joined since). Lead rows never land
+            // here: findAnonymousForEmailAndEdition filters interest/waitlist.
+            if ($boundUserId && $rowStatus === RegistrationStatus::Cancelled) {
+                $existingData = is_array($row->enrollment_data ?? null) ? $row->enrollment_data : [];
+                $existingData[$stage] = $wrapped;
 
-            $updated = $registrations->update((int) $row->id, $update);
-            if (!$updated) {
-                ntdst_log('enrollment')->error('Stage submission update failed', [
-                    'registration_id' => (int) $row->id,
+                $reactivated = $registrations->create([
+                    'user_id' => $boundUserId,
                     'edition_id' => $editionId,
-                    'stage' => $stage,
+                    'status' => $status->value,
+                    'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+                    'enrollment_data' => $existingData,
+                    'company_id' => $companyId,
                 ]);
+                if (is_wp_error($reactivated)) {
+                    return $reactivated;
+                }
+
+                return [(int) $reactivated, $boundUserId];
+            }
+
+            // Live interest/waitlist row (bound or lead): append the stage
+            // envelope. The read-modify-write runs under the selection lock
+            // (DATA-MODEL §5 — interleaved submissions diffing against the
+            // same pre-state was a shipped bug), and the row is re-read
+            // INSIDE the lock so the no-downgrade decision and the data merge
+            // see fresh state.
+            $rowId = (int) $row->id;
+            if (!$registrations->acquireSelectionLock($rowId)) {
                 return new WP_Error('update_failed', __('Je aanmelding kon niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
             }
 
-            return [(int) $row->id, $boundUserId];
+            try {
+                $fresh = $registrations->find($rowId);
+                if (!$fresh) {
+                    return new WP_Error('update_failed', __('Je aanmelding kon niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
+                }
+                $row = $fresh;
+                $rowStatus = RegistrationStatus::tryFrom((string) $row->status);
+
+                // Never DOWNGRADE waitlist → interest: a waitlist row is
+                // promotion-eligible (a stronger claim than interest), so an
+                // interest submission on top of it appends its data but keeps
+                // the waitlist status. The reverse (interest → waitlist) is a
+                // normal upgrade. Applies to bound AND lead rows alike.
+                $targetStatus = ($rowStatus === RegistrationStatus::Waitlist && $status === RegistrationStatus::Interest)
+                    ? RegistrationStatus::Waitlist
+                    : $status;
+
+                $existingData = is_array($row->enrollment_data ?? null) ? $row->enrollment_data : [];
+                $existingData[$stage] = $wrapped;
+
+                $update = [
+                    'status' => $targetStatus->value,
+                    'enrollment_data' => $existingData,
+                ];
+
+                // The row may have been cancelled between the pre-lock read and
+                // this fresh read — clear the stamp like create()'s reactivate
+                // branch does (updateStatus() only stamps cancelled_at when
+                // empty, so a stale value would freeze forever).
+                if ($rowStatus === RegistrationStatus::Cancelled) {
+                    $update['cancelled_at'] = null;
+                }
+
+                // Partner scoping parity for a PRE-EXISTING account row that
+                // never got a company (adopted rows are stamped in the bind).
+                if ($boundUserId && $companyId && empty($row->company_id)) {
+                    $update['company_id'] = $companyId;
+                }
+
+                $updated = $registrations->update($rowId, $update);
+                if (!$updated) {
+                    ntdst_log('enrollment')->error('Stage submission update failed', [
+                        'registration_id' => $rowId,
+                        'edition_id' => $editionId,
+                        'stage' => $stage,
+                    ]);
+                    return new WP_Error('update_failed', __('Je aanmelding kon niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
+                }
+            } finally {
+                $registrations->releaseSelectionLock($rowId);
+            }
+
+            return [$rowId, $boundUserId];
         }
 
         $payload = [
@@ -342,11 +408,8 @@ final class QuestionnaireHandler
 
         // Account-bound rows carry the partner affiliation like every other
         // account path (mirrors EnrollmentService::registerInterest).
-        if ($boundUserId) {
-            $companyId = CompanyAffiliation::getCompanyId($boundUserId);
-            if ($companyId) {
-                $payload['company_id'] = $companyId;
-            }
+        if ($boundUserId && $companyId) {
+            $payload['company_id'] = $companyId;
         }
 
         $created = $registrations->create($payload);

@@ -2607,7 +2607,6 @@ All handlers follow the **thin handler pattern:**
 **Actions:**
 - `stride_submit_enrollment` - Submit edition/trajectory enrollment
 - `stride_validate_voucher` - Validate discount code (public)
-- `stride_save_session_selection` - Save selected sessions
 
 ### QuoteUpdateHandler
 **Actions:**
@@ -2663,7 +2662,6 @@ ntdstAPI.post('stride_validate_voucher', {
 |--------|---------|------|
 | `stride_submit_enrollment` | Submit enrollment form | logged-in |
 | `stride_validate_voucher` | Validate discount code | public |
-| `stride_save_session_selection` | Save session choices | logged-in |
 | `stride_update_profile` | Update user profile | logged-in |
 | `stride_export_ical` | Generate .ics file | logged-in |
 

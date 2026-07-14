@@ -107,13 +107,17 @@ final class QuestionnaireHandlerIdentityTest extends TestCase
     {
         $this->loginAs(7, 'anna@example.test');
 
-        $lead = (object) ['id' => 55, 'status' => 'interest', 'enrollment_data' => []];
+        $lead = (object) ['id' => 55, 'status' => 'interest', 'enrollment_data' => [], 'user_id' => null, 'company_id' => null];
 
         $repo = $this->createMock(RegistrationRepository::class);
         $repo->method('findByUserAndEdition')->willReturn(null);
         $repo->method('findAnonymousForEmailAndEdition')->willReturn($lead);
         $repo->expects($this->once())->method('bindLeadToUser')->with(55, 7)->willReturn(true);
-        $repo->method('find')->with(55)->willReturn($lead);
+        // The append RMW runs under the selection lock with a FRESH re-read
+        // inside it (DATA-MODEL §5) — never against the pre-lock row state.
+        $repo->expects($this->once())->method('acquireSelectionLock')->with(55)->willReturn(true);
+        $repo->expects($this->once())->method('find')->with(55)->willReturn($lead);
+        $repo->expects($this->once())->method('releaseSelectionLock')->with(55);
         $repo->expects($this->once())->method('update')
             ->with(55, $this->callback(fn(array $u): bool => $u['status'] === 'interest' && isset($u['enrollment_data']['interest'])))
             ->willReturn(true);
@@ -124,6 +128,30 @@ final class QuestionnaireHandlerIdentityTest extends TestCase
 
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
+    }
+
+    public function test_a_failed_bind_never_falls_through_to_create(): void
+    {
+        // INV-4 + duplicate shape: bindLeadToUser returning false (SQL error,
+        // or a concurrent bind won the row) must surface as an error — falling
+        // through to create() would mint a second row next to the surviving
+        // lead, or downgrade a waitlist row via create()'s reactivate branch.
+        $this->loginAs(7, 'anna@example.test');
+
+        $lead = (object) ['id' => 55, 'status' => 'interest', 'enrollment_data' => [], 'user_id' => null, 'company_id' => null];
+
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->method('findByUserAndEdition')->willReturn(null);
+        $repo->method('findAnonymousForEmailAndEdition')->willReturn($lead);
+        $repo->method('bindLeadToUser')->willReturn(false);
+        $repo->expects($this->never())->method('create');
+        $repo->expects($this->never())->method('update');
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $result = $this->handler->handleSubmitInterest(null, $this->interestParams('anna@example.test'));
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('update_failed', $result->get_error_code());
     }
 
     public function test_already_enrolled_self_submission_is_a_friendly_error(): void
@@ -177,6 +205,8 @@ final class QuestionnaireHandlerIdentityTest extends TestCase
 
         $repo = $this->createMock(RegistrationRepository::class);
         $repo->method('findByUserAndEdition')->willReturn($waitlistRow);
+        $repo->method('acquireSelectionLock')->willReturn(true);
+        $repo->method('find')->with(70)->willReturn($waitlistRow);
         $repo->expects($this->once())->method('update')
             ->with(70, $this->callback(
                 fn(array $u): bool => $u['status'] === 'waitlist'      // NOT downgraded
@@ -192,24 +222,30 @@ final class QuestionnaireHandlerIdentityTest extends TestCase
         $this->assertTrue($result['success']);
     }
 
-    public function test_reactivating_a_cancelled_row_clears_the_cancellation_stamp(): void
+    public function test_reactivating_a_cancelled_row_routes_through_creates_reactivate_branch(): void
     {
-        // Mirrors create()'s reactivate branch: a live interest row must not
-        // carry a stale cancelled_at (it renders a cancellation date in the
-        // dossier/exports, and updateStatus only stamps cancelled_at when
-        // empty — a later cancellation would keep the OLD timestamp forever).
+        // A cancelled ACCOUNT row reactivates via create(): its reactivate
+        // branch runs under the enroll lock and does the FULL reset —
+        // cancelled_at, stale quote_id/selections/completion_tasks/
+        // completed_at, and a fresh registered_at (waitlist seniority is
+        // registered_at ASC; keeping the old stamp would let a returning user
+        // queue-jump everyone who joined in between). A handler-side partial
+        // update would leave all of that stale.
         $this->loginAs(7, 'anna@example.test');
 
-        $cancelled = (object) ['id' => 71, 'status' => 'cancelled', 'enrollment_data' => [], 'company_id' => null];
+        $cancelled = (object) ['id' => 71, 'status' => 'cancelled', 'enrollment_data' => ['interest' => ['old' => true]], 'company_id' => null];
 
         $repo = $this->createMock(RegistrationRepository::class);
         $repo->method('findByUserAndEdition')->willReturn($cancelled);
-        $repo->expects($this->once())->method('update')
-            ->with(71, $this->callback(
-                fn(array $u): bool => $u['status'] === 'interest'
-                    && array_key_exists('cancelled_at', $u) && $u['cancelled_at'] === null,
+        $repo->expects($this->never())->method('update');
+        $repo->expects($this->once())->method('create')
+            ->with($this->callback(
+                fn(array $p): bool => $p['user_id'] === 7
+                    && $p['edition_id'] === 42
+                    && $p['status'] === 'interest'
+                    && isset($p['enrollment_data']['interest']['data']),  // fresh stage envelope merged in
             ))
-            ->willReturn(true);
+            ->willReturn(71);
         ntdst_set(RegistrationRepository::class, $repo);
 
         $result = $this->handler->handleSubmitInterest(null, $this->interestParams('anna@example.test'));

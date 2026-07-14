@@ -27,6 +27,21 @@ final class CompletionTaskHandler
     private const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
     private const MAX_FILE_COUNT = 5;
 
+    // Admin-review tasks: their card says "afgehandeld door een beheerder" and
+    // the sanctioned completion surfaces are the manager-gated admin handlers
+    // (BulkRegistrationHandler / RosterBulkHandler). Ticking one here
+    // auto-confirms or finalizes the registration, so the public endpoint
+    // requires stride_manage for them — a participant (or enroller) must
+    // never approve their own enrollment.
+    private const ADMIN_TASK_TYPES = ['approval', 'post_approval'];
+
+    // Rule 4 delegable set (form-identity plan 2026-07-14): the enrolled_by
+    // actor may act on the PRACTICAL tasks only. Allow-list, not deny-list —
+    // the questionnaire (intake) and the evaluation are strictly personal,
+    // and any future task type is enroller-denied by default instead of
+    // failing open.
+    private const DELEGABLE_TASK_TYPES = ['session_selection', 'documents', 'post_documents'];
+
     public function __construct()
     {
         $this->init();
@@ -43,11 +58,13 @@ final class CompletionTaskHandler
     /**
      * Owner-or-enroller gate (form-identity rule 4, plan 2026-07-14): the
      * PARTICIPANT always acts on their own registration; the `enrolled_by`
-     * actor (colleague enrollment) may act on the non-personal tasks —
+     * actor (colleague enrollment) may act on the DELEGABLE tasks only —
      * session selection, documents — for the colleague they enrolled. The
-     * questionnaire (intake) task stays strictly personal: the enroller can
-     * neither submit nor tick it (its submission path,
+     * questionnaire (intake) and the evaluation stay strictly personal: the
+     * enroller can neither submit nor tick them (their submission path,
      * QuestionnaireHandler::handleSubmitStage, is participant-only too).
+     * A null $taskType is the non-task-scoped action (proof download) —
+     * enroller-allowed, it belongs to the documents they may manage.
      * Server-side column check — never a client claim.
      */
     private function actorMayActOn(object $reg, int $userId, ?string $taskType = null): bool
@@ -59,7 +76,7 @@ final class CompletionTaskHandler
             return false;
         }
 
-        return $taskType !== 'questionnaire';
+        return $taskType === null || in_array($taskType, self::DELEGABLE_TASK_TYPES, true);
     }
 
     /**
@@ -82,6 +99,14 @@ final class CompletionTaskHandler
 
         if (!$registrationId || !$taskType) {
             return new WP_Error('invalid_input', __('Ongeldige gegevens.', 'stride'));
+        }
+
+        // Admin-review tasks are not self-serviceable: completing 'approval'
+        // as the last enrollment task auto-confirms, 'post_approval'
+        // finalizes — that decision belongs to a stride_manage user (the
+        // admin surfaces call EnrollmentCompletion directly).
+        if (in_array($taskType, self::ADMIN_TASK_TYPES, true) && !current_user_can('stride_manage')) {
+            return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
         }
 
         $repo = ntdst_get(RegistrationRepository::class);

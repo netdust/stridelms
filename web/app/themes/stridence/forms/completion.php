@@ -11,6 +11,8 @@
  * @var object  $registration   Registration row from DB
  * @var array   $task_summary   From EnrollmentCompletion::getTaskSummary()
  * @var string  $phase          'enrollment' or 'post_course'
+ * @var bool    $is_enroller    Viewer is the enrolled_by actor, not the participant
+ * @var string  $participant_name  Participant display name (enroller view only)
  */
 
 defined('ABSPATH') || exit;
@@ -22,6 +24,12 @@ $reg_id        = (int) ($registration->id ?? 0);
 $tasks         = $task_summary['tasks'] ?? [];
 $availability  = $task_summary['availability'] ?? [];
 $active_phase  = $phase ?? 'enrollment';
+$is_enroller   = !empty($is_enroller);
+$participant_name = (string) ($participant_name ?? '');
+
+// Strictly personal tasks (form-identity rule 4): the enroller sees them but
+// cannot act — the server denies them too (CompletionTaskHandler allow-list).
+$personal_tasks = ['questionnaire', 'post_evaluation'];
 
 // Filter tasks to active phase only
 $phase_tasks = array_filter($tasks, fn($t) => ($t['phase'] ?? 'enrollment') === $active_phase);
@@ -88,9 +96,17 @@ $is_post_course = ($active_phase === 'post_course');
                 : esc_html__('Inschrijving voltooien', 'stridence') ?>
         </h1>
         <p class="text-text-muted">
-            <?= $is_post_course
-                ? esc_html__('Voltooi onderstaande stappen om je opleiding af te ronden.', 'stridence')
-                : esc_html__('Voltooi onderstaande stappen om je inschrijving te bevestigen.', 'stridence') ?>
+            <?php if ($is_enroller && $participant_name !== ''): ?>
+                <?= esc_html(sprintf(
+                    /* translators: %s: participant display name */
+                    __('Je voltooit deze stappen voor %s.', 'stridence'),
+                    $participant_name,
+                )) ?>
+            <?php else: ?>
+                <?= $is_post_course
+                    ? esc_html__('Voltooi onderstaande stappen om je opleiding af te ronden.', 'stridence')
+                    : esc_html__('Voltooi onderstaande stappen om je inschrijving te bevestigen.', 'stridence') ?>
+            <?php endif; ?>
         </p>
 
         <!-- Progress bar -->
@@ -173,6 +189,17 @@ $is_post_course = ($active_phase === 'post_course');
                                         — <?= esc_html(stride_format_date($task['completed_at'])) ?>
                                     <?php endif; ?>
                                 </p>
+                            <?php elseif ($is_enroller && in_array($taskType, $personal_tasks, true)): ?>
+                                <div class="flex items-center gap-3 p-3 rounded-lg bg-surface-alt/50">
+                                    <?= stridence_icon('info', 'w-5 h-5 text-text-muted shrink-0') ?>
+                                    <p class="text-sm text-text-muted">
+                                        <?= esc_html(sprintf(
+                                            /* translators: %s: participant display name */
+                                            __('Deze stap is persoonlijk — %s vult dit zelf in.', 'stridence'),
+                                            $participant_name !== '' ? $participant_name : __('de deelnemer', 'stridence'),
+                                        )) ?>
+                                    </p>
+                                </div>
                             <?php else: ?>
                                 <p class="text-sm text-text-muted mb-4">
                                     <?= esc_html($task_descriptions[$taskType] ?? '') ?>

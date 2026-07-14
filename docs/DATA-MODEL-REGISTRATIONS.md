@@ -141,23 +141,42 @@ temporary state, not an identity. The rules, per form:
 submission (`QuestionnaireHandler::upsertStageSubmission`): the submitter's
 e-mail decides the participant. Logged in + own e-mail → the row is BOUND to
 the account (`user_id` set, no lead columns; an earlier lead row for that
-e-mail+edition is adopted first via `bindLeadToUser`, so one person never
-holds two rows). Any other submission — a visitor, or a logged-in user
-typing someone else's e-mail — stays a LEAD and is adopted collision-safely
-at promotion/enrollment (INV-9). Deliberately NO `get_user_by()` binding of
-arbitrary e-mails at submission: a stranger must never write into a member's
-account, and the form response is identical in every branch (no
-account-enumeration signal). The admin grid surfaces the match instead
-("Account gevonden" badge via `accountMatch`) — binding happens at
-promotion. `scripts/adopt-leads.php` is the one-time pass applying this rule
-to pre-existing lead rows.
+e-mail+edition is adopted first via `bindLeadToUser`). Any other submission —
+a visitor, or a logged-in user typing someone else's e-mail — stays a LEAD.
+Deliberately NO `get_user_by()` binding of arbitrary e-mails at submission: a
+stranger must never write into a member's account, and the form response is
+identical in every branch (no account-enumeration signal). The admin grid
+surfaces the match instead ("Account gevonden" badge via `accountMatch`) —
+binding happens at promotion/enrollment. `scripts/adopt-leads.php` is the
+one-time pass applying this rule to pre-existing lead rows.
+
+**Where duplicates can and cannot exist.** The self-bind ordering
+(lead first, own-account submission later) adopts the lead row — one row.
+The REVERSE ordering is deliberately not deduped: a logged-out submission
+whose e-mail belongs to an account with a bound row for the same edition
+creates a second, LEAD row (deduping it would require resolving arbitrary
+e-mails to accounts or leaking registration state). Such a pair is a
+TRANSIENT lead-side duplicate: it is visible in the grid (badge), and every
+surface that turns the lead into an account-bound row refuses or resolves
+the collision — `promoteFromWaitlist` returns `duplicate_registration` when
+the resolved account already holds a row for the edition,
+`EnrollmentService::enroll()` adopts the lead row (interest AND waitlist)
+via `upgradeFromInterest`, and `scripts/adopt-leads.php` SKIP-reports the
+pair for manual triage. Two LIVE account-bound rows for one (user, edition)
+must never exist.
 
 The lead columns always hold the **participant's** identity (who the
 interest is FOR), never the actor's. The actor is tracked separately:
 `submitted_by` inside the stage envelope (pre-enrollment) or the
-`enrolled_by` column (full enrollment). `bindLeadToUser()` is THE one bind
-write (guarded on the row still being account-less; clears the lead
-columns).
+`enrolled_by` column (full enrollment). There are exactly TWO bind writes,
+both guarded on the row still being account-less and both clearing the lead
+columns + stamping the account's `company_id` (COALESCE — an existing
+company on the row wins): `bindLeadToUser()` (promotion, self-bind at
+submission, adoption script — sets nothing else) and `upgradeFromInterest()`
+(enroll-time adopt — additionally flips status/path and resets
+`registered_at`, because enrolling IS the status change). Both return false
+on 0 affected rows; callers must treat that as "the row is no longer mine"
+and never fall through to a create.
 
 **The five lead-identity invariants** (`lead_name` / `lead_email`, schema v5):
 

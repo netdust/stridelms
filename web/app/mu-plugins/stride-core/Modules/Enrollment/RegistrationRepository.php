@@ -347,20 +347,15 @@ final class RegistrationRepository
             if ($existing) {
                 $existingStatus = RegistrationStatus::tryFrom($existing->status);
 
-                // Reactivate-eligible statuses:
+                // Reactivate-eligible statuses (RegistrationStatus::isReactivatable):
                 // - Cancelled: terminal-cancel state, re-enrolling reopens the row.
                 // - Interest / Waitlist: pre-enrollment holding states, the user already
                 //   expressed intent — enrolling promotes that row instead of blocking.
-                // For Interest specifically, EnrollmentService::enroll() has a separate
-                // upgrade path that merges enrollment_data when the row is anonymous
-                // (user_id=0). That path runs BEFORE this method, so we only land here
-                // when the existing Interest row already belongs to this user.
-                $reactivatableStatuses = [
-                    RegistrationStatus::Cancelled,
-                    RegistrationStatus::Interest,
-                    RegistrationStatus::Waitlist,
-                ];
-                if (in_array($existingStatus, $reactivatableStatuses, true)) {
+                // For LEAD interest/waitlist rows, EnrollmentService::enroll() has a
+                // separate upgrade path (upgradeFromInterest) that runs BEFORE this
+                // method, so we only land here when the existing row already belongs
+                // to this user.
+                if ($existingStatus && $existingStatus->isReactivatable()) {
                     // Preserve existing enrollment_data (interest/waitlist stage payloads
                     // collected earlier) unless the caller passes new data to merge.
                     $existingData = is_string($existing->enrollment_data ?? null) && $existing->enrollment_data !== ''
@@ -381,6 +376,15 @@ final class RegistrationRepository
                         'completion_tasks' => null,
                         'completed_at' => null,
                     ];
+
+                    // Partner scoping parity on reactivation: a caller-computed
+                    // company_id (enroll(), the public form upsert) must not be
+                    // silently dropped — but never overwrite a company already
+                    // on the row (admin-set scope wins, same COALESCE semantics
+                    // as bindLeadToUser).
+                    if (!empty($data['company_id']) && empty($existing->company_id)) {
+                        $reactivate['company_id'] = absint($data['company_id']);
+                    }
 
                     // Re-stamp the lead identity when the reactivated row is
                     // still anonymous (F-G3). UNCONDITIONAL: the columns must
@@ -644,6 +648,49 @@ final class RegistrationRepository
     }
 
     /**
+     * Most recent live registration this actor created for SOMEONE ELSE on
+     * this edition (colleague enrollment). Rule 4 of the form-identity plan:
+     * the enrolled_by actor completes the non-personal tasks for the person
+     * they enrolled — the completion route resolves through here when the
+     * actor has no eligible registration of their own.
+     *
+     * Excludes the actor's own rows (owner path is findByUserAndEdition) and
+     * non-actionable statuses; most recent first because the enroll flow
+     * redirects here immediately after enrolling one colleague.
+     */
+    public function findByEditionAndEnroller(int $enrollerId, int $editionId): ?object
+    {
+        global $wpdb;
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$this->table()}
+             WHERE edition_id = %d
+               AND enrolled_by = %d
+               AND user_id != %d
+               AND status IN (%s, %s)
+             ORDER BY id DESC
+             LIMIT 1",
+            $editionId,
+            $enrollerId,
+            $enrollerId,
+            RegistrationStatus::Pending->value,
+            RegistrationStatus::Confirmed->value,
+        ));
+
+        if ($row && $row->selections) {
+            $row->selections = json_decode($row->selections, true);
+        }
+        if ($row && $row->completion_tasks) {
+            $row->completion_tasks = json_decode($row->completion_tasks, true);
+        }
+        if ($row && isset($row->enrollment_data) && $row->enrollment_data) {
+            $row->enrollment_data = json_decode($row->enrollment_data, true);
+        }
+
+        return $row;
+    }
+
+    /**
      * Find an interest registration by email and edition.
      *
      * Searches enrollment_data JSON for $.interest.data.email match.
@@ -665,20 +712,24 @@ final class RegistrationRepository
         global $wpdb;
         $table = $this->table();
 
+        // Match on the denormalized lead_email COLUMN, not the JSON: the JSON
+        // type forces utf8mb4_bin (MariaDB alias AND MySQL JSON_UNQUOTE), so a
+        // JSON_EXTRACT comparison is case-SENSITIVE — the only case-sensitive
+        // e-mail predicate in the system, while self-bind (strcasecmp), the
+        // grid search and batchGetUsersByEmail all match case-insensitively.
+        // A case-differing resubmission then missed its earlier lead row and
+        // minted a second one. lead_email is *_ci VARCHAR, stamped on every
+        // account-less write + the v5 backfill (invariant 3).
         $row = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$table}
              WHERE edition_id = %d
-             AND user_id IS NULL
+             AND (user_id IS NULL OR user_id = 0)
              AND status IN (%s, %s)
-             AND (
-                JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.interest.data.email')) = %s
-                OR JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.waitlist.data.email')) = %s
-             )
+             AND lead_email = %s
              LIMIT 1",
             $editionId,
             RegistrationStatus::Interest->value,
             RegistrationStatus::Waitlist->value,
-            $email,
             $email,
         ));
 
@@ -719,37 +770,54 @@ final class RegistrationRepository
     }
 
     /**
-     * Upgrade an interest registration to a full enrollment.
+     * Upgrade a LEAD pre-enrollment row (interest or waitlist) to a full
+     * enrollment — the enroll-time sibling of bindLeadToUser() with the same
+     * bind contract: guarded on the row still being account-less, clears the
+     * denormalized lead columns (once bound, identity lives on the account —
+     * lead-identity invariant), and stamps the partner affiliation in the
+     * same statement (COALESCE keeps a pre-existing non-zero company_id).
+     * Additionally flips status/path and resets registered_at, because
+     * enrolling IS the status change.
      *
-     * Sets user_id, status, enrollment_path, enrollment_data, and registered_at.
+     * Returns false on 0 affected rows too (concurrent bind won the row) —
+     * the caller must fall back to its normal duplicate-check path, never
+     * assume the upgrade happened.
      *
      * @param array<string, mixed> $enrollmentData Merged enrollment_data to store
      */
-    public function upgradeFromInterest(int $registrationId, int $userId, string $status, string $enrollmentPath, array $enrollmentData): bool
+    public function upgradeFromInterest(int $registrationId, int $userId, string $status, string $enrollmentPath, array $enrollmentData, ?int $companyId = null): bool
     {
         global $wpdb;
 
-        $result = $wpdb->update(
-            $this->table(),
-            [
-                'user_id'         => $userId,
-                'status'          => $status,
-                'enrollment_path' => $enrollmentPath,
-                'enrollment_data' => wp_json_encode(self::normalizeEnrollmentData($enrollmentData)),
-                'registered_at'   => current_time('mysql'),
-            ],
-            ['id' => $registrationId],
-        );
+        $companySql = $companyId
+            ? $wpdb->prepare(', company_id = COALESCE(NULLIF(company_id, 0), %d)', $companyId)
+            : '';
 
-        if ($result !== false) {
-            $this->clearCache();
+        $result = $wpdb->query($wpdb->prepare(
+            "UPDATE {$this->table()}
+             SET user_id = %d, status = %s, enrollment_path = %s,
+                 enrollment_data = %s, registered_at = %s,
+                 lead_name = '', lead_email = ''{$companySql}
+             WHERE id = %d AND (user_id IS NULL OR user_id = 0)",
+            $userId,
+            $status,
+            $enrollmentPath,
+            wp_json_encode(self::normalizeEnrollmentData($enrollmentData)),
+            current_time('mysql'),
+            $registrationId,
+        ));
+
+        $this->clearCache();
+
+        if ($result !== false && $result > 0) {
             $this->emitRowEvent('row_updated', $registrationId, [
                 'user_id' => $userId,
                 'status'  => $status,
             ], 'upgrade_from_interest');
+            return true;
         }
 
-        return $result !== false;
+        return false;
     }
 
     /**
@@ -1635,25 +1703,6 @@ final class RegistrationRepository
     }
 
     /**
-     * Bind an account-less (lead) row to a WP account — THE one bind write
-     * (INV-3, INV-9). Used by every surface that turns a lead into an
-     * account-bound registration: waitlist promotion, the self-bind at
-     * interest/waitlist submission (form-identity plan 2026-07-14), and the
-     * one-time adoption script.
-     *
-     * Minimal write: sets `user_id` and clears the denormalized lead columns
-     * (once bound, identity lives on the account — lead-identity invariant;
-     * the captured stage data stays in enrollment_data untouched). Leaves
-     * status, registered_at and enrollment_path alone — the promote capacity
-     * transaction owns the status flip. Deliberately NOT
-     * upgradeFromInterest(), which resets registered_at and forces status/path.
-     *
-     * GUARDED on the row still being account-less: a concurrent bind (or a
-     * wrong id) can never silently re-home a row that already belongs to an
-     * account — 0 affected rows returns false, callers treat it as a failed
-     * bind and re-read.
-     */
-    /**
      * Work-list for the one-time lead adoption pass (scripts/adopt-leads.php,
      * form-identity plan 2026-07-14): every account-less row that carries a
      * lead e-mail. Minimal columns; the script resolves each e-mail against
@@ -1672,17 +1721,58 @@ final class RegistrationRepository
         ) ?: [];
     }
 
-    public function bindLeadToUser(int $registrationId, int $userId): bool
+    /**
+     * Bind an account-less (lead) row to a WP account — THE one bind write
+     * (INV-3, INV-9). Used by every surface that turns a lead into an
+     * account-bound registration: waitlist promotion, the self-bind at
+     * interest/waitlist submission (form-identity plan 2026-07-14), and the
+     * one-time adoption script.
+     *
+     * Minimal write: sets `user_id` and clears the denormalized lead columns
+     * (once bound, identity lives on the account — lead-identity invariant;
+     * the captured stage data stays in enrollment_data untouched). Leaves
+     * status, registered_at and enrollment_path alone — the promote capacity
+     * transaction owns the status flip. The enroll-time adopt
+     * (upgradeFromInterest) is the ONE sibling write: same guard, same
+     * lead-column clear, but it additionally flips status/path in the same
+     * statement because enrolling IS the status change.
+     *
+     * $companyId travels in the SAME guarded statement so every bind surface
+     * stamps the account's partner affiliation exactly once (Partner API
+     * parity — a row must never stay invisible to /stride/v1/partner/*
+     * purely because it started as a lead). COALESCE keeps a non-zero
+     * pre-existing company_id: an admin-set scope is never overwritten.
+     *
+     * GUARDED on the row still being account-less: a concurrent bind (or a
+     * wrong id) can never silently re-home a row that already belongs to an
+     * account — 0 affected rows returns false, callers treat it as a failed
+     * bind and re-read.
+     */
+    public function bindLeadToUser(int $registrationId, int $userId, ?int $companyId = null): bool
     {
         global $wpdb;
 
-        $result = $wpdb->query($wpdb->prepare(
-            "UPDATE {$this->table()}
-             SET user_id = %d, lead_name = '', lead_email = ''
-             WHERE id = %d AND (user_id IS NULL OR user_id = 0)",
-            $userId,
-            $registrationId,
-        ));
+        if ($companyId) {
+            $sql = $wpdb->prepare(
+                "UPDATE {$this->table()}
+                 SET user_id = %d, lead_name = '', lead_email = '',
+                     company_id = COALESCE(NULLIF(company_id, 0), %d)
+                 WHERE id = %d AND (user_id IS NULL OR user_id = 0)",
+                $userId,
+                $companyId,
+                $registrationId,
+            );
+        } else {
+            $sql = $wpdb->prepare(
+                "UPDATE {$this->table()}
+                 SET user_id = %d, lead_name = '', lead_email = ''
+                 WHERE id = %d AND (user_id IS NULL OR user_id = 0)",
+                $userId,
+                $registrationId,
+            );
+        }
+
+        $result = $wpdb->query($sql);
 
         $this->clearCache();
 

@@ -163,9 +163,22 @@ final class EnrollmentRouter
             }
         }
 
-        // Allow both pending (enrollment tasks) and confirmed (post-course tasks)
-        $allowedStatuses = ['pending', 'confirmed'];
-        if (!$registration || !in_array($registration->status, $allowedStatuses, true) || empty($registration->completion_tasks)) {
+        // Rule 4 (form-identity plan 2026-07-14): the colleague-enroller
+        // completes the delegable tasks for the person they enrolled. When the
+        // actor has no eligible registration of their own, resolve the most
+        // recent one they created for this edition — the enroll flow redirects
+        // the enroller here right after a colleague enrollment with open
+        // tasks, and without this fallback that redirect bounced them.
+        $isEnroller = false;
+        if ($postType === 'vad_edition' && !$this->completionEligible($registration)) {
+            $enrollerReg = $repo->findByEditionAndEnroller($userId, $post->ID);
+            if ($this->completionEligible($enrollerReg)) {
+                $registration = $enrollerReg;
+                $isEnroller = true;
+            }
+        }
+
+        if (!$this->completionEligible($registration)) {
             wp_safe_redirect(get_permalink($post->ID));
             exit;
         }
@@ -199,15 +212,37 @@ final class EnrollmentRouter
         $completionService = $this->completion;
         $taskSummary = $completionService->getTaskSummary((int) $registration->id);
 
+        // Name the participant when the ENROLLER is viewing (rule 4): the
+        // template disables the strictly-personal tasks and shows whose
+        // registration this is.
+        $participantName = '';
+        if ($isEnroller) {
+            $participant = get_userdata((int) $registration->user_id);
+            $participantName = $participant ? $participant->display_name : '';
+        }
+
         ntdst_response()
             ->with('post', $post)
             ->with('type', $type)
             ->with('registration', $registration)
             ->with('task_summary', $taskSummary)
             ->with('phase', $phase)
+            ->with('is_enroller', $isEnroller)
+            ->with('participant_name', $participantName)
             ->render('forms/completion');
 
         return null;
+    }
+
+    /**
+     * A registration can drive the completion page: live status (pending =
+     * enrollment tasks, confirmed = post-course tasks) and tasks to show.
+     */
+    private function completionEligible(?object $registration): bool
+    {
+        return $registration !== null
+            && in_array($registration->status, ['pending', 'confirmed'], true)
+            && !empty($registration->completion_tasks);
     }
 
     // === Helpers ===

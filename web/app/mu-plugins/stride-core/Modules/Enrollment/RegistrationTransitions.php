@@ -18,7 +18,10 @@ use Stride\Domain\RegistrationStatus;
  *   Interest   → Pending, Cancelled
  *   Confirmed  → Cancelled
  *   Completed  → (terminal)
- *   Cancelled  → (terminal; re-enrol is a NEW registration)
+ *   Cancelled  → (terminal for ADMIN actions; a re-enrol or a fresh public
+ *                 form submission REACTIVATES the same row in place — see
+ *                 DATA-MODEL-REGISTRATIONS.md §5 and
+ *                 RegistrationStatus::isReactivatable())
  *
  * Cancellation is available from EVERY non-terminal state — the map mirrors the
  * actual server authority (EnrollmentService::cancel() rejects ONLY Completed

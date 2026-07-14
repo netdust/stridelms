@@ -66,7 +66,13 @@ foreach ($rows as $row) {
         continue;
     }
 
-    if ($repo->bindLeadToUser((int) $row->id, (int) $user->ID)) {
+    // Partner scoping parity: the bind stamps the account's company
+    // affiliation in the same guarded statement (COALESCE — an already-set
+    // company on the row wins), so script-adopted rows are visible to the
+    // Partner API exactly like promotion- or submission-bound ones.
+    $companyId = \Stride\Modules\User\CompanyAffiliation::getCompanyId((int) $user->ID);
+
+    if ($repo->bindLeadToUser((int) $row->id, (int) $user->ID, $companyId ?: null)) {
         $bound++;
         echo sprintf("BIND  reg #%d → account #%d (%s)\n", (int) $row->id, (int) $user->ID, (string) $row->lead_email);
     } else {

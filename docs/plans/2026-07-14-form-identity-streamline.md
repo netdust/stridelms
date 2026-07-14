@@ -121,6 +121,47 @@ away — no stranger-writable account binding exists). The admin grid shows
 visible without the binding. Goal restated: a clear, clean submission flow —
 clear who submitted what, admin can take each submission to its next step.
 
+## Review round 2 (same day) — verified findings, all fixed
+
+An 8-angle review + adversarial verification pass over the executed slice
+confirmed and fixed:
+
+- **Actor gate widened too far / too wide by default:** `actorMayActOn` is now
+  an ALLOW-list (`session_selection`, `documents`, `post_documents`) — the
+  evaluation is strictly personal like the intake, and future task types are
+  enroller-denied by default. `approval`/`post_approval` additionally require
+  `stride_manage` at the public endpoint (a participant could previously
+  self-approve → auto-confirm; pre-existing, now closed).
+- **Rule 4 was unreachable end-to-end:** the completion route bounced the
+  colleague-enroller; it now falls back to the most recent registration they
+  created for the edition, with the personal tasks rendered read-only. The
+  caller-less duplicate endpoint `stride_save_session_selection` (owner-only,
+  drifted from the gate) was deleted.
+- **Silent bind failure** in the self-bind adopt fell through to `create()`
+  (duplicate row / waitlist downgrade via the reactivate branch) — now logs +
+  returns an error; the adopted row is reused in memory instead of an
+  unguarded re-find.
+- **Case-sensitivity:** the lead-adopt lookup compared e-mails via
+  `JSON_EXTRACT` (utf8mb4_bin, case-SENSITIVE — the only case-sensitive
+  e-mail predicate in the system); it now matches the `lead_email` column
+  (*_ci), consistent with self-bind/grid/batch lookups.
+- **Cross-boundary duplicates:** promotion now refuses to bind a lead onto an
+  account that already holds a row for the edition
+  (`duplicate_registration`, mirrors adopt-leads triage); `enroll()` adopts
+  waitlist leads too (not only interest). Doc §4 states the real guarantee.
+- **Two bind writes, one contract:** `upgradeFromInterest` now guards on
+  account-less, clears lead columns and stamps `company_id` — same contract
+  as `bindLeadToUser`, which now takes the company in the SAME guarded
+  statement (COALESCE; admin-set company wins). The adopt script and the
+  promote path stamp through the bind; the separate post-bind update is gone.
+- **Reactivation completeness:** a cancelled account row reactivates through
+  `create()`'s reactivate branch (full reset: stale quote/selections/
+  completed_at cleared, fresh `registered_at` — no waitlist queue-jumping).
+- **Missing selection lock:** the stage-append read-modify-write runs under
+  `acquireSelectionLock` with a fresh re-read inside the lock (DATA-MODEL §5).
+- **Vocabulary:** `RegistrationStatus::isReactivatable()` replaces three
+  hand-rolled status lists (handler, repo reactivate branch, enroll pre-check).
+
 ## Superseded open decision (kept for history)
 
 - Threat 2 acceptance: a stranger CAN still put a (visible-provenance,

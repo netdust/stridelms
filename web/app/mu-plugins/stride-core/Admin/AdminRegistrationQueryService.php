@@ -279,7 +279,10 @@ final class AdminRegistrationQueryService
         $leadEmails = [];
         foreach ($rows as $row) {
             $userId = (int) $row->user_id;
-            if (($userId <= 0 || !isset($users[$userId]) || $users[$userId] === null) && !empty($row->lead_email)) {
+            // Same lead predicate as $isAnon below: no positive user record
+            // (batchGetUsers seeds misses with null, so isset() covers both
+            // the missing and the deleted-user case).
+            if (($userId <= 0 || !isset($users[$userId])) && !empty($row->lead_email)) {
                 $leadEmails[] = (string) $row->lead_email;
             }
         }
