@@ -255,7 +255,7 @@ final class WorklistQueueResolver
 
             switch ($row->status) {
                 case RegistrationStatus::Pending->value:
-                    if (isset($wants['pending'])) {
+                    if (isset($sets['pending'])) {
                         $sets['pending'][] = $regId;
                     }
                     break;
@@ -264,7 +264,7 @@ final class WorklistQueueResolver
                     // Open capacity = edition not terminal/past (effective
                     // status) AND free spots (prefetched per distinct edition).
                     if (
-                        isset($wants['waitlist'])
+                        isset($sets['waitlist'])
                         && $effective !== null
                         && !$effective->isTerminal()
                         && $effective !== OfferingStatus::Completed
@@ -276,7 +276,7 @@ final class WorklistQueueResolver
 
                 case RegistrationStatus::Confirmed->value:
                     // Absent quote OR any label that is not Exported → follow-up.
-                    if (isset($wants['offerte'])) {
+                    if (isset($sets['offerte'])) {
                         $label = $offerteByReg[$regId] ?? null;
                         if ($label !== $exportedLabel) {
                             $sets['offerte'][] = $regId;
@@ -285,7 +285,7 @@ final class WorklistQueueResolver
                     break;
 
                 case RegistrationStatus::Completed->value:
-                    if (!isset($wants['nocert']) || empty($row->completed_at)) {
+                    if (!isset($sets['nocert']) || empty($row->completed_at)) {
                         break;
                     }
                     $courseId = $courseIdByEdition[$editionId] ?? 0;
@@ -301,7 +301,7 @@ final class WorklistQueueResolver
                     break;
 
                 case RegistrationStatus::Interest->value:
-                    if (isset($wants['oldinterest'])) {
+                    if (isset($sets['oldinterest'])) {
                         $registeredTs = $row->registered_at ? strtotime((string) $row->registered_at) : false;
                         if ($registeredTs !== false && $registeredTs < $oldInterestCutoff) {
                             $sets['oldinterest'][] = $regId;
@@ -309,7 +309,7 @@ final class WorklistQueueResolver
                     }
                     // Counted INDEPENDENTLY of the age check — a row may belong
                     // to both queues (they answer different questions).
-                    if (isset($wants['interest_to_invite']) && ($datedByEdition[$editionId] ?? false)) {
+                    if (isset($sets['interest_to_invite']) && ($datedByEdition[$editionId] ?? false)) {
                         $sets['interest_to_invite'][] = $regId;
                     }
                     break;

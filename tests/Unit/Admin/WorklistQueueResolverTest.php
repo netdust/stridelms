@@ -67,6 +67,70 @@ final class WorklistQueueResolverTest extends TestCase
     }
 
     /**
+     * REGRESSION (2026-07-14, $wants/$sets rename miss): every earlier test
+     * exercised the empty-scope early-returns and never reached the
+     * row-classification switch — a refactor that broke ALL of its per-queue
+     * guards shipped with this suite green (all six Vandaag counts rendered 0
+     * and every ?queue= click-through opened an empty grid). This test drives
+     * a real row set THROUGH the switch and pins the classified id-sets.
+     */
+    public function test_rows_are_classified_into_their_queues(): void
+    {
+        global $wpdb;
+        $previousWpdb = $wpdb;
+        $wpdb = new class {
+            public string $prefix = 'wp_';
+
+            public function prepare(string $query, ...$args): string
+            {
+                foreach ($args as $arg) {
+                    $query = preg_replace('/%[sd]/', is_string($arg) ? "'" . addslashes($arg) . "'" : (string) $arg, $query, 1);
+                }
+
+                return $query;
+            }
+
+            public function get_var(?string $query = null): ?string
+            {
+                // RegistrationTable::exists() probes SHOW TABLES LIKE.
+                return 'wp_vad_registrations';
+            }
+        };
+
+        try {
+            $rows = [
+                // → pending queue.
+                (object) ['id' => 1, 'user_id' => 10, 'edition_id' => 100, 'status' => 'pending', 'registered_at' => '2026-07-01 10:00:00', 'completed_at' => null],
+                // → oldinterest (200 days old, undated edition).
+                (object) ['id' => 2, 'user_id' => 0, 'edition_id' => 101, 'status' => 'interest', 'registered_at' => gmdate('Y-m-d H:i:s', strtotime('-200 days')), 'completed_at' => null],
+                // → interest_to_invite (fresh, edition 102 has a start date).
+                (object) ['id' => 3, 'user_id' => 0, 'edition_id' => 102, 'status' => 'interest', 'registered_at' => gmdate('Y-m-d H:i:s'), 'completed_at' => null],
+            ];
+
+            $registrations = Mockery::mock(RegistrationRepository::class);
+            $registrations->shouldReceive('findByEditionsAndStatuses')->andReturn($rows);
+
+            $editions = Mockery::mock(EditionService::class);
+
+            $editionRepo = Mockery::mock(EditionRepository::class);
+            $editionRepo->shouldReceive('filterIdsWithStartDate')
+                ->with([101, 102])->andReturn([102]);
+
+            $resolver = new WorklistQueueResolver($registrations, $editions, $editionRepo);
+            $sets = $resolver->idsByQueue([100, 101, 102]);
+
+            $this->assertSame([1], $sets['pending'], 'a pending row must land in the pending queue');
+            $this->assertSame([2], $sets['oldinterest'], 'a 200-day-old interest row must land in oldinterest');
+            $this->assertSame([3], $sets['interest_to_invite'], 'an interest row on a dated edition must land in interest_to_invite');
+            $this->assertSame([], $sets['waitlist']);
+            $this->assertSame([], $sets['offerte']);
+            $this->assertSame([], $sets['nocert']);
+        } finally {
+            $wpdb = $previousWpdb;
+        }
+    }
+
+    /**
      * Cross-language contract: the resolver's queue vocabulary must appear
      * verbatim in BOTH client files — grid.js (QUEUE_META: chip labels + the
      * ?queue= passthrough allowlist) and vandaag.js (QUEUE_DEFS: the cards
