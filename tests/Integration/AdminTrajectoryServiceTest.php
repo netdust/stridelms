@@ -50,7 +50,7 @@ final class AdminTrajectoryServiceTest extends IntegrationTestCase
         $fixture = [
             // title-suffix          => status meta (drives the scope/status branch)
             "{$token} Alpha"   => 'open',
-            "{$token} Bravo"   => 'closed',
+            "{$token} Bravo"   => 'completed',
             "{$token} Charlie" => 'archived',
             "{$token} Delta"   => 'full',
             "{$token} Echo"    => '',         // no _ntdst_status row → counts as active
@@ -115,9 +115,10 @@ final class AdminTrajectoryServiceTest extends IntegrationTestCase
     {
         $data = $this->call(['scope' => 'active']);
 
-        // active = NOT (closed|archived). Bravo(closed) + Charlie(archived) drop;
-        // Alpha(open), Delta(full), Echo(no status) remain.
-        $this->assertSame(3, $data['total'], 'active scope excludes closed + archived only');
+        // active = NOT admin-closed (OfferingStatus::adminClosedValues, F-T2).
+        // Bravo(completed) + Charlie(archived) drop; Alpha(open), Delta(full),
+        // Echo(no status row → active) remain.
+        $this->assertSame(3, $data['total'], 'active scope excludes completed + archived only');
         $titles = array_keys($this->byTitle($data));
         sort($titles);
         $this->assertSame(
@@ -128,13 +129,13 @@ final class AdminTrajectoryServiceTest extends IntegrationTestCase
 
     public function testStatusFilterMatchesExactMetaValue(): void
     {
-        $data = $this->call(['status' => 'closed']);
+        $data = $this->call(['status' => 'completed']);
 
-        $this->assertSame(1, $data['total'], 'status=closed matches the single closed row');
+        $this->assertSame(1, $data['total'], 'status=completed matches the single completed row');
         $this->assertCount(1, $data['items']);
         $this->assertSame("{$this->token} Bravo", $data['items'][0]['title']);
-        $this->assertSame('closed', $data['items'][0]['status']);
-        $this->assertSame('Gesloten', $data['items'][0]['statusLabel']);
+        $this->assertSame('completed', $data['items'][0]['status']);
+        $this->assertSame('Afgelopen', $data['items'][0]['statusLabel']);
     }
 
     public function testSearchNarrowsToMatchingTitleSubstring(): void
@@ -168,12 +169,17 @@ final class AdminTrajectoryServiceTest extends IntegrationTestCase
         // rename any of them.
         foreach ([
             'id', 'title', 'description', 'status', 'statusLabel', 'mode', 'modeLabel',
-            'capacity', 'enrolledCount', 'courseCount', 'courses', 'enrolledUsers',
+            'capacity', 'enrolledCount', 'courseCount', 'courses',
             'price', 'priceFormatted', 'priceNonMember', 'priceNonMemberFormatted',
             'enrollmentDeadline', 'choiceAvailableDate', 'choiceDeadline', 'editUrl',
         ] as $key) {
             $this->assertArrayHasKey($key, $item, "read-model must surface {$key}");
         }
+
+        // The list renders no roster — the per-trajectory enrolledUsers rows
+        // (names + e-mails) are fetched ONLY on the detail path. The list
+        // payload must not ship them.
+        $this->assertArrayNotHasKey('enrolledUsers', $item, 'list payload must not ship roster PII');
 
         $this->assertSame("{$this->token} Alpha", $item['title']);
         $this->assertSame('Body for ' . "{$this->token} Alpha", $item['description']);

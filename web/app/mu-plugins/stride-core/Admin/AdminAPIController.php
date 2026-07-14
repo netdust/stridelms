@@ -1639,10 +1639,11 @@ final class AdminAPIController
      *
      * Params:
      *  - q        server-side title LIKE (bound via $wpdb->prepare + esc_like).
-     *  - scope    active (default) | all. active restricts to non-terminal
-     *             statuses (announcement/open/in_progress — mirrors
-     *             TrajectoryRepository::findActive). Trajectories have no dates,
-     *             so the active scope is purely status-based.
+     *  - scope    active (default) | all. active = NOT admin-closed
+     *             (TrajectoryRepository::adminActiveWhereFragment — the same
+     *             boundary the Trajecten list scope uses; meta-less passes,
+     *             cancelled stays visible). Trajectories have no dates, so
+     *             the active scope is purely status-based.
      *  - page / per_page  paged, per_page capped at 100 (clamp, not 400).
      *
      * §10.6: scope=all warrants NO extra capability — gate is canViewAdmin only.

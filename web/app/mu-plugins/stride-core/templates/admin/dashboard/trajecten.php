@@ -18,8 +18,10 @@
  *     detailCourses.{editions,online} (no required/elective structure on this
  *     endpoint — that lives on the dossier per-user endpoint). The "kies N uit M"
  *     elective microcopy is dropped (data not available here).
- *   - the roster is `detail.registrations` (id,name,email,status,status_label);
- *     a row links to the person's dossier via switchView('dossier',{user:r.id}),
+ *   - the roster is `detail.registrations` (regId,id,name,email,status,
+ *     status_label); regId = registration row id, THE stable :key — id is the
+ *     USER id and is 0 for a deleted account. A row links to the person's
+ *     dossier via switchView('dossier',{user:r.id}) (disabled when id=0),
  *     NOT a hardcoded dossier.html#reg-103. No WS.COMPANIES lookup.
  *
  * Scope: mounted with x-data="trajecten()" INSIDE the shell's wsShell() scope,
@@ -39,7 +41,7 @@ defined('ABSPATH') || exit;
          x-show="view === 'trajecten'"
          x-data="trajecten()"
          @ws-refresh.window="if ($event.detail && $event.detail.view === 'trajecten') loadList()"
-         @keydown.escape.window="(detail || detailLoading || detailError) && closeDetail()"
+         @keydown.escape.window="view === 'trajecten' && (detail || detailLoading || detailError) && closeDetail()"
          x-cloak>
     <div class="ws-stagger">
 
@@ -155,18 +157,20 @@ defined('ABSPATH') || exit;
                 <p><?php echo esc_html__('Pas de zoekterm, status of het bereik aan.', 'stride'); ?></p>
             </div>
 
-            <!-- pager (F-T4: the list was hard-capped at the first 50 with no way to reach the rest) -->
-            <div class="ws-traj-pager" x-show="!loading && !error && totalPages > 1"
-                 style="display:flex;align-items:center;justify-content:flex-end;gap:var(--ws-3);padding:var(--ws-3) var(--ws-5);border-top:1px solid var(--ws-border)">
-                <button class="ws-btn ws-btn--ghost" :disabled="page <= 1" @click="goPage(-1)">
-                    ‹ <?php echo esc_html__('Vorige', 'stride'); ?>
-                </button>
-                <span class="ws-muted" style="font-size:var(--ws-fs-sm)">
-                    <?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="totalPages"></b>
-                </span>
-                <button class="ws-btn ws-btn--ghost" :disabled="page >= totalPages" @click="goPage(1)">
-                    <?php echo esc_html__('Volgende', 'stride'); ?> ›
-                </button>
+        </div>
+
+        <!-- pager (F-T4: the list was hard-capped at the first 50 with no way to
+             reach the rest). SAME shared ws-pager markup + goPage(p)/pageList()
+             contract as edities/offertes — no per-surface pager dialect. -->
+        <div class="ws-pager" x-show="!loading && !error && pageCount > 1">
+            <div class="ws-count"><?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="pageCount"></b></div>
+            <div class="ws-pager__pages">
+                <button class="ws-page-btn" :disabled="page===1" @click="goPage(page-1)"><span x-html="icon('chevRight')" style="transform:rotate(180deg);width:15px;height:15px"></span></button>
+                <template x-for="p in pageList()" :key="p">
+                    <template x-if="p === '…'"><span class="ws-page-ellipsis">…</span></template>
+                    <template x-if="p !== '…'"><button class="ws-page-btn" :class="p===page && 'is-active'" @click="goPage(p)" x-text="p"></button></template>
+                </template>
+                <button class="ws-page-btn" :disabled="page===pageCount" @click="goPage(page+1)"><span x-html="icon('chevRight')" style="width:15px;height:15px"></span></button>
             </div>
         </div>
     </div>
@@ -273,12 +277,19 @@ defined('ABSPATH') || exit;
                             <div class="ws-section-title"><span x-html="icon('users')"></span> <?php echo esc_html__('Ingeschreven deelnemers', 'stride'); ?> <span class="ws-grouphead__count" x-text="detail.enrolledCount"></span><span class="ws-section-title__line"></span></div>
                             <p class="ws-muted" style="margin:calc(-1 * var(--ws-2)) 0 var(--ws-3);font-size:var(--ws-fs-sm)"
                                x-show="detail.enrolledCount > (detail.registrations || []).length"
-                               x-text="'<?php echo esc_js(__('De', 'stride')); ?> ' + (detail.registrations || []).length + ' <?php echo esc_js(__('recentste worden getoond.', 'stride')); ?>'"></p>
+                               x-text="'<?php echo esc_js(__('Alleen de %d recentste worden getoond.', 'stride')); ?>'.replace('%d', (detail.registrations || []).length)"></p>
 
                             <template x-if="detail.registrations && detail.registrations.length">
                                 <div class="ws-traj-roster">
+                                    <!-- keyed on regId (registration row id) — r.id is the USER id
+                                         and is 0 for every deleted account; keying on it collapses
+                                         those rows. A deleted-account row has no dossier to open:
+                                         the button is disabled with an explanatory title. -->
                                     <template x-for="r in detail.registrations" :key="r.regId">
-                                        <button class="ws-traj-rosteritem" @click="openPerson(r)">
+                                        <button class="ws-traj-rosteritem" @click="openPerson(r)"
+                                                :disabled="!r.id"
+                                                :title="r.id ? '' : '<?php echo esc_attr__('Account verwijderd — geen dossier beschikbaar', 'stride'); ?>'"
+                                                :style="r.id ? '' : 'cursor:default;opacity:.65'">
                                             <div class="ws-traj-rosteritem__body">
                                                 <div class="ws-traj-rosteritem__name" x-text="r.name"></div>
                                                 <div class="ws-traj-rosteritem__sub" x-text="r.email"></div>

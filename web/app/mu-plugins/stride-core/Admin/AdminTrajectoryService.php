@@ -89,15 +89,15 @@ final class AdminTrajectoryService
         // list hid active trajectories on pages 2+). 'active' = NOT
         // admin-closed (F-T2): the SAME boundary the edition workspace scope
         // uses (OfferingStatus::adminClosedValues — completed/archived;
-        // cancelled stays visible because it still carries cleanup work). The
-        // old hand-rolled list excluded a nonexistent 'closed' status, so
-        // completed/cancelled trajectories counted as active. A trajectory
-        // with NO _ntdst_status row counts as active (NOT closed).
+        // cancelled stays visible because it still carries cleanup work). A
+        // trajectory with NO _ntdst_status row counts as active (NOT closed).
+        // THE one admin-active trajectory predicate lives in the repo
+        // (adminActiveWhereFragment) — the grid typeahead splices the same
+        // fragment, so the two surfaces can never drift apart.
         if ($scope === 'active') {
-            $closed = OfferingStatus::adminClosedValues();
-            $placeholders = implode(',', array_fill(0, count($closed), '%s'));
-            $where[] = "NOT EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_scope WHERE pm_scope.post_id = p.ID AND pm_scope.meta_key = '_ntdst_status' AND pm_scope.meta_value IN ({$placeholders}))";
-            array_push($params, ...$closed);
+            [$scopeSql, $scopeParams] = $this->trajectoryRepository->adminActiveWhereFragment('p');
+            $where[] = $scopeSql;
+            array_push($params, ...$scopeParams);
         }
 
         $whereClause = implode(' AND ', $where);
@@ -163,37 +163,32 @@ final class AdminTrajectoryService
             }
         }
 
-        // Batch fetch trajectory enrollments via canonical RegistrationRepository
+        // Enrollment COUNTS only via canonical RegistrationRepository
         // (stride_vad_registrations is the unified source; the legacy
         // stride_vad_trajectory_enrollments table is no longer written to.)
-        $registrationRepo = $this->registrationRepo;
-        $enrollmentCounts = $registrationRepo->countByTrajectoryIds($trajectoryIds);
-        $allEnrollments = $registrationRepo->findByTrajectoryIds($trajectoryIds, 50);
-
-        $allEnrollmentUserIds = [];
-        foreach ($allEnrollments as $rows) {
-            foreach ($rows as $row) {
-                $allEnrollmentUserIds[] = (int) $row->user_id;
-            }
-        }
+        // The list renders NO roster — it binds only enrolledCount — so the
+        // old per-trajectory 50-row enrollment fetch + user batch shipped up
+        // to ~2,500 rows of names/e-mails per page that were discarded
+        // client-side. The roster is fetched ONLY on the detail path.
+        $enrollmentCounts = $this->registrationRepo->countByTrajectoryIds($trajectoryIds);
 
         // Batch fetch editions for courses
         $editionsMap = BatchQueryHelper::batchGetPosts($allEditionIds, EditionCPT::POST_TYPE);
-
-        // Batch fetch users for enrollments
-        $usersMap = BatchQueryHelper::batchGetUsers($allEnrollmentUserIds);
 
         // === FORMAT TRAJECTORIES ===
 
         $items = [];
         foreach ($trajectories as $trajectory) {
-            $items[] = $this->formatTrajectoryItem($trajectory, [
+            $item = $this->formatTrajectoryItem($trajectory, [
                 'meta'             => $trajectoryMeta,
                 'editions'         => $editionsMap,
                 'enrollmentCounts' => $enrollmentCounts,
-                'enrollments'      => $allEnrollments,
-                'users'            => $usersMap,
+                'enrollments'      => [],
+                'users'            => [],
             ]);
+            // Always-empty on this path — never ship a misleading [] roster key.
+            unset($item['enrolledUsers']);
+            $items[] = $item;
         }
 
         return new WP_REST_Response([
@@ -238,7 +233,9 @@ final class AdminTrajectoryService
         $enrollmentDeadline = $meta['_ntdst_enrollment_deadline'] ?? '';
         $choiceDeadline = $meta['_ntdst_choice_deadline'] ?? '';
         $price = (int) ($meta['_ntdst_price'] ?? 0);
-        $priceNonMember = (float) ($meta['_ntdst_price_non_member'] ?? 0);
+        // Both prices are canonical CENTS — one type. The old (float) cast on
+        // the non-member price implied a euro-float storage that doesn't exist.
+        $priceNonMember = (int) ($meta['_ntdst_price_non_member'] ?? 0);
         $choiceAvailableDate = $meta['_ntdst_choice_available_date'] ?? '';
 
         // Parse courses
@@ -310,12 +307,11 @@ final class AdminTrajectoryService
         // dropdown's wording. Meta-less/unknown → Concept, like everywhere else.
         $statusLabel = (OfferingStatus::tryFrom($trajectoryStatus) ?? OfferingStatus::Draft)->label();
 
-        // Get mode label
-        $modeLabel = match ($mode) {
-            'cohort' => 'Cohort',
-            'open' => 'Open inschrijving',
-            default => ucfirst($mode ?: 'cohort'),
-        };
+        // Mode label from THE enum: the old match knew a fictional 'open' mode
+        // (real vocabulary is cohort|self_paced, TrajectoryMode) and ucfirst'd
+        // the rest — self_paced rendered "Self_paced". Unknown/empty → Cohort,
+        // matching the 'mode' fallback below.
+        $modeLabel = (TrajectoryMode::tryFrom($mode) ?? TrajectoryMode::Cohort)->label();
 
         return [
             'id' => $trajectoryId,
@@ -594,6 +590,9 @@ final class AdminTrajectoryService
                 'status_label' => $status ? $status->label() : __('Onbekend', 'stride'),
             ];
         }, $item['enrolledUsers'] ?? []);
+
+        // registrations IS the roster — drop the raw duplicate.
+        unset($item['enrolledUsers']);
 
         return new WP_REST_Response(array_merge($item, [
             'registrations' => $registrations,

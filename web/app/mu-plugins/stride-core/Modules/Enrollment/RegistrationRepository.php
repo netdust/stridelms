@@ -1100,6 +1100,12 @@ final class RegistrationRepository
 
     /**
      * Count enrollments for a trajectory.
+     *
+     * With no explicit $status, cancelled parents are excluded — the SAME
+     * population rule as countByTrajectoryIds, so the CPT list-table column
+     * (this method) and the workspace list (the batch method) can never show
+     * two different "deelnemers" numbers for one trajectory. An explicit
+     * $status (including 'cancelled') counts exactly that status.
      */
     public function countByTrajectory(int $trajectoryId, ?string $status = null): int
     {
@@ -1111,6 +1117,9 @@ final class RegistrationRepository
         if ($status !== null) {
             $sql .= " AND status = %s";
             $params[] = $status;
+        } else {
+            $sql .= " AND status != %s";
+            $params[] = RegistrationStatus::Cancelled->value;
         }
 
         return (int) $wpdb->get_var($wpdb->prepare($sql, ...$params));

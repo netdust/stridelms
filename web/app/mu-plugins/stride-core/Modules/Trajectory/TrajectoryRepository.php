@@ -18,13 +18,13 @@ final class TrajectoryRepository extends AbstractRepository
     protected string $postType = TrajectoryCPT::POST_TYPE;
 
     /**
-     * The single source of truth for "active trajectory" status values.
+     * The PUBLIC-catalog "active trajectory" status values.
      *
-     * A trajectory is active when its stored status is one of these
-     * non-terminal offering statuses. Both findActive() (catalog) and the
-     * admin trajectory typeahead (AdminAPIController::getTrajectoryOptions)
-     * reference THIS const — never re-list the set inline, or the two
-     * surfaces drift when the domain definition changes.
+     * A trajectory is catalog-active when its stored status is one of these
+     * non-terminal offering statuses — findActive() (catalog enumeration)
+     * owns this definition. The ADMIN surfaces use a different boundary:
+     * "NOT admin-closed" via adminActiveWhereFragment() (meta-less passes,
+     * cancelled stays visible). Never conflate the two.
      *
      * @var list<string>
      */
@@ -113,26 +113,51 @@ final class TrajectoryRepository extends AbstractRepository
         }
 
         if ($activeOnly) {
-            // ADMIN-active (F-T2): NOT admin-closed — the SAME boundary the
-            // Trajecten list scope and the edition workspace scope use
-            // (OfferingStatus::adminClosedValues). The old EXISTS ... IN
-            // (ACTIVE_STATUSES) was a third active-definition: it dropped
-            // meta-less trajectories (which the list scope keeps) and hid
-            // cancelled trajectories whose registrations still need cleanup.
-            // ACTIVE_STATUSES stays the PUBLIC catalog definition (findActive).
-            $statusKey          = $this->getMetaPrefix() . 'status';
-            $closed             = OfferingStatus::adminClosedValues();
-            $statusPlaceholders = implode(',', array_fill(0, count($closed), '%s'));
-            $where[]            = "NOT EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status
-                WHERE pm_status.post_id = p.ID
-                AND pm_status.meta_key = '{$statusKey}'
-                AND pm_status.meta_value IN ({$statusPlaceholders}))";
-            foreach ($closed as $st) {
-                $params[] = $st;
-            }
+            // ADMIN-active (F-T2): NOT admin-closed — THE shared fragment, so
+            // the typeahead and the Trajecten list scope can never drift. The
+            // old EXISTS ... IN (ACTIVE_STATUSES) was a third active-definition:
+            // it dropped meta-less trajectories (which the list scope keeps)
+            // and hid cancelled trajectories whose registrations still need
+            // cleanup. ACTIVE_STATUSES stays the PUBLIC catalog definition.
+            [$scopeSql, $scopeParams] = $this->adminActiveWhereFragment('p');
+            $where[] = $scopeSql;
+            array_push($params, ...$scopeParams);
         }
 
         return [implode(' AND ', $where), $params];
+    }
+
+    /**
+     * THE one ADMIN-active trajectory predicate: NOT admin-closed.
+     *
+     * Returns a [sql, params] WHERE fragment excluding trajectories whose
+     * status meta is in OfferingStatus::adminClosedValues() (completed +
+     * archived) — the SAME boundary the edition workspace scope uses (F-T2).
+     * Meta-less trajectories PASS (no status row ≠ closed); cancelled stays
+     * visible because it still carries cleanup work. Spliced by both the
+     * Trajecten list scope (AdminTrajectoryService::getTrajectories) and the
+     * grid typeahead (buildOptionsWhere) — never re-list the set inline.
+     *
+     * The status meta key is built from getMetaPrefix() (D1); every dynamic
+     * VALUE is a %s placeholder for the caller's $wpdb->prepare (M4).
+     *
+     * @param string $alias The posts-table alias in the caller's query.
+     * @return array{0: string, 1: list<string>}
+     */
+    public function adminActiveWhereFragment(string $alias = 'p'): array
+    {
+        global $wpdb;
+
+        $statusKey    = $this->getMetaPrefix() . 'status';
+        $closed       = OfferingStatus::adminClosedValues();
+        $placeholders = implode(',', array_fill(0, count($closed), '%s'));
+
+        $sql = "NOT EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_scope
+            WHERE pm_scope.post_id = {$alias}.ID
+            AND pm_scope.meta_key = '{$statusKey}'
+            AND pm_scope.meta_value IN ({$placeholders}))";
+
+        return [$sql, $closed];
     }
 
     /**

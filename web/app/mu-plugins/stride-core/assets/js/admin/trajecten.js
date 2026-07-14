@@ -14,7 +14,9 @@
      GET /admin/trajectories            (list — server owns filter/scope/paging)
         { items:[ <item> ], total, page, perPage, totalPages }
      GET /admin/trajectories/{id}       (detail)
-        <item> PLUS { registrations:[{id,name,email,status,status_label}] }
+        <item> PLUS { registrations:[{regId,id,name,email,status,status_label}] }
+        (regId = registration row id, THE stable key; id = user id, 0 for a
+         deleted account — never key or Map on id, that collapses those rows)
 
      <item> = {
        id, title, description, status, statusLabel, mode, modeLabel,
@@ -64,11 +66,12 @@
   'use strict';
 
   /* ---- status VALUE → badge hue class (styling only — INV-5/INV-7) --------
-     Ported from the mockup TRAJ_STATUS table. The LABEL is never taken from
-     here (the API's statusLabel wins, INV-7); this maps only the closed status
-     value to a CSS hue class. An unknown status falls back to the neutral
-     slate ('completed') class — never a crash, never raw passthrough. */
-  /* Two REAL vocabularies (F-T2/F-T3 — the old table knew a fictional
+     The LABEL is never taken from here (the API's statusLabel wins, INV-7);
+     this maps only the closed status value to a CSS hue class. An unknown
+     status falls back to the neutral slate ('completed') class — never a
+     crash, never raw passthrough.
+
+     Two REAL vocabularies (F-T2/F-T3 — the mockup's table knew a fictional
      'closed' and a fictional 'active', and missed the most common actual
      values, so confirmed/waitlist roster rows and in_progress trajectories
      all fell through to the neutral slate):
@@ -153,7 +156,7 @@
       rows: [],
       total: 0,
       page: 1,
-      totalPages: 1,
+      pageCount: 1,
       loading: true,
       error: '',
 
@@ -163,11 +166,14 @@
       statusFilter: '',
       q: '',
 
-      // detail slide-over state (its own load lifecycle)
+      // detail slide-over state (its own load lifecycle). _detailReq is a
+      // monotonic request token: closeDetail()/a newer openDetail() bumps it,
+      // so a stale in-flight response can never resurrect a closed slide-over.
       detail: null,
       detailCourses: { editions: [], online: [] },
       detailLoading: false,
       detailError: '',
+      _detailReq: 0,
 
       init() {
         // I-1: load the list the FIRST time trajecten becomes active, not on
@@ -198,7 +204,13 @@
           .then((data) => {
             this.rows = window.WS.mapTrajectories(data);
             this.total = Number(data && data.total) || this.rows.length;
-            this.totalPages = Math.max(1, Number(data && data.totalPages) || 1);
+            this.pageCount = Math.max(1, Number(data && data.totalPages) || 1);
+            // Page pointer past the (shrunk) result set → clamp and refetch,
+            // so a delete on the last page never strands an empty view.
+            if (this.page > this.pageCount) {
+              this.page = this.pageCount;
+              this.loadList();
+            }
           })
           .catch(() => {
             this.error = 'Kon de trajecten niet laden.';
@@ -208,9 +220,15 @@
       },
 
       /* Filter/scope changes restart at page 1 — a page pointer past the new
-         result set would render a misleading empty list. */
+         result set would render a misleading empty list. Picking a status the
+         active scope structurally excludes (completed/archived = the
+         admin-closed set) auto-widens to 'all' — otherwise that filter could
+         only EVER show an empty list. */
       onFilterChange() {
         this.page = 1;
+        if (this.scope === 'active' && (this.statusFilter === 'completed' || this.statusFilter === 'archived')) {
+          this.scope = 'all';
+        }
         this.loadList();
       },
 
@@ -220,11 +238,24 @@
         this.loadList();
       },
 
-      goPage(delta) {
-        const next = this.page + delta;
-        if (next < 1 || next > this.totalPages) return;
-        this.page = next;
-        this.loadList();
+      /* Absolute page jump — the SAME contract as edities/offertes/grid
+         (goPage(p), never a delta; the template's pageList() buttons pass
+         absolute numbers). */
+      goPage(p) {
+        if (p >= 1 && p <= this.pageCount && p !== this.page) {
+          this.page = p;
+          this.loadList();
+        }
+      },
+      pageList() {
+        const last = this.pageCount, cur = this.page, out = [];
+        if (last <= 7) { for (let i = 1; i <= last; i++) out.push(i); return out; }
+        out.push(1);
+        if (cur > 3) out.push('…');
+        for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) out.push(i);
+        if (cur < last - 2) out.push('…');
+        out.push(last);
+        return out;
       },
 
       /* Open the detail slide-over: a single O(1) fetch (the F1-fixed path that
@@ -232,25 +263,32 @@
          (empty roster is NOT an error — the t3 edge). */
       openDetail(id) {
         if (!id) return;
+        const req = ++this._detailReq;
         this.detail = null;
         this.detailCourses = { editions: [], online: [] };
         this.detailLoading = true;
         this.detailError = '';
         this.api('/admin/trajectories/' + encodeURIComponent(id))
           .then((data) => {
+            if (req !== this._detailReq) return; // closed / superseded mid-flight
             this.detail = data;
             this.detailCourses = window.WS.groupCourses(data && data.courses);
           })
           .catch(() => {
+            if (req !== this._detailReq) return;
             this.detailError = 'Kon dit traject niet laden.';
           })
-          .finally(() => { this.detailLoading = false; });
+          .finally(() => {
+            if (req === this._detailReq) this.detailLoading = false;
+          });
       },
 
       closeDetail() {
+        this._detailReq++; // invalidate any in-flight detail fetch
         this.detail = null;
         this.detailError = '';
         this.detailCourses = { editions: [], online: [] };
+        this.detailLoading = false;
       },
 
       /* Jump to a roster person's dossier via the shell's extended switchView
