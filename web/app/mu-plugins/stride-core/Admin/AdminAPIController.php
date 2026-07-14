@@ -583,11 +583,15 @@ final class AdminAPIController
      */
     public function getStats(WP_REST_Request $request): WP_REST_Response
     {
-        // F-V10: ?fresh=1 (the Vernieuwen button) busts the dashboard read
-        // caches before the read — see getActionQueue. Idempotent with the
-        // sibling call in the same pulse; a benign extra recompute at worst.
+        // F-V10: ?fresh=1 (the Vernieuwen button) busts THIS endpoint's read
+        // caches before the read — the stats transient + the resolver
+        // id-sets feeding its queue counts. Endpoint-scoped on purpose: the
+        // pulse fires this and /admin/action-queue in PARALLEL, and a full
+        // bustCaches() from both raced to delete the transient the sibling
+        // request had just repopulated (double recompute per click).
         if ($request->get_param('fresh')) {
-            AdminStatsService::bustCaches();
+            delete_transient(AdminStatsService::STATS_TRANSIENT_KEY);
+            AdminStatsService::bumpQueueRev();
         }
 
         // Thin delegator — all $wpdb / read-model assembly lives in
@@ -1772,14 +1776,18 @@ final class AdminAPIController
         // always pass.
         $activeEditionIds = ntdst_get(WorklistQueueResolver::class)->activeEditionIds();
 
-        // Enrollment phase: pending registrations that can still yield an item —
-        // an open admin-approval task or no tasks at all (bucket 1) or
-        // stale-aged (bucket 3 candidate).
-        $pendingRows = $registrationRepo->findPendingWithOpenApproval($staleThreshold, self::APPROVALS_SCAN_CAP, $activeEditionIds);
+        // Enrollment phase: every pending registration in scope — the bucket
+        // rule (awaitsAdmin vs stale) runs in PHP below; SQL task-shape
+        // pre-filters kept hiding row subsets the queue card counted.
+        $pendingRows = $registrationRepo->findPendingForApprovalScan(self::APPROVALS_SCAN_CAP, $activeEditionIds);
 
         // Post-course phase: confirmed registrations with an open post_approval
         // task whose post-course user tasks (fixed keys) are absent-or-completed.
-        $confirmedRows = $registrationRepo->findConfirmedWithOpenPostApproval(self::APPROVALS_SCAN_CAP, $activeEditionIds);
+        // Deliberately UNSCOPED (null): post-course work arrives around/after
+        // course end, when admins have often already closed the edition —
+        // scoping hid open post_approvals on closed editions from EVERY
+        // surface (no queue card carries them either).
+        $confirmedRows = $registrationRepo->findConfirmedWithOpenPostApproval(self::APPROVALS_SCAN_CAP, null);
 
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
         /** @var list<array{0: object, 1: array, 2: string, 3: array}> $matches */
@@ -1788,17 +1796,15 @@ final class AdminAPIController
 
         foreach ($pendingRows as $row) {
             $tasks = is_array($row->completion_tasks) ? $row->completion_tasks : [];
-            $userTasksDone = $completionService->areUserTasksComplete($tasks);
 
-            // Bucket 1: the row waits on the ADMIN — user tasks all done
-            // with an open approval task, or NO tasks at all (F-V5: nothing
-            // for the user to do, only the admin's confirm is missing; the
-            // old isset($tasks['approval']) condition made those rows count
-            // on the queue card yet never appear here). Same readiness rule
-            // as WorklistQueueResolver::pendingSplit (decision 7a).
-            $approvalOpen = isset($tasks['approval'])
-                && ($tasks['approval']['status'] ?? 'pending') !== 'completed';
-            if ($userTasksDone && ($approvalOpen || empty($tasks))) {
+            // Bucket 1: the row waits on the ADMIN. THE shared rule
+            // (EnrollmentCompletion::awaitsAdmin — the same predicate the
+            // Vandaag card's ready/blocked split classifies with): user side
+            // done, or nothing for the user to do (F-V5). Every hand-rolled
+            // variant here (isset approval / approvalOpen / empty checks)
+            // hid a row subset the card counted.
+            $userTasksDone = $completionService->awaitsAdmin($tasks);
+            if ($userTasksDone) {
                 $matches[] = [$row, $tasks, 'approval', []];
                 $counts['approval']++;
                 continue;
@@ -1807,7 +1813,7 @@ final class AdminAPIController
             // Bucket 3: user-side stale pending — user hasn't finished tasks and the
             // registration is older than the threshold. Capacity is held until admin
             // contacts the user or cancels.
-            if (!$userTasksDone && $row->registered_at && $row->registered_at <= $staleThreshold) {
+            if ($row->registered_at && $row->registered_at <= $staleThreshold) {
                 $openTask = $completionService->getFirstOpenUserTask($tasks);
                 $matches[] = [$row, $tasks, 'stale_user', array_merge([
                     'open_task' => $openTask,
@@ -1955,10 +1961,14 @@ final class AdminAPIController
 
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
 
-        // Mark approval task as completed
+        // Mark approval task as completed. 'task_not_required' is fine: a
+        // pending row with NO tasks (or no approval task) still legitimately
+        // waits on the admin (awaitsAdmin — the "Wacht op mij" bucket) and
+        // approving it means confirming; a hard error here left those rows
+        // listed with a dead Goedkeuren button.
         $result = $completionService->completeTask($registrationId, 'approval');
 
-        if (is_wp_error($result)) {
+        if (is_wp_error($result) && $result->get_error_code() !== 'task_not_required') {
             return $result;
         }
 
@@ -2015,11 +2025,12 @@ final class AdminAPIController
     {
         $rules = StrideSettingsService::getNotificationRules();
 
-        // F-V10: ?fresh=1 (the Vernieuwen button) busts the dashboard read
-        // caches BEFORE the read, so the toasted "vernieuwd" is true instead
-        // of re-serving a transient younger than its TTL.
+        // F-V10: ?fresh=1 (the Vernieuwen button) busts THIS endpoint's read
+        // cache before the read, so the toasted "vernieuwd" is true instead
+        // of re-serving a transient younger than its TTL. Endpoint-scoped —
+        // see getStats for why not a full bustCaches().
         if ($request->get_param('fresh')) {
-            AdminStatsService::bustCaches();
+            delete_transient(AdminStatsService::ACTION_QUEUE_TRANSIENT_KEY);
         }
 
         // SQL data-gathering + rule evaluation + transient caching live in

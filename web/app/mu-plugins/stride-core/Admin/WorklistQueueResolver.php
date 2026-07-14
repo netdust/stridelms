@@ -154,7 +154,13 @@ final class WorklistQueueResolver
      */
     public function pendingSplit(?array $activeEditionIds = null): array
     {
-        $sets = $this->resolve($activeEditionIds ?? $this->activeEditionIds(), ['pending']);
+        // Resolve the FULL queue set: the stats path (the only caller) has
+        // just resolved exactly that for idsByQueue, so this is a memo/cache
+        // hit — one fetch, one snapshot, ready ∪ blocked ≡ pending by
+        // construction. A ['pending']-subset resolve would be a second fetch
+        // under a different cache key, and two independently-aged snapshots
+        // could ship a split disagreeing with its own total.
+        $sets = $this->resolve($activeEditionIds ?? $this->activeEditionIds(), self::QUEUES);
         $ready = $sets['pending_ready'] ?? [];
 
         return [
@@ -187,17 +193,20 @@ final class WorklistQueueResolver
 
         // Short-TTL cross-request cache: the grid's ?queue= path re-resolves
         // on every pagination/sort/search interaction, and the nocert queue
-        // does a per-row LearnDash lookup each time. Salted with the rev
-        // counter AdminStatsService::bustCaches() bumps on every covered
-        // write (registration events, CPT saves, LD completion), so a write
-        // reflects on the next request; anything outside the bust set is
-        // bounded to ≤60s staleness — the counts transient already accepts
-        // ≤120s on the same inputs.
+        // does a per-row LearnDash lookup each time. The key is FIXED per
+        // (edition-set, queue-subset) — a handful of reusable rows — with the
+        // rev stored INSIDE the value for validation: a rev-salted KEY would
+        // orphan every live entry on each write-event bump (registration
+        // saves happen constantly) and bloat wp_options between transient
+        // cleanups. AdminStatsService::bustCaches() bumps the rev on every
+        // covered write, so a write reflects on the next request; anything
+        // outside the bust set is bounded to ≤60s staleness — the counts
+        // transient already accepts ≤120s on the same inputs.
         $rev = (int) get_option(AdminStatsService::QUEUE_REV_OPTION, 0);
-        $cacheKey = 'stride_queue_ids_' . md5($rev . '|' . $memoKey);
+        $cacheKey = 'stride_queue_ids_' . md5($memoKey);
         $cached = get_transient($cacheKey);
-        if (is_array($cached)) {
-            return $this->memo[$memoKey] = $cached;
+        if (is_array($cached) && ($cached['rev'] ?? -1) === $rev && is_array($cached['sets'] ?? null)) {
+            return $this->memo[$memoKey] = $cached['sets'];
         }
 
         $sets = array_fill_keys($queues, []);
@@ -272,19 +281,13 @@ final class WorklistQueueResolver
                 : [];
         }
 
-        // Free-spots probe, batched: ONE occupancy query over the waitlist-
-        // hosting editions (capacity statuses per the enum — same definition
-        // as hasAvailableSpots) instead of a per-edition getRegisteredCount.
-        $hasSpotsByEdition = [];
-        if (!empty($waitlistEditionIds)) {
-            $waitlistIds = array_keys($waitlistEditionIds);
-            $occupied = \Stride\Infrastructure\BatchQueryHelper::batchGetRegistrationCounts($waitlistIds);
-            foreach ($waitlistIds as $editionId) {
-                $capacity = $this->editions->getCapacity($editionId);
-                $hasSpotsByEdition[$editionId] = $capacity <= 0
-                    || ($occupied[$editionId] ?? 0) < $capacity;
-            }
-        }
+        // Free-spots probe, batched — the DECISION lives in EditionService
+        // (hasAvailableSpotsBatch, same rule as hasAvailableSpots), this
+        // class only consumes the map. A hand-rolled comparison here was a
+        // second "has spots" definition, the drift class F-V6 exists to kill.
+        $hasSpotsByEdition = !empty($waitlistEditionIds)
+            ? $this->editions->hasAvailableSpotsBatch(array_keys($waitlistEditionIds))
+            : [];
         $courseIdByEdition = [];
         foreach (array_keys($completedEditionIds) as $editionId) {
             $courseIdByEdition[$editionId] = $this->editions->getCourseId($editionId) ?? 0;
@@ -321,12 +324,13 @@ final class WorklistQueueResolver
                     if (isset($sets['pending'])) {
                         $sets['pending'][] = $regId;
 
-                        // Split (7a): user tasks all done, or NO tasks at all
-                        // (F-V5 — nothing for the user to do) → the row waits
-                        // on the ADMIN.
+                        // Split (7a): THE shared rule — the row waits on the
+                        // admin when the user side is done (or there was
+                        // nothing for the user to do, F-V5). Same predicate
+                        // the approvals panel buckets with.
                         $tasks = is_array($row->completion_tasks ?? null) ? $row->completion_tasks : [];
                         $completion ??= ntdst_get(EnrollmentCompletion::class);
-                        if ($completion->areUserTasksComplete($tasks)) {
+                        if ($completion->awaitsAdmin($tasks)) {
                             $sets['pending_ready'][] = $regId;
                         }
                     }
@@ -388,7 +392,7 @@ final class WorklistQueueResolver
             }
         }
 
-        set_transient($cacheKey, $sets, MINUTE_IN_SECONDS);
+        set_transient($cacheKey, ['rev' => $rev, 'sets' => $sets], MINUTE_IN_SECONDS);
 
         return $this->memo[$memoKey] = $sets;
     }

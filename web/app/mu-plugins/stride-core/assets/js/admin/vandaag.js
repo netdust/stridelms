@@ -123,7 +123,7 @@
       if (d.key === 'pending' && count > 0 && w.pending_ready != null) {
         const ready = Number(w.pending_ready) || 0;
         const blocked = Math.max(0, count - ready);
-        q.sub = `${ready} klaar voor goedkeuring · ${blocked} wacht op deelnemer`;
+        q.sub = `${ready} klaar voor goedkeuring · ${blocked} ${blocked === 1 ? 'wacht' : 'wachten'} op deelnemer`;
       }
       return q;
     });
@@ -257,14 +257,6 @@
 
       today: new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' }),
 
-      /* Time-of-day greeting (F-V13 — "Goeiemorgen." was hardcoded all day). */
-      get greeting() {
-        const h = new Date().getHours();
-        if (h < 12) return 'Goeiemorgen.';
-        if (h < 18) return 'Goeiemiddag.';
-        return 'Goeienavond.';
-      },
-
       get totalActions() {
         if (Number.isFinite(this.queueTotal)) return this.queueTotal;
         return this.queues.reduce((n, q) => n + (q.count || 0), 0);
@@ -372,15 +364,19 @@
          and is restored if the write fails — a melding that stays visible is
          the honest failure mode. */
       async dismissMelding(item) {
-        const prev = this.aq.meldingen;
-        this.aq.meldingen = prev.filter((m) => m.regId !== item.regId);
+        this.aq.meldingen = this.aq.meldingen.filter((m) => m.regId !== item.regId);
         try {
           await this.api('/admin/action-queue/dismiss', {
             method: 'POST',
             body: JSON.stringify({ rule: item.rule, subject_id: item.subjectId || 0 }),
           });
         } catch (e) {
-          this.aq.meldingen = prev;
+          // Re-insert ONLY the failed row — restoring a pre-dismiss array
+          // snapshot would clobber whatever happened while the POST was in
+          // flight (a second dismissal that succeeded, a pulse() refresh).
+          if (!this.aq.meldingen.some((m) => m.regId === item.regId)) {
+            this.aq.meldingen = [...this.aq.meldingen, item];
+          }
         }
       },
 

@@ -84,6 +84,21 @@ final class ActionQueueService
     }
 
     /**
+     * Workspace deep-link for an edition-scoped melding — ONE statement of
+     * the {view, params} contract grid.js/shell.js consume, and of the
+     * "no edition -> no affordance" rule (a missing edition meta used to
+     * link post.php?post=0).
+     *
+     * @return array{view: string, params: array{edition_id: int}}|null
+     */
+    private function editionTarget(int $editionId): ?array
+    {
+        return $editionId > 0
+            ? ['view' => 'inschrijvingen', 'params' => ['edition_id' => $editionId]]
+            : null;
+    }
+
+    /**
      * Editions approaching capacity threshold.
      * @return list<array>
      */
@@ -110,9 +125,7 @@ final class ActionQueueService
                     'text'       => sprintf('%s: %d/%d plaatsen bezet (%d%%)', $title, $registered, $capacity, (int) $percentage),
                     'subject_id' => $editionId ?: null,
                     'url'        => '',
-                    'target'     => $editionId > 0
-                        ? ['view' => 'inschrijvingen', 'params' => ['edition_id' => $editionId]]
-                        : null,
+                    'target'     => $this->editionTarget($editionId),
                 ];
             }
         }
@@ -140,9 +153,7 @@ final class ActionQueueService
                 'text'       => sprintf('Sessie "%s" op %s nadert', $title, $date),
                 'subject_id' => $session['id'] ?? null,
                 'url'        => '',
-                'target'     => $editionId > 0
-                    ? ['view' => 'inschrijvingen', 'params' => ['edition_id' => $editionId]]
-                    : null,
+                'target'     => $this->editionTarget($editionId),
             ];
         }
 
@@ -202,9 +213,7 @@ final class ActionQueueService
                 'text'       => sprintf('Editie "%s" start op %s', $title, $date),
                 'subject_id' => $editionId ?: null,
                 'url'        => '',
-                'target'     => $editionId > 0
-                    ? ['view' => 'inschrijvingen', 'params' => ['edition_id' => $editionId]]
-                    : null,
+                'target'     => $this->editionTarget($editionId),
             ];
         }
 

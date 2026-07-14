@@ -56,21 +56,69 @@ final class AdminStatsService
     public function __construct(
         private readonly ActionQueueService $actionQueue,
         private readonly EditionRepository $editionRepository,
-    ) {}
+    ) {
+        $this->init();
+    }
+
+    /**
+     * The write-event bust hooks live HERE — with the cache owner — and NOT
+     * in AdminDashboardService: that service is admin_only, and the ntdst
+     * Bootstrap skips admin_only services when !is_admin(). Workspace
+     * mutations run through REST (is_admin() false), so hooks registered
+     * there never fired for exactly the writes the workspace makes —
+     * approve/promote/bulk left every dashboard count stale until the TTL.
+     */
+    private function init(): void
+    {
+        $bust = static function (): void {
+            self::bustCaches();
+        };
+        add_action('stride/registration/created', $bust);
+        add_action('stride/registration/confirmed', $bust);
+        add_action('stride/registration/cancelled', $bust);
+        add_action('stride/attendance/marked', $bust);
+        add_action('save_post_vad_quote', $bust);
+        // Bulk batch completion + quote-status changes set via the repo
+        // (which never touch save_post_vad_quote) must recount the queue.
+        add_action('stride/registration/bulk_completed', $bust);
+        add_action('stride/registration/quote_status_changed', $bust);
+        // Interest/waitlist public sign-ups feed worklistQueues.oldinterest /
+        // .waitlist_open (not covered by created/confirmed/cancelled).
+        add_action('stride/registration/interest_registered', $bust);
+        add_action('stride/registration/waitlisted', $bust);
+        // Any other status transition (e.g. a single reg → completed feeding
+        // .nocert) fires the repo's generic updated event — the catch-all.
+        add_action('stride/registration/updated', $bust);
+        // Edition / session / trajectory CPT writes feed upcomingEditions,
+        // todaySessions and the queue scope (findAdminActiveIds).
+        add_action('save_post_vad_edition', $bust);
+        add_action('save_post_vad_session', $bust);
+        add_action('save_post_vad_trajectory', $bust);
+        // learndash_course_completed (feeds the nocert count) fires on
+        // frontend requests — that bust lives in LearnDashService, which
+        // loads on every request. It calls the same bustCaches().
+    }
 
     /**
      * Bust every cached dashboard read this service owns (stats + action
-     * queue) — THE single bust both hook sites call
-     * (AdminDashboardService::init's write-event closure and
-     * LearnDashService's course-completion hook), so a cache added here is
-     * busted everywhere at once instead of drifting between two hand-copied
-     * delete_transient lists.
+     * queue + the resolver's id-sets) — THE single bust both hook sites
+     * call (init() above and LearnDashService's course-completion hook), so
+     * a cache added here is busted everywhere at once instead of drifting
+     * between two hand-copied delete_transient lists.
      */
     public static function bustCaches(): void
     {
         delete_transient(self::ACTION_QUEUE_TRANSIENT_KEY);
         delete_transient(self::STATS_TRANSIENT_KEY);
-        // Invalidate the resolver's id-set cache (dynamic keys — rev-salted).
+        self::bumpQueueRev();
+    }
+
+    /**
+     * Invalidate the resolver's id-set cache (dynamic keys — validated
+     * against this rev inside the cached value).
+     */
+    public static function bumpQueueRev(): void
+    {
         update_option(self::QUEUE_REV_OPTION, (int) get_option(self::QUEUE_REV_OPTION, 0) + 1, true);
     }
 
@@ -398,29 +446,41 @@ final class AdminStatsService
             $data['starting_soon'] = $startingSoon ?: [];
         }
 
-        // Registrations sitting on an OPEN completion task past the cutoff.
-        // Tasks are stored as {type: {status: 'pending'|'completed', …}} —
-        // the old predicate LIKE '"completed":false' matched a boolean key no
-        // writer ever produces, so this melding could never fire (F-V1).
-        // Both live phases count: pending rows (enrollment tasks) and
-        // confirmed rows (post-course tasks) — the same population as the
-        // Acties panel's per-person buckets this melding deep-links to.
+        // Registrations sitting on an open USER task past the cutoff — the
+        // same population as the "Wacht op gebruiker" tab this melding
+        // deep-links to. The old predicate LIKE '"completed":false' matched
+        // a boolean key no writer ever produces (F-V1: could never fire);
+        // a bare LIKE '"status":"pending"' over-matched admin-side approval
+        // tasks and told the admin users were dawdling when the admin was
+        // the blocker. SQL over-fetches (any pending sub-object), the shared
+        // rule (EnrollmentCompletion::awaitsAdmin — the actor decider) is
+        // authoritative in PHP.
         if (!empty($rules['incomplete_tasks']['enabled']) && $registrationTableExists) {
             $taskDays = (int) ($rules['incomplete_tasks']['value'] ?? 7);
             $taskCutoff = wp_date('Y-m-d', strtotime("-{$taskDays} days"));
-            $incompleteTasks = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.id
+            $candidates = $wpdb->get_results($wpdb->prepare(
+                "SELECT r.id, r.completion_tasks
                  FROM {$registrationTable} r
-                 WHERE r.status IN (%s, %s)
+                 WHERE r.status = %s
                  AND r.completion_tasks IS NOT NULL
                  AND r.completion_tasks LIKE %s
-                 AND r.registered_at < %s",
+                 AND r.registered_at < %s
+                 LIMIT 500",
                 RegistrationStatus::Pending->value,
-                RegistrationStatus::Confirmed->value,
                 '%"status":"pending"%',
                 $taskCutoff,
             ), ARRAY_A);
-            $data['incomplete_tasks'] = $incompleteTasks ?: [];
+
+            $completion = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+            $data['incomplete_tasks'] = array_values(array_filter(
+                $candidates ?: [],
+                static function (array $row) use ($completion): bool {
+                    $tasks = json_decode((string) ($row['completion_tasks'] ?? ''), true);
+
+                    // Waiting on the USER = not awaiting the admin.
+                    return is_array($tasks) && !$completion->awaitsAdmin($tasks);
+                },
+            ));
         }
 
         $items = $this->actionQueue->evaluate($rules, $data);

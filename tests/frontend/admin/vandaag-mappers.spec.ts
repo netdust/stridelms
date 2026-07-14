@@ -231,8 +231,11 @@ test.describe('mapQueues — pending split (7a)', () => {
   test('renders the split line when pending_ready is present', () => {
     const queues = mappers.mapQueues({ pending: 5, pending_ready: 2 });
     const pending = queues.find((q: any) => q.key === 'pending');
-    expect(pending.sub).toBe('2 klaar voor goedkeuring · 3 wacht op deelnemer');
+    expect(pending.sub).toBe('2 klaar voor goedkeuring · 3 wachten op deelnemer');
     expect(pending.count).toBe(5);
+    // Dutch inflection: singular 'wacht', plural 'wachten'.
+    expect(mappers.mapQueues({ pending: 3, pending_ready: 2 }).find((q: any) => q.key === 'pending').sub)
+      .toContain('1 wacht op deelnemer');
   });
 
   test('no split without the payload key (stale cache) or at count 0', () => {
@@ -242,7 +245,7 @@ test.describe('mapQueues — pending split (7a)', () => {
 
   test('a ready count above the total never renders a negative blocked number', () => {
     const pending = mappers.mapQueues({ pending: 2, pending_ready: 9 }).find((q: any) => q.key === 'pending');
-    expect(pending.sub).toContain('0 wacht op deelnemer');
+    expect(pending.sub).toContain('0 wachten op deelnemer');
   });
 });
 

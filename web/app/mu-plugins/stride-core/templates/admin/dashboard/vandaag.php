@@ -39,8 +39,16 @@ defined('ABSPATH') || exit;
         <div class="ws-page-head">
             <div>
                 <span class="ws-eyebrow"><?php echo esc_html__('Werklijst', 'stride'); ?> · <span x-text="today"></span></span>
-                <!-- F-V13: time-of-day greeting (was "Goeiemorgen." all day) -->
-                <h1 x-text="greeting"><?php echo esc_html__('Goeiemorgen.', 'stride'); ?></h1>
+                <!-- F-V13: time-of-day greeting (was "Goeiemorgen." all day).
+                     Server-rendered: translatable ('stride' text domain, unlike
+                     a JS literal) and on SITE time, consistent with every
+                     other timestamp on this surface. -->
+                <?php $strideGreetingHour = (int) current_time('G'); ?>
+                <h1><?php echo esc_html(
+                    $strideGreetingHour < 12
+                        ? __('Goeiemorgen.', 'stride')
+                        : ($strideGreetingHour < 18 ? __('Goeiemiddag.', 'stride') : __('Goeienavond.', 'stride'))
+                ); ?></h1>
                 <p>
                     <?php echo esc_html__('Je hebt', 'stride'); ?>
                     <b x-text="totalActions"></b>
@@ -116,8 +124,12 @@ defined('ABSPATH') || exit;
                         <span x-text="errors.actions"></span>
                     </div>
                 </template>
-                <!-- F-V11: the approvals scan hit its cap — pills are lower bounds -->
-                <template x-if="clipped && !errors.actions">
+                <!-- F-V11: the approvals scan hit its cap — pills are lower
+                     bounds. NOT gated on errors.actions: clipped comes from a
+                     SUCCEEDED approvals call whose rows render below, so the
+                     lower-bound warning must show even when the separate
+                     meldingen call failed. -->
+                <template x-if="clipped">
                     <div class="ws-inline-notice">
                         <span x-html="icon('info')" style="width:14px;height:14px"></span>
                         <span><?php echo esc_html__('Grote wachtrij — de tellingen tonen de oudste items; er kunnen er meer zijn.', 'stride'); ?></span>

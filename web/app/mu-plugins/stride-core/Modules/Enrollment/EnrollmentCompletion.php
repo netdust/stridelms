@@ -495,6 +495,21 @@ final class EnrollmentCompletion
     }
 
     /**
+     * THE "waits on the admin" rule for a PENDING registration (decision 7a
+     * — F-V4/F-V5): the user side is done — every user-completable task
+     * completed, or no tasks at all (nothing for the user to do) — so only
+     * the admin's approve/confirm is missing. The Vandaag card's
+     * ready/blocked split (WorklistQueueResolver::pendingSplit) and the
+     * approvals panel's "Wacht op mij" bucket (AdminAPIController::
+     * getPendingApprovals) BOTH call this; a second hand-rolled variant is
+     * how the card and the panel showed different numbers one panel apart.
+     */
+    public function awaitsAdmin(array $tasks): bool
+    {
+        return $this->areUserTasksComplete($tasks);
+    }
+
+    /**
      * Check if all user-completable tasks are done (excludes approval types).
      */
     public function areUserTasksComplete(array $tasks): bool

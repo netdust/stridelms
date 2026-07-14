@@ -99,6 +99,36 @@ class EditionService extends AbstractService implements EditionQueryInterface
         return $registered < $capacity;
     }
 
+    /**
+     * Batch variant of hasAvailableSpots() — SAME rule (capacity 0 =
+     * unlimited; anything else, incl. a malformed negative meta, requires
+     * occupancy < capacity), one occupancy query for the whole set instead
+     * of per-edition getRegisteredCount round-trips. The Vandaag waitlist
+     * queue consumes this; the decision must never be re-implemented at a
+     * call site (the F-V6 drift class).
+     *
+     * @param array<int> $editionIds
+     * @return array<int, bool> edition id => has free spots
+     */
+    public function hasAvailableSpotsBatch(array $editionIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        $occupied = \Stride\Infrastructure\BatchQueryHelper::batchGetRegistrationCounts($ids);
+
+        $spots = [];
+        foreach ($ids as $editionId) {
+            $capacity = $this->getCapacity($editionId);
+            $spots[$editionId] = $capacity === 0
+                || ($capacity > 0 && ($occupied[$editionId] ?? 0) < $capacity);
+        }
+
+        return $spots;
+    }
+
     public function getRegisteredCount(int $editionId): int
     {
         $cacheKey = 'stride_edition_reg_count_' . $editionId;
@@ -107,19 +137,10 @@ class EditionService extends AbstractService implements EditionQueryInterface
             return (int) $cached;
         }
 
-        global $wpdb;
-        $table = $wpdb->prefix . 'vad_registrations';
-
-        // The seat-holding statuses come from the enum (F-V6): one capacity
-        // definition for this counter AND the capacity melding.
-        $statuses = \Stride\Domain\RegistrationStatus::capacityValues();
-        $placeholders = implode(',', array_fill(0, count($statuses), '%s'));
-
-        $count = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE edition_id = %d AND status IN ({$placeholders})",
-            $editionId,
-            ...$statuses,
-        ));
+        // One occupancy SQL definition (F-V6): delegate to the batch helper
+        // (enum-derived seat-holding statuses) instead of a third hand-rolled
+        // copy of the same COUNT.
+        $count = \Stride\Infrastructure\BatchQueryHelper::batchGetRegistrationCounts([$editionId])[$editionId] ?? 0;
 
         set_transient($cacheKey, $count, 60);
 

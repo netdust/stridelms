@@ -15,9 +15,13 @@ use Stride\Modules\Enrollment\RegistrationRepository;
  * (see RegistrationTable). The resulting DB error was swallowed into an empty
  * bucket, so overdue completion tasks NEVER surfaced on the admin dashboard.
  *
- * Contract: a confirmed registration older than the rule cutoff whose
- * completion_tasks JSON contains "completed":false MUST yield an
- * `incomplete_tasks` item in GET /stride/v1/admin/action-queue.
+ * Contract (updated for the Vandaag slice, F-V1): a PENDING registration
+ * older than the rule cutoff with an open USER task (real task shape —
+ * {type: {status: 'pending'}}; the old '"completed":false' boolean was a key
+ * no writer ever produces, which is why the melding never fired) MUST yield
+ * an `incomplete_tasks` item in GET /stride/v1/admin/action-queue. Rows
+ * whose only open task is the ADMIN's approval must NOT count — the melding
+ * deep-links to the "Wacht op gebruiker" tab.
  *
  * Run: ddev exec vendor/bin/phpunit -c phpunit-integration.xml.dist --filter ActionQueueIncompleteTasksTest
  */
@@ -144,10 +148,10 @@ final class ActionQueueIncompleteTasksTest extends IntegrationTestCase
         $regId = $this->registrations->create([
             'user_id' => self::$testUserId,
             'edition_id' => $editionId,
-            'status' => 'confirmed',
+            'status' => 'pending',
         ]);
 
-        $this->assertIsInt($regId, 'Failed to create confirmed registration: ' . wp_json_encode($regId));
+        $this->assertIsInt($regId, 'Failed to create pending registration: ' . wp_json_encode($regId));
         $this->testRegistrationIds[] = $regId;
 
         // Backdate past the cutoff and attach an incomplete completion task.
@@ -158,7 +162,9 @@ final class ActionQueueIncompleteTasksTest extends IntegrationTestCase
             [
                 'registered_at' => wp_date('Y-m-d H:i:s', strtotime('-30 days')),
                 'completion_tasks' => wp_json_encode([
-                    ['task' => 'evaluation', 'completed' => false],
+                    // Real writer shape (EnrollmentCompletion): an open USER
+                    // task — waiting on the participant, not the admin.
+                    'questionnaire' => ['status' => 'pending', 'phase' => 'enrollment'],
                 ]),
             ],
             ['id' => $regId],

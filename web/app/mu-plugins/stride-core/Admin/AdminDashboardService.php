@@ -83,37 +83,11 @@ class AdminDashboardService extends AbstractService
         // staler than the last such write (within their TTL). Void closure: do
         // not surface delete_transient()'s bool to the action dispatcher (an
         // action callback must return nothing).
-        $invalidateQueue = static function (): void {
-            \Stride\Admin\AdminStatsService::bustCaches();
-        };
-        add_action('stride/registration/created', $invalidateQueue);
-        add_action('stride/registration/confirmed', $invalidateQueue);
-        add_action('stride/registration/cancelled', $invalidateQueue);
-        add_action('stride/attendance/marked', $invalidateQueue);
-        add_action('save_post_vad_quote', $invalidateQueue);
-        // M10 (Task 2.4) — bulk batch completion + quote-status changes set via
-        // the repo (which never touch save_post_vad_quote) must recount the queue.
-        add_action('stride/registration/bulk_completed', $invalidateQueue);
-        add_action('stride/registration/quote_status_changed', $invalidateQueue);
-        // Cluster-F gate (perf-oracle F-1): the stats key counts more inputs than
-        // the action-queue did, so it needs a wider bust set or it shows stale
-        // headline counts for up to STATS_TTL.
-        //  - interest/waitlist public sign-ups feed worklistQueues.oldinterest /
-        //    .waitlist_open (not covered by created/confirmed/cancelled).
-        add_action('stride/registration/interest_registered', $invalidateQueue);
-        add_action('stride/registration/waitlisted', $invalidateQueue);
-        //  - any other status transition (e.g. a single reg → completed feeding
-        //    .nocert) fires the repo's generic updated event — the catch-all.
-        add_action('stride/registration/updated', $invalidateQueue);
-        //  - edition / session / trajectory CPT writes feed upcomingEditions,
-        //    todaySessions and the queue scope (findAdminActiveIds).
-        add_action('save_post_vad_edition', $invalidateQueue);
-        add_action('save_post_vad_session', $invalidateQueue);
-        add_action('save_post_vad_trajectory', $invalidateQueue);
-        //  - learndash_course_completed (feeds the nocert count) is deliberately
-        //    NOT hooked here: this service is admin_only, and course completion
-        //    fires on FRONTEND/REST requests where it never boots. That bust
-        //    lives in LearnDashService (loaded on every request).
+        // The write-event cache-bust hooks live in AdminStatsService::init()
+        // (the cache owner, booted on EVERY request). They used to live here
+        // — but this service is admin_only and never boots on REST requests,
+        // which is where every workspace mutation runs: the busts silently
+        // never fired for exactly the writes the workspace makes.
 
         add_action('admin_menu', [$this, 'registerAdminPage']);
         add_action('admin_menu', [$this, 'reorderSubmenus'], 999);

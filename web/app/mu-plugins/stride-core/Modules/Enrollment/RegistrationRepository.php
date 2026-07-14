@@ -1246,8 +1246,12 @@ final class RegistrationRepository
 
         // completion_tasks rides along (decoded) for the pending-split
         // readiness rule (WorklistQueueResolver::pendingSplit, decision 7a).
+        // Fetched for PENDING rows only — the blob can be KBs per row and no
+        // other status reads it; a bare column here dragged + decoded it for
+        // every confirmed/completed/interest row of the full-queue resolve.
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, user_id, edition_id, status, registered_at, completed_at, completion_tasks
+            "SELECT id, user_id, edition_id, status, registered_at, completed_at,
+                    CASE WHEN status = 'pending' THEN completion_tasks END AS completion_tasks
              FROM {$this->table()}
              WHERE edition_id IN ({$idPlaceholders})
                AND status IN ({$statusPlaceholders})",
@@ -1808,80 +1812,91 @@ final class RegistrationRepository
 
     /**
      * Approvals scan, enrollment phase (INV-3, panel drift Important-2):
-     * pending registrations that can still yield a pending-approvals item —
-     * an open admin-approval task, NO tasks at all (F-V5: nothing blocks the
-     * row except the admin — the old IS NOT NULL pre-filter made those rows
-     * count on the queue card yet stay invisible here), or stale-aged. The
-     * caller's PHP re-checks stay authoritative; this SQL filter is shaped
-     * to only ever OVER-fetch. The task status comparison carries an
-     * explicit COLLATE utf8mb4_bin so SQL matches PHP's strict ===/!==
-     * exactly (CR-E1); the LIMIT is the caller's scan cap (CR-E2 — a full
-     * result set means "maybe clipped").
+     * EVERY pending registration in scope, oldest first, up to the scan cap.
+     * Deliberately no task-shape SQL pre-filter: the panel's bucket rule is
+     * EnrollmentCompletion::awaitsAdmin — "user side done, or no tasks at
+     * all" — which SQL cannot express, and every attempt to approximate it
+     * (IS NULL / open-$.approval predicates) silently hid a row subset the
+     * queue card counted (F-V5 twice). The PHP re-checks are authoritative;
+     * pending rows are few by nature and the LIMIT is the caller's scan cap
+     * (CR-E2 — a full result set means "maybe clipped").
      *
      * $editionIds scopes the scan to the admin-active edition set (F-V4 —
-     * the same corpus every other Vandaag number reasons over); rows with
-     * NO edition (trajectory parents) always pass.
+     * the same corpus the queue cards reason over); rows with NO edition
+     * (trajectory parents) always pass — the cards can't show them (they are
+     * edition-queues), the panel deliberately can. null = unscoped; an EMPTY
+     * array means "no active editions" and matches only edition-less rows —
+     * never a silent whole-table fallback (the cards would read 0 while the
+     * panel listed closed-edition rows).
      *
-     * @param array<int> $editionIds
+     * @param array<int>|null $editionIds
      * @return array<object> rows with ->id (int), ->user_id, ->edition_id,
      *                       ->registered_at and ->completion_tasks
      *                       (array|null — JSON-decoded, repo convention)
      */
-    public function findPendingWithOpenApproval(string $staleThreshold, int $scanCap, array $editionIds = []): array
+    public function findPendingForApprovalScan(int $scanCap, ?array $editionIds = null): array
     {
         global $wpdb;
 
-        $scopeSql = $this->editionScopeSql($editionIds);
+        [$scopeSql, $scopeArgs] = $this->editionScopeSql($editionIds);
 
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT id, user_id, edition_id, registered_at, completion_tasks
              FROM {$this->table()}
              WHERE status = 'pending'
                {$scopeSql}
-               AND (
-                   completion_tasks IS NULL
-                   OR (JSON_EXTRACT(completion_tasks, '$.approval') IS NOT NULL
-                       AND COALESCE(JSON_VALUE(completion_tasks, '$.approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed')
-                   OR registered_at <= %s
-               )
              ORDER BY registered_at ASC
              LIMIT %d",
-            $staleThreshold,
-            $scanCap,
+            ...array_merge($scopeArgs, [$scanCap]),
         ));
 
         return $this->decodeCompletionTaskRows($rows);
     }
 
     /**
-     * Optional admin-active edition scope fragment for the approvals scans.
-     * Empty scope = unscoped (backward-compatible); edition-less rows
-     * (trajectory parents) always pass.
+     * Admin-active edition scope fragment for the approvals scans, as a
+     * prepared [sql, args] pair (the repo's placeholder-throughout property
+     * is load-bearing for INV-3 — no interpolated id lists). null = no
+     * scope; [] = only edition-less rows (trajectory parents), NEVER an
+     * unscoped fallback.
+     *
+     * @param array<int>|null $editionIds
+     * @return array{0: string, 1: list<int>}
      */
-    private function editionScopeSql(array $editionIds): string
+    private function editionScopeSql(?array $editionIds): array
     {
-        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
-        if (empty($ids)) {
-            return '';
+        if ($editionIds === null) {
+            return ['', []];
         }
 
-        return 'AND (edition_id IS NULL OR edition_id IN (' . implode(',', $ids) . '))';
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if (empty($ids)) {
+            return ['AND edition_id IS NULL', []];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        return ["AND (edition_id IS NULL OR edition_id IN ({$placeholders}))", $ids];
     }
 
     /**
      * Approvals scan, post-course phase (INV-3): confirmed registrations
      * with an open post_approval task whose post-course user tasks (fixed
      * keys) are absent-or-completed. Same over-fetch + COLLATE + scan-cap +
-     * edition-scope contract as findPendingWithOpenApproval().
+     * edition-scope contract as findPendingForApprovalScan(). Post-course
+     * approvals deliberately stay UNSCOPED at the call site (editionIds =
+     * null): the work arrives around/after course end, when admins have
+     * often already closed the edition — scoping it hid open post_approvals
+     * on closed editions from every surface.
      *
      * @param array<int> $editionIds
-     * @return array<object> same row shape as findPendingWithOpenApproval()
+     * @return array<object> same row shape as findPendingForApprovalScan()
      */
-    public function findConfirmedWithOpenPostApproval(int $scanCap, array $editionIds = []): array
+    public function findConfirmedWithOpenPostApproval(int $scanCap, ?array $editionIds = null): array
     {
         global $wpdb;
 
-        $scopeSql = $this->editionScopeSql($editionIds);
+        [$scopeSql, $scopeArgs] = $this->editionScopeSql($editionIds);
 
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT id, user_id, edition_id, registered_at, completion_tasks
@@ -1897,7 +1912,7 @@ final class RegistrationRepository
                     OR JSON_VALUE(completion_tasks, '$.post_documents.status') COLLATE utf8mb4_bin = 'completed')
              ORDER BY registered_at ASC
              LIMIT %d",
-            $scanCap,
+            ...array_merge($scopeArgs, [$scanCap]),
         ));
 
         return $this->decodeCompletionTaskRows($rows);

@@ -122,10 +122,11 @@ final class WorklistQueueResolverTest extends TestCase
             $editionRepo->shouldReceive('filterIdsWithStartDate')
                 ->with([101, 102])->andReturn([102]);
 
-            // Readiness rule (pendingSplit): "user tasks done" = every
-            // non-approval task completed; empty/NULL = nothing to do.
+            // Readiness rule (pendingSplit): THE shared awaitsAdmin predicate
+            // — "user tasks done" = every non-approval task completed;
+            // empty/NULL = nothing to do.
             $completion = Mockery::mock(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
-            $completion->shouldReceive('areUserTasksComplete')->andReturnUsing(
+            $completion->shouldReceive('awaitsAdmin')->andReturnUsing(
                 static function (array $tasks): bool {
                     foreach ($tasks as $type => $task) {
                         if ($type !== 'approval' && ($task['status'] ?? 'pending') !== 'completed') {
