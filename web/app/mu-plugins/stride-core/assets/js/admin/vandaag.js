@@ -249,9 +249,24 @@
       loading: { stats: true, actions: true },
       errors: { stats: '', actions: '' },
 
+      // F-V11: the approvals scan hit its cap — counts/pills are lower bounds.
+      clipped: false,
+      // F-V8: server-derived DISTINCT total across the queues (a row may sit
+      // in two queues); null until a payload carries it → fall back to sum.
+      queueTotal: null,
+
       today: new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' }),
 
+      /* Time-of-day greeting (F-V13 — "Goeiemorgen." was hardcoded all day). */
+      get greeting() {
+        const h = new Date().getHours();
+        if (h < 12) return 'Goeiemorgen.';
+        if (h < 18) return 'Goeiemiddag.';
+        return 'Goeienavond.';
+      },
+
       get totalActions() {
+        if (Number.isFinite(this.queueTotal)) return this.queueTotal;
         return this.queues.reduce((n, q) => n + (q.count || 0), 0);
       },
 
@@ -267,20 +282,26 @@
          and again (bypassing the latch) by pulse() for an explicit refresh.
          Both fetches run in parallel; a panel that fails shows its own error,
          the rest still renders (AF-1 mid-flow). */
-      load() {
+      load(fresh = false) {
         // Clear any prior error banners so a successful retry (pulse) recovers
         // cleanly — otherwise a stale error survives a now-successful load.
         this.errors.stats = '';
         this.errors.actions = '';
+        // F-V10: an explicit refresh (Vernieuwen) busts the server read
+        // caches (?fresh=1) — otherwise the toasted "vernieuwd" re-served a
+        // transient younger than its TTL.
+        const freshQ = fresh ? '?fresh=1' : '';
         Promise.allSettled([
-          this.api('/admin/stats'),
+          this.api(`/admin/stats${freshQ}`),
           this.api('/admin/pending-approvals?stale_days=7&per_page=100'),
-          this.api('/admin/action-queue'),
+          this.api(`/admin/action-queue${freshQ}`),
         ]).then(([stats, approvals, queue]) => {
           // ---- stat strip + 5 queues (from /admin/stats) ----
           if (stats.status === 'fulfilled') {
             this.stats = window.WS.mapStats(stats.value);
             this.queues = window.WS.mapQueues(stats.value.worklistQueues);
+            const total = Number(stats.value.worklistQueues && stats.value.worklistQueues.total);
+            this.queueTotal = Number.isFinite(total) ? total : null;
           } else {
             this.errors.stats = 'Kon de statistieken niet laden.';
           }
@@ -296,9 +317,12 @@
             const buckets = window.WS.mapActionBuckets(approvals.value, meldingen.length);
             this.aq = { mij: buckets.mij, gebruiker: buckets.gebruiker, meldingen };
             this.actTab = buckets.defaultTab;
+            // F-V11: surface the scan-cap flag — pills are lower bounds then.
+            this.clipped = !!approvals.value.clipped;
           } else {
             this.aq = { mij: [], gebruiker: [], meldingen };
             this.actTab = 'meldingen';
+            this.clipped = false;
             this.errors.actions = 'Kon de goedkeuringslijst niet laden.';
           }
           // If only the meldingen call failed, surface it but keep mij/gebruiker.
@@ -361,11 +385,11 @@
       },
 
       pulse() {
-        // Re-run the full load (bypassing the first-activation latch), then
-        // toast the result.
+        // Re-run the full load (bypassing the first-activation latch) with a
+        // server cache bust (F-V10), then toast the result.
         this.loading.stats = true;
         this.loading.actions = true;
-        this.load();
+        this.load(true);
         window.dispatchEvent(new CustomEvent('ws-toast'));
       },
 

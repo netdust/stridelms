@@ -583,6 +583,13 @@ final class AdminAPIController
      */
     public function getStats(WP_REST_Request $request): WP_REST_Response
     {
+        // F-V10: ?fresh=1 (the Vernieuwen button) busts the dashboard read
+        // caches before the read — see getActionQueue. Idempotent with the
+        // sibling call in the same pulse; a benign extra recompute at worst.
+        if ($request->get_param('fresh')) {
+            AdminStatsService::bustCaches();
+        }
+
         // Thin delegator — all $wpdb / read-model assembly lives in
         // AdminStatsService (strangle §12.4 / S1, INV-3).
         $service = ntdst_get(\Stride\Admin\AdminStatsService::class);
@@ -1746,7 +1753,11 @@ final class AdminAPIController
             ]);
         }
 
-        $staleThreshold = gmdate('Y-m-d H:i:s', time() - ($staleDays * DAY_IN_SECONDS));
+        // F-V9: registered_at is written in SITE time (current_time('mysql')),
+        // so the threshold string must be site-time too — gmdate() compared a
+        // UTC string against site-tz timestamps (±offset staleness skew, day-
+        // boundary off-by-ones).
+        $staleThreshold = wp_date('Y-m-d H:i:s', time() - ($staleDays * DAY_IN_SECONDS));
 
         // INV-3: the registrations table is repository-owned — both scan
         // queries (exact SQL incl. COLLATE pin + scan cap) live in
@@ -1803,7 +1814,10 @@ final class AdminAPIController
                     'open_task_label' => $openTask
                         ? \Stride\Modules\Enrollment\EnrollmentCompletion::taskTypeLabel($openTask)
                         : null,
-                    'days_idle' => (int) floor((time() - strtotime($row->registered_at)) / DAY_IN_SECONDS),
+                    // F-V9: strtotime() parses the site-time string on the
+                    // server's tz — current_time('timestamp') carries the same
+                    // shift, so the pair is consistent (time() was not).
+                    'days_idle' => (int) floor(((int) current_time('timestamp') - strtotime($row->registered_at)) / DAY_IN_SECONDS),
                 ], $this->buildDeadlineCountdown($completionService, $tasks, $openTask, (int) ($row->edition_id ?? 0)))];
                 $counts['stale_user']++;
             }
@@ -1914,10 +1928,13 @@ final class AdminAPIController
 
         $result = ['activeDeadline' => $deadline, 'overdue' => $overdue];
 
+        // F-V9: the deadline is a site-time date string parsed on the server's
+        // tz — pair it with current_time('timestamp') (same shift), not time().
+        $now = (int) current_time('timestamp');
         if ($overdue) {
-            $result['days_overdue'] = (int) floor((time() - strtotime($deadline)) / DAY_IN_SECONDS);
+            $result['days_overdue'] = (int) floor(($now - strtotime($deadline)) / DAY_IN_SECONDS);
         } else {
-            $result['days_left'] = max(0, (int) floor((strtotime($deadline) - time()) / DAY_IN_SECONDS));
+            $result['days_left'] = max(0, (int) floor((strtotime($deadline) - $now) / DAY_IN_SECONDS));
         }
 
         return $result;
@@ -1997,6 +2014,13 @@ final class AdminAPIController
     public function getActionQueue(WP_REST_Request $request): WP_REST_Response
     {
         $rules = StrideSettingsService::getNotificationRules();
+
+        // F-V10: ?fresh=1 (the Vernieuwen button) busts the dashboard read
+        // caches BEFORE the read, so the toasted "vernieuwd" is true instead
+        // of re-serving a transient younger than its TTL.
+        if ($request->get_param('fresh')) {
+            AdminStatsService::bustCaches();
+        }
 
         // SQL data-gathering + rule evaluation + transient caching live in
         // AdminStatsService (strangle §12.4 / S1, INV-3). The per-user

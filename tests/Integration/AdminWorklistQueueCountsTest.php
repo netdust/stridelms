@@ -397,14 +397,18 @@ final class AdminWorklistQueueCountsTest extends IntegrationTestCase
         $data = $response->get_data();
         $this->assertIsArray($data);
 
-        // Pre-existing keys MUST still be present (additive — other UI consumes them).
+        // The CONSUMED keys (vandaag.js mapStats) must be present. The
+        // pre-workspace detail blocks (todaySessionDetails,
+        // upcomingEditionDetails, recentRegistrations, openTrajectories,
+        // alerts, actionCount) were verified consumer-less and trimmed
+        // (F-V12) — computing them cost batch fetches on every cache miss.
         foreach ([
             'upcomingEditions', 'totalRegistrations', 'pendingQuotes', 'todaySessions',
-            'openTrajectories', 'actionCount', 'todaySessionDetails', 'upcomingEditionDetails',
-            'recentRegistrations', 'registrationsThisWeek', 'registrationsLastWeek', 'alerts',
+            'registrationsThisWeek', 'registrationsLastWeek',
         ] as $key) {
-            $this->assertArrayHasKey($key, $data, "Existing /admin/stats key dropped: {$key}");
+            $this->assertArrayHasKey($key, $data, "Consumed /admin/stats key dropped: {$key}");
         }
+        $this->assertArrayNotHasKey('alerts', $data, 'the dead detail payload must stay trimmed (F-V12)');
 
         // New worklist queue counts present under a stable container key.
         $this->assertArrayHasKey('worklistQueues', $data, '/admin/stats must expose worklistQueues');

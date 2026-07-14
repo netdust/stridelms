@@ -106,7 +106,7 @@ class AdminDashboardService extends AbstractService
         //    .nocert) fires the repo's generic updated event — the catch-all.
         add_action('stride/registration/updated', $invalidateQueue);
         //  - edition / session / trajectory CPT writes feed upcomingEditions,
-        //    todaySessions, openTrajectories, upcomingEditionDetails, alerts.
+        //    todaySessions and the queue scope (findAdminActiveIds).
         add_action('save_post_vad_edition', $invalidateQueue);
         add_action('save_post_vad_session', $invalidateQueue);
         add_action('save_post_vad_trajectory', $invalidateQueue);

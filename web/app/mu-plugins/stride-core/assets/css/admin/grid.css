@@ -104,6 +104,10 @@
 .ws-actitem__title { font-weight: 500; color: var(--ws-text); }
 .ws-actitem__meta { font-size: var(--ws-fs-sm); color: var(--ws-text-3); }
 .ws-actitem__age { font-size: var(--ws-fs-sm); color: var(--ws-warning-text); font-weight: 500; white-space: nowrap; }
+/* Inline panel notices (F-V11 clipped, F-V13 partial-load error) — never a panel replacement */
+.ws-inline-notice { display: flex; align-items: center; gap: var(--ws-2); padding: var(--ws-2) var(--ws-5); font-size: var(--ws-fs-sm); color: var(--ws-text-3); border-bottom: 1px solid var(--ws-border); }
+.ws-inline-notice--error { color: var(--ws-danger-text, #b91c1c); background: var(--ws-danger-bg, #fef2f2); }
+
 /* 6a: per-row melding dismissal — quiet until the row is hovered */
 .ws-actitem__dismiss { display: grid; place-items: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: transparent; color: var(--ws-text-3); cursor: pointer; opacity: 0; transition: opacity var(--ws-ease), background var(--ws-ease); }
 .ws-actitem:hover .ws-actitem__dismiss { opacity: 1; }

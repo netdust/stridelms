@@ -39,7 +39,8 @@ defined('ABSPATH') || exit;
         <div class="ws-page-head">
             <div>
                 <span class="ws-eyebrow"><?php echo esc_html__('Werklijst', 'stride'); ?> · <span x-text="today"></span></span>
-                <h1><?php echo esc_html__('Goeiemorgen.', 'stride'); ?></h1>
+                <!-- F-V13: time-of-day greeting (was "Goeiemorgen." all day) -->
+                <h1 x-text="greeting"><?php echo esc_html__('Goeiemorgen.', 'stride'); ?></h1>
                 <p>
                     <?php echo esc_html__('Je hebt', 'stride'); ?>
                     <b x-text="totalActions"></b>
@@ -105,22 +106,31 @@ defined('ABSPATH') || exit;
                 </button>
             </div>
             <div>
-                <!-- error state for the approvals/action-queue calls -->
+                <!-- F-V13: a failed call is an inline notice, never a panel
+                     replacement — the buckets that DID load keep rendering
+                     (previously one failed meldingen call hid loaded
+                     mij/gebruiker rows behind a full-panel error). -->
                 <template x-if="errors.actions">
-                    <div class="ws-empty" style="padding:32px">
-                        <div class="ws-empty__icon" x-html="icon('alert')"></div>
-                        <h3><?php echo esc_html__('Acties niet geladen', 'stride'); ?></h3>
-                        <p x-text="errors.actions"></p>
+                    <div class="ws-inline-notice ws-inline-notice--error">
+                        <span x-html="icon('alert')" style="width:14px;height:14px"></span>
+                        <span x-text="errors.actions"></span>
+                    </div>
+                </template>
+                <!-- F-V11: the approvals scan hit its cap — pills are lower bounds -->
+                <template x-if="clipped && !errors.actions">
+                    <div class="ws-inline-notice">
+                        <span x-html="icon('info')" style="width:14px;height:14px"></span>
+                        <span><?php echo esc_html__('Grote wachtrij — de tellingen tonen de oudste items; er kunnen er meer zijn.', 'stride'); ?></span>
                     </div>
                 </template>
                 <!-- loading -->
-                <template x-if="loading.actions && !errors.actions">
+                <template x-if="loading.actions">
                     <div class="ws-empty" style="padding:32px">
                         <p><?php echo esc_html__('Laden…', 'stride'); ?></p>
                     </div>
                 </template>
                 <!-- populated rows -->
-                <template x-if="!loading.actions && !errors.actions">
+                <template x-if="!loading.actions">
                     <div>
                         <template x-for="item in aq[actTab]" :key="item.regId">
                             <a class="ws-actitem" href="#" @click.prevent="openAction(item)">
@@ -149,7 +159,8 @@ defined('ABSPATH') || exit;
                                       x-html="icon('chevRight')" style="width:16px;height:16px;color:var(--ws-text-3)"></span>
                             </a>
                         </template>
-                        <div x-show="aq[actTab].length===0" class="ws-empty" style="padding:32px">
+                        <!-- "Alles afgehandeld" under a load error would be a lie — the notice above tells the truth then -->
+                        <div x-show="aq[actTab].length===0 && !errors.actions" class="ws-empty" style="padding:32px">
                             <div class="ws-empty__icon" x-html="icon('checkCircle')"></div>
                             <h3><?php echo esc_html__('Niets in deze wachtrij', 'stride'); ?></h3>
                             <p><?php echo esc_html__('Alles afgehandeld. Goed bezig.', 'stride'); ?></p>

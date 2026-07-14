@@ -277,7 +277,10 @@ final class WorklistQueueResolver
             );
         }
 
-        $oldInterestCutoff = strtotime('-' . self::OLD_INTEREST_DAYS . ' days');
+        // F-V9: registered_at is a SITE-time string parsed on the server's tz
+        // below — base the cutoff on current_time('timestamp') (same shift)
+        // so the 90-day boundary doesn't wander by the utc-offset.
+        $oldInterestCutoff = strtotime('-' . self::OLD_INTEREST_DAYS . ' days', (int) current_time('timestamp'));
 
         // Readiness rule for the pending split — lazy container read, only
         // taxed when a pending row is actually classified.
