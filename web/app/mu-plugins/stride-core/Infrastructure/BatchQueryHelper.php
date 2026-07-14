@@ -76,12 +76,19 @@ final class BatchQueryHelper
 
         $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
 
+        // Occupancy counts the enum's seat-holding statuses (F-V6): callers
+        // render this against capacity (Edities agenda, waitlist free-spots
+        // probe), so it must agree with EditionService::getRegisteredCount
+        // and the capacity melding — one definition, not a fourth list.
+        $statuses = \Stride\Domain\RegistrationStatus::capacityValues();
+        $statusPlaceholders = implode(',', array_fill(0, count($statuses), '%s'));
+
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT edition_id, COUNT(*) as count
              FROM {$table}
-             WHERE edition_id IN ({$placeholders}) AND status = 'confirmed'
+             WHERE edition_id IN ({$placeholders}) AND status IN ({$statusPlaceholders})
              GROUP BY edition_id",
-            ...$editionIds,
+            ...array_merge($editionIds, $statuses),
         ));
 
         $counts = array_fill_keys($editionIds, 0);

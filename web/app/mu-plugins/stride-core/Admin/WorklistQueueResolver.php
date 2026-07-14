@@ -185,6 +185,21 @@ final class WorklistQueueResolver
             return $this->memo[$memoKey];
         }
 
+        // Short-TTL cross-request cache: the grid's ?queue= path re-resolves
+        // on every pagination/sort/search interaction, and the nocert queue
+        // does a per-row LearnDash lookup each time. Salted with the rev
+        // counter AdminStatsService::bustCaches() bumps on every covered
+        // write (registration events, CPT saves, LD completion), so a write
+        // reflects on the next request; anything outside the bust set is
+        // bounded to ≤60s staleness — the counts transient already accepts
+        // ≤120s on the same inputs.
+        $rev = (int) get_option(AdminStatsService::QUEUE_REV_OPTION, 0);
+        $cacheKey = 'stride_queue_ids_' . md5($rev . '|' . $memoKey);
+        $cached = get_transient($cacheKey);
+        if (is_array($cached)) {
+            return $this->memo[$memoKey] = $cached;
+        }
+
         $sets = array_fill_keys($queues, []);
         // Internal sub-set riding along with 'pending' (pendingSplit) —
         // stripped from the public idsByQueue shape.
@@ -257,9 +272,18 @@ final class WorklistQueueResolver
                 : [];
         }
 
+        // Free-spots probe, batched: ONE occupancy query over the waitlist-
+        // hosting editions (capacity statuses per the enum — same definition
+        // as hasAvailableSpots) instead of a per-edition getRegisteredCount.
         $hasSpotsByEdition = [];
-        foreach (array_keys($waitlistEditionIds) as $editionId) {
-            $hasSpotsByEdition[$editionId] = $this->editions->hasAvailableSpots($editionId);
+        if (!empty($waitlistEditionIds)) {
+            $waitlistIds = array_keys($waitlistEditionIds);
+            $occupied = \Stride\Infrastructure\BatchQueryHelper::batchGetRegistrationCounts($waitlistIds);
+            foreach ($waitlistIds as $editionId) {
+                $capacity = $this->editions->getCapacity($editionId);
+                $hasSpotsByEdition[$editionId] = $capacity <= 0
+                    || ($occupied[$editionId] ?? 0) < $capacity;
+            }
         }
         $courseIdByEdition = [];
         foreach (array_keys($completedEditionIds) as $editionId) {
@@ -363,6 +387,8 @@ final class WorklistQueueResolver
                     break;
             }
         }
+
+        set_transient($cacheKey, $sets, MINUTE_IN_SECONDS);
 
         return $this->memo[$memoKey] = $sets;
     }

@@ -45,6 +45,14 @@ final class AdminStatsService
     /** Transient key for the cached action-queue items (getActionQueueItems). */
     public const ACTION_QUEUE_TRANSIENT_KEY = 'stride_action_queue';
 
+    /**
+     * Revision counter salting WorklistQueueResolver's short-TTL id-set
+     * cache. The cache keys are dynamic (edition-set + queue-subset hash),
+     * so they cannot be deleted by name — bumping the rev invalidates every
+     * cached id-set at once.
+     */
+    public const QUEUE_REV_OPTION = 'stride_queue_rev';
+
     public function __construct(
         private readonly ActionQueueService $actionQueue,
         private readonly EditionRepository $editionRepository,
@@ -62,6 +70,8 @@ final class AdminStatsService
     {
         delete_transient(self::ACTION_QUEUE_TRANSIENT_KEY);
         delete_transient(self::STATS_TRANSIENT_KEY);
+        // Invalidate the resolver's id-set cache (dynamic keys — rev-salted).
+        update_option(self::QUEUE_REV_OPTION, (int) get_option(self::QUEUE_REV_OPTION, 0) + 1, true);
     }
 
     // =========================================================================
