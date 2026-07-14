@@ -406,6 +406,9 @@ final class AdminTrajectoryService
                 $requiredCourses[] = [
                     'title' => $course->post_title,
                     'edition' => $editionId,
+                    // The dossier sub-label — a TITLE, not the raw FK int the
+                    // template used to print. Post cache is warm (getProgressData).
+                    'edition_title' => $editionId > 0 ? (string) get_the_title($editionId) : '',
                     'state' => $state,
                 ];
             }

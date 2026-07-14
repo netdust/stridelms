@@ -38,6 +38,17 @@ final class AdminUserService
 {
     use AdminBatchHelpers;
 
+    /** Dutch labels for the enrollment_path column (raw slugs stay in the payload). */
+    private const PATH_LABELS = [
+        'individual' => 'Individueel',
+        'colleague'  => 'Via collega',
+        'trajectory' => 'Via traject',
+        'partner'    => 'Via partner',
+    ];
+
+    /** @var array<int,string> per-request user display-name cache (stage actors). */
+    private array $userNameCache = [];
+
     /**
      * Assemble the user-detail (Dossier) case-view response.
      *
@@ -172,10 +183,14 @@ final class AdminUserService
             $attendanceByEdition = $this->fetchUserAttendanceByEdition($userId, $editionIds);
             $sessionCountByEdition = $this->fetchSessionCountByEdition($editionIds);
 
-            // Resolve session titles for the loaded editions so the case view can
-            // render `selections` (session/edition IDs in the JSON column) as human
-            // labels — never raw IDs. One batched read across all loaded editions.
-            $sessionTitlesById = $this->fetchSessionTitlesByEdition($editionIds);
+            // Session details (title/date/times) for the loaded editions — one
+            // batched read. Feeds: selection-label resolution, the per-session
+            // attendance rows, and the HONEST hours sum (real durations of the
+            // sessions marked present — the old "present × 4h" convention
+            // fabricated hours for 2-hour or full-day sessions).
+            $sessionDetailsById = $this->fetchSessionDetailsByEdition($editionIds);
+            $sessionTitlesById = array_map(static fn(array $s) => $s['title'], $sessionDetailsById);
+            $sessionStatusByEdition = $this->fetchUserSessionAttendance($userId, $editionIds);
 
             // Per-registration offerte status (the §0 #5 quote-workflow status, NEVER
             // "paid"). Resolve each reg → its linked quote: the explicit quote_id
@@ -200,16 +215,16 @@ final class AdminUserService
                 $attendanceSummary = null;
 
                 if ($totalSessions > 0) {
-                    $present = $att['present'] ?? 0;
-                    $absent = $att['absent'] ?? 0;
-                    $excused = $att['excused'] ?? 0;
-                    $hours = $att['hours'] ?? 0;
+                    $statusBySession = $sessionStatusByEdition[$editionId] ?? [];
                     $attendanceSummary = [
-                        'present' => $present,
-                        'absent' => $absent,
-                        'excused' => $excused,
+                        'present' => $att['present'] ?? 0,
+                        'absent' => $att['absent'] ?? 0,
+                        'excused' => $att['excused'] ?? 0,
                         'total_sessions' => $totalSessions,
-                        'hours' => $hours,
+                        // Real hours: sum of the present sessions' start→end durations.
+                        'hours' => $this->presentHours($editionId, $statusBySession, $sessionDetailsById),
+                        // Per-session rows — WHICH day was missed, not just a count.
+                        'sessions' => $this->buildSessionRows($editionId, $statusBySession, $sessionDetailsById),
                     ];
                 }
 
@@ -265,9 +280,14 @@ final class AdminUserService
                     'edition_title' => $rowTitle !== '' ? $rowTitle : __('Onbekend', 'stride'),
                     'status' => $row->status,
                     'enrollment_path' => $row->enrollment_path,
+                    'enrollment_path_label' => self::PATH_LABELS[(string) $row->enrollment_path]
+                        ?? (string) $row->enrollment_path,
                     'registered_at' => $row->registered_at,
+                    'registered_at_display' => $this->formatLocalDate((string) ($row->registered_at ?? '')),
                     'completed_at' => $row->completed_at,
+                    'completed_at_display' => $this->formatLocalDate((string) ($row->completed_at ?? '')),
                     'cancelled_at' => $row->cancelled_at,
+                    'cancelled_at_display' => $this->formatLocalDate((string) ($row->cancelled_at ?? '')),
                     'has_sessions' => $totalSessions > 0,
                     'attendance' => $attendanceSummary,
                     // The REAL completion tasks (Dutch label + per-task status) —
@@ -348,6 +368,7 @@ final class AdminUserService
                 continue; // Skip building the sensitive detail row entirely.
             }
 
+            $quoteTotal = Money::cents((int) ($meta['total'] ?? 0));
             $quotes[] = [
                 'id' => $quoteId,
                 'title' => $quotePost->post_title,
@@ -356,10 +377,14 @@ final class AdminUserService
                 'edition_title' => isset($quoteEditions[$quoteEditionId]) ? $quoteEditions[$quoteEditionId]->post_title : '',
                 'status' => $quoteStatus,
                 'status_label' => $statusLabel,
-                'total' => Money::cents((int) ($meta['total'] ?? 0))->amount(),
+                'total' => $quoteTotal->amount(),
+                'total_display' => '€ ' . number_format($quoteTotal->amount(), 2, ',', '.'),
                 'created_at' => $quotePost->post_date,
+                'created_at_display' => $this->formatLocalDate((string) $quotePost->post_date),
                 'sent_at' => ($meta['sent_at'] ?? '') ?: null,
                 'valid_until' => ($meta['valid_until'] ?? '') ?: null,
+                'valid_until_display' => $this->formatLocalDate((string) ($meta['valid_until'] ?? '')),
+                'edit_url' => admin_url('post.php?post=' . $quoteId . '&action=edit'),
             ];
         }
 
@@ -440,10 +465,11 @@ final class AdminUserService
             $summaryEditionIds = array_keys($grouped);
             if (!empty($summaryEditionIds)) {
                 $sessionCounts = $this->fetchSessionCountByEdition($summaryEditionIds);
-                $hoursByEdition = $this->fetchUserAttendanceByEdition($userId, $summaryEditionIds);
+                $summaryDetails = $this->fetchSessionDetailsByEdition($summaryEditionIds);
+                $summaryStatuses = $this->fetchUserSessionAttendance($userId, $summaryEditionIds);
                 foreach ($grouped as $editionId => &$row) {
                     $row['total_sessions'] = $sessionCounts[$editionId] ?? 0;
-                    $row['hours'] = $hoursByEdition[$editionId]['hours'] ?? 0;
+                    $row['hours'] = $this->presentHours($editionId, $summaryStatuses[$editionId] ?? [], $summaryDetails);
                 }
                 unset($row);
             }
@@ -532,6 +558,10 @@ final class AdminUserService
             'reg_per_page' => $regPerPage,
             'quotes' => $canSeeSensitive ? $quotes : [],
             'attendance' => $attendance,
+            // Explicit gate flag: an EMPTY audit trail and a GATED audit trail
+            // both serialize as [] — without this the UI could not distinguish
+            // "no history yet" from "afgeschermd voor jouw rol" (F-D14).
+            'can_see_timeline' => $canSeeSensitive,
             'audit_trail' => $canSeeSensitive ? $auditTrail : [],
             'audit_trail_total' => $canSeeSensitive ? $auditTrailTotal : 0,
         ]);
@@ -573,9 +603,11 @@ final class AdminUserService
                 $stages[$key] = $this->initialSelectionStage($stage);
                 continue;
             }
+            // submitted_at is stored gmdate('c') (UTC ISO) → Dutch site-TZ moment;
+            // submitted_by is a raw user ID → display name (was printed as "door 5").
             $stages[$key] = [
-                'submitted_at' => (string) ($stage['submitted_at'] ?? ''),
-                'submitted_by' => (string) ($stage['submitted_by'] ?? ''),
+                'submitted_at' => $this->formatIsoMoment((string) ($stage['submitted_at'] ?? '')),
+                'submitted_by' => $this->resolveUserName($stage['submitted_by'] ?? null),
                 'data' => is_array($stage['data'] ?? null) ? $this->flattenStageData($stage['data']) : [],
             ];
         }
@@ -785,14 +817,16 @@ final class AdminUserService
     }
 
     /**
-     * Map session-post IDs → titles for a set of editions, so selection IDs resolve
-     * to human labels. Sessions are `vad_session` posts linked to an edition via
-     * `_ntdst_edition_id`. One batched query across all loaded editions.
+     * Session details (title / edition / date / times) for a set of editions.
+     *
+     * One batched query. Feeds selection-label resolution, the per-session
+     * attendance rows, and the honest present-hours sum. Sessions are
+     * `vad_session` posts linked to an edition via `_ntdst_edition_id`.
      *
      * @param  array<int> $editionIds
-     * @return array<int, string>  session post ID => title
+     * @return array<int, array{edition_id:int, title:string, date:string, start_time:string, end_time:string}>
      */
-    private function fetchSessionTitlesByEdition(array $editionIds): array
+    private function fetchSessionDetailsByEdition(array $editionIds): array
     {
         if (empty($editionIds)) {
             return [];
@@ -803,9 +837,15 @@ final class AdminUserService
         $params = array_merge([SessionCPT::POST_TYPE], $editionIds);
 
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID, p.post_title
+            "SELECT p.ID, p.post_title, pm.meta_value AS edition_id,
+                    d.meta_value AS session_date,
+                    st.meta_value AS start_time,
+                    et.meta_value AS end_time
              FROM {$wpdb->posts} p
              INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
+             LEFT JOIN {$wpdb->postmeta} d  ON p.ID = d.post_id  AND d.meta_key  = '_ntdst_date'
+             LEFT JOIN {$wpdb->postmeta} st ON p.ID = st.post_id AND st.meta_key = '_ntdst_start_time'
+             LEFT JOIN {$wpdb->postmeta} et ON p.ID = et.post_id AND et.meta_key = '_ntdst_end_time'
              WHERE p.post_type = %s
                AND p.post_status = 'publish'
                AND pm.meta_value IN ({$placeholders})",
@@ -814,10 +854,161 @@ final class AdminUserService
 
         $map = [];
         foreach ($rows as $row) {
-            $map[(int) $row->ID] = (string) $row->post_title;
+            $map[(int) $row->ID] = [
+                'edition_id' => (int) $row->edition_id,
+                'title' => (string) $row->post_title,
+                'date' => (string) ($row->session_date ?? ''),
+                'start_time' => (string) ($row->start_time ?? ''),
+                'end_time' => (string) ($row->end_time ?? ''),
+            ];
         }
 
         return $map;
+    }
+
+    /**
+     * The user's per-session attendance statuses across a set of editions.
+     *
+     * @param  array<int> $editionIds
+     * @return array<int, array<int, string>>  edition_id => [session_id => status]
+     */
+    private function fetchUserSessionAttendance(int $userId, array $editionIds): array
+    {
+        if (empty($editionIds) || !AttendanceTable::exists()) {
+            return [];
+        }
+
+        global $wpdb;
+        $attendanceTable = AttendanceTable::getTableName();
+        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
+        $params = array_merge([$userId], $editionIds);
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT edition_id, session_id, status
+             FROM {$attendanceTable}
+             WHERE user_id = %d
+               AND edition_id IN ({$placeholders})",
+            ...$params,
+        ));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int) $row->edition_id][(int) $row->session_id] = (string) $row->status;
+        }
+
+        return $map;
+    }
+
+    /**
+     * Sum of the real durations (start→end) of the sessions the user was
+     * marked PRESENT at, for one edition. Sessions without both times
+     * contribute 0 — hours are never fabricated (the previous convention
+     * was a hard-coded 4h per present mark). Rounded to 1 decimal.
+     *
+     * @param array<int,string> $statusBySession  session_id => status
+     * @param array<int,array{edition_id:int,title:string,date:string,start_time:string,end_time:string}> $details
+     */
+    private function presentHours(int $editionId, array $statusBySession, array $details): float
+    {
+        $hours = 0.0;
+        foreach ($statusBySession as $sessionId => $status) {
+            if ($status !== 'present') {
+                continue;
+            }
+            $s = $details[$sessionId] ?? null;
+            if (!$s || (int) $s['edition_id'] !== $editionId || $s['start_time'] === '' || $s['end_time'] === '') {
+                continue;
+            }
+            $start = strtotime($s['start_time']);
+            $end = strtotime($s['end_time']);
+            if ($start !== false && $end !== false && $end > $start) {
+                $hours += ($end - $start) / 3600;
+            }
+        }
+
+        return round($hours, 1);
+    }
+
+    /**
+     * Per-session attendance rows for one edition: every session of the
+     * edition (date-ordered) with the user's mark — so the dossier answers
+     * "WHICH day was missed", not just how many.
+     *
+     * @param array<int,string> $statusBySession  session_id => status
+     * @param array<int,array{edition_id:int,title:string,date:string,start_time:string,end_time:string}> $details
+     * @return list<array{id:int, title:string, date:string, time:string, status:string}>
+     */
+    private function buildSessionRows(int $editionId, array $statusBySession, array $details): array
+    {
+        $rows = [];
+        foreach ($details as $sessionId => $s) {
+            if ((int) $s['edition_id'] !== $editionId) {
+                continue;
+            }
+            $time = $s['start_time'] !== '' && $s['end_time'] !== ''
+                ? substr($s['start_time'], 0, 5) . '–' . substr($s['end_time'], 0, 5)
+                : '';
+            $rows[] = [
+                'id' => $sessionId,
+                'title' => $s['title'],
+                'date' => $s['date'] !== '' ? date_i18n('d/m/Y', (int) strtotime($s['date'])) : '',
+                'time' => $time,
+                // '' = not (yet) marked; the template renders a muted dash state.
+                'status' => $statusBySession[$sessionId] ?? '',
+                '_sort' => $s['date'],
+            ];
+        }
+        usort($rows, static fn(array $a, array $b) => strcmp($a['_sort'], $b['_sort']));
+
+        return array_map(static function (array $r): array {
+            unset($r['_sort']);
+            return $r;
+        }, $rows);
+    }
+
+    /**
+     * Dutch date for a site-local MySQL datetime ('' for empty/zero dates).
+     */
+    private function formatLocalDate(string $value): string
+    {
+        if ($value === '' || str_starts_with($value, '0000-00-00')) {
+            return '';
+        }
+        $ts = strtotime($value);
+
+        return $ts !== false ? date_i18n('d/m/Y', $ts) : '';
+    }
+
+    /**
+     * Dutch site-TZ moment for a stored UTC ISO-8601 stamp (gmdate('c')).
+     */
+    private function formatIsoMoment(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+        $ts = strtotime($value);
+
+        return $ts !== false ? wp_date('d/m/Y H:i', $ts) : $value;
+    }
+
+    /**
+     * Display name for a stage actor (stored as a raw user ID). Cached
+     * per request; a deleted user or empty value yields ''.
+     */
+    private function resolveUserName(mixed $userId): string
+    {
+        $id = (int) (is_scalar($userId) ? $userId : 0);
+        if ($id <= 0) {
+            // Legacy stages may already carry a name string — pass it through.
+            return is_string($userId) && !is_numeric($userId) ? $userId : '';
+        }
+        if (!isset($this->userNameCache[$id])) {
+            $user = get_userdata($id);
+            $this->userNameCache[$id] = $user ? $user->display_name : '';
+        }
+
+        return $this->userNameCache[$id];
     }
 
     /**
@@ -861,17 +1052,15 @@ final class AdminUserService
     }
 
     /**
-     * Aggregate attendance for a user across a set of editions.
+     * Aggregate attendance COUNTS for a user across a set of editions.
      *
-     * Returns [edition_id => [present, absent, excused, hours]]. Hours assumes
-     * 4 hours per "present" session (current convention in the user-detail
-     * attendance summary). Editions with no recorded attendance are absent.
-     *
-     * Moved verbatim from AdminAPIController::fetchUserAttendanceByEdition — its only
-     * call sites were inside getUserDetail (S2 hazard analysis).
+     * Returns [edition_id => [present, absent, excused]]. Editions with no
+     * recorded attendance are absent. (Hours are computed separately from the
+     * real session durations — see presentHours(); the old "present × 4h"
+     * convention fabricated hours and is gone.)
      *
      * @param array<int> $editionIds
-     * @return array<int, array{present:int, absent:int, excused:int, hours:int}>
+     * @return array<int, array{present:int, absent:int, excused:int}>
      */
     private function fetchUserAttendanceByEdition(int $userId, array $editionIds): array
     {
@@ -897,18 +1086,12 @@ final class AdminUserService
         foreach ($rows as $row) {
             $editionId = (int) $row->edition_id;
             if (!isset($map[$editionId])) {
-                $map[$editionId] = ['present' => 0, 'absent' => 0, 'excused' => 0, 'hours' => 0];
+                $map[$editionId] = ['present' => 0, 'absent' => 0, 'excused' => 0];
             }
             if (isset($map[$editionId][$row->status])) {
                 $map[$editionId][$row->status] = (int) $row->cnt;
             }
         }
-
-        // Hours = present count × 4 (matches existing convention)
-        foreach ($map as &$entry) {
-            $entry['hours'] = $entry['present'] * 4;
-        }
-        unset($entry);
 
         return $map;
     }

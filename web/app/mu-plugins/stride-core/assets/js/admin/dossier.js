@@ -320,10 +320,14 @@
       person: null,
       regs: [],
       trajectories: [],
+      quotes: [],              // manager-gated quote detail list (number/total/status)
       auditTrail: [],
       canSeeTimeline: true,    // false when audit_trail is gated off (PII N1)
       timelineReg: 0,
       openStages: {},
+      openAttendance: {},      // per-reg per-session attendance rows toggle
+      revealed: {},            // masked PII fields revealed this session (field → value)
+      revealBusy: '',          // field currently being revealed
 
       // reload bookkeeping: which ?user=/?reg= target the current data belongs
       // to, and a monotonically increasing load token so an older in-flight
@@ -420,8 +424,11 @@
           this.person = null;
           this.regs = [];
           this.trajectories = [];
+          this.quotes = [];
           this.auditTrail = [];
           this.openStages = {};
+          this.openAttendance = {};
+          this.revealed = {};
           this.actionFeedback = {};
         }
         // Reset error banners so a successful retry recovers cleanly
@@ -475,11 +482,14 @@
               open: prevOpen[r.id] !== undefined ? prevOpen[r.id] : i === openIdx,
             }));
             this.regsTotal = Number(d.registrations_total) || allRegs.length;
-            // audit_trail is GATED — absent/empty means the viewer can't see it
-            // (PII N1) OR there's simply no history. Either way: locked/empty
-            // timeline, never a crash.
+            this.quotes = Array.isArray(d.quotes) ? d.quotes : [];
+            // audit_trail is GATED for view-only roles — the explicit
+            // can_see_timeline flag distinguishes "afgeschermd" from "no
+            // history yet" (an empty array is both, F-D14).
             this.auditTrail = Array.isArray(d.audit_trail) ? d.audit_trail : [];
-            this.canSeeTimeline = Array.isArray(d.audit_trail);
+            this.canSeeTimeline = d.can_see_timeline !== undefined
+              ? !!d.can_see_timeline
+              : Array.isArray(d.audit_trail);
             const keepTimeline = !targetChanged
               && this.regs.some((r) => r.id === this.timelineReg);
             this.timelineReg = keepTimeline
@@ -576,6 +586,36 @@
         const a = r && r.attendance;
         if (!a || !a.total_sessions) return '';
         return `${a.present || 0}/${a.total_sessions} aanwezig`;
+      },
+
+      /* per-session attendance rows toggle (which day was missed) */
+      toggleAttendance(regId) { this.openAttendance[regId] = !this.openAttendance[regId]; },
+      isAttendanceOpen(regId) { return !!this.openAttendance[regId]; },
+      /* closed-enum session-mark → Dutch label + dot class ('' = not marked) */
+      sessionMark(status) {
+        const MAP = {
+          present: { label: 'Aanwezig', cls: 'present' },
+          absent:  { label: 'Afwezig',  cls: 'absent' },
+          excused: { label: 'Verontschuldigd', cls: 'excused' },
+        };
+        return MAP[status] || { label: 'Niet gemarkeerd', cls: 'unmarked' };
+      },
+
+      /* Reveal ONE masked identity field (manager-only; server audits + rate-
+         limits every reveal). The value is kept client-side for this dossier
+         view only — a target switch clears `revealed`. */
+      async revealField(field) {
+        if (!this.userId || this.revealBusy || this.revealed[field]) return;
+        this.revealBusy = field;
+        try {
+          const d = await this.api(`/admin/users/${this.userId}/reveal?field=${encodeURIComponent(field)}`);
+          this.revealed = { ...this.revealed, [field]: d.value || '—' };
+        } catch (e) {
+          this.revealed = { ...this.revealed, [field]: '' };
+          window.alert((e && e.message) || 'Tonen mislukt.');
+        } finally {
+          this.revealBusy = '';
+        }
       },
 
       /* presentational helpers (all closed-enum / AS-RECEIVED) */

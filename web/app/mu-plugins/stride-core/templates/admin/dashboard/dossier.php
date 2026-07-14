@@ -87,7 +87,10 @@ defined('ABSPATH') || exit;
                      :style="`background:linear-gradient(135deg, ${avatarColor(person.display_name)}, #1d4ed8)`"
                      x-text="initials(person.display_name)"></div>
                 <div class="ws-person-head__info">
-                    <div class="ws-person-head__name" x-text="person.display_name"></div>
+                    <div class="ws-person-head__name">
+                        <span x-text="person.display_name"></span>
+                        <span class="ws-badge ws-badge--cancelled ws-badge--dotless" x-show="person.is_anonymised" x-text="person.anonymised_label || '<?php echo esc_js(__('Geanonimiseerd', 'stride')); ?>'" style="vertical-align:middle;margin-left:8px"></span>
+                    </div>
                     <div class="ws-person-head__meta">
                         <?php // profile_type is an OBJECT {name, color} — bind .name
                               // (a bare x-text rendered "[object Object]"). ?>
@@ -173,7 +176,8 @@ defined('ABSPATH') || exit;
                                                 <span class="ws-att-row__dot" :class="'ws-att-row__dot--'+courseStateClass(c.state)"></span>
                                                 <div class="ws-traj-courserow__body">
                                                     <span class="ws-traj-courserow__title" x-text="c.title"></span>
-                                                    <small x-text="c.cohort || c.edition || ''"></small>
+                                                    <?php // edition_title — never the raw FK int (c.edition). ?>
+                                                    <small x-text="c.edition_title || ''"></small>
                                                 </div>
                                                 <span class="ws-att-row__state" :class="'ws-att-row__state--'+courseStateClass(c.state)" x-text="courseStateLabel(c.state)"></span>
                                             </div>
@@ -239,7 +243,7 @@ defined('ABSPATH') || exit;
                                 <span class="ws-reg__chev" x-html="icon('chevRight')"></span>
                                 <div class="ws-reg__title">
                                     <b x-text="r.edition_title"></b><span class="ws-badge ws-badge--lead ws-badge--dotless" x-show="r.is_trajectory"><?php echo esc_html__('Traject', 'stride'); ?></span>
-                                    <small><?php echo esc_html__('ingeschreven', 'stride'); ?> <span x-text="r.registered_at"></span></small>
+                                    <small><?php echo esc_html__('ingeschreven', 'stride'); ?> <span x-text="r.registered_at_display || r.registered_at"></span></small>
                                 </div>
                                 <div class="ws-reg__badges">
                                     <!-- offerte (quote-workflow) badge — hidden for cancelled regs: the
@@ -257,9 +261,9 @@ defined('ABSPATH') || exit;
 
                                 <!-- detail grid (status lives in the reg header badge — not duplicated here) -->
                                 <div class="ws-detail-grid">
-                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Inschrijvingspad', 'stride'); ?></div><div class="ws-field__val" x-text="r.enrollment_path"></div></div>
-                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Ingeschreven op', 'stride'); ?></div><div class="ws-field__val" x-text="r.registered_at"></div></div>
-                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Afgerond op', 'stride'); ?></div><div class="ws-field__val" x-text="r.completed_at || '—'"></div></div>
+                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Inschrijvingspad', 'stride'); ?></div><div class="ws-field__val" x-text="r.enrollment_path_label || r.enrollment_path"></div></div>
+                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Ingeschreven op', 'stride'); ?></div><div class="ws-field__val" x-text="r.registered_at_display || r.registered_at"></div></div>
+                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Afgerond op', 'stride'); ?></div><div class="ws-field__val" x-text="r.completed_at_display || '—'"></div></div>
                                 </div>
 
                                 <!-- pending hint: server-computed per-row reason (waiting on user vs admin) -->
@@ -313,11 +317,31 @@ defined('ABSPATH') || exit;
                                         <!-- attendance per session -->
                                         <div class="ws-section-title"><span x-html="icon('calendar')"></span> <?php echo esc_html__('Aanwezigheid', 'stride'); ?> <span class="ws-section-title__line"></span></div>
                                         <template x-if="r.attendance">
-                                            <div class="ws-att-summary">
-                                                <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--present"></span> <b x-text="r.attendance.present"></b> <?php echo esc_html__('aanwezig', 'stride'); ?></span>
-                                                <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--absent"></span> <b x-text="r.attendance.absent"></b> <?php echo esc_html__('afwezig', 'stride'); ?></span>
-                                                <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--excused"></span> <b x-text="r.attendance.excused"></b> <?php echo esc_html__('verontschuldigd', 'stride'); ?></span>
-                                                <span class="ws-att-summary__item"><?php echo esc_html__('van', 'stride'); ?> <b x-text="r.attendance.total_sessions"></b> <?php echo esc_html__('sessies', 'stride'); ?> · <b x-text="r.attendance.hours"></b><?php echo esc_html__('u', 'stride'); ?></span>
+                                            <div>
+                                                <div class="ws-att-summary">
+                                                    <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--present"></span> <b x-text="r.attendance.present"></b> <?php echo esc_html__('aanwezig', 'stride'); ?></span>
+                                                    <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--absent"></span> <b x-text="r.attendance.absent"></b> <?php echo esc_html__('afwezig', 'stride'); ?></span>
+                                                    <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--excused"></span> <b x-text="r.attendance.excused"></b> <?php echo esc_html__('verontschuldigd', 'stride'); ?></span>
+                                                    <span class="ws-att-summary__item"><?php echo esc_html__('van', 'stride'); ?> <b x-text="r.attendance.total_sessions"></b> <?php echo esc_html__('sessies', 'stride'); ?><template x-if="r.attendance.hours > 0"><span> · <b x-text="r.attendance.hours"></b><?php echo esc_html__('u', 'stride'); ?></span></template></span>
+                                                    <template x-if="(r.attendance.sessions || []).length">
+                                                        <button class="ws-btn ws-btn--ghost ws-btn--sm" type="button" @click="toggleAttendance(r.id)">
+                                                            <span x-text="isAttendanceOpen(r.id) ? '<?php echo esc_js(__('Verberg sessies', 'stride')); ?>' : '<?php echo esc_js(__('Per sessie', 'stride')); ?>'"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                                <?php // per-session rows: WHICH day was missed ?>
+                                                <template x-if="isAttendanceOpen(r.id)">
+                                                    <div class="ws-att-rows" style="margin-top:var(--ws-2)">
+                                                        <template x-for="s in r.attendance.sessions" :key="s.id">
+                                                            <div class="ws-att-row" style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:var(--ws-fs-sm)">
+                                                                <span class="ws-att-row__dot" :class="'ws-att-row__dot--' + sessionMark(s.status).cls"></span>
+                                                                <span x-text="s.title" style="flex:1"></span>
+                                                                <span class="ws-muted" x-text="[s.date, s.time].filter(Boolean).join(' · ')"></span>
+                                                                <span class="ws-att-row__state" x-text="sessionMark(s.status).label"></span>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </template>
                                             </div>
                                         </template>
                                         <template x-if="!r.attendance">
@@ -427,8 +451,76 @@ defined('ABSPATH') || exit;
                     </template>
                 </div>
 
-                <!-- ===== RIGHT: history timeline ===== -->
+                <!-- ===== RIGHT: quotes + profile details + history timeline ===== -->
                 <div>
+
+                    <!-- quotes (manager-gated: the server returns [] for view-only roles) -->
+                    <template x-if="quotes.length">
+                        <div class="ws-card" style="margin-bottom:var(--ws-4)">
+                            <div class="ws-card__head">
+                                <span x-html="icon('receipt')" style="width:17px;height:17px;color:var(--ws-primary)"></span>
+                                <span class="ws-card__title"><?php echo esc_html__('Offertes', 'stride'); ?></span>
+                            </div>
+                            <div class="ws-card__body">
+                                <template x-for="q in quotes" :key="q.id">
+                                    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--ws-border, #eee);font-size:var(--ws-fs-sm)">
+                                        <div style="flex:1;min-width:0">
+                                            <a :href="q.edit_url" target="_blank" rel="noopener" style="font-weight:600" x-text="q.number || q.title"></a>
+                                            <div class="ws-muted" x-text="q.edition_title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+                                        </div>
+                                        <span class="ws-offerte" :class="'ws-offerte--'+offerteClass(q.status_label)">
+                                            <span class="ws-offerte__dot"></span><span x-text="q.status_label"></span>
+                                        </span>
+                                        <b x-text="q.total_display"></b>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- billing + identity (identity fields masked; reveal is manager-only,
+                         audited + rate-limited server-side) -->
+                    <template x-if="person.billing_company || person.billing_vat || person.invoice_email || person.national_id_present || person.date_of_birth_present || person.professional_license_number_present">
+                        <div class="ws-card" style="margin-bottom:var(--ws-4)">
+                            <div class="ws-card__head">
+                                <span x-html="icon('building')" style="width:17px;height:17px;color:var(--ws-primary)"></span>
+                                <span class="ws-card__title"><?php echo esc_html__('Facturatie & identiteit', 'stride'); ?></span>
+                            </div>
+                            <div class="ws-card__body">
+                                <dl class="ws-kv">
+                                    <template x-if="person.billing_company"><div class="ws-kv__row"><dt><?php echo esc_html__('Bedrijf', 'stride'); ?></dt><dd x-text="person.billing_company"></dd></div></template>
+                                    <template x-if="person.billing_vat"><div class="ws-kv__row"><dt><?php echo esc_html__('BTW-nummer', 'stride'); ?></dt><dd x-text="person.billing_vat"></dd></div></template>
+                                    <template x-if="person.billing_address_1 || person.billing_postcode || person.billing_city"><div class="ws-kv__row"><dt><?php echo esc_html__('Adres', 'stride'); ?></dt><dd x-text="[person.billing_address_1, [person.billing_postcode, person.billing_city].filter(Boolean).join(' ')].filter(Boolean).join(', ')"></dd></div></template>
+                                    <template x-if="person.invoice_email"><div class="ws-kv__row"><dt><?php echo esc_html__('Factuur-e-mail', 'stride'); ?></dt><dd x-text="person.invoice_email"></dd></div></template>
+                                    <template x-if="person.gln_number"><div class="ws-kv__row"><dt><?php echo esc_html__('GLN-nummer', 'stride'); ?></dt><dd x-text="person.gln_number"></dd></div></template>
+                                    <?php
+                                    // Masked identity fields — value stays '••••••' until the
+                                    // manager clicks Toon (server audits + rate-limits reveals).
+                                    $piiFields = [
+                                        'national_id' => __('Rijksregisternr.', 'stride'),
+                                        'date_of_birth' => __('Geboortedatum', 'stride'),
+                                        'professional_license_number' => __('Visumnummer', 'stride'),
+                                    ];
+                                    foreach ($piiFields as $piiKey => $piiLabel) : ?>
+                                    <template x-if="person.<?php echo esc_attr($piiKey); ?>_present">
+                                        <div class="ws-kv__row">
+                                            <dt><?php echo esc_html($piiLabel); ?></dt>
+                                            <dd>
+                                                <span x-text="revealed['<?php echo esc_js($piiKey); ?>'] || person.<?php echo esc_attr($piiKey); ?> || '••••••'"></span>
+                                                <template x-if="canManage && !revealed['<?php echo esc_js($piiKey); ?>']">
+                                                    <button class="ws-btn ws-btn--ghost ws-btn--sm" type="button"
+                                                            :disabled="revealBusy === '<?php echo esc_js($piiKey); ?>'"
+                                                            @click="revealField('<?php echo esc_js($piiKey); ?>')"><?php echo esc_html__('Toon', 'stride'); ?></button>
+                                                </template>
+                                            </dd>
+                                        </div>
+                                    </template>
+                                    <?php endforeach; ?>
+                                </dl>
+                            </div>
+                        </div>
+                    </template>
+
                     <div class="ws-card ws-timeline-card">
                         <div class="ws-card__head">
                             <span x-html="icon('history')" style="width:17px;height:17px;color:var(--ws-primary)"></span>
