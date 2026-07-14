@@ -2661,6 +2661,20 @@ final class RegistrationRepository
             $params[]  = $likeTerm;
         }
 
+        // Worklist-queue pin (?queue=): the resolver's id-set IS the queue
+        // definition (WorklistQueueResolver — the same set the Vandaag card
+        // counted). An EMPTY set must yield zero rows, never "no filter".
+        // Ids are server-resolved ints (never client input), bound via %d.
+        if (array_key_exists('queue_ids', $filters) && is_array($filters['queue_ids'])) {
+            $queueIds = array_values(array_unique(array_map('intval', $filters['queue_ids'])));
+            if ($queueIds === []) {
+                $where[] = '1 = 0';
+            } else {
+                $where[] = 'r.id IN (' . implode(',', array_fill(0, count($queueIds), '%d')) . ')';
+                $params = array_merge($params, $queueIds);
+            }
+        }
+
         $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
 
         return [

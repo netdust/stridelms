@@ -42,7 +42,10 @@ test.describe('syncStateToUrl (write half, un-mocked history)', () => {
   test('writes the active grid state into the URL, preserving shell + WP params', () => {
     const win = fakeWindow('http://x/wp/wp-admin/admin.php?page=stride-dashboard&view=inschrijvingen&queue=pending');
     const g = makeGrid(win);
-    // simulate an in-grid filter/sort/page change
+    // simulate an in-grid filter/sort/page change. `queue` is GRID-owned once
+    // the deep-link arrived (applyQueueDeepLink stamps it) — the sync writes it
+    // from grid state, so the fixture mirrors the real flow and sets it.
+    g.queue = 'pending';
     g.filters = { status: 'confirmed', edition_id: 42, company_id: 0, trajectory_id: 0, q: 'anna' };
     g.sortKey = 'name'; g.sortDir = 'desc'; g.page = 3; g.perPage = 50; g.groupBy = 'status';
 
@@ -96,6 +99,20 @@ test.describe('syncStateToUrl (write half, un-mocked history)', () => {
     expect(out.get('status')).toBeNull();       // the cleared key is GONE
     expect(out.get('edition_id')).toBeNull();
     expect(out.get('view')).toBe('inschrijvingen'); // shell param still preserved
+  });
+
+  test('NEGATIVE: dismissing the queue chip DROPS ?queue= (a reload must not resurrect it)', () => {
+    const win = fakeWindow('http://x/?view=inschrijvingen&queue=nocert');
+    const g = makeGrid(win);
+    g.queue = '';   // user removed the "Wachtrij:" chip
+    g.filters = { status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' };
+    g.sortKey = ''; g.page = 1; g.perPage = 25; g.groupBy = '';
+
+    g.syncStateToUrl();
+
+    const out = new URL(win.location.href).searchParams;
+    expect(out.get('queue')).toBeNull();
+    expect(out.get('view')).toBe('inschrijvingen');
   });
 });
 

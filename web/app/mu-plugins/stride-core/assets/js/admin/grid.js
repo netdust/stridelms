@@ -84,22 +84,23 @@
   };
 
   /* ---- queue → endpoint params (PURE, Tier-A) ----------------------------
-     The Vandaag deep-link sends a queue KEY; the endpoint does NOT accept a
-     `queue` param, so this translates each key to the closest REAL filter.
-     For queues that aren't a clean single status (offerte/nocert/oldinterest)
-     we map to the status that best approximates and do NOT invent a backend
-     param. An unknown key returns {} — no fabricated param, no leak. */
-  const QUEUE_STATUS = {
-    pending:     'pending',
-    waitlist:    'waitlist',
-    offerte:     'confirmed',   // offerte-opvolging ≈ confirmed (no offerte param on the endpoint)
-    nocert:      'completed',   // afgerond zonder certificaat ≈ completed
-    oldinterest: 'interest',    // oude interesse ≈ interest
-    interest_to_invite: 'interest', // interesse — editie nu gepland ≈ interest (view the list; mail send deferred)
+     The Vandaag deep-link sends a queue KEY and the endpoint now accepts it
+     directly (?queue= → WorklistQueueResolver id-set server-side) — the grid
+     shows EXACTLY the rows the card counted, never a lossy status
+     approximation (the old QUEUE_STATUS mapping dropped every predicate
+     except status: "Afgerond zonder certificaat: 3" opened ALL completed
+     rows). QUEUE_META is the closed-enum Dutch chip label per key; an unknown
+     key returns {} — no fabricated param, no leak. */
+  const QUEUE_META = {
+    pending:            'Wacht op goedkeuring',
+    waitlist:           'Wachtlijst — plaatsen vrij',
+    offerte:            'Offerte-opvolging',
+    nocert:             'Afgerond zonder certificaat',
+    oldinterest:        'Oude interesse',
+    interest_to_invite: 'Interesse — editie nu gepland',
   };
   function queueToParams(queueKey) {
-    const status = QUEUE_STATUS[queueKey];
-    return status ? { status } : {};
+    return QUEUE_META[queueKey] ? { queue: queueKey } : {};
   }
 
   /* ---- offerte LABEL → CSS modifier key (PURE, Tier-A) -------------------
@@ -160,6 +161,7 @@
     const s = state || {};
     const f = s.filters || {};
     const out = {};
+    if (s.queue && QUEUE_META[s.queue]) out.queue = s.queue;
     if (f.status) out.status = f.status;
     if (f.edition_id) out.edition_id = String(f.edition_id);
     if (f.company_id) out.company_id = String(f.company_id);
@@ -368,9 +370,12 @@
         const q = p.get('queue');
         if (q) {
           const qp = queueToParams(q);
-          if (qp.status && (this.queue !== q || this.filters.status !== qp.status)) {
-            this.queue = q;
-            this.filters.status = qp.status;
+          if (qp.queue && this.queue !== qp.queue) {
+            this.queue = qp.queue;
+            // The queue is its own server-side filter — a leftover status chip
+            // would double-filter the pinned id-set (each queue is
+            // single-status anyway; the funnel reflects it via statusCounts).
+            this.filters.status = '';
             return true;
           }
           return false;
@@ -413,6 +418,7 @@
         params.set('page', String(this.page));
         params.set('per_page', String(this.perPage));
         const f = this.filters;
+        if (this.queue) params.set('queue', this.queue);
         if (f.status) params.set('status', f.status);
         if (f.edition_id) params.set('edition_id', String(f.edition_id));
         if (f.company_id) params.set('company_id', String(f.company_id));
@@ -465,9 +471,12 @@
         if (typeof window === 'undefined' || !window.history || !window.history.replaceState) return;
         const url = new URL(window.location.href);
         // Clear only the keys THIS grid owns (leave shell/WP params untouched).
+        // `queue` is grid-owned once the deep-link has arrived: the shell WRITES
+        // it on switchView, but clearing the queue chip in-grid must also drop
+        // it from the URL or a reload would resurrect the dismissed queue.
         // Pagination is `p`, NEVER `page` — `page` is WP admin's routing param
         // (?page=stride-dashboard); deleting it here blanks the dashboard on reload.
-        ['status', 'edition_id', 'company_id', 'trajectory_id', 'q', 'sort', 'order', 'group_by', 'p', 'per_page']
+        ['queue', 'status', 'edition_id', 'company_id', 'trajectory_id', 'q', 'sort', 'order', 'group_by', 'p', 'per_page']
           .forEach((k) => url.searchParams.delete(k));
         const gridParams = gridStateToParams(this);
         Object.keys(gridParams).forEach((k) => url.searchParams.set(k, gridParams[k]));
@@ -502,17 +511,21 @@
       statusCount(status) { return Number(this.statusCounts[status]) || 0; },
       setStatus(s) {
         this.filters.status = (this.filters.status === s) ? '' : s;
+        // A funnel click is an explicit re-filter — the queue context (and its
+        // queue-specific empty state) must not linger under it (F-G14).
+        this.queue = '';
         this.onFilterChange();
       },
 
       /* ===== filter chips ===== */
       get hasFilters() {
         const f = this.filters;
-        return !!(f.status || f.edition_id || f.company_id || f.trajectory_id || f.q);
+        return !!(this.queue || f.status || f.edition_id || f.company_id || f.trajectory_id || f.q);
       },
       get activeChips() {
         const out = [];
         const f = this.filters;
+        if (this.queue && QUEUE_META[this.queue]) out.push({ k: 'queue', label: 'Wachtrij: ' + QUEUE_META[this.queue] });
         if (f.status && STATUS_META[f.status]) out.push({ k: 'status', label: 'Status: ' + STATUS_META[f.status].label });
         if (f.edition_id) {
           const ed = this.editionOptions.find((e) => String(e.id) === String(f.edition_id));
@@ -523,7 +536,8 @@
         return out;
       },
       removeChip(k) {
-        if (k === 'edition_id' || k === 'company_id' || k === 'trajectory_id') this.filters[k] = 0;
+        if (k === 'queue') this.queue = '';
+        else if (k === 'edition_id' || k === 'company_id' || k === 'trajectory_id') this.filters[k] = 0;
         else this.filters[k] = '';
         this.onFilterChange();
       },

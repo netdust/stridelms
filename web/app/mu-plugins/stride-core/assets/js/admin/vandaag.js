@@ -289,9 +289,11 @@
       },
 
       /* Open a queue → grid, pre-filtered by ?queue=<key> (cluster C reads it
-         from the URL on its own init). Uses the shell's extended switchView. */
+         from the URL on its own init). Uses the shell's extended switchView.
+         A count-0 card still opens (spec F1): the grid shows the queue's
+         truthful empty state — a silent no-op read as a broken card. */
       openQueue(q) {
-        if (!q || q.count === 0) return;
+        if (!q) return;
         this.switchView('inschrijvingen', { queue: q.key });
       },
 

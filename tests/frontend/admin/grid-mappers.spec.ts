@@ -6,11 +6,10 @@
  * carries real branching logic with a falsifiable contract, so each gets a
  * RED-first behavioural test incl. its empty/edge + denial branch.
  *
- *   1. queueToParams(queueKey) — translates a Vandaag deep-link queue key
- *      (pending/waitlist/offerte/nocert/oldinterest) into the REAL endpoint
- *      query params. The endpoint does NOT accept `queue`; this is the
- *      frontend-side translation. A wrong mapping ships the abandoned attempt's
- *      bug: a deep-link that lands on the WRONG filter. The DENIAL branch is an
+ *   1. queueToParams(queueKey) — validates a Vandaag deep-link queue key
+ *      against the closed queue table and passes it through as the endpoint's
+ *      ?queue= param (the server resolves it to the SAME id-set the Vandaag
+ *      card counted — WorklistQueueResolver, RC-2). The DENIAL branch is an
  *      unknown queue key → no params invented, no backend param fabricated.
  *
  *   2. offerteClass(label) — maps the AS-RECEIVED Dutch offerte LABEL (INV-7:
@@ -32,40 +31,27 @@ import { test, expect } from '@playwright/test';
 const grid = require('../../../web/app/mu-plugins/stride-core/assets/js/admin/grid.js');
 
 test.describe('queueToParams', () => {
-  test('pending → status=pending (the simple-status queues)', () => {
-    expect(grid.queueToParams('pending')).toEqual({ status: 'pending' });
+  test('every known queue key passes through as the ?queue= param (server-resolved id-set)', () => {
+    for (const key of ['pending', 'waitlist', 'offerte', 'nocert', 'oldinterest', 'interest_to_invite']) {
+      expect(grid.queueToParams(key)).toEqual({ queue: key });
+    }
   });
 
-  test('waitlist → status=waitlist', () => {
-    expect(grid.queueToParams('waitlist')).toEqual({ status: 'waitlist' });
-  });
-
-  test('offerte-opvolging → the closest available filter (status=confirmed)', () => {
-    // offerte_opvolging is "confirmed + offerte not yet exported"; the endpoint
-    // has no offerte param, so we approximate with status=confirmed and do NOT
-    // invent a backend param.
-    expect(grid.queueToParams('offerte')).toEqual({ status: 'confirmed' });
-  });
-
-  test('nocert → status=completed, oldinterest → status=interest', () => {
-    expect(grid.queueToParams('nocert')).toEqual({ status: 'completed' });
-    expect(grid.queueToParams('oldinterest')).toEqual({ status: 'interest' });
-  });
-
-  test('interest_to_invite → status=interest (deep-link to the interest list)', () => {
-    // "Interesse — editie nu gepland": the closest real filter is the interest
-    // status, same approach as oldinterest. The mail SEND is deferred; this
-    // deep-link only views the list.
-    expect(grid.queueToParams('interest_to_invite')).toEqual({ status: 'interest' });
+  test('a queue key never degrades to a bare status filter (the RC-2 drift bug)', () => {
+    // The old mapping approximated e.g. nocert → status=completed, so the card
+    // said "3" and the grid showed ALL completed rows. The contract now is the
+    // queue key itself — the server owns the predicate.
+    expect(grid.queueToParams('nocert')).not.toHaveProperty('status');
+    expect(grid.queueToParams('offerte')).not.toHaveProperty('status');
   });
 
   test('DENIAL: unknown queue key → {} (no fabricated backend param, no crash)', () => {
     expect(grid.queueToParams('not-a-queue')).toEqual({});
     expect(grid.queueToParams('')).toEqual({});
     expect(grid.queueToParams(undefined)).toEqual({});
-    // Adversarial: a key that is NOT in the queue table must never echo through
-    // as a status — the endpoint would silently ignore a bogus status and the
-    // grid would show an unfiltered page disguised as a filtered one.
+    // Adversarial: a key outside the closed queue table must never echo
+    // through — the endpoint 400s on unknown queues, so fabricating one would
+    // surface a hard error for a merely-stale deep-link.
     expect(grid.queueToParams('queue=pending&status=confirmed')).toEqual({});
   });
 });

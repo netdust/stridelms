@@ -46,6 +46,25 @@ final class AdminRegistrationQueryService
      */
     public function getGridPage(array $params): array|\WP_Error
     {
+        // Worklist queue filter (?queue=): resolve the SAME id-set the Vandaag
+        // card counted (WorklistQueueResolver — one definition, RC-2) and pin
+        // the grid to it. The ids already encode the active-edition scope, so
+        // the scope join is skipped. Other filters (search, edition, status,
+        // group_by) compose on top via buildGridFilters as usual.
+        if (!empty($params['queue'])) {
+            $resolver = ntdst_get(WorklistQueueResolver::class);
+            $queueIds = $resolver->idsForQueue((string) $params['queue']);
+            if ($queueIds === null) {
+                return new \WP_Error(
+                    'invalid_queue',
+                    __('Onbekende wachtrij.', 'stride'),
+                    ['status' => 400],
+                );
+            }
+            $params['queue_ids'] = $queueIds;
+            $params['edition_scope'] = 'all';
+        }
+
         $groupBy = $params['group_by'] ?? null;
 
         $page = $groupBy !== null

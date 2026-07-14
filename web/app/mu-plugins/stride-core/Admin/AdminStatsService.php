@@ -441,172 +441,21 @@ final class AdminStatsService
      */
     public function getWorklistQueueCounts(array $activeEditionIds): array
     {
-        $empty = [
-            'pending'            => 0,
-            'waitlist_open'      => 0,
-            'offerte_opvolging'  => 0,
-            'nocert'             => 0,
-            'oldinterest'        => 0,
-            'interest_to_invite' => 0,
-        ];
+        // THE queue definitions live in WorklistQueueResolver — the counts are
+        // count() of the SAME id-sets the grid's ?queue= filter applies, so the
+        // card number and its click-through can never drift (RC-2). Lazy
+        // container read: the resolver also serves AdminRegistrationQueryService,
+        // which this service already owns — a constructor dep would cycle.
+        $ids = ntdst_get(WorklistQueueResolver::class)->idsByQueue($activeEditionIds);
 
-        $activeEditionIds = array_values(array_unique(array_filter(array_map('intval', $activeEditionIds))));
-        if (empty($activeEditionIds) || !RegistrationTable::exists()) {
-            return $empty;
-        }
-
-        // --- pending: a single grouped count, no row fetch needed ---
-        $breakdown = $this->registrations->statusBreakdownByEditions($activeEditionIds);
-        $pending   = (int) ($breakdown[RegistrationStatus::Pending->value] ?? 0);
-
-        // --- Fetch the rows the other four queues reason over (structured cols, M5) ---
-        $rows = $this->registrations->findByEditionsAndStatuses(
-            $activeEditionIds,
-            [
-                RegistrationStatus::Waitlist->value,
-                RegistrationStatus::Confirmed->value,
-                RegistrationStatus::Completed->value,
-                RegistrationStatus::Interest->value,
-            ],
-        );
-
-        if (empty($rows)) {
-            return ['pending' => $pending] + $empty;
-        }
-
-        // Effective status per edition (INV-7) — one batched decision pass.
-        $effectiveStatuses = $this->editions->getEffectiveStatuses($activeEditionIds);
-
-        // Offerte resolver (single paid-proxy definition) over the confirmed regs.
-        $confirmedRegIds = [];
-        foreach ($rows as $row) {
-            if ($row->status === RegistrationStatus::Confirmed->value) {
-                $confirmedRegIds[] = (int) $row->id;
-            }
-        }
-        $offerteByReg  = !empty($confirmedRegIds)
-            ? $this->registrationQuery->offerteStatusesForRegistrations($confirmedRegIds)
-            : [];
-        $exportedLabel = QuoteStatus::Exported->label();
-
-        // Pre-resolve the per-edition lookups ONCE per distinct edition, not per
-        // row (CR-2/CR-3): the waitlist capacity check and the completed-row
-        // course lookup otherwise fire a query per matching row even when many
-        // rows share an edition. Build the distinct-edition maps up front.
-        $waitlistEditionIds = [];
-        $completedEditionIds = [];
-        $interestEditionIds = [];
-        foreach ($rows as $row) {
-            $editionId = (int) $row->edition_id;
-            if ($row->status === RegistrationStatus::Waitlist->value) {
-                $waitlistEditionIds[$editionId] = true;
-            } elseif ($row->status === RegistrationStatus::Completed->value && !empty($row->completed_at)) {
-                $completedEditionIds[$editionId] = true;
-            } elseif ($row->status === RegistrationStatus::Interest->value) {
-                $interestEditionIds[$editionId] = true;
-            }
-        }
-        $hasSpotsByEdition = [];
-        foreach (array_keys($waitlistEditionIds) as $editionId) {
-            $hasSpotsByEdition[$editionId] = $this->editions->hasAvailableSpots($editionId);
-        }
-        $courseIdByEdition = [];
-        foreach (array_keys($completedEditionIds) as $editionId) {
-            $courseIdByEdition[$editionId] = $this->editions->getCourseId($editionId) ?? 0;
-        }
-
-        // interest_to_invite: a per-distinct-edition start_date presence map for
-        // the interest rows' editions (one batched meta read, mirroring the
-        // prefetch-per-distinct-edition style above). A non-empty start_date means
-        // the formerly-dateless interest anchor now has a PLANNED date → invite.
-        $datedByEdition = [];
-        if (!empty($interestEditionIds)) {
-            $startMeta = BatchQueryHelper::batchGetPostMeta(
-                array_keys($interestEditionIds),
-                ['_ntdst_start_date'],
-            );
-            foreach (array_keys($interestEditionIds) as $editionId) {
-                $startDate = $startMeta[$editionId]['_ntdst_start_date'] ?? null;
-                $datedByEdition[$editionId] = is_string($startDate) && trim($startDate) !== '';
-            }
-        }
-
-        $oldInterestCutoff = strtotime('-' . self::OLD_INTEREST_DAYS . ' days');
-
-        $waitlistOpen     = 0;
-        $offerteOpvolging = 0;
-        $nocert           = 0;
-        $oldinterest      = 0;
-        $interestToInvite = 0;
-
-        foreach ($rows as $row) {
-            $regId     = (int) $row->id;
-            $userId    = (int) $row->user_id;
-            $editionId = (int) $row->edition_id;
-            $effective = $effectiveStatuses[$editionId] ?? null;
-
-            switch ($row->status) {
-                case RegistrationStatus::Waitlist->value:
-                    // Open capacity = edition not terminal/past (effective status)
-                    // AND the per-edition capacity check shows free spots
-                    // (prefetched per distinct edition above).
-                    if (
-                        $effective !== null
-                        && !$effective->isTerminal()
-                        && $effective !== OfferingStatus::Completed
-                        && ($hasSpotsByEdition[$editionId] ?? false)
-                    ) {
-                        $waitlistOpen++;
-                    }
-                    break;
-
-                case RegistrationStatus::Confirmed->value:
-                    // Absent quote (not in the resolver map / 'Geen offerte') OR
-                    // any label that is not the Exported label → follow-up needed.
-                    $label = $offerteByReg[$regId] ?? null;
-                    if ($label !== $exportedLabel) {
-                        $offerteOpvolging++;
-                    }
-                    break;
-
-                case RegistrationStatus::Completed->value:
-                    if (empty($row->completed_at)) {
-                        break;
-                    }
-                    $courseId = $courseIdByEdition[$editionId] ?? 0;
-                    if ($courseId <= 0) {
-                        $nocert++; // No course → no certificate path → needs attention.
-                        break;
-                    }
-                    // Cert link is a per-(course,user) fact, so it stays per-row,
-                    // but the courseId lookup it depends on is now prefetched.
-                    if (LearnDashHelper::getCertificateLink($courseId, $userId) === '') {
-                        $nocert++;
-                    }
-                    break;
-
-                case RegistrationStatus::Interest->value:
-                    $registeredTs = $row->registered_at ? strtotime((string) $row->registered_at) : false;
-                    if ($registeredTs !== false && $registeredTs < $oldInterestCutoff) {
-                        $oldinterest++;
-                    }
-                    // interest_to_invite: edition now has a planned date. Counted
-                    // INDEPENDENTLY of the age check — a row may belong to both
-                    // queues (they answer different questions).
-                    if ($datedByEdition[$editionId] ?? false) {
-                        $interestToInvite++;
-                    }
-                    break;
-            }
-        }
-
+        // Payload keys are the legacy stats vocabulary (vandaag.js countKey map).
         return [
-            'pending'            => $pending,
-            'waitlist_open'      => $waitlistOpen,
-            'offerte_opvolging'  => $offerteOpvolging,
-            'nocert'             => $nocert,
-            'oldinterest'        => $oldinterest,
-            'interest_to_invite' => $interestToInvite,
+            'pending'            => count($ids['pending']),
+            'waitlist_open'      => count($ids['waitlist']),
+            'offerte_opvolging'  => count($ids['offerte']),
+            'nocert'             => count($ids['nocert']),
+            'oldinterest'        => count($ids['oldinterest']),
+            'interest_to_invite' => count($ids['interest_to_invite']),
         ];
     }
 

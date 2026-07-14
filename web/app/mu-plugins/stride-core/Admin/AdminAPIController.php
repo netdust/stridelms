@@ -1597,6 +1597,9 @@ final class AdminAPIController
             'q'            => sanitize_text_field((string) ($request->get_param('q') ?? '')),
             'edition_scope' => sanitize_text_field((string) ($request->get_param('edition_scope') ?? 'active')),
             'group_by'     => sanitize_text_field((string) ($request->get_param('group_by') ?? '')),
+            // Worklist queue key (?queue= from the Vandaag cards) — validated
+            // against WorklistQueueResolver::QUEUES in the service (400 on miss).
+            'queue'        => sanitize_key((string) ($request->get_param('queue') ?? '')),
         ];
 
         // Remove empty strings so queryForGrid's isset/!empty checks work correctly.
