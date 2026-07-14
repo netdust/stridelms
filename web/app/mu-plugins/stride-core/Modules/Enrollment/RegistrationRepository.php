@@ -2010,12 +2010,32 @@ final class RegistrationRepository
         global $wpdb;
 
         // --- M4: Sort allowlist (load-bearing security — do NOT add user input here) ---
-        $sortAllowlist = ['registered_at', 'status', 'edition_id', 'company_id', 'completed_at', 'cancelled_at'];
+        // Keys are the CLIENT sort keys (the grid's column headers); values are
+        // SERVER-OWNED SQL expressions — user input only ever selects a key.
+        // 'name' and 'edition' sort by what the admin SEES (display name /
+        // edition title), not by FK id — the headers used to silently fall
+        // back to registered_at, which read as a broken/random sort (F-G1).
+        $sortExpressions = [
+            'registered_at' => 'r.registered_at',
+            'status'        => 'r.status',
+            'edition_id'    => 'r.edition_id',
+            'company_id'    => 'r.company_id',
+            'completed_at'  => 'r.completed_at',
+            'cancelled_at'  => 'r.cancelled_at',
+            'name'          => "COALESCE(u.display_name, '')",
+            'edition'       => "COALESCE(ep.post_title, '')",
+        ];
 
         // --- Sanitize sort/order/pagination ---
-        $sort = in_array($filters['sort'] ?? '', $sortAllowlist, true)
-            ? $filters['sort']
+        $sortKey = array_key_exists((string) ($filters['sort'] ?? ''), $sortExpressions)
+            ? (string) $filters['sort']
             : 'registered_at';
+        $sortExpr = $sortExpressions[$sortKey];
+
+        // Edition-title sort needs the edition post joined for ORDER BY only.
+        $sortJoin = $sortKey === 'edition'
+            ? "LEFT JOIN {$wpdb->posts} ep ON ep.ID = r.edition_id"
+            : '';
 
         $order = strtolower($filters['order'] ?? '') === 'asc' ? 'ASC' : 'DESC';
 
@@ -2051,6 +2071,8 @@ final class RegistrationRepository
         // enrollment_data is selected SOLELY for the anonymous-lead name/email fallback
         // (anon interest/waitlist rows have no wp_users join). It is NEVER filtered or
         // sorted on, so it does not participate in the M4/M5 SQL-safety invariants.
+        // Stable tiebreaker (r.id) so equal sort values can never shuffle rows
+        // across page boundaries between requests.
         $dataSql = "SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
                            r.parent_registration_id, r.status, r.enrollment_path,
                            r.company_id, r.registered_at, r.completed_at,
@@ -2059,8 +2081,9 @@ final class RegistrationRepository
                     FROM {$regTable} r
                     LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
                     {$activeJoin}
+                    {$sortJoin}
                     {$whereClause}
-                    ORDER BY r.{$sort} {$order}
+                    ORDER BY {$sortExpr} {$order}, r.id DESC
                     LIMIT %d OFFSET %d";
 
         $dataParams = array_merge($params, [$perPage, $offset]);
