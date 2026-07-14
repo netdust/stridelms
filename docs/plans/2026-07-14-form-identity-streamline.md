@@ -20,11 +20,16 @@
    those are strictly personal. On-behalf includes completion tasks (e.g.
    session selection by the colleague-enroller).
 
-## The form-identity matrix (the convergence point this slice creates)
+## The form-identity matrix (documentation + per-handler tests — NO runtime class)
 
-One policy table in code (`Modules/Enrollment/FormIdentityPolicy`), consulted
-by every handler and pinned by a contract test — handlers can no longer
-improvise their own gate:
+> **Simplicity pass (2026-07-14, Stefan):** no new DB table anywhere in this
+> plan, and no runtime policy class either — six forms with one-line gates
+> don't justify indirection. The matrix lives HERE and in
+> docs/DATA-MODEL-REGISTRATIONS.md; per-handler unit tests pin each gate.
+> Also cut: the self/other toggle (the e-mail field IS the choice — rule 3
+> resolves whatever is submitted), the resolveParticipant fold (deferred —
+> tracked INV-9 cleanup, zero functional gain now), and the code-identifier
+> vocabulary sweep (UI copy + docs only).
 
 | Form | Account required | Prefill when logged in | On behalf of another | Participant binding |
 |---|---|---|---|---|
@@ -37,9 +42,10 @@ improvise their own gate:
 
 ## E-mail→account resolution (rule 3, the core change)
 
-At interest/waitlist submission, resolve the submitted e-mail through ONE
-helper (extending the existing INV-9 point `resolveLeadAccount`; also folds
-`resolveParticipant`, the tracked INV-9 bypass, into it):
+At interest/waitlist submission, resolve the submitted e-mail with a plain
+`get_user_by('email')` lookup in the two handlers (no new helper class; the
+INV-9 create-paths are untouched — submission-time is resolve-only, never
+create):
 
 | Case | Row created | Notes |
 |---|---|---|
@@ -55,16 +61,13 @@ existing `hasActiveRegistration` check (same row-per-person outcome).
 (same merge semantics as the promotion adopt). Run as a WP-CLI/eval-file
 routine, not a schema migration — it's data, not DDL. Idempotent, logged.
 
-## Vocabulary sweep
+## Vocabulary (copy + docs only)
 
-"Anonymous" disappears from code and UI where it means "no account":
-`resolveAnonymousIdentity`→`resolveLeadIdentity` (presenter already named
-`presentLeadIdentity`), `findAnonymousForEmailAndEdition`→
-`findLeadByEmailAndEdition`, API flag `anonymous`→ kept for one release as an
-alias of new `has_account:false` (grid/dossier JS reads it), UI copy
-"(anoniem)" only remains as the no-name-captured fallback; the row badge
-becomes "Geen account" (a state, not an identity). The data-model doc §4
-updates accordingly.
+The grid/dossier badge for account-less rows becomes "Geen account" (a state,
+not an identity); "(anoniem)" remains only as the no-name-captured fallback.
+Docs say "lead = participant without an account yet". Code identifiers and
+the API `anonymous` flag stay as-is (documented) — renaming them is diff
+churn with no behavior change.
 
 ## Threat model
 
@@ -86,31 +89,27 @@ admin. Public surface: the two nonce-gated `ntdst/api_data` form actions
 **Out of scope:** e-mail ownership verification (double opt-in) for leads —
 deferred; the netdust-mail broadcast work is the natural place if ever needed.
 
-## Tasks
+## Tasks (slim)
 
-1. **`FormIdentityPolicy`** table + contract test asserting each handler's
-   actual gate (login check, on-behalf, participant binding) matches it.
-2. **One account resolver** — extend `resolveLeadAccount` into the single
-   INV-9 find-or-resolve; fold `resolveParticipant` into it (welcome-mail
-   policy as a flag); add the submission-time lookup mode (resolve, never
-   create). Update INV-9 doc entry.
-3. **Interest/waitlist handlers**: e-mail→account resolution per the table;
-   explicit "voor mezelf / voor iemand anders" choice when logged in (self →
-   prefilled + locked e-mail); provenance + audit event on third-party
-   binding; identical responses (threat 1); rate throttle (threat 3).
-4. **Interest form prefill** (waitlist already has it); verify
+1. **Interest/waitlist handlers**: `get_user_by('email')` resolution → bind
+   or lead per the table; provenance already exists (`submitted_by`); audit
+   event on third-party binding; identical responses (threat 1). Rate
+   throttle ONLY under full rule 3 (see open decision).
+2. **Interest form prefill** (waitlist already has it); verify
    enrollment/intake/evaluation prefill coverage.
-5. **Completion tasks**: allow the registration's `enrolled_by` actor;
-   intake/evaluation untouched.
-6. **Adoption pass** for existing lead rows (CLI routine, idempotent).
-7. **Vocabulary sweep** + data-model doc §4 update + grid/dossier badge
-   ("Geen account").
-8. Tests (unit + handler contract + JS spec updates), suites green,
+3. **Completion tasks**: allow the registration's `enrolled_by` actor
+   (one condition); intake/evaluation untouched.
+4. **Adoption pass** for existing lead rows (eval-file script like seed.php,
+   idempotent, logged — run against a copy of production data first).
+5. **Copy + docs**: "Geen account" badge; matrix into
+   DATA-MODEL-REGISTRATIONS.md §4.
+6. Per-handler unit tests pinning each gate + JS spec updates, suites green,
    two-round review, push.
 
-**Estimate:** 1.5–2 days. **Est. risk concentrations:** the resolver fold
-(task 2 — touches colleague enrollment) and the adoption pass (task 6 — run
-against a copy of production data first).
+**Deferred (tracked, not lost):** resolveParticipant→resolveLeadAccount fold
+(INV-9 cleanup); code-identifier renames.
+
+**Estimate:** < 1 day.
 
 ## Open decision for Stefan
 
