@@ -33,8 +33,8 @@
 
 | Form | Account required | Prefill when logged in | On behalf of another | Participant binding |
 |---|---|---|---|---|
-| Interest | no | **yes (add — missing today)** | yes (explicit choice, new) | e-mail→account resolution (below) |
-| Waitlist | no | yes (exists) | yes (explicit choice, new) | e-mail→account resolution |
+| Interest | no | **yes (add — missing today)** | yes (via the e-mail field — no toggle) | e-mail→account resolution (below) |
+| Waitlist | no | yes (exists) | yes (via the e-mail field — no toggle) | e-mail→account resolution |
 | Enrollment (full) | yes | yes | yes ("collega", exists) | self, or find-or-create for colleague (exists) |
 | Completion tasks / session selection | yes | n/a | **yes for `enrolled_by` actor (open up — participant-or-admin today)** | own registration or enroller's colleague |
 | Intake | yes | yes | **no** (exists — keep) | own registration only |
