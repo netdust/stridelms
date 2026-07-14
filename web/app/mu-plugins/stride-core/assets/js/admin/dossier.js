@@ -116,18 +116,67 @@
      An interest registration is for a course with no planned edition yet; there
      is nothing to approve until it becomes a real (pending) enrollment. Its only
      actions are messaging + cancelling. (grid.js + vandaag.js already scope
-     approve to 'pending' — this aligns the dossier panel with them.) */
+     approve to 'pending' — this aligns the dossier panel with them.)
+
+     Every action carries its gated bulk handler id (`bulk`) and is dispatched
+     as a single-id batch through the SAME ntdst/v1/action registry the grid
+     uses — the dossier never grows its own write path.
+       target    — lifecycle destination, validated against the server-printed
+                   StrideConfig.transitions at init (drift → console warning,
+                   same CR-5 discipline as grid.js).
+       needsTask — only offered when the reg has that completion task OPEN
+                   (the server would reject with task_not_required anyway;
+                   don't render a button that can only fail).
+       deferred  — handler is an honest server stub: render DISABLED with a
+                   "volgt binnenkort" tooltip, never a clickable button that
+                   fails 100% of the time (decision 2026-07-14).
+       confirm   — destructive: ask before firing.
+       ok        — Dutch success feedback. */
+  const DEFERRED_HINT = 'Volgt binnenkort — deze actie is nog niet beschikbaar.';
   const SMART_ACTIONS = [
-    { id: 'stride_approve',           label: 'Goedkeuren',               icon: 'checkCircle', states: ['pending'] },
-    { id: 'stride_promote_waitlist',  label: 'Promoveer van wachtlijst', icon: 'arrowUp',     states: ['waitlist'] },
-    { id: 'stride_quote_sent',        label: 'Offerte verzonden',        icon: 'send',        states: ['confirmed'] },
-    { id: 'stride_quote_exported',    label: 'Offerte verwerkt',         icon: 'checkCircle', states: ['confirmed'] },
-    { id: 'stride_message',           label: 'Bericht sturen',           icon: 'mail',        states: ['confirmed', 'completed', 'interest', 'pending', 'waitlist'] },
-    { id: 'stride_generate_doc',      label: 'Document genereren',       icon: 'fileText',    states: ['completed'] },
-    { id: 'stride_cancel',            label: 'Annuleren',                icon: 'xCircle',     states: ['pending', 'interest', 'confirmed', 'waitlist'], danger: true },
+    { id: 'stride_approve', bulk: 'stride_bulk_approve', label: 'Goedkeuren', icon: 'checkCircle',
+      states: ['pending'], target: 'confirmed', ok: 'Goedgekeurd — inschrijving bevestigd.' },
+    { id: 'stride_promote_waitlist', bulk: 'stride_bulk_promote_waitlist', label: 'Promoveer van wachtlijst', icon: 'arrowUp',
+      states: ['waitlist'], target: 'confirmed', ok: 'Gepromoveerd van wachtlijst.' },
+    { id: 'stride_quote_sent', bulk: 'stride_bulk_quote_sent', label: 'Offerte verzonden', icon: 'send',
+      states: ['confirmed'], ok: 'Offerte gemarkeerd als verzonden.' },
+    { id: 'stride_quote_exported', bulk: 'stride_bulk_quote_exported', label: 'Offerte verwerkt', icon: 'checkCircle',
+      states: ['confirmed'], ok: 'Offerte gemarkeerd als verwerkt.' },
+    { id: 'stride_approve_post_course', bulk: 'stride_bulk_approve_post_course', label: 'Aftekenen na opleiding', icon: 'award',
+      states: ['confirmed', 'completed'], needsTask: 'post_approval', ok: 'Afgetekend na opleiding.' },
+    { id: 'stride_message', bulk: 'stride_bulk_message', label: 'Bericht sturen', icon: 'mail',
+      states: ['confirmed', 'completed', 'interest', 'pending', 'waitlist'], deferred: true },
+    { id: 'stride_generate_doc', bulk: 'stride_bulk_generate_doc', label: 'Document genereren', icon: 'fileText',
+      states: ['completed'], deferred: true },
+    { id: 'stride_cancel', bulk: 'stride_bulk_cancel', label: 'Annuleren', icon: 'xCircle',
+      states: ['pending', 'interest', 'confirmed', 'waitlist'], target: 'cancelled', danger: true,
+      confirm: 'Weet je zeker dat je deze inschrijving wil annuleren? De plaats komt vrij en de gebruiker verliest toegang.',
+      ok: 'Inschrijving geannuleerd.' },
   ];
   function actionsForState(state) {
     return SMART_ACTIONS.filter((a) => a.states.includes(state));
+  }
+  /* per-REGISTRATION refinement: needsTask actions require that task OPEN. */
+  function actionsForReg(reg) {
+    const r = reg || {};
+    return actionsForState(r.status).filter((a) => {
+      if (!a.needsTask) return true;
+      return (r.tasks || []).some((t) => t.type === a.needsTask && t.status !== 'completed');
+    });
+  }
+  /* CR-5 drift guard — the dossier's lifecycle actions must agree with the
+     server-printed transition map (StrideConfig.transitions), like grid.js. */
+  function validateTransitionDrift(transitions) {
+    if (!transitions || typeof transitions !== 'object') return;
+    const canReach = (from, target) => Array.isArray(transitions[from]) && transitions[from].includes(target);
+    SMART_ACTIONS.forEach((a) => {
+      if (!a.target) return;
+      const invalid = a.states.filter((s) => !canReach(s, a.target));
+      if (invalid.length) {
+        // eslint-disable-next-line no-console
+        console.warn(`[dossier] action "${a.id}" offered for state(s) [${invalid}] the server map does not permit → "${a.target}" (CR-5).`);
+      }
+    });
   }
 
   /* ======================================================================
@@ -333,6 +382,10 @@
          changed the data underneath). load() self-guards via loadedKey/loadSeq,
          so activation events can never double-render or race. */
       init() {
+        // Lifecycle-action drift guard (CR-5): warn at boot if this file's
+        // action table disagrees with the server-printed transition map.
+        validateTransitionDrift((window.StrideConfig || {}).transitions);
+
         // Active on mount (deep-link ?view=dossier&user=…) → cold load.
         if (this.view === 'dossier') {
           this.load();
@@ -528,46 +581,50 @@
       /* presentational helpers (all closed-enum / AS-RECEIVED) */
       statusMeta(status) { return statusMeta(status); },
       offerteClass(label) { return offerteClass(label); },
-      actionsFor(state) { return actionsForState(state); },
+      actionsFor(reg) { return actionsForReg(reg); },
+      deferredHint() { return DEFERRED_HINT; },
 
-      /* Map a dossier SMART_ACTION id → the gated bulk action id and dispatch it
-         for this single registration via ids:[r.id]. Scope is the waitlist-promote
-         feature: only `stride_promote_waitlist` → `stride_bulk_promote_waitlist`
-         (the dossier id intentionally lacks `bulk_`; mirror grid.js:145). Other
-         ids are no-ops here (still presentational) until they get wired. The
-         bulk endpoint re-checks `stride_manage`, so a view-only user who somehow
-         sees the button gets a 403 — the endpoint is the security boundary, not
-         the button's visibility. */
+      /* Write access — the action row is only rendered for stride_manage.
+         The endpoint re-checks the capability per request; this is UI honesty
+         (a view-only Supervisor gets no buttons that would 403), not security. */
+      get canManage() { return !!(window.StrideConfig || {}).canManage; },
+
+      /* Dispatch a smart action for this single registration as a one-id batch
+         through the SAME gated ntdst/v1/action bulk handlers the grid uses
+         (a.bulk carries the handler id; the per-action nonce is armed via
+         StrideConfig.bulkNonces in bulkApi). The endpoint re-checks
+         `stride_manage` — it is the security boundary, not button visibility.
+         Success = the row is NOT in the per-row failure report; the dossier
+         then soft-refreshes so the new status/tasks show in place. */
       async runSmartAction(a, r) {
-        const BULK_ID = { stride_promote_waitlist: 'stride_bulk_promote_waitlist' };
-        const bulkId = a && BULK_ID[a.id];
-        if (!bulkId || !r || !r.id || this.actionBusy) return;
+        if (!a || !a.bulk || a.deferred || !r || !r.id || this.actionBusy) return;
+        if (a.confirm && !window.confirm(a.confirm)) return;
 
         this.actionBusy = r.id;
         this.actionFeedback = { ...this.actionFeedback, [r.id]: null };
         try {
-          const report = await this.bulkApi(bulkId, { ids: [r.id] });
+          const report = await this.bulkApi(a.bulk, { ids: [r.id] });
           const failed = (report && report.failed) || [];
           const mine = failed.find((f) => Number(f.id) === Number(r.id));
           if (mine) {
-            // The endpoint returns a per-row reason (e.g. lead_no_email,
-            // capacity_full) — surface it, do not swallow it.
+            // The endpoint returns a per-row reason (e.g. capacity_full,
+            // no_quote, lead_no_email) — surface it, do not swallow it.
             this.actionFeedback = {
               ...this.actionFeedback,
-              [r.id]: { kind: 'err', text: mine.message || 'Promoveren mislukt.' },
+              [r.id]: { kind: 'err', text: mine.message || 'Actie mislukt.' },
             };
           } else {
             this.actionFeedback = {
               ...this.actionFeedback,
-              [r.id]: { kind: 'ok', text: 'Gepromoveerd van wachtlijst.' },
+              [r.id]: { kind: 'ok', text: a.ok || 'Uitgevoerd.' },
             };
-            // Refresh the dossier so the row's new `confirmed` status shows.
+            // Soft refresh: the row's new status / task state shows in place.
             this.load();
           }
         } catch (e) {
           this.actionFeedback = {
             ...this.actionFeedback,
-            [r.id]: { kind: 'err', text: (e && e.message) || 'Promoveren mislukt.' },
+            [r.id]: { kind: 'err', text: (e && e.message) || 'Actie mislukt.' },
           };
         } finally {
           this.actionBusy = 0;
@@ -600,6 +657,8 @@
     offerteClass,
     statusMeta,
     actionsForState,
+    actionsForReg,
+    validateTransitionDrift,
     avatarColor,
     initials,
     formatWhen,

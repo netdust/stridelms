@@ -122,10 +122,15 @@ final class BulkRegistrationHandler
             $enrollment = ntdst_get(EnrollmentService::class);
 
             $task = $completion->completeTask($id, 'approval');
-            if (is_wp_error($task)) {
-                // task_not_required is benign for an already-approved row — still report it.
+            if (is_wp_error($task) && $task->get_error_code() !== 'task_not_required') {
                 return $task;
             }
+            // task_not_required = the row has NO approval task (legacy/admin-created
+            // pendings, or approval not enabled on the edition). There is nothing to
+            // complete, but the row is still legitimately approvable — proceed to the
+            // domain confirm, which re-guards the status transition itself. Failing
+            // here made such rows permanently un-approvable from the grid AND the
+            // dossier, with an untranslated internal error in the failure report.
 
             // D2: confirmRegistration returns WP_Error('invalid_status') for non-pending,
             // so an already-confirmed row never double-grants.

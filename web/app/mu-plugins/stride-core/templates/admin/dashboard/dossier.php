@@ -375,34 +375,40 @@ defined('ABSPATH') || exit;
                                     <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0"><?php echo esc_html__('Geen notities.', 'stride'); ?></p>
                                 </template>
 
-                                <!-- state-appropriate actions (derived, presentational) -->
-                                <div class="ws-reg-actions">
-                                    <div class="ws-reg-actions__label"><span x-html="icon('sparkle')"></span> <?php echo esc_html__('Acties voor deze inschrijving', 'stride'); ?></div>
-                                    <div class="ws-reg-actions__row">
-                                        <template x-for="(a, i) in actionsFor(r.status)" :key="a.id">
-                                            <button class="ws-action-btn"
-                                                    :class="a.danger ? 'ws-action-btn--danger' : (i===0 ? 'ws-action-btn--primary' : 'ws-action-btn--secondary')"
-                                                    :title="a.label"
-                                                    :disabled="actionBusy === r.id"
-                                                    @click="runSmartAction(a, r)">
-                                                <span class="ws-action-btn__ico" x-html="icon(a.icon)"></span>
-                                                <span x-text="a.label"></span>
-                                            </button>
-                                        </template>
-                                        <template x-if="actionsFor(r.status).length === 0">
-                                            <span class="ws-reg-actions__none">
-                                                <span x-html="icon('info')"></span>
-                                                <?php echo esc_html__('Geen acties — geannuleerd. Een nieuwe inschrijving start een nieuw dossier.', 'stride'); ?>
-                                            </span>
+                                <!-- state-appropriate actions — stride_manage only (view-only
+                                     roles get no buttons that would 403; the endpoint re-checks
+                                     the capability regardless). Deferred stubs render DISABLED
+                                     with a "volgt binnenkort" tooltip, never as live buttons. -->
+                                <template x-if="canManage">
+                                    <div class="ws-reg-actions">
+                                        <div class="ws-reg-actions__label"><span x-html="icon('sparkle')"></span> <?php echo esc_html__('Acties voor deze inschrijving', 'stride'); ?></div>
+                                        <div class="ws-reg-actions__row">
+                                            <template x-for="(a, i) in actionsFor(r)" :key="a.id">
+                                                <button class="ws-action-btn"
+                                                        :class="a.danger ? 'ws-action-btn--danger' : (i===0 ? 'ws-action-btn--primary' : 'ws-action-btn--secondary')"
+                                                        :title="a.deferred ? deferredHint() : a.label"
+                                                        :disabled="a.deferred || actionBusy === r.id"
+                                                        :style="a.deferred ? 'opacity:.5;cursor:not-allowed' : ''"
+                                                        @click="runSmartAction(a, r)">
+                                                    <span class="ws-action-btn__ico" x-html="icon(a.icon)"></span>
+                                                    <span x-text="a.label"></span>
+                                                </button>
+                                            </template>
+                                            <template x-if="actionsFor(r).length === 0">
+                                                <span class="ws-reg-actions__none">
+                                                    <span x-html="icon('info')"></span>
+                                                    <?php echo esc_html__('Geen acties — geannuleerd. Een nieuwe inschrijving start een nieuw dossier.', 'stride'); ?>
+                                                </span>
+                                            </template>
+                                        </div>
+                                        <template x-if="actionFeedback[r.id]">
+                                            <p class="ws-reg-actions__feedback"
+                                               :class="actionFeedback[r.id].kind === 'ok' ? 'is-ok' : 'is-err'"
+                                               x-text="actionFeedback[r.id].text"
+                                               style="margin:var(--ws-2) 0 0;font-size:var(--ws-fs-sm)"></p>
                                         </template>
                                     </div>
-                                    <template x-if="actionFeedback[r.id]">
-                                        <p class="ws-reg-actions__feedback"
-                                           :class="actionFeedback[r.id].kind === 'ok' ? 'is-ok' : 'is-err'"
-                                           x-text="actionFeedback[r.id].text"
-                                           style="margin:var(--ws-2) 0 0;font-size:var(--ws-fs-sm)"></p>
-                                    </template>
-                                </div>
+                                </template>
 
                             </div>
                         </div>
