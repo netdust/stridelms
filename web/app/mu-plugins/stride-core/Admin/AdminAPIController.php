@@ -108,6 +108,15 @@ final class AdminAPIController
                     'default' => 'agenda',
                     'enum' => ['agenda', 'list'],
                 ],
+                'scope' => [
+                    // upcoming (default) = the 2-day-lookback cutoff;
+                    // all = no default cutoff (F-E2: the lookback was silent
+                    // and had no UI escape hatch). An explicit date_from
+                    // always overrides the default cutoff, either scope.
+                    'type' => 'string',
+                    'default' => 'upcoming',
+                    'enum' => ['upcoming', 'all'],
+                ],
             ],
         ]);
 
@@ -626,6 +635,10 @@ final class AdminAPIController
         $themeId = (int) $request->get_param('theme');
         $formatId = (int) $request->get_param('format');
         $tagId = (int) $request->get_param('tag');
+        $scope = (string) ($request->get_param('scope') ?? 'upcoming');
+        if (!in_array($scope, ['upcoming', 'all'], true)) {
+            $scope = 'upcoming';
+        }
         $offset = ($page - 1) * $perPage;
 
         $today = current_time('Y-m-d');
@@ -640,12 +653,14 @@ final class AdminAPIController
         $where = ["p.post_type = %s", "p.post_status = 'publish'"];
         $params = [EditionCPT::POST_TYPE];
 
-        // By default, only show editions that haven't passed more than 2 days ago.
-        // Permit NULL start_date so dateless editions (no sessions -> no
-        // start_date meta, the interest-list anchors) show in the default scope.
-        // Same fix the Admin Workspace spec §10.7 / Task 1.2 inherits — see
+        // By default (scope=upcoming), only show editions that haven't passed
+        // more than 2 days ago; scope=all lifts the cutoff (F-E2 — the
+        // lookback was invisible and inescapable). Permit NULL start_date so
+        // dateless editions (no sessions -> no start_date meta, the
+        // interest-list anchors) show in the default scope. Same fix the
+        // Admin Workspace spec §10.7 / Task 1.2 inherits — see
         // docs/plans/2026-06-13-admin-workspace-spec.md.
-        if (empty($dateFrom)) {
+        if (empty($dateFrom) && $scope !== 'all') {
             $where[] = "(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)";
             $params[] = $twoDaysAgo;
         }
@@ -655,9 +670,27 @@ final class AdminAPIController
             $params[] = '%' . $wpdb->esc_like($search) . '%';
         }
 
-        if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
-            $params[] = $status;
+        // Status filter matches the EFFECTIVE status — the badge the row
+        // actually displays (F-E2). The old stored-meta EXISTS filter
+        // disagreed with the rendered label for exactly the rows where they
+        // diverge (e.g. stored 'open' + past dates renders "Afgelopen" but
+        // matched status=open, not status=completed) — the F-T2 lesson: a
+        // filter must speak the vocabulary the surface renders.
+        $statusEditionIds = $this->effectiveStatusEditionIds($status);
+        if ($statusEditionIds !== null) {
+            if ($statusEditionIds === []) {
+                return new WP_REST_Response([
+                    'items' => [],
+                    'total' => 0,
+                    'page' => $page,
+                    'perPage' => $perPage,
+                    'totalPages' => 0,
+                    'view' => 'list',
+                ]);
+            }
+            $idPlaceholders = implode(',', array_fill(0, count($statusEditionIds), '%d'));
+            $where[] = "p.ID IN ({$idPlaceholders})";
+            array_push($params, ...$statusEditionIds);
         }
 
         // Date range filter
@@ -741,9 +774,14 @@ final class AdminAPIController
             // Get registration count from batch
             $registeredCount = $regCounts[$editionId] ?? 0;
 
-            // Check if edition is today
-            $isToday = $startDate === $today || ($startDate <= $today && $endDate >= $today);
-            $isPast = !empty($endDate) ? $endDate < $today : $startDate < $today;
+            // Check if edition is today. A DATELESS edition (no start_date —
+            // the sessionless interest anchors, §10.7) is neither today nor
+            // past: the old string comparisons flagged it isPast ('' < today
+            // is true) and, with only an end_date, even isToday (F-A8/F-E1 —
+            // latent while the list view had no UI caller; it has one now).
+            $isToday = $startDate !== '' && ($startDate === $today || ($endDate !== '' && $startDate <= $today && $endDate >= $today));
+            $isPast = ($startDate !== '' || $endDate !== '')
+                && (!empty($endDate) ? $endDate < $today : $startDate < $today);
 
             // Common edition->item shaping shared with the agenda view, deduped
             // into EditionAdminMapper (id, course{id,title}, capacity,
@@ -766,6 +804,10 @@ final class AdminAPIController
             $base['course']['tags'] = $courseTagList;
             $base['startDate'] = $startDate ?: null;
             $base['endDate'] = $endDate ?: null;
+            // Server-owned Dutch date label (INV-7 — cells rendered raw ISO,
+            // F-E2). Empty for a dateless edition; the template shows its own
+            // 'Geen datum' state.
+            $base['dateLabel'] = $this->editionDateRangeLabel($startDate, $endDate);
             $base['venue'] = $venue ?: null;
             $base['isToday'] = $isToday;
             $base['isPast'] = $isPast;
@@ -920,6 +962,10 @@ final class AdminAPIController
         $themeId = (int) $request->get_param('theme');
         $formatId = (int) $request->get_param('format');
         $tagId = (int) $request->get_param('tag');
+        $scope = (string) ($request->get_param('scope') ?? 'upcoming');
+        if (!in_array($scope, ['upcoming', 'all'], true)) {
+            $scope = 'upcoming';
+        }
         $offset = ($page - 1) * $perPage;
 
         // Build query for sessions with edition info
@@ -931,12 +977,13 @@ final class AdminAPIController
         ];
         $params = [SessionCPT::POST_TYPE, EditionCPT::POST_TYPE];
 
-        // Default: only show sessions from 2 days ago onwards. Sessions ALWAYS
-        // carry a date (INNER JOIN on _ntdst_date in the repo), so unlike the
-        // LIST view there is NO §10.7 NULL-permitting carve-out here — dateless
-        // editions have no session rows and never appear in the agenda. Keep
-        // this predicate non-NULL-permitting.
-        if (empty($dateFrom)) {
+        // Default (scope=upcoming): only show sessions from 2 days ago onwards;
+        // scope=all lifts the cutoff (F-E2). Sessions ALWAYS carry a date
+        // (INNER JOIN on _ntdst_date in the repo), so unlike the LIST view
+        // there is NO §10.7 NULL-permitting carve-out here — dateless editions
+        // have no session rows and never appear in the agenda (they live in
+        // the LIST view, F-E1). Keep this predicate non-NULL-permitting.
+        if (empty($dateFrom) && $scope !== 'all') {
             $where[] = "pm_date.meta_value >= %s";
             $params[] = $twoDaysAgo;
         }
@@ -947,10 +994,23 @@ final class AdminAPIController
             $params[] = '%' . $wpdb->esc_like($search) . '%';
         }
 
-        // Filter by edition status
-        if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = e.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
-            $params[] = $status;
+        // Filter by the edition's EFFECTIVE status — the badge the row
+        // displays (F-E2; same rationale as the LIST view above).
+        $statusEditionIds = $this->effectiveStatusEditionIds($status);
+        if ($statusEditionIds !== null) {
+            if ($statusEditionIds === []) {
+                return new WP_REST_Response([
+                    'items' => [],
+                    'total' => 0,
+                    'page' => $page,
+                    'perPage' => $perPage,
+                    'totalPages' => 0,
+                    'view' => 'agenda',
+                ]);
+            }
+            $idPlaceholders = implode(',', array_fill(0, count($statusEditionIds), '%d'));
+            $where[] = "e.ID IN ({$idPlaceholders})";
+            array_push($params, ...$statusEditionIds);
         }
 
         // Date range filter on session date
@@ -1069,6 +1129,10 @@ final class AdminAPIController
             $base['title'] = $session->edition_title;
             $base['sessionTitle'] = $session->session_title;
             $base['date'] = $sessionDate;
+            // Server-owned Dutch date label (INV-7 — the cell rendered the raw
+            // ISO date, F-E2). Falls back to '' on an unparseable date; the
+            // template then shows the raw ISO value rather than nothing.
+            $base['dateLabel'] = stride_format_date((string) $sessionDate);
             $base['startTime'] = $startTime ?: null;
             $base['endTime'] = $endTime ?: null;
             $base['venue'] = $location ?: $venue ?: null;
@@ -1086,6 +1150,62 @@ final class AdminAPIController
             'totalPages' => (int) ceil($total / $perPage),
             'view' => 'agenda',
         ]);
+    }
+
+    /**
+     * Resolve the edition-id set whose EFFECTIVE status equals $status
+     * (INV-7: one decision engine — EditionService::getEffectiveStatuses).
+     *
+     * Shared by the LIST and AGENDA views of GET /admin/editions so their
+     * status filter matches the badge each row displays, not the stored meta
+     * (which diverges for past-dated and sessionless editions). The corpus is
+     * small (editions number in the hundreds — the CR-2 typeahead precedent),
+     * so resolving all published ids per filtered request is cheap and keeps
+     * SQL paging intact via one IN clause.
+     *
+     * @return list<int>|null null = no status filter requested;
+     *                        []   = filter set but nothing matches (incl. an
+     *                               unknown status value — matches nothing,
+     *                               like the old stored-meta equality did).
+     */
+    private function effectiveStatusEditionIds(string $status): ?array
+    {
+        if ($status === '') {
+            return null;
+        }
+        if (\Stride\Domain\OfferingStatus::tryFrom($status) === null) {
+            return [];
+        }
+
+        $ids = $this->editionRepository->findPublishedIds();
+        if ($ids === []) {
+            return [];
+        }
+
+        $statuses = ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($ids);
+
+        return array_values(array_filter(
+            $ids,
+            static fn(int $id): bool => (($statuses[$id] ?? null)?->value) === $status,
+        ));
+    }
+
+    /**
+     * Dutch date(-range) label for a LIST-view edition row (F-E2 — cells
+     * rendered raw ISO). '' for a dateless edition (§10.7 anchors); single
+     * date when start == end or end is missing.
+     */
+    private function editionDateRangeLabel(string $startDate, string $endDate): string
+    {
+        if ($startDate === '') {
+            return '';
+        }
+        $start = stride_format_date($startDate);
+        if ($endDate === '' || $endDate === $startDate) {
+            return $start;
+        }
+
+        return $start . ' – ' . stride_format_date($endDate);
     }
 
     /**
@@ -1192,9 +1312,11 @@ final class AdminAPIController
 
         $editionId = (int) $request->get_param('id');
 
-        // Get edition
+        // Get edition. CR-4 publish guard (F-A2): every list surface filters
+        // post_status='publish'; without the same guard here a trashed/draft
+        // edition's detail stayed readable by id.
         $edition = get_post($editionId);
-        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE) {
+        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE || $edition->post_status !== 'publish') {
             return new WP_Error('not_found', 'Edition not found', ['status' => 404]);
         }
 
@@ -1278,9 +1400,11 @@ final class AdminAPIController
     {
         $editionId = (int) $request->get_param('id');
 
-        // Verify edition exists
+        // Verify edition exists. CR-4 publish guard (F-A2): without it a
+        // trashed/draft edition's participant rows (names, e-mails) stayed
+        // readable by anyone with stride_view.
         $edition = get_post($editionId);
-        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE) {
+        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE || $edition->post_status !== 'publish') {
             return new WP_Error('not_found', 'Edition not found', ['status' => 404]);
         }
 

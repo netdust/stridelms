@@ -59,11 +59,17 @@ final class EditionRepository extends AbstractRepository
      * AdminRegistrationQueryService) routes through THIS set instead of
      * re-deriving a predicate.
      *
-     * NOTE this is deliberately DISTINCT from the Edities agenda's own
-     * date-scoped list predicate (AdminAPIController::getEditions) — the
-     * agenda answers "what is coming up", this answers "where can admin work
-     * still live". The divergence is intentional (decision 2026-07-14) and is
-     * scheduled for reconciliation in the Edities slice.
+     * NOTE this is deliberately DISTINCT from the Edities surface's own
+     * date-scoped default predicate (AdminAPIController::getEditions) — the
+     * Edities surface answers "what is coming up", this answers "where can
+     * admin work still live". Reconciled at the Edities slice (2026-07-14):
+     * the divergence STAYS by design; what changed is that it is no longer a
+     * trap — the surface's date cutoff is a visible "Aankomend"/"Alles"
+     * scope pill, and the Lijst view (NULL-date-permitting) reaches every
+     * edition this set can contain, including the dateless anchors. Not
+     * cached across requests, also by decision: one indexed scan over a
+     * corpus of hundreds is cheaper than carrying invalidation state for
+     * every status/publish transition.
      *
      * INV-7 note: this reads the STORED status meta on purpose, NOT
      * getEffectiveStatus() — the effective layer's past-date → Completed
@@ -100,6 +106,25 @@ final class EditionRepository extends AbstractRepository
              WHERE p.post_type = %s AND p.post_status = 'publish'
                AND (pm_status.meta_value IS NULL OR pm_status.meta_value NOT IN ({$closedIn}))",
             array_merge([EditionCPT::POST_TYPE], $closed),
+        ));
+
+        return array_map('intval', $ids);
+    }
+
+    /**
+     * All published edition ids — the corpus the admin effective-status
+     * filter resolves over (AdminAPIController::effectiveStatusEditionIds).
+     * One indexed scan of wp_posts; editions number in the hundreds.
+     *
+     * @return list<int>
+     */
+    public function findPublishedIds(): array
+    {
+        global $wpdb;
+
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish'",
+            EditionCPT::POST_TYPE,
         ));
 
         return array_map('intval', $ids);

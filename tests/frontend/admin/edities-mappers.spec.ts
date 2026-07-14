@@ -68,3 +68,42 @@ test.describe('editionBadgeClass (VALUE → ws-badge hue, closed enum)', () => {
     expect(edities.editionBadgeClass(null)).toBe('cancelled');
   });
 });
+
+/* The factory's pure row helpers + the scope auto-widen rule (F-E1/F-E2).
+   The factory needs no browser: construct it and call the methods directly;
+   load() is stubbed where a method would otherwise fetch. */
+test.describe('edities() factory row helpers', () => {
+  const factory = () => edities.edities();
+
+  test('dateText prefers the server Dutch dateLabel, falls back to raw date, empty for dateless', () => {
+    const f = factory();
+    expect(f.dateText({ dateLabel: '14 juli 2026', date: '2026-07-14' })).toBe('14 juli 2026');
+    expect(f.dateText({ date: '2026-07-14' })).toBe('2026-07-14');
+    expect(f.dateText({ dateLabel: '', date: null })).toBe('');
+    expect(f.dateText(null)).toBe('');
+  });
+
+  test('rowKey keeps agenda (session) and list (edition) key spaces disjoint', () => {
+    const f = factory();
+    // The same underlying edition id must not collide across the view toggle.
+    expect(f.rowKey({ sessionId: 7, id: 7 })).toBe('s7');
+    expect(f.rowKey({ id: 7 })).toBe('e7');
+    expect(f.rowKey({ sessionId: 7, id: 7 })).not.toBe(f.rowKey({ id: 7 }));
+    expect(f.rowKey(null)).toBe('e0');
+  });
+
+  test('picking an admin-closed status under the upcoming scope auto-widens to all', () => {
+    const f = factory();
+    f.load = () => {}; // stub the fetch
+    f.scope = 'upcoming';
+    f.filters.status = 'completed';
+    f.onFilterChange();
+    expect(f.scope).toBe('all');
+
+    // A live status keeps the scope as-is.
+    f.scope = 'upcoming';
+    f.filters.status = 'open';
+    f.onFilterChange();
+    expect(f.scope).toBe('upcoming');
+  });
+});

@@ -1,19 +1,24 @@
 <?php
 /**
- * Admin Workspace — Edities AGENDA surface (cluster F).
+ * Admin Workspace — Edities surface (cluster F).
  *
- * In-shell agenda of scheduled offerings — ONE ROW PER SESSION DATE. Its own
- * per-surface Alpine factory (assets/js/admin/edities.js) owns ALL its data:
- * fetches GET /admin/editions?view=agenda server-side (paging/filter
- * server-owned), owns its loading/empty/error state, re-loads on every
- * filter/page change.
+ * In-shell overview of scheduled offerings with TWO VIEWS (F-E1):
+ *  - Agenda (default): ONE ROW PER SESSION DATE — dateless editions have no
+ *    session rows and never appear here;
+ *  - Lijst: ONE ROW PER EDITION, NULL-date-permitting (§10.7) — the only view
+ *    where the sessionless interest-anchor editions are visible.
+ * Its own per-surface Alpine factory (assets/js/admin/edities.js) owns ALL its
+ * data: fetches GET /admin/editions server-side (paging/filter server-owned),
+ * owns its loading/empty/error state, re-loads on every filter/page change.
  *
  * Mounted with x-data="edities()" INSIDE the shell's wsShell() scope, so it
  * inherits api(), switchView(), icon() (Alpine v3 nested-scope).
  *
- * FILTERS: exactly three — Search (edition title) + Tag (one dropdown from
- * /admin/course-tags `.tag`) + a single flatpickr field (single date OR range,
- * with a clear ✕). Status / Thema / Formaat removed.
+ * SCOPE (F-E2): "Aankomend" (default — the server's 2-day-lookback cutoff,
+ * now a visible toggle pill) | "Alles". FILTERS: Search (edition title) +
+ * Status (OfferingStatus dropdown, matched against the EFFECTIVE status the
+ * badge renders) + Tag (one dropdown from /admin/course-tags `.tag`) + a
+ * single flatpickr field (single date OR range, with a clear ✕).
  *
  * INV-5: every x-html binds a CONSTANT icon name via icon('<literal>'); never a
  * data field. Titles/dates/labels render via x-text (auto-escaped).
@@ -34,13 +39,48 @@ defined('ABSPATH') || exit;
     <!-- ===== TOOLBAR ===== -->
     <div class="ws-toolbar">
         <div class="ws-toolbar__row">
-            <span class="ws-toolbar__group-label"><?php echo esc_html__('Filters', 'stride'); ?></span>
+            <!-- view toggle (F-E1): Agenda = one row per session date (dateless
+                 editions have no session rows); Lijst = one row per edition,
+                 the ONLY view where dateless interest-anchor editions appear. -->
+            <span class="ws-chip" :class="viewMode==='agenda' && 'is-active'" @click="setViewMode('agenda')"
+                  :title="'<?php echo esc_attr__('Eén rij per sessiedatum', 'stride'); ?>'">
+                <span x-html="icon('calendar')" style="width:13px;height:13px"></span>
+                <?php echo esc_html__('Agenda', 'stride'); ?>
+            </span>
+            <span class="ws-chip" :class="viewMode==='list' && 'is-active'" @click="setViewMode('list')"
+                  :title="'<?php echo esc_attr__('Eén rij per editie, ook edities zonder datum', 'stride'); ?>'">
+                <span x-html="icon('grid')" style="width:13px;height:13px"></span>
+                <?php echo esc_html__('Lijst', 'stride'); ?>
+            </span>
 
-            <div class="ws-search ws-search--inline">
+            <!-- scope pill (F-E2): the 2-day-lookback default cutoff, visible
+                 and escapable instead of silent. -->
+            <span class="ws-chip" style="margin-left:var(--ws-3)" :class="scope==='upcoming' && 'is-active'" @click="toggleScope()"
+                  :title="scope==='upcoming' ? '<?php echo esc_attr__('Toon ook eerdere edities', 'stride'); ?>' : '<?php echo esc_attr__('Beperk tot aankomende edities', 'stride'); ?>'">
+                <span x-html="icon(scope==='upcoming' ? 'check' : 'archive')" style="width:13px;height:13px"></span>
+                <span x-text="scope==='upcoming' ? '<?php echo esc_js(__('Aankomend', 'stride')); ?>' : '<?php echo esc_js(__('Alles', 'stride')); ?>'"></span>
+            </span>
+
+            <div class="ws-search ws-search--inline" style="margin-left:var(--ws-3)">
                 <span x-html="icon('search')"></span>
                 <input type="text"
                        placeholder="<?php echo esc_attr__('Zoek op titel…', 'stride'); ?>"
                        x-model="filters.q" @input.debounce.350ms="onSearchChange()">
+            </div>
+
+            <div class="ws-select-wrap">
+                <span x-html="icon('filter')" style="width:14px;height:14px"></span>
+                <?php echo esc_html__('Status', 'stride'); ?>
+                <select class="ws-select" x-model="filters.status" @change="onFilterChange()">
+                    <option value=""><?php echo esc_html__('Alle statussen', 'stride'); ?></option>
+                    <?php
+                    // F-E2: the filter speaks the SAME vocabulary the badge
+                    // renders — the OfferingStatus enum, matched server-side
+                    // against the EFFECTIVE status.
+                    foreach (\Stride\Domain\OfferingStatus::cases() as $offeringStatus) : ?>
+                        <option value="<?php echo esc_attr($offeringStatus->value); ?>"><?php echo esc_html($offeringStatus->label()); ?></option>
+                    <?php endforeach; ?>
+                </select>
             </div>
 
             <div class="ws-select-wrap">
@@ -103,7 +143,10 @@ defined('ABSPATH') || exit;
                 </tr>
             </thead>
             <tbody>
-                <template x-for="r in rows" :key="r.sessionId">
+                <!-- rowKey: agenda rows are sessions ('s'+sessionId), list rows
+                     are editions ('e'+id) — disjoint key spaces across the
+                     view toggle. -->
+                <template x-for="r in rows" :key="rowKey(r)">
                     <tr @click="openRow(r)">
                         <td>
                             <div class="ws-namecell">
@@ -118,7 +161,7 @@ defined('ABSPATH') || exit;
                             <span class="ws-org-cell">
                                 <span x-html="icon('calendar')"></span>
                                 <span>
-                                    <span x-text="r.date || '<?php echo esc_js(__('Geen datum', 'stride')); ?>'"></span>
+                                    <span x-text="dateText(r) || '<?php echo esc_js(__('Geen datum', 'stride')); ?>'"></span>
                                     <span class="ws-muted" x-show="timeLabel(r)" x-text="' · ' + timeLabel(r)"></span>
                                 </span>
                             </span>
@@ -152,9 +195,15 @@ defined('ABSPATH') || exit;
         <div class="ws-empty" x-show="!loading && !error && total === 0" style="padding-top:80px">
             <div class="ws-empty__icon" x-html="icon('grid')"></div>
             <h3 x-text="emptyTitle()"></h3>
-            <p><?php echo esc_html__('Pas de filters aan of wis ze om meer edities te zien.', 'stride'); ?></p>
+            <p x-show="hasFilters || scope !== 'upcoming'"><?php echo esc_html__('Pas de filters aan of wis ze om meer edities te zien.', 'stride'); ?></p>
+            <!-- scope-aware empty state (F-E2): the silent 2-day cutoff may be
+                 exactly why the list is empty — say so and offer the way out. -->
+            <p x-show="!hasFilters && scope === 'upcoming'"><?php echo esc_html__('Alleen aankomende edities worden standaard getoond.', 'stride'); ?></p>
             <button class="ws-btn ws-btn--ghost" style="margin-top:16px" x-show="hasFilters" @click="clearAllFilters()">
                 <span x-html="icon('x')"></span> <?php echo esc_html__('Filters wissen', 'stride'); ?>
+            </button>
+            <button class="ws-btn ws-btn--ghost" style="margin-top:16px" x-show="!hasFilters && scope === 'upcoming'" @click="toggleScope()">
+                <span x-html="icon('archive')"></span> <?php echo esc_html__('Toon ook eerdere edities', 'stride'); ?>
             </button>
         </div>
     </div>
