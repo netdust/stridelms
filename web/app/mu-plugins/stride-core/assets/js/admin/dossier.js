@@ -299,6 +299,13 @@
       timelineReg: 0,
       openStages: {},
 
+      // reload bookkeeping: which ?user=/?reg= target the current data belongs
+      // to, and a monotonically increasing load token so an older in-flight
+      // response can never overwrite a newer one (person A resolving after a
+      // faster person B would otherwise show A's dossier under B's URL).
+      loadedKey: null,
+      loadSeq: 0,
+
       // per-block load state — a failed block shows its OWN error, never blanks
       loading: { detail: true, trajectories: true },
       errors: { detail: '', trajectories: '' },
@@ -332,26 +339,59 @@
         return json.data;
       },
 
-      /* init() reads ?user= then loads BOTH endpoints in parallel. I-1: gated so
-         it loads the FIRST time dossier becomes active (it is reached via a
-         ?user= deep-link, so view === 'dossier' on arrival → the guard fires on
-         mount; the guard also prevents a spurious reload if the view toggles). */
+      /* init() — the dossier owns its FULL activation lifecycle instead of the
+         shared one-shot wsLazyLoad latch. The latch is right for the list
+         surfaces (load once, keep), but the dossier's TARGET changes with every
+         "row → dossier" click (?user=/?reg=), so a load-once latch showed the
+         PREVIOUS person's data under the new URL from the second use onward.
+         Every activation reloads: a changed target gets a fresh spinner + reset,
+         a same-target return gets a soft refresh (grid/cohort mutations may have
+         changed the data underneath). load() self-guards via loadedKey/loadSeq,
+         so activation events can never double-render or race. */
       init() {
-        window.WS.lazyLoad(this, 'dossier', () => this.load());
+        // Active on mount (deep-link ?view=dossier&user=…) → cold load.
+        if (this.view === 'dossier') {
+          this.load();
+        }
+        window.addEventListener('ws-view-changed', (e) => {
+          if (e && e.detail && e.detail.view === 'dossier') {
+            this.load();
+          }
+        });
       },
 
       load() {
-        // Reset error banners at the top so a successful retry recovers cleanly
-        // (cluster-B lesson — a stale error must not survive a now-good load).
-        this.errors.detail = '';
-        this.errors.trajectories = '';
-
         const params = new URLSearchParams(window.location.search);
         const userId = Number(params.get('user')) || 0;
         // Optional deep-link to a SPECIFIC registration (e.g. from a Vandaag
         // "Wacht op mij" row). When present we open/select that reg instead of
         // defaulting to the newest one; 0 = no preference, fall back to regs[0].
         const wantReg = Number(params.get('reg')) || 0;
+
+        // Target change (a DIFFERENT person/registration than the loaded one)
+        // → full reset + spinner, so the old person can never linger under the
+        // new URL. Same target → soft refresh: keep the rendered dossier (and
+        // the open/collapsed state) while fresh data loads underneath.
+        const key = userId + ':' + wantReg;
+        const targetChanged = key !== this.loadedKey;
+        this.loadedKey = key;
+        const seq = ++this.loadSeq;
+
+        if (targetChanged) {
+          this.loading.detail = true;
+          this.loading.trajectories = true;
+          this.person = null;
+          this.regs = [];
+          this.trajectories = [];
+          this.auditTrail = [];
+          this.openStages = {};
+          this.actionFeedback = {};
+        }
+        // Reset error banners so a successful retry recovers cleanly
+        // (cluster-B lesson — a stale error must not survive a now-good load).
+        this.errors.detail = '';
+        this.errors.trajectories = '';
+
         if (!userId) {
           this.loading.detail = false;
           this.loading.trajectories = false;
@@ -359,10 +399,21 @@
           return;
         }
 
+        // Preserve which registrations are expanded across a SOFT refresh (an
+        // action just ran; collapsing everything would lose the admin's place).
+        const prevOpen = targetChanged
+          ? {}
+          : Object.fromEntries(this.regs.map((r) => [r.id, r.open]));
+
         Promise.allSettled([
           this.api(`/admin/users/${userId}/detail`),
           this.api(`/admin/users/${userId}/trajectories`),
         ]).then(([detail, trajectories]) => {
+          // A newer load() superseded this one (fast target switch) — drop it.
+          if (seq !== this.loadSeq) {
+            return;
+          }
+
           // ---- detail: person + registrations + audit timeline ----
           if (detail.status === 'fulfilled') {
             const d = detail.value || {};
@@ -374,13 +425,20 @@
               ? allRegs.findIndex((r) => Number(r.id) === wantReg)
               : -1;
             const openIdx = wantIdx >= 0 ? wantIdx : 0;
-            this.regs = allRegs.map((r, i) => ({ ...r, open: i === openIdx }));
+            this.regs = allRegs.map((r, i) => ({
+              ...r,
+              open: prevOpen[r.id] !== undefined ? prevOpen[r.id] : i === openIdx,
+            }));
             // audit_trail is GATED — absent/empty means the viewer can't see it
             // (PII N1) OR there's simply no history. Either way: locked/empty
             // timeline, never a crash.
             this.auditTrail = Array.isArray(d.audit_trail) ? d.audit_trail : [];
             this.canSeeTimeline = Array.isArray(d.audit_trail);
-            this.timelineReg = this.regs.length ? this.regs[openIdx].id : 0;
+            const keepTimeline = !targetChanged
+              && this.regs.some((r) => r.id === this.timelineReg);
+            this.timelineReg = keepTimeline
+              ? this.timelineReg
+              : (this.regs.length ? this.regs[openIdx].id : 0);
           } else {
             this.errors.detail = 'Kon het dossier niet laden.';
           }

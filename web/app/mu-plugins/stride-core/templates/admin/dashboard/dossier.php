@@ -34,7 +34,10 @@ defined('ABSPATH') || exit;
 <section class="ws-content ws-content--flush"
          x-show="view === 'dossier'"
          x-data="dossier()"
-         @ws-refresh.window="if ($event.detail && $event.detail.view === 'dossier') init()"
+         <?php // ws-refresh calls load(), NOT init() — init() registers the
+               // ws-view-changed listener, so re-running it on every refresh
+               // click accumulated one extra permanent listener per refresh. ?>
+         @ws-refresh.window="if ($event.detail && $event.detail.view === 'dossier') load()"
          x-cloak>
 
     <!-- ===== LOADING ===== -->
