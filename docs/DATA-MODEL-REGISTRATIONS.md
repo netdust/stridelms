@@ -123,6 +123,23 @@ Unknown root keys are DROPPED (and logged) on write — don't invent new stages
 without extending `ALLOWED_ROOT_KEYS`. Always build envelopes via
 `wrapStage()`; never hand-assemble the shape.
 
+**Who a "lead" is — participant vs actor.** The public interest/waitlist
+forms create anonymous rows (`user_id = NULL`) UNCONDITIONALLY — even for a
+logged-in visitor — deduplicated by e-mail per edition
+(`findAnonymousForEmailAndEdition`; a repeat submission appends its stage to
+the same row). The lead columns therefore always hold the **participant's**
+identity (who the interest is FOR — possibly someone the visitor typed in),
+never the actor's. The actor is tracked separately: `submitted_by` inside the
+stage envelope (pre-enrollment) or the `enrolled_by` column (full enrollment).
+Contrast: full enrollment "voor een collega" (`PATH_COLLEAGUE`) creates a REAL
+WP account for the participant — no lead columns there. When a lead later
+enrolls or is promoted from the waitlist, the upgrade path find-or-creates
+the account collision-safely (INV-9) and ADOPTS the anonymous row (merging
+`enrollment_data`) — never a duplicate. Known product gap: a logged-in user
+submitting interest for THEMSELVES also becomes an anonymous lead (the form
+never binds to the session account); `EnrollmentService::registerInterest()`
+— the account-bound path — currently has no callers.
+
 **The five lead-identity invariants** (`lead_name` / `lead_email`, schema v5):
 
 1. **One extractor.** `RegistrationRepository::extractLeadIdentity()` is THE
