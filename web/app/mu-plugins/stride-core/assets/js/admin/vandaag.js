@@ -342,6 +342,24 @@
         if (id) this.switchView('dossier', { user: id, reg: item.regId });
       },
 
+      /* Dismiss a melding for THIS admin (6a — F-V7): the endpoint stores a
+         per-user {rule, subject_id} marker (30-day prune server-side) and the
+         action-queue read filters on it. Optimistic: the row disappears now
+         and is restored if the write fails — a melding that stays visible is
+         the honest failure mode. */
+      async dismissMelding(item) {
+        const prev = this.aq.meldingen;
+        this.aq.meldingen = prev.filter((m) => m.regId !== item.regId);
+        try {
+          await this.api('/admin/action-queue/dismiss', {
+            method: 'POST',
+            body: JSON.stringify({ rule: item.rule, subject_id: item.subjectId || 0 }),
+          });
+        } catch (e) {
+          this.aq.meldingen = prev;
+        }
+      },
+
       pulse() {
         // Re-run the full load (bypassing the first-activation latch), then
         // toast the result.

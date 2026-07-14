@@ -104,6 +104,10 @@
 .ws-actitem__title { font-weight: 500; color: var(--ws-text); }
 .ws-actitem__meta { font-size: var(--ws-fs-sm); color: var(--ws-text-3); }
 .ws-actitem__age { font-size: var(--ws-fs-sm); color: var(--ws-warning-text); font-weight: 500; white-space: nowrap; }
+/* 6a: per-row melding dismissal — quiet until the row is hovered */
+.ws-actitem__dismiss { display: grid; place-items: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: transparent; color: var(--ws-text-3); cursor: pointer; opacity: 0; transition: opacity var(--ws-ease), background var(--ws-ease); }
+.ws-actitem:hover .ws-actitem__dismiss { opacity: 1; }
+.ws-actitem__dismiss:hover { background: var(--ws-surface-container, var(--ws-surface-alt)); color: var(--ws-text); }
 
 /* --------------------------------------------------------------------------
    INSCHRIJVINGEN — the grid

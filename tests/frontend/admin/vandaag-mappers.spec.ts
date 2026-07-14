@@ -245,3 +245,39 @@ test.describe('mapQueues — pending split (7a)', () => {
     expect(pending.sub).toContain('0 wacht op deelnemer');
   });
 });
+
+/**
+ * 6a — per-row melding dismissal (F-V7: the endpoint shipped with zero JS
+ * consumers, so aggregate alerts reappeared forever). Optimistic removal,
+ * restore on failure. The factory method only touches this.api/this.aq, so
+ * it is testable without a browser.
+ */
+test.describe('dismissMelding (6a)', () => {
+  const rows = () => [
+    { regId: 'stale_quote-0', rule: 'stale_quote', subjectId: 0 },
+    { regId: 'capacity_threshold-9', rule: 'capacity_threshold', subjectId: 9 },
+  ];
+
+  test('optimistically removes the row and POSTs rule + subject_id', async () => {
+    const f = mappers.vandaag();
+    const calls: any[] = [];
+    f.api = async (url: string, opts: any) => { calls.push([url, opts]); return {}; };
+    f.aq = { mij: [], gebruiker: [], meldingen: rows() };
+
+    await f.dismissMelding(f.aq.meldingen[1]);
+
+    expect(f.aq.meldingen.map((m: any) => m.regId)).toEqual(['stale_quote-0']);
+    expect(calls[0][0]).toBe('/admin/action-queue/dismiss');
+    expect(JSON.parse(calls[0][1].body)).toEqual({ rule: 'capacity_threshold', subject_id: 9 });
+  });
+
+  test('restores the row when the write fails', async () => {
+    const f = mappers.vandaag();
+    f.api = async () => { throw new Error('nope'); };
+    f.aq = { mij: [], gebruiker: [], meldingen: rows() };
+
+    await f.dismissMelding(f.aq.meldingen[0]);
+
+    expect(f.aq.meldingen.length).toBe(2);
+  });
+});

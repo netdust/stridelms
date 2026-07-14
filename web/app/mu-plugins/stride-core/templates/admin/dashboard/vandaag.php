@@ -136,6 +136,14 @@ defined('ABSPATH') || exit;
                                       x-show="item.deadline"
                                       :class="item.deadline && item.deadline.kind === 'overdue' ? 'ws-badge--overdue' : 'ws-badge--due-soon'"
                                       x-text="item.deadline && item.deadline.label"></span>
+                                <!-- 6a: per-row melding dismissal (per-admin, 30 dagen) -->
+                                <button x-show="item.isMelding"
+                                        class="ws-actitem__dismiss"
+                                        type="button"
+                                        title="<?php echo esc_attr__('Melding verbergen (30 dagen)', 'stride'); ?>"
+                                        @click.prevent.stop="dismissMelding(item)">
+                                    <span x-html="icon('x')" style="width:14px;height:14px"></span>
+                                </button>
                                 <!-- No affordance on informational meldingen (no target and no url) -->
                                 <span x-show="!item.isMelding || item.target || item.url"
                                       x-html="icon('chevRight')" style="width:16px;height:16px;color:var(--ws-text-3)"></span>
