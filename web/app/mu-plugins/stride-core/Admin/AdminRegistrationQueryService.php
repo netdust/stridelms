@@ -272,6 +272,21 @@ final class AdminRegistrationQueryService
             update_meta_cache('user', $userIds);
         }
 
+        // Lead rows whose e-mail belongs to an EXISTING account (safer identity
+        // variant: such rows stay leads until promotion — the admin must see
+        // the match to act on it). One batched query over this page's lead
+        // e-mails, never per-row lookups.
+        $leadEmails = [];
+        foreach ($rows as $row) {
+            $userId = (int) $row->user_id;
+            if (($userId <= 0 || !isset($users[$userId]) || $users[$userId] === null) && !empty($row->lead_email)) {
+                $leadEmails[] = (string) $row->lead_email;
+            }
+        }
+        $accountsByEmail = !empty($leadEmails)
+            ? BatchQueryHelper::batchGetUsersByEmail($leadEmails)
+            : [];
+
         // Session counts per edition (for attendance %).
         // Delegated to SessionRepository (INV-3): dynamic meta prefix, published-only,
         // all input ids present (0 default) — no raw $wpdb / hardcoded meta key here.
@@ -358,6 +373,19 @@ final class AdminRegistrationQueryService
             $editionPost  = $editionId > 0 ? ($editions[$editionId] ?? null) : null;
             $editionTitle = $editionPost?->post_title ?? '';
 
+            // A lead whose e-mail matches an existing account (not bound —
+            // binding only happens for self-submission or at promotion).
+            $accountMatch = null;
+            if ($isAnon && !empty($row->lead_email)) {
+                $matched = $accountsByEmail[strtolower((string) $row->lead_email)] ?? null;
+                if ($matched !== null) {
+                    $accountMatch = [
+                        'id'   => (int) $matched->ID,
+                        'name' => (string) $matched->display_name,
+                    ];
+                }
+            }
+
             $items[] = [
                 'id'           => $regId,
                 'user'         => [
@@ -366,6 +394,7 @@ final class AdminRegistrationQueryService
                     'email' => $email,
                 ],
                 'anonymous'    => $isAnon,
+                'accountMatch' => $accountMatch,
                 'edition'      => [
                     'id'    => $editionId,
                     'title' => $editionTitle,

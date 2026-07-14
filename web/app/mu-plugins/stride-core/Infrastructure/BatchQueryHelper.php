@@ -120,6 +120,55 @@ final class BatchQueryHelper
     }
 
     /**
+     * Batch resolve e-mail addresses to existing WP accounts (one query).
+     *
+     * Consumed by the grid's lead rows: under the safer identity variant
+     * (form-identity plan 2026-07-14) a lead whose e-mail belongs to an
+     * existing account stays a lead until promotion — this lookup lets the
+     * admin SEE that ("Account gevonden") instead of discovering it at
+     * promote time. Keys are lower-cased for case-insensitive matching
+     * (e-mail case is not significant).
+     *
+     * @param  array<string> $emails
+     * @return array<string, \WP_User> Map of lower-cased email => WP_User (misses absent).
+     */
+    public static function batchGetUsersByEmail(array $emails): array
+    {
+        $emails = array_values(array_unique(array_filter(array_map(
+            static fn($email): string => strtolower(trim((string) $email)),
+            $emails,
+        ))));
+
+        if (empty($emails)) {
+            return [];
+        }
+
+        // get_users has no email__in arg — resolve via the indexed user_email
+        // column in ONE prepared IN() query, then hydrate the matched ids.
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($emails), '%s'));
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT ID, user_email FROM {$wpdb->users} WHERE LOWER(user_email) IN ({$placeholders})",
+            ...$emails,
+        ));
+
+        if (empty($rows)) {
+            return [];
+        }
+
+        $byEmail = [];
+        $userMap = self::batchGetUsers(array_map(static fn($r): int => (int) $r->ID, $rows));
+        foreach ($rows as $row) {
+            $user = $userMap[(int) $row->ID] ?? null;
+            if ($user !== null) {
+                $byEmail[strtolower((string) $row->user_email)] = $user;
+            }
+        }
+
+        return $byEmail;
+    }
+
+    /**
      * Batch fetch posts by IDs.
      *
      * @param array<int> $postIds

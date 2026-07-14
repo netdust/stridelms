@@ -123,22 +123,41 @@ Unknown root keys are DROPPED (and logged) on write — don't invent new stages
 without extending `ALLOWED_ROOT_KEYS`. Always build envelopes via
 `wrapStage()`; never hand-assemble the shape.
 
-**Who a "lead" is — participant vs actor.** The public interest/waitlist
-forms create anonymous rows (`user_id = NULL`) UNCONDITIONALLY — even for a
-logged-in visitor — deduplicated by e-mail per edition
-(`findAnonymousForEmailAndEdition`; a repeat submission appends its stage to
-the same row). The lead columns therefore always hold the **participant's**
-identity (who the interest is FOR — possibly someone the visitor typed in),
-never the actor's. The actor is tracked separately: `submitted_by` inside the
-stage envelope (pre-enrollment) or the `enrolled_by` column (full enrollment).
-Contrast: full enrollment "voor een collega" (`PATH_COLLEAGUE`) creates a REAL
-WP account for the participant — no lead columns there. When a lead later
-enrolls or is promoted from the waitlist, the upgrade path find-or-creates
-the account collision-safely (INV-9) and ADOPTS the anonymous row (merging
-`enrollment_data`) — never a duplicate. Known product gap: a logged-in user
-submitting interest for THEMSELVES also becomes an anonymous lead (the form
-never binds to the session account); `EnrollmentService::registerInterest()`
-— the account-bound path — currently has no callers.
+**Who a "lead" is — the form-identity model** (plan
+`docs/plans/2026-07-14-form-identity-streamline.md`, safer variant). Nobody
+is "anonymous": a **lead is a participant without an account yet** — a
+temporary state, not an identity. The rules, per form:
+
+| Form | Account required | Prefill when logged in | On behalf of another | Participant binding |
+|---|---|---|---|---|
+| Interest | no | yes | yes — via the e-mail field | self-bind or lead (below) |
+| Waitlist | no | yes | yes — via the e-mail field | self-bind or lead (below) |
+| Enrollment (full) | yes | yes | yes ("collega" — real account created) | self / colleague account, `enrolled_by` = actor |
+| Completion tasks / session selection / documents | yes | n/a | yes — the row's `enrolled_by` actor | own registration or enrolled colleague's |
+| Intake (questionnaire) | yes | yes | **no — strictly personal** | own registration only |
+| Evaluation | yes | yes | **no — strictly personal** | own registration only |
+
+**E-mail→account resolution (safer variant)** at interest/waitlist
+submission (`QuestionnaireHandler::upsertStageSubmission`): the submitter's
+e-mail decides the participant. Logged in + own e-mail → the row is BOUND to
+the account (`user_id` set, no lead columns; an earlier lead row for that
+e-mail+edition is adopted first via `bindLeadToUser`, so one person never
+holds two rows). Any other submission — a visitor, or a logged-in user
+typing someone else's e-mail — stays a LEAD and is adopted collision-safely
+at promotion/enrollment (INV-9). Deliberately NO `get_user_by()` binding of
+arbitrary e-mails at submission: a stranger must never write into a member's
+account, and the form response is identical in every branch (no
+account-enumeration signal). The admin grid surfaces the match instead
+("Account gevonden" badge via `accountMatch`) — binding happens at
+promotion. `scripts/adopt-leads.php` is the one-time pass applying this rule
+to pre-existing lead rows.
+
+The lead columns always hold the **participant's** identity (who the
+interest is FOR), never the actor's. The actor is tracked separately:
+`submitted_by` inside the stage envelope (pre-enrollment) or the
+`enrolled_by` column (full enrollment). `bindLeadToUser()` is THE one bind
+write (guarded on the row still being account-less; clears the lead
+columns).
 
 **The five lead-identity invariants** (`lead_name` / `lead_email`, schema v5):
 

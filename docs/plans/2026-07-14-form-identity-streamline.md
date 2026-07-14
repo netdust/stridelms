@@ -1,6 +1,6 @@
 # Form Identity Streamline — one participant model for every form
 
-**Date:** 2026-07-14 · **Owner decisions:** Stefan (chat, 2026-07-14) · **Status:** awaiting go
+**Date:** 2026-07-14 · **Owner decisions:** Stefan (chat, 2026-07-14) · **Status:** EXECUTED (safer variant — same day)
 **Base:** `claude/admin-dashboard-review-imki0g` (independent of the admin-view slices; can run before or after Vandaag)
 
 ## The model (Stefan's rules, verbatim intent)
@@ -111,7 +111,17 @@ deferred; the netdust-mail broadcast work is the natural place if ever needed.
 
 **Estimate:** < 1 day.
 
-## Open decision for Stefan
+## Decision record
+
+**Stefan chose the SAFER VARIANT (2026-07-14):** bind at submission only when
+the submitter is logged in as the account owner; every other submission stays
+a lead until the promotion adopt. No rate throttle needed (threat 3 falls
+away — no stranger-writable account binding exists). The admin grid shows
+"Account gevonden" on leads whose e-mail matches an account, so the match is
+visible without the binding. Goal restated: a clear, clean submission flow —
+clear who submitted what, admin can take each submission to its next step.
+
+## Superseded open decision (kept for history)
 
 - Threat 2 acceptance: a stranger CAN still put a (visible-provenance,
   interest-only) entry on a member's dashboard by typing their e-mail. The

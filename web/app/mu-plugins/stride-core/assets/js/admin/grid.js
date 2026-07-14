@@ -949,13 +949,20 @@
         this.result = null;
       },
 
-      /* row click → the person's dossier (cluster D reads ?user=). An
-         anonymous lead has NO account and thus no dossier — say so instead of
-         a silent no-op on a row that looks clickable (F-G14). */
+      /* row click → the person's dossier (cluster D reads ?user=). A lead
+         has NO account and thus no dossier yet — say so instead of a silent
+         no-op on a row that looks clickable (F-G14). When the lead's e-mail
+         matches an existing account, name it: that IS the admin's next step
+         (the row binds to it at enrollment/promotion). */
       openRow(r) {
         const id = r && r.user && r.user.id;
-        if (id) this.switchView('dossier', { user: id });
-        else this.toast('mixed', '', 'Anonieme lead — er is nog geen account en dus geen dossier.');
+        if (id) {
+          this.switchView('dossier', { user: id });
+        } else if (r && r.accountMatch) {
+          this.toast('mixed', r.accountMatch.name, ': e-mailadres hoort bij dit bestaande account. De lead wordt eraan gekoppeld bij inschrijving of promotie.');
+        } else {
+          this.toast('mixed', '', 'Lead zonder account — er is nog geen dossier.');
+        }
       },
 
       /* ===== presentational helpers ===== */

@@ -18,9 +18,26 @@ $course_title = $course_id ? get_the_title($course_id) : ($edition ? $edition->p
 $questionnaireRepo = ntdst_get(QuestionnaireRepository::class);
 $field_groups = $questionnaireRepo->getGroupsForStage($edition_id, 'interest');
 
+// Prefill from the logged-in user (form-identity rule 2 — all forms prefill;
+// mirrors the waitlist form). The e-mail stays EDITABLE: submitting your own
+// address binds the row to your account, editing it submits for someone else
+// (rule 3/4 — the e-mail field IS the choice, no toggle). Anonymous visitors
+// get an empty form.
+$prefill_name = '';
+$prefill_email = '';
+if (is_user_logged_in()) {
+    $current_user = wp_get_current_user();
+    $prefill_name = trim(
+        get_user_meta($current_user->ID, 'first_name', true) . ' ' . get_user_meta($current_user->ID, 'last_name', true)
+    ) ?: $current_user->display_name;
+    $prefill_email = $current_user->user_email;
+}
+
 $alpine_config = json_encode([
     'editionId' => $edition_id,
     'fieldGroups' => $field_groups,
+    'prefillName' => $prefill_name,
+    'prefillEmail' => $prefill_email,
 ]);
 ?>
 
@@ -77,6 +94,8 @@ function strideInterestForm(config) {
         submitted: false,
         error: '',
         init() {
+            this.form.name = config.prefillName || '';
+            this.form.email = config.prefillEmail || '';
             (config.fieldGroups || []).forEach(group => {
                 (group.fields || []).forEach(field => {
                     if (field.name) {

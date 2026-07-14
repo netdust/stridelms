@@ -6,6 +6,7 @@ namespace Stride\Modules\Questionnaire;
 
 use Stride\Domain\RegistrationStatus;
 use Stride\Modules\Enrollment\RegistrationRepository;
+use Stride\Modules\User\CompanyAffiliation;
 use WP_Error;
 
 /**
@@ -53,52 +54,21 @@ final class QuestionnaireHandler
             return $validationResult;
         }
 
-        // Check for existing anonymous row (any pre-enrollment stage). One row per
-        // email/edition: edition status determines current stage, we just append data.
-        $registrations = ntdst_get(RegistrationRepository::class);
-        $existing = $registrations->findAnonymousForEmailAndEdition($email, $editionId);
-
         $stageData = array_merge(['name' => $name, 'email' => $email], $extraFields);
         $wrapped = RegistrationRepository::wrapStage($stageData, get_current_user_id() ?: null);
 
-        $registrationId = $existing ? (int) $existing->id : 0;
-
-        if ($existing) {
-            $existingData = is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : [];
-            $existingData['interest'] = $wrapped;
-            $updated = $registrations->update((int) $existing->id, [
-                'status' => RegistrationStatus::Interest->value,
-                'enrollment_data' => $existingData,
-            ]);
-            if (!$updated) {
-                ntdst_log('enrollment')->error('Interest registration update failed', [
-                    'registration_id' => (int) $existing->id,
-                    'edition_id' => $editionId,
-                ]);
-                return new WP_Error('update_failed', __('Je interesse kon niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
-            }
-        } else {
-            // Create new interest registration
-            $created = $registrations->create([
-                'user_id' => null,
-                'edition_id' => $editionId,
-                'status' => RegistrationStatus::Interest->value,
-                'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
-                'enrollment_data' => ['interest' => $wrapped],
-            ]);
-
-            if (is_wp_error($created)) {
-                return $created;
-            }
-            $registrationId = (int) $created;
+        $result = $this->upsertStageSubmission($editionId, 'interest', $email, $wrapped);
+        if (is_wp_error($result)) {
+            return $result;
         }
+        [$registrationId, $boundUserId] = $result;
 
         // Same semantic event the logged-in EnrollmentService path dispatches —
         // mail (StrideMailBridge), audit (AuditBridge) and any future consumer
         // hang off this one emission point instead of inline ndmail_send calls.
         do_action('stride/registration/interest_registered', [
             'registration_id' => $registrationId,
-            'user_id'         => null,
+            'user_id'         => $boundUserId ?: null,
             'edition_id'      => $editionId,
             'name'            => $name,
             'email'           => $email,
@@ -146,48 +116,20 @@ final class QuestionnaireHandler
             return new WP_Error('validation_error', __('Facturatie e-mailadres is ongeldig.', 'stride'));
         }
 
-        $registrations = ntdst_get(RegistrationRepository::class);
-        $existing = $registrations->findAnonymousForEmailAndEdition($email, $editionId);
-
         $stageData = array_merge(['name' => $name, 'email' => $email], $extraFields);
         $wrapped = RegistrationRepository::wrapStage($stageData, get_current_user_id() ?: null);
 
-        $registrationId = $existing ? (int) $existing->id : 0;
-
-        if ($existing) {
-            $existingData = is_array($existing->enrollment_data ?? null) ? $existing->enrollment_data : [];
-            $existingData['waitlist'] = $wrapped;
-            $updated = $registrations->update((int) $existing->id, [
-                'status' => RegistrationStatus::Waitlist->value,
-                'enrollment_data' => $existingData,
-            ]);
-            if (!$updated) {
-                ntdst_log('enrollment')->error('Waitlist registration update failed', [
-                    'registration_id' => (int) $existing->id,
-                    'edition_id' => $editionId,
-                ]);
-                return new WP_Error('update_failed', __('Je aanvraag kon niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
-            }
-        } else {
-            $created = $registrations->create([
-                'user_id' => null,
-                'edition_id' => $editionId,
-                'status' => RegistrationStatus::Waitlist->value,
-                'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
-                'enrollment_data' => ['waitlist' => $wrapped],
-            ]);
-
-            if (is_wp_error($created)) {
-                return $created;
-            }
-            $registrationId = (int) $created;
+        $result = $this->upsertStageSubmission($editionId, 'waitlist', $email, $wrapped);
+        if (is_wp_error($result)) {
+            return $result;
         }
+        [$registrationId, $boundUserId] = $result;
 
         // Same semantic event the logged-in EnrollmentService path dispatches —
         // see handleSubmitInterest for the rationale.
         do_action('stride/registration/waitlisted', [
             'registration_id' => $registrationId,
-            'user_id'         => null,
+            'user_id'         => $boundUserId ?: null,
             'edition_id'      => $editionId,
             'name'            => $name,
             'email'           => $email,
@@ -258,6 +200,126 @@ final class QuestionnaireHandler
             'success' => true,
             'message' => __('Bedankt voor het invullen!', 'stride'),
         ];
+    }
+
+    /**
+     * E-mail→account resolution, SAFER VARIANT (form-identity plan
+     * 2026-07-14, Stefan's decision): bind at submission time ONLY when the
+     * submitter is logged in AND the submitted e-mail is their own account
+     * e-mail. Every other submission — a visitor, or a logged-in user
+     * submitting for someone else — stays a lead and is adopted
+     * collision-safely at promotion/enrollment (INV-9).
+     *
+     * Deliberately NOT a get_user_by() lookup on arbitrary e-mails: a
+     * visitor typing a member's address must never write into that member's
+     * account (plan threat 2), and the form response is identical in every
+     * branch so nothing leaks whether an e-mail has an account (threat 1).
+     *
+     * @return int The submitter's user id when self-bound, 0 otherwise.
+     */
+    private function resolveSelfBoundUser(string $email): int
+    {
+        $current = wp_get_current_user();
+        if (!$current || !$current->ID) {
+            return 0;
+        }
+
+        return strcasecmp($email, (string) $current->user_email) === 0 ? (int) $current->ID : 0;
+    }
+
+    /**
+     * The ONE upsert both public pre-enrollment forms (interest, waitlist)
+     * run: resolve the participant (self-bound account or lead), dedupe to
+     * one row per participant per edition, append the stage envelope.
+     *
+     * Row resolution order for a self-bound submission:
+     *  1. an existing row on the ACCOUNT (any status) — pre-enrollment
+     *     statuses get the stage appended; an active enrollment is a
+     *     friendly "al ingeschreven" error (own state, no info leak);
+     *  2. an existing LEAD row for this e-mail+edition (submitted earlier
+     *     while logged out) — bound to the account first
+     *     (bindLeadToUser), so one person never accumulates two rows;
+     *  3. none → a new account-bound row.
+     * A lead submission (visitor / on-behalf) keeps today's behavior:
+     * one lead row per e-mail per edition, stage appended on repeat.
+     *
+     * @param  string $stage 'interest'|'waitlist' (also the target status).
+     * @return array{0:int,1:int}|WP_Error  [registrationId, boundUserId (0 = lead)]
+     */
+    private function upsertStageSubmission(int $editionId, string $stage, string $email, array $wrapped): array|WP_Error
+    {
+        $registrations = ntdst_get(RegistrationRepository::class);
+        $status = $stage === 'waitlist' ? RegistrationStatus::Waitlist : RegistrationStatus::Interest;
+
+        $boundUserId = $this->resolveSelfBoundUser($email);
+        $row = null;
+
+        if ($boundUserId) {
+            $row = $registrations->findByUserAndEdition($boundUserId, $editionId);
+
+            if (!$row) {
+                $lead = $registrations->findAnonymousForEmailAndEdition($email, $editionId);
+                if ($lead && $registrations->bindLeadToUser((int) $lead->id, $boundUserId)) {
+                    $row = $registrations->find((int) $lead->id);
+                }
+            }
+
+            if ($row) {
+                $rowStatus = RegistrationStatus::tryFrom((string) $row->status);
+                $appendable = [RegistrationStatus::Interest, RegistrationStatus::Waitlist, RegistrationStatus::Cancelled];
+                if (!in_array($rowStatus, $appendable, true)) {
+                    return new WP_Error(
+                        'already_registered',
+                        __('Je bent al ingeschreven voor deze editie.', 'stride'),
+                    );
+                }
+            }
+        } else {
+            $row = $registrations->findAnonymousForEmailAndEdition($email, $editionId);
+        }
+
+        if ($row) {
+            $existingData = is_array($row->enrollment_data ?? null) ? $row->enrollment_data : [];
+            $existingData[$stage] = $wrapped;
+            $updated = $registrations->update((int) $row->id, [
+                'status' => $status->value,
+                'enrollment_data' => $existingData,
+            ]);
+            if (!$updated) {
+                ntdst_log('enrollment')->error('Stage submission update failed', [
+                    'registration_id' => (int) $row->id,
+                    'edition_id' => $editionId,
+                    'stage' => $stage,
+                ]);
+                return new WP_Error('update_failed', __('Je aanmelding kon niet worden opgeslagen. Probeer het later opnieuw.', 'stride'));
+            }
+
+            return [(int) $row->id, $boundUserId];
+        }
+
+        $payload = [
+            'user_id' => $boundUserId ?: null,
+            'edition_id' => $editionId,
+            'status' => $status->value,
+            'enrollment_path' => RegistrationRepository::PATH_INDIVIDUAL,
+            'enrollment_data' => [$stage => $wrapped],
+        ];
+
+        // Account-bound rows carry the partner affiliation like every other
+        // account path (mirrors EnrollmentService::registerInterest).
+        if ($boundUserId) {
+            $companyId = CompanyAffiliation::getCompanyId($boundUserId);
+            if ($companyId) {
+                $payload['company_id'] = $companyId;
+            }
+        }
+
+        $created = $registrations->create($payload);
+        if (is_wp_error($created)) {
+            return $created;
+        }
+
+        return [(int) $created, $boundUserId];
     }
 
     private function sanitizeExtraFields(array|string $fields): array

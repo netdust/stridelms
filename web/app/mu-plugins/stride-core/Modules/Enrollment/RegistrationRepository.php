@@ -1635,33 +1635,63 @@ final class RegistrationRepository
     }
 
     /**
-     * Re-link an anonymous waitlist row to a resolved WP account.
+     * Bind an account-less (lead) row to a WP account — THE one bind write
+     * (INV-3, INV-9). Used by every surface that turns a lead into an
+     * account-bound registration: waitlist promotion, the self-bind at
+     * interest/waitlist submission (form-identity plan 2026-07-14), and the
+     * one-time adoption script.
      *
-     * Minimal user_id-only write (INV-3, INV-9): sets ONLY `user_id`, leaving
-     * status, registered_at, enrollment_path and enrollment_data untouched —
-     * the promote capacity transaction owns the status flip, and the lead's
-     * captured data must stay per-registration. Deliberately NOT
+     * Minimal write: sets `user_id` and clears the denormalized lead columns
+     * (once bound, identity lives on the account — lead-identity invariant;
+     * the captured stage data stays in enrollment_data untouched). Leaves
+     * status, registered_at and enrollment_path alone — the promote capacity
+     * transaction owns the status flip. Deliberately NOT
      * upgradeFromInterest(), which resets registered_at and forces status/path.
+     *
+     * GUARDED on the row still being account-less: a concurrent bind (or a
+     * wrong id) can never silently re-home a row that already belongs to an
+     * account — 0 affected rows returns false, callers treat it as a failed
+     * bind and re-read.
      */
-    public function attachUserToWaitlistRow(int $registrationId, int $userId): bool
+    /**
+     * Work-list for the one-time lead adoption pass (scripts/adopt-leads.php,
+     * form-identity plan 2026-07-14): every account-less row that carries a
+     * lead e-mail. Minimal columns; the script resolves each e-mail against
+     * wp_users and binds matches via bindLeadToUser().
+     *
+     * @return array<object> {id, edition_id, lead_email} rows.
+     */
+    public function findLeadRowsWithEmail(): array
     {
         global $wpdb;
 
-        $result = $wpdb->update(
-            $this->table(),
-            ['user_id' => $userId],
-            ['id' => $registrationId],
-            ['%d'],
-            ['%d'],
-        );
+        return $wpdb->get_results(
+            "SELECT id, edition_id, lead_email FROM {$this->table()}
+             WHERE (user_id IS NULL OR user_id = 0)
+               AND lead_email IS NOT NULL AND lead_email != ''",
+        ) ?: [];
+    }
+
+    public function bindLeadToUser(int $registrationId, int $userId): bool
+    {
+        global $wpdb;
+
+        $result = $wpdb->query($wpdb->prepare(
+            "UPDATE {$this->table()}
+             SET user_id = %d, lead_name = '', lead_email = ''
+             WHERE id = %d AND (user_id IS NULL OR user_id = 0)",
+            $userId,
+            $registrationId,
+        ));
 
         $this->clearCache();
 
-        if ($result !== false) {
-            $this->emitRowEvent('row_updated', $registrationId, ['user_id' => $userId], 'attach_user_to_waitlist_row');
+        if ($result !== false && $result > 0) {
+            $this->emitRowEvent('row_updated', $registrationId, ['user_id' => $userId], 'bind_lead_to_user');
+            return true;
         }
 
-        return $result !== false;
+        return false;
     }
 
     /**

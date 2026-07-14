@@ -41,6 +41,28 @@ final class CompletionTaskHandler
     }
 
     /**
+     * Owner-or-enroller gate (form-identity rule 4, plan 2026-07-14): the
+     * PARTICIPANT always acts on their own registration; the `enrolled_by`
+     * actor (colleague enrollment) may act on the non-personal tasks —
+     * session selection, documents — for the colleague they enrolled. The
+     * questionnaire (intake) task stays strictly personal: the enroller can
+     * neither submit nor tick it (its submission path,
+     * QuestionnaireHandler::handleSubmitStage, is participant-only too).
+     * Server-side column check — never a client claim.
+     */
+    private function actorMayActOn(object $reg, int $userId, ?string $taskType = null): bool
+    {
+        if ((int) $reg->user_id === $userId) {
+            return true;
+        }
+        if ((int) ($reg->enrolled_by ?? 0) !== $userId) {
+            return false;
+        }
+
+        return $taskType !== 'questionnaire';
+    }
+
+    /**
      * Complete a task (questionnaire, session_selection).
      *
      * @param mixed $data Existing data (unused)
@@ -65,7 +87,7 @@ final class CompletionTaskHandler
         $repo = ntdst_get(RegistrationRepository::class);
         $reg = $repo->find($registrationId);
 
-        if (!$reg || (int) $reg->user_id !== $userId) {
+        if (!$reg || !$this->actorMayActOn($reg, $userId, $taskType)) {
             return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
         }
 
@@ -118,7 +140,7 @@ final class CompletionTaskHandler
         $repo = ntdst_get(RegistrationRepository::class);
         $reg = $repo->find($registrationId);
 
-        if (!$reg || (int) $reg->user_id !== $userId) {
+        if (!$reg || !$this->actorMayActOn($reg, $userId, 'documents')) {
             return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
         }
 
@@ -310,8 +332,8 @@ final class CompletionTaskHandler
             return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
         }
 
-        // M2: registration owner or stride_manage, decided here (INV-1).
-        if ((int) $reg->user_id !== $userId && !current_user_can('stride_manage')) {
+        // M2: registration owner, their enroller, or stride_manage — decided here (INV-1).
+        if (!$this->actorMayActOn($reg, $userId) && !current_user_can('stride_manage')) {
             ntdst_log('enrollment')->warning('proof download denied: not owner', [
                 'attachment_id' => $attachmentId,
                 'registration_id' => $registrationId,

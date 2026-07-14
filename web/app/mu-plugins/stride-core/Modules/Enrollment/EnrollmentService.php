@@ -703,12 +703,12 @@ final class EnrollmentService extends AbstractService
             // M-PER-ROW: the relink is committed standalone BEFORE the capacity
             // transaction. Guard its outcome — a failed re-link must become a
             // per-row WP_Error, never a confirm against the stale user_id=0 row
-            // (which would orphan-grant access to user 0). `=== false` (not `!`)
-            // mirrors attachUserToWaitlistRow's own `$result !== false`: a 0-rows
-            // write is success, only a SQL error is failure (and M-IDEMPOTENT
-            // already gates re-entry on user_id===0, so the idempotent retry never
-            // reaches this branch at all).
-            if ($this->registrations->attachUserToWaitlistRow($registrationId, $resolved['user_id']) === false) {
+            // (which would orphan-grant access to user 0). bindLeadToUser is
+            // guarded on the row still being account-less; 0 affected rows now
+            // counts as a failed bind too (a concurrent bind means THIS confirm
+            // must not proceed against assumptions — M-IDEMPOTENT gates re-entry
+            // on user_id===0, so the idempotent retry never reaches this branch).
+            if ($this->registrations->bindLeadToUser($registrationId, $resolved['user_id']) === false) {
                 ntdst_log('enrollment')->error('Failed to relink waitlist row to resolved account', [
                     'registration_id' => $registrationId,
                     'user_id' => $resolved['user_id'],
