@@ -29,8 +29,15 @@ final class RegistrationTable
      *     from v3 to v4 when feat/admin-url-filter-state merged first and took
      *     v3 for the index; the two migrations now sequence cleanly (v2 install
      *     upgrades v3-index then v4-column) instead of colliding on one version.
+     * v5: lead_name / lead_email columns (F-G3 — anonymous-lead search).
+     *     Anonymous interest/waitlist submitters live only in enrollment_data
+     *     JSON, which the grid search deliberately never LIKEs (M5), so leads
+     *     were unfindable by the name/email on their own submission. The
+     *     denormalized columns are stamped at write time
+     *     (RegistrationRepository::extractLeadIdentity) and backfilled from
+     *     the JSON here for existing lead rows.
      */
-    public const SCHEMA_VERSION = 4;
+    public const SCHEMA_VERSION = 5;
 
     private const SCHEMA_VERSION_OPTION = 'stride_registrations_schema_version';
 
@@ -59,6 +66,8 @@ final class RegistrationTable
         $sql = "CREATE TABLE IF NOT EXISTS {$table} (
             id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
             user_id BIGINT UNSIGNED NULL,
+            lead_name VARCHAR(191) NULL COMMENT 'Anonymous-lead searchability (v5) — name from the interest/waitlist submission',
+            lead_email VARCHAR(191) NULL COMMENT 'Anonymous-lead searchability (v5)',
             edition_id BIGINT UNSIGNED NULL,
             trajectory_id BIGINT UNSIGNED NULL,
             parent_registration_id BIGINT UNSIGNED NULL,
@@ -252,6 +261,57 @@ final class RegistrationTable
                 return;
             }
         }
+
+        // v5 (F-G3): lead_name/lead_email columns + JSON backfill for existing
+        // anonymous-lead rows. Guarded via SHOW COLUMNS (same posture as v4).
+        $hasLeadNameColumn = $wpdb->get_var("SHOW COLUMNS FROM {$table} LIKE 'lead_name'");
+
+        if ($hasLeadNameColumn === null) {
+            $leadAltered = $wpdb->query(
+                "ALTER TABLE {$table}
+                 ADD COLUMN lead_name VARCHAR(191) NULL,
+                 ADD COLUMN lead_email VARCHAR(191) NULL",
+            );
+
+            if ($leadAltered === false) {
+                ntdst_log('enrollment')->error('registrations schema v5 migration failed', [
+                    'step' => 'add_lead_identity_columns',
+                    'error' => $wpdb->last_error,
+                ]);
+
+                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
+                return;
+            }
+        }
+
+        // Backfill lead identity from enrollment_data for existing anonymous
+        // rows (user_id NULL/0). Decoded in PHP via the SAME extractor the
+        // write path uses (RegistrationRepository::extractLeadIdentity — no
+        // second JSON-path definition). Batched on `lead_name IS NULL`; rows
+        // with NO extractable identity are stamped '' (checked, nothing) so a
+        // batch can never re-scan them — '' never matches a %LIKE% search.
+        // The batch cap is a runaway guard only; leads are a small subset.
+        $batches = 0;
+        do {
+            $backfillRows = $wpdb->get_results(
+                "SELECT id, enrollment_data FROM {$table}
+                 WHERE (user_id IS NULL OR user_id = 0)
+                   AND enrollment_data IS NOT NULL
+                   AND lead_name IS NULL
+                 LIMIT 500",
+            ) ?: [];
+            foreach ($backfillRows as $row) {
+                $decoded = json_decode((string) $row->enrollment_data, true);
+                $identity = is_array($decoded)
+                    ? RegistrationRepository::extractLeadIdentity($decoded)
+                    : ['name' => '', 'email' => ''];
+                $wpdb->update($table, [
+                    'lead_name' => $identity['name'],
+                    'lead_email' => $identity['email'],
+                ], ['id' => (int) $row->id]);
+            }
+        } while (count($backfillRows) === 500 && ++$batches < 40);
 
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
     }

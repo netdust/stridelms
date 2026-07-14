@@ -211,6 +211,18 @@ final class RegistrationTableMigrateGuardTest extends TestCase
 
                 return $result;
             }
+
+            /** v5 lead backfill SELECT — an empty lead corpus by default. */
+            public function get_results(?string $query = null): array
+            {
+                return [];
+            }
+
+            /** v5 lead backfill per-row UPDATE (unreached with an empty corpus). */
+            public function update(...$args): int|false
+            {
+                return 1;
+            }
         };
 
         $wpdb->queryResults = $queryResults;

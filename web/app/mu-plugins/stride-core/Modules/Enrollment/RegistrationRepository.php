@@ -88,6 +88,33 @@ final class RegistrationRepository
      * @param string|null          $submittedAt ISO-8601 UTC. Defaults to `gmdate('c')`.
      * @return array{submitted_at: string, submitted_by: int|null, data: array<string, mixed>}
      */
+    /**
+     * Extract the anonymous submitter's identity from an enrollment_data array.
+     *
+     * THE single definition of where a lead's name/email live (F-G3):
+     * enrollment_data[interest|waitlist]['data']['name'|'email']. Consumed by
+     * the write paths (create/reactivate/update stamp the denormalized
+     * lead_name/lead_email columns), the v5 migration backfill, and any read
+     * that would otherwise re-derive the JSON path. Empty strings when absent.
+     *
+     * @param  array<string,mixed> $enrollmentData Decoded enrollment_data.
+     * @return array{name:string, email:string}
+     */
+    public static function extractLeadIdentity(array $enrollmentData): array
+    {
+        foreach (['interest', 'waitlist'] as $stage) {
+            $data = $enrollmentData[$stage]['data'] ?? null;
+            if (is_array($data) && (!empty($data['name']) || !empty($data['email']))) {
+                return [
+                    'name' => mb_substr(sanitize_text_field((string) ($data['name'] ?? '')), 0, 191),
+                    'email' => mb_substr(sanitize_email((string) ($data['email'] ?? '')), 0, 191),
+                ];
+            }
+        }
+
+        return ['name' => '', 'email' => ''];
+    }
+
     public static function wrapStage(array $data, ?int $submittedBy = null, ?string $submittedAt = null): array
     {
         if ($submittedBy === null) {
@@ -327,6 +354,16 @@ final class RegistrationRepository
                         'completed_at' => null,
                     ];
 
+                    // Re-stamp the lead identity when the reactivated row is
+                    // still anonymous and the merged data carries it (F-G3).
+                    if (empty($existing->user_id) && $mergedData) {
+                        $identity = self::extractLeadIdentity($mergedData);
+                        if ($identity['name'] !== '' || $identity['email'] !== '') {
+                            $reactivate['lead_name'] = $identity['name'];
+                            $reactivate['lead_email'] = $identity['email'];
+                        }
+                    }
+
                     $result = $wpdb->update($this->table(), $reactivate, ['id' => (int) $existing->id]);
 
                     if ($result === false) {
@@ -363,6 +400,18 @@ final class RegistrationRepository
                     ? wp_json_encode(self::normalizeEnrollmentData($data['enrollment_data']))
                     : null,
             ];
+
+            // Anonymous lead (no account): stamp the denormalized searchable
+            // identity columns from the submission payload (F-G3 — the JSON is
+            // deliberately never LIKEd, so without these columns a lead is
+            // unfindable by the name on their own form).
+            if (empty($insert['user_id']) && is_array($data['enrollment_data'] ?? null)) {
+                $identity = self::extractLeadIdentity($data['enrollment_data']);
+                if ($identity['name'] !== '' || $identity['email'] !== '') {
+                    $insert['lead_name'] = $identity['name'];
+                    $insert['lead_email'] = $identity['email'];
+                }
+            }
 
             $result = $wpdb->insert($this->table(), $insert);
 
@@ -1731,6 +1780,22 @@ final class RegistrationRepository
         // structural changes, not just "different encoded string."
         $before = $this->find($id);
 
+        // Anonymous lead whose enrollment_data is being (re)written: keep the
+        // denormalized searchable identity in sync (F-G3). Not in $allowed —
+        // derived by the repo, never caller-settable.
+        if (
+            array_key_exists('enrollment_data', $update)
+            && $before !== null
+            && empty($before->user_id)
+            && is_array($data['enrollment_data'] ?? null)
+        ) {
+            $identity = self::extractLeadIdentity($data['enrollment_data']);
+            if ($identity['name'] !== '' || $identity['email'] !== '') {
+                $update['lead_name'] = $identity['name'];
+                $update['lead_email'] = $identity['email'];
+            }
+        }
+
         $result = $wpdb->update($this->table(), $update, ['id' => $id]) !== false;
 
         if ($result) {
@@ -2672,8 +2737,15 @@ final class RegistrationRepository
 
         if ($q !== null) {
             // Name search — bound as a prepared LIKE, never interpolated (M4).
-            $where[]   = '(u.display_name LIKE %s OR u.user_login LIKE %s OR u.user_email LIKE %s)';
+            // lead_name/lead_email are the DENORMALIZED anonymous-lead identity
+            // columns (schema v5) — searching a lead's own name/email used to
+            // return "Geen resultaten" because it only lives in enrollment_data
+            // JSON, which is deliberately never LIKEd (M5).
+            $where[]   = '(u.display_name LIKE %s OR u.user_login LIKE %s OR u.user_email LIKE %s'
+                . ' OR r.lead_name LIKE %s OR r.lead_email LIKE %s)';
             $likeTerm  = '%' . $wpdb->esc_like($q) . '%';
+            $params[]  = $likeTerm;
+            $params[]  = $likeTerm;
             $params[]  = $likeTerm;
             $params[]  = $likeTerm;
             $params[]  = $likeTerm;

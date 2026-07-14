@@ -94,11 +94,15 @@ defined('ABSPATH') || exit;
             <span class="ws-toolbar__sep"></span>
             <span class="ws-toolbar__group-label"><?php echo esc_html__('Filters', 'stride'); ?></span>
 
-            <!-- search: server-side q (name/email/organisation LIKE) -->
+            <!-- search: server-side q — display name / login / e-mail of the
+                 account, PLUS the lead_name/lead_email columns so anonymous
+                 interest/waitlist leads are findable by their own submission.
+                 The placeholder promises exactly what the WHERE searches
+                 (it used to claim 'organisatie', which was never searched). -->
             <div class="ws-search ws-search--inline">
                 <span x-html="icon('search')"></span>
                 <input type="text"
-                       placeholder="<?php echo esc_attr__('Zoek op naam, e-mail, organisatie…', 'stride'); ?>"
+                       placeholder="<?php echo esc_attr__('Zoek op naam of e-mail…', 'stride'); ?>"
                        x-model="filters.q" @input.debounce.350ms="onSearchChange()">
             </div>
 
