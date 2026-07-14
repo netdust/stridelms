@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stride\Tests\Unit\Modules\Questionnaire;
 
+use Stride\Domain\OfferingStatus;
+use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Questionnaire\QuestionnaireHandler;
 use Stride\Modules\Questionnaire\QuestionnaireValidator;
@@ -34,6 +36,12 @@ class WaitlistNativeFieldsValidationTest extends TestCase
         $validator = $this->createMock(QuestionnaireValidator::class);
         $validator->method('validate')->willReturn(true);
         ntdst_set(QuestionnaireValidator::class, $validator);
+
+        // Availability gate passes: waitlist is a Full-edition affordance.
+        $editions = $this->createMock(EditionService::class);
+        $editions->method('exists')->willReturn(true);
+        $editions->method('getEffectiveStatus')->willReturn(OfferingStatus::Full);
+        ntdst_set(EditionService::class, $editions);
 
         $this->handler = new QuestionnaireHandler();
     }

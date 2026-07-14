@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stride\Tests\Unit\Modules\Questionnaire;
 
+use Stride\Domain\OfferingStatus;
+use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Questionnaire\QuestionnaireHandler;
 use Stride\Modules\Questionnaire\QuestionnaireValidator;
@@ -37,7 +39,20 @@ final class QuestionnaireHandlerIdentityTest extends TestCase
         $validator->method('validate')->willReturn(true);
         ntdst_set(QuestionnaireValidator::class, $validator);
 
+        // Server-side availability gate passes by default: interest is an
+        // Announcement affordance (the gate itself is pinned in
+        // test_submission_is_rejected_when_the_edition_status_forbids_it).
+        $this->allowSubmissions(OfferingStatus::Announcement);
+
         $this->handler = new QuestionnaireHandler();
+    }
+
+    private function allowSubmissions(OfferingStatus $effective): void
+    {
+        $editions = $this->createMock(EditionService::class);
+        $editions->method('exists')->willReturn(true);
+        $editions->method('getEffectiveStatus')->willReturn($effective);
+        ntdst_set(EditionService::class, $editions);
     }
 
     private function loginAs(int $id, string $email): void
@@ -252,6 +267,26 @@ final class QuestionnaireHandlerIdentityTest extends TestCase
 
         $this->assertIsArray($result);
         $this->assertTrue($result['success']);
+    }
+
+    public function test_submission_is_rejected_when_the_edition_status_forbids_it(): void
+    {
+        // The render-time CTA gating (interest only on Announcement, waitlist
+        // only on Full) is bypassable with a crafted POST — the server
+        // enforces the same rule. Identity-independent: repo never touched.
+        $this->logout();
+        $this->allowSubmissions(OfferingStatus::Open);
+
+        $repo = $this->createMock(RegistrationRepository::class);
+        $repo->expects($this->never())->method('create');
+        $repo->expects($this->never())->method('update');
+        $repo->expects($this->never())->method('findAnonymousForEmailAndEdition');
+        ntdst_set(RegistrationRepository::class, $repo);
+
+        $result = $this->handler->handleSubmitInterest(null, $this->interestParams('lead@example.test'));
+
+        $this->assertInstanceOf(\WP_Error::class, $result);
+        $this->assertSame('not_available', $result->get_error_code());
     }
 
     public function test_success_response_is_identical_for_lead_and_bound_submissions(): void

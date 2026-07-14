@@ -765,6 +765,20 @@ final class EnrollmentService extends AbstractService
             }
         }
 
+        // Profile-type enroll gate (INV-12 M1): promotion IS an enrollment —
+        // a blocked profile type must not reach Confirmed via the waitlist
+        // route. enroll() and registerWaitlist() both enforce this; the
+        // promote path was the one gap. Runs after account resolution so it
+        // covers freshly-resolved leads too (a benign bind having happened is
+        // the documented idempotent state).
+        $participantId = (int) $registration->user_id;
+        if ($participantId) {
+            $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
+            if ($policy->blocksEnrollment($participantId, $editionId, 'vad_edition')) {
+                return new WP_Error('profiletype_blocked', __('Niet beschikbaar voor jouw profieltype', 'stride'));
+            }
+        }
+
         // Race-safe per-row capacity re-check + status transition under one
         // transaction, mirroring enroll(): lock confirmed rows FOR UPDATE so a
         // concurrent promote/enroll cannot both consume the final seat.

@@ -32,7 +32,9 @@ final class QuestionnaireHandlerWrapTest extends IntegrationTestCase
 
     public function testInterestSubmissionPersistsWrappedShape(): void
     {
-        $editionId = $this->createTestEdition();
+        // Interest is an Announcement affordance — the handler enforces the
+        // effective-status gate server-side (security hardening 2026-07-14).
+        $editionId = $this->createTestEdition(['meta' => ['_ntdst_status' => 'announcement']]);
         $handler = ntdst_get(QuestionnaireHandler::class);
 
         $result = $handler->handleSubmitInterest(null, [
@@ -62,7 +64,8 @@ final class QuestionnaireHandlerWrapTest extends IntegrationTestCase
 
     public function testWaitlistSubmissionPersistsWrappedShape(): void
     {
-        $editionId = $this->createTestEdition();
+        // Waitlist is a Full-edition affordance (same server-side gate).
+        $editionId = $this->createTestEdition(['meta' => ['_ntdst_status' => 'full']]);
         $handler = ntdst_get(QuestionnaireHandler::class);
 
         // The waitlist path requires the native offer/invoice fields by default

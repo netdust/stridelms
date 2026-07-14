@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Stride\Modules\Questionnaire;
 
 use Stride\Domain\RegistrationStatus;
+use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\User\CompanyAffiliation;
 use WP_Error;
@@ -256,6 +257,23 @@ final class QuestionnaireHandler
     {
         $registrations = ntdst_get(RegistrationRepository::class);
         $status = $stage === 'waitlist' ? RegistrationStatus::Waitlist : RegistrationStatus::Interest;
+
+        // Server-side availability gate (INV-7): the render-time CTA gating
+        // is bypassable with a crafted POST — enforce the same rule here.
+        // Interest is an Announcement affordance, waitlist a Full one
+        // (identical to the edition template's CTA conditions). The check is
+        // identity-independent, so the response leaks nothing about accounts.
+        $editions = ntdst_get(EditionService::class);
+        if (!$editions->exists($editionId)) {
+            return new WP_Error('invalid_edition', __('Deze editie bestaat niet.', 'stride'));
+        }
+        $offering = $editions->getEffectiveStatus($editionId);
+        $stageAllowed = $status === RegistrationStatus::Waitlist
+            ? $offering->allowsWaitlist()
+            : $offering->allowsInterest();
+        if (!$stageAllowed) {
+            return new WP_Error('not_available', __('Aanmelden is momenteel niet mogelijk voor deze editie.', 'stride'));
+        }
 
         $boundUserId = $this->resolveSelfBoundUser($email);
         $companyId = $boundUserId ? (CompanyAffiliation::getCompanyId($boundUserId) ?: null) : null;
