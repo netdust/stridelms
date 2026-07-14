@@ -76,19 +76,34 @@ trait BulkRunner
      * MAX_BATCH + 1 ids so an over-cap result is rejected by runBulk's cap guard as
      * too_many — never truncated. A plain {ids:[…]} payload is returned unchanged.
      *
+     * The client filter is routed through AdminRegistrationQueryService::
+     * applyScopePins FIRST — the same queue→queue_ids and default
+     * active-edition-scope injection the grid READ applies — so the expansion
+     * covers exactly the set the grid showed and the confirm dialog counted.
+     * Without it, a select-all inside a ?queue= view (whose payload carries
+     * queue but no status) or under the default active scope expanded UNSCOPED
+     * over the whole edition-grained table (2026-07-14 blast-radius bug).
+     * An unknown queue key is a WP_Error(400), propagated by runBulk.
+     *
      * @param  array<string,mixed> $params registry params (full POST body).
-     * @return array<string,mixed>         $params with ['ids'] populated under select_all.
+     * @return array<string,mixed>|WP_Error $params with ['ids'] populated under select_all.
      */
-    private function resolveBulkIds(array $params): array
+    private function resolveBulkIds(array $params): array|WP_Error
     {
         if (empty($params['select_all'])) {
             return $params;
         }
 
         $filter = is_array($params['filter'] ?? null) ? $params['filter'] : [];
-        $repo   = ntdst_get(RegistrationRepository::class);
 
-        $params['ids'] = $repo->idsForGridFilter($filter, self::EXPANSION_FETCH_LIMIT);
+        $scoped = ntdst_get(\Stride\Admin\AdminRegistrationQueryService::class)->applyScopePins($filter);
+        if (is_wp_error($scoped)) {
+            return $scoped;
+        }
+
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        $params['ids'] = $repo->idsForGridFilter($scoped, self::EXPANSION_FETCH_LIMIT);
 
         return $params;
     }
@@ -112,6 +127,9 @@ trait BulkRunner
         // handler routes through, so a future handler cannot forget it and
         // silently no-op a select_all request. Idempotent for a plain {ids:[…]}.
         $params = $this->resolveBulkIds($params);
+        if (is_wp_error($params)) {
+            return $params;
+        }
 
         $ids = array_values(array_unique(array_map('absint', (array) ($params['ids'] ?? []))));
 

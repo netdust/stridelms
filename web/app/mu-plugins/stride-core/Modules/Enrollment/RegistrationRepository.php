@@ -2053,7 +2053,7 @@ final class RegistrationRepository
      *
      * Active-edition scope is an ID-SET the caller passes (active_edition_ids,
      * resolved by AdminRegistrationQueryService from
-     * EditionRepository::findActiveDateScopedIds — status-based, decision
+     * EditionRepository::findAdminActiveIds — status-based, decision
      * 2026-07-14). This repo carries NO scope predicate of its own; the
      * service omits the key for edition_scope='all', an explicit edition_id,
      * or a queue pin (whose ids already encode the scope).
@@ -2087,7 +2087,10 @@ final class RegistrationRepository
             'company_id'    => 'r.company_id',
             'completed_at'  => 'r.completed_at',
             'cancelled_at'  => 'r.cancelled_at',
-            'name'          => "COALESCE(u.display_name, '')",
+            // NULLIF: an anonymous lead has NO users join (display_name NULL) —
+            // it must sort by its lead_name (what the Naam column SHOWS), not
+            // clump at '' regardless of the rendered name.
+            'name'          => "COALESCE(NULLIF(u.display_name, ''), r.lead_name, '')",
             'edition'       => "COALESCE(ep.post_title, '')",
         ];
 
@@ -2133,16 +2136,16 @@ final class RegistrationRepository
 
         // --- Fetch rows (structured columns only — M5) ---
         // ORDER BY: column name comes from the server-side allowlist (M4), never from user input.
-        // enrollment_data is selected SOLELY for the anonymous-lead name/email fallback
-        // (anon interest/waitlist rows have no wp_users join). It is NEVER filtered or
-        // sorted on, so it does not participate in the M4/M5 SQL-safety invariants.
+        // lead_name/lead_email are the denormalized anonymous-lead identity (v5) —
+        // the grid no longer ships the enrollment_data JSON blob per row just to
+        // decode a name out of it.
         // Stable tiebreaker (r.id) so equal sort values can never shuffle rows
         // across page boundaries between requests.
         $dataSql = "SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
                            r.parent_registration_id, r.status, r.enrollment_path,
                            r.company_id, r.registered_at, r.completed_at,
                            r.cancelled_at, r.quote_id, r.enrolled_by, r.notes,
-                           r.enrollment_data
+                           r.lead_name, r.lead_email
                     FROM {$regTable} r
                     LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
                     {$activeJoin}
@@ -2293,8 +2296,8 @@ final class RegistrationRepository
         // tally is computed separately in SQL (offerteVerdelingByGroup, FIX-10).
         //
         // Column set is byte-identical to queryForGrid's $dataSql (M5: structured
-        // columns only; enrollment_data solely for the anon-lead name fallback).
-        // enrollment_data participates in NO filter/sort, only SELECT.
+        // columns only; lead_name/lead_email are the denormalized anon-lead
+        // identity — no enrollment_data blob shipped per row).
         //
         // PARAM ORDER (M4): the inner subquery text consumes $params + the group
         // filter args (JOIN %d before WHERE params, then the group IN placeholders);
@@ -2304,13 +2307,13 @@ final class RegistrationRepository
                            parent_registration_id, status, enrollment_path,
                            company_id, registered_at, completed_at,
                            cancelled_at, quote_id, enrolled_by, notes,
-                           enrollment_data, group_val
+                           lead_name, lead_email, group_val
                     FROM (
                         SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
                                r.parent_registration_id, r.status, r.enrollment_path,
                                r.company_id, r.registered_at, r.completed_at,
                                r.cancelled_at, r.quote_id, r.enrolled_by, r.notes,
-                               r.enrollment_data,
+                               r.lead_name, r.lead_email,
                                r.{$groupBy} AS group_val,
                                ROW_NUMBER() OVER (
                                    PARTITION BY r.{$groupBy}
@@ -2510,8 +2513,14 @@ final class RegistrationRepository
      * Capped by $limit (the caller passes MAX_BATCH + 1) so an over-cap expansion
      * returns MAX_BATCH+1 ids and the bulk handler's EXISTING cap guard rejects it
      * with too_many — this method never truncates silently nor enforces a second
-     * cap. An empty $filters expands to the bounded active edition-grained corpus
-     * (base predicate + default active scope), never the whole table.
+     * cap.
+     *
+     * SCOPE CONTRACT: like queryForGrid, this method applies NO scope of its
+     * own — the caller MUST route client filter input through
+     * AdminRegistrationQueryService::applyScopePins() first, so the expansion
+     * carries the same queue_ids / active_edition_ids pins the grid READ
+     * rendered. A raw client filter here expands over the whole
+     * edition-grained table (the 2026-07-14 blast-radius regression).
      *
      * Param order mirrors queryForGrid exactly: buildGridFilters unshifts the
      * trajectory JOIN %d to the FRONT of $params, so array_merge($params, [$limit])
@@ -2667,7 +2676,7 @@ final class RegistrationRepository
         $where[] = 'r.edition_id IS NOT NULL';
 
         // Active-edition scope: the CALLER passes the resolved admin-active
-        // edition-id set (EditionRepository::findActiveDateScopedIds via
+        // edition-id set (EditionRepository::findAdminActiveIds via
         // AdminRegistrationQueryService — status-based, decision 2026-07-14).
         // Pinning to the id-set keeps ONE scope definition; this repo no longer
         // carries its own SQL twin of the predicate (the old start_date join
@@ -2675,13 +2684,7 @@ final class RegistrationRepository
         // zero rows — a scope that resolves to nothing must never mean "all".
         $activeJoin = '';
         if (array_key_exists('active_edition_ids', $filters) && is_array($filters['active_edition_ids'])) {
-            $activeIds = array_values(array_unique(array_map('intval', $filters['active_edition_ids'])));
-            if ($activeIds === []) {
-                $where[] = '1 = 0';
-            } else {
-                $where[] = 'r.edition_id IN (' . implode(',', array_fill(0, count($activeIds), '%d')) . ')';
-                $params = array_merge($params, $activeIds);
-            }
+            $this->pinToIdSet('r.edition_id', $filters['active_edition_ids'], $where, $params);
         }
 
         // Trajectory scope (task 1.4b) — routes through the verified parent→child
@@ -2753,16 +2756,9 @@ final class RegistrationRepository
 
         // Worklist-queue pin (?queue=): the resolver's id-set IS the queue
         // definition (WorklistQueueResolver — the same set the Vandaag card
-        // counted). An EMPTY set must yield zero rows, never "no filter".
-        // Ids are server-resolved ints (never client input), bound via %d.
+        // counted). Ids are server-resolved ints (never client input).
         if (array_key_exists('queue_ids', $filters) && is_array($filters['queue_ids'])) {
-            $queueIds = array_values(array_unique(array_map('intval', $filters['queue_ids'])));
-            if ($queueIds === []) {
-                $where[] = '1 = 0';
-            } else {
-                $where[] = 'r.id IN (' . implode(',', array_fill(0, count($queueIds), '%d')) . ')';
-                $params = array_merge($params, $queueIds);
-            }
+            $this->pinToIdSet('r.id', $filters['queue_ids'], $where, $params);
         }
 
         $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
@@ -2774,6 +2770,30 @@ final class RegistrationRepository
             'page'         => $page,
             'per_page'     => $perPage,
         ];
+    }
+
+    /**
+     * Pin a WHERE clause to a server-resolved id-set — the ONE home of the
+     * load-bearing invariant every pin shares: an EMPTY resolved set must
+     * yield ZERO rows ('1 = 0'), never "no filter" (a scope that resolves to
+     * nothing meaning "all" is the leak class both call sites exist to
+     * prevent). Ids are always server-resolved ints, bound via %d (M4);
+     * $column is a caller-owned literal, never user input.
+     *
+     * @param string     $column  SQL column literal (e.g. 'r.id').
+     * @param array      $ids     Server-resolved id-set.
+     * @param list<string> $where  WHERE fragments (appended to).
+     * @param list<mixed>  $params Bound params (appended to, in WHERE order).
+     */
+    private function pinToIdSet(string $column, array $ids, array &$where, array &$params): void
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if ($ids === []) {
+            $where[] = '1 = 0';
+            return;
+        }
+        $where[] = "{$column} IN (" . implode(',', array_fill(0, count($ids), '%d')) . ')';
+        $params  = array_merge($params, $ids);
     }
 
     // === Legacy aliases ===

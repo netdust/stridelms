@@ -258,3 +258,21 @@ The test-gap analysis (2026-07-05) already showed the thin layer is exactly wher
 ## 5. Suggested immediate next step
 
 Start with Phase 0 (six decisions above — 30 minutes of Stefan's time), then execute Phase 1 as a single gated plan (`superpowers:writing-plans`, threat model not required — no new surface except the `queue` param, which reuses existing validated predicates; the XLSX/publish-guard fixes shrink attack surface). Roadmap item 0a should be updated: strike the accordion regression (fixed), keep anon-lead search (F-G3), and replace "needs a debugging pass" with a link to this document.
+
+---
+
+## 6. Slice log (execution against this register)
+
+Base for all slices: `main`, branch `claude/admin-dashboard-review-imki0g`. Per-slice flow: fixes in small commits → unit + frontend suites green → multi-agent code review (high) with confirmed findings fixed → push.
+
+### 2026-07-13 — Dossier slice (view 1)
+Resolved: F-D1..F-D16 (all Dossier findings), plus the shared approve-core extraction (BulkRunner::approveRow — grid/dossier/roster parity) and the quote.email_sent PII exclusion from the stride_view feed. Two review rounds; both suites green.
+
+### 2026-07-14 — Inschrijvingen slice (view 2)
+Resolved: F-V2 (WorklistQueueResolver id-sets — count IS the click-through), F-V3/F-G2 (status-based admin-active scope + dismissable "Actieve edities" pill + `edition_scope` URL state), F-G1 (real Naam/Editie sorts incl. lead_name), F-G3 (lead_name/lead_email columns, schema v5 + guarded backfill), F-G4/F-G5 (grouped-view bulk bar + pager + honest copy), F-G6 (stubs disabled + "volgt binnenkort"), F-G7 (select-time status stamps + status-gated quote bulk + armed-selection status from queue/status context), F-G8 (load race token), F-G9/F-T1 (trajectory filter UI + chip + "Toon inschrijvingen" deep-link), F-G10 (edition typeahead + server group labels), F-G14 partial (indeterminate header checkbox, anon-lead row toast, queue-aware empty states, honest search placeholder, `distColor` removed).
+
+Review-round fixes on top of the slice (2026-07-14, 8-angle panel): select-all blast-radius scope hole closed (applyScopePins shared by grid read AND BulkRunner expansion; payload carries queue + edition_scope; arming gated to status-homogeneous contexts), stale queue pin cleared on deep-link re-activation, name sort covers lead_name, v5 backfill stamps the version only when drained (error/cap → backoff + retry), per-queue resolver gating (no LD cert lookups for unrelated queues), resolveAnonymousIdentity reads the v5 columns (one identity definition), `learndash_course_completed` added to the stats bust set, INV-3 start_date read moved into EditionRepository (filterIdsWithStartDate), findActiveDateScopedIds renamed findAdminActiveIds (dead $graceDays dropped), AdminStatsService dead deps/imports removed, id-set pin helper unified, contract tests hardened (QUEUE_META extraction, labels, QUEUE_ROW_STATUS).
+
+Still open (deferred with rationale): F-G12 (interest→pending needs a domain op + product ruling), F-G13 (offerte_status filter — the queue covers the workflow; needs resolver treatment), F-G11 partially (remaining domain-error translations), organisation search (F-G3 tail), F-G14 leftovers (skeleton rows, company by name, avg-attendance). UNIQUE-constraint piggyback retargeted to schema v6 (needs a dedupe pass first — tasks/todo.md #2).
+
+Next views per the locked decisions: Vandaag (7a split approval card, 6a per-row melding dismissal, F-V6 capacity unify), then Trajecten, Edities (scope reconciliation with findAdminActiveIds), Offertes, Gebruikers, Cohort (5a remove bulk bar).

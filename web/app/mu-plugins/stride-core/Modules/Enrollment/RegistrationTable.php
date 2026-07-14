@@ -291,7 +291,13 @@ final class RegistrationTable
         // second JSON-path definition). Batched on `lead_name IS NULL`; rows
         // with NO extractable identity are stamped '' (checked, nothing) so a
         // batch can never re-scan them — '' never matches a %LIKE% search.
-        // The batch cap is a runaway guard only; leads are a small subset.
+        //
+        // Stamping invariant (INV-4 / same posture as every step above): the
+        // version option is ONLY stamped when the backfill DRAINED. A failed
+        // SELECT/UPDATE or a tripped runaway cap logs, sets the retry backoff,
+        // and returns unstamped — migrate() re-enters after the backoff and
+        // continues where it left off (stamped rows never re-match IS NULL).
+        // Stamping anyway would strand the remaining leads unfindable forever.
         $batches = 0;
         do {
             $backfillRows = $wpdb->get_results(
@@ -300,18 +306,53 @@ final class RegistrationTable
                    AND enrollment_data IS NOT NULL
                    AND lead_name IS NULL
                  LIMIT 500",
-            ) ?: [];
+            );
+
+            if (!is_array($backfillRows)) {
+                ntdst_log('enrollment')->error('registrations schema v5 migration failed', [
+                    'step' => 'backfill_lead_identity_select',
+                    'error' => $wpdb->last_error,
+                ]);
+                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
+                return;
+            }
+
             foreach ($backfillRows as $row) {
                 $decoded = json_decode((string) $row->enrollment_data, true);
                 $identity = is_array($decoded)
                     ? RegistrationRepository::extractLeadIdentity($decoded)
                     : ['name' => '', 'email' => ''];
-                $wpdb->update($table, [
+                $updated = $wpdb->update($table, [
                     'lead_name' => $identity['name'],
                     'lead_email' => $identity['email'],
                 ], ['id' => (int) $row->id]);
+
+                if ($updated === false) {
+                    ntdst_log('enrollment')->error('registrations schema v5 migration failed', [
+                        'step' => 'backfill_lead_identity_update',
+                        'registration_id' => (int) $row->id,
+                        'error' => $wpdb->last_error,
+                    ]);
+                    set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
+                    return;
+                }
             }
-        } while (count($backfillRows) === 500 && ++$batches < 40);
+
+            if (count($backfillRows) === 500 && ++$batches >= 40) {
+                // Runaway guard tripped (>20k lead rows in one request): stop
+                // THIS run but do NOT stamp — the next run (after the backoff)
+                // continues with the still-NULL remainder.
+                ntdst_log('enrollment')->warning('registrations schema v5 backfill paused at batch cap; will continue next run', [
+                    'step' => 'backfill_lead_identity_cap',
+                    'batches' => $batches,
+                ]);
+                set_transient(self::RETRY_TRANSIENT, 1, 5 * MINUTE_IN_SECONDS);
+
+                return;
+            }
+        } while (count($backfillRows) === 500);
 
         update_option(self::SCHEMA_VERSION_OPTION, self::SCHEMA_VERSION);
     }

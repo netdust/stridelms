@@ -161,6 +161,74 @@ final class RegistrationTableMigrateGuardTest extends TestCase
         $this->assertCount(2, $wpdb->queries, 'Retry must re-run both the ALTER and the backfill');
     }
 
+    // === v5 lead backfill guards (INV-4: the version may only be stamped
+    // when the backfill DRAINED — a failed SELECT/UPDATE or the tripped
+    // runaway cap must log, set the backoff, and leave the version unstamped
+    // so the next run continues with the still-NULL remainder). ===
+
+    public function testV5BackfillSelectErrorDoesNotStampAndSetsBackoff(): void
+    {
+        $wpdb = $this->fakeWpdb([true, 1], 'Server has gone away');
+        $wpdb->getResultsQueue = [null];   // DB error on the backfill SELECT
+
+        RegistrationTable::migrate();
+
+        $this->assertFalse(
+            get_option('stride_registrations_schema_version'),
+            'A failed backfill SELECT must not stamp the version (leads would stay unfindable forever)',
+        );
+        $this->assertNotFalse(get_transient('stride_registrations_migration_backoff'));
+        $this->assertMigrationFailureLogged('Server has gone away', 'schema v5 migration failed');
+    }
+
+    public function testV5BackfillUpdateErrorDoesNotStampAndSetsBackoff(): void
+    {
+        $wpdb = $this->fakeWpdb([true, 1], 'Deadlock found');
+        $wpdb->getResultsQueue = [[(object) ['id' => 7, 'enrollment_data' => '{}']]];
+        $wpdb->updateResults = [false];    // the per-row UPDATE errors
+
+        RegistrationTable::migrate();
+
+        $this->assertFalse(get_option('stride_registrations_schema_version'));
+        $this->assertNotFalse(get_transient('stride_registrations_migration_backoff'));
+        $this->assertMigrationFailureLogged('Deadlock found', 'schema v5 migration failed');
+    }
+
+    public function testV5BackfillCapOutPausesWithoutStampingSoTheRemainderContinues(): void
+    {
+        // 40 full batches (the runaway cap) with rows still remaining: the run
+        // must PAUSE (backoff, no stamp) — stamping would strand every lead
+        // beyond the cap permanently NULL, since migrate() is version-gated.
+        $fullBatch = array_fill(0, 500, (object) ['id' => 1, 'enrollment_data' => '{}']);
+        $wpdb = $this->fakeWpdb([true, 1]);
+        $wpdb->getResultsQueue = array_fill(0, 40, $fullBatch);
+
+        RegistrationTable::migrate();
+
+        $this->assertFalse(
+            get_option('stride_registrations_schema_version'),
+            'A capped-out backfill must NOT stamp — the remainder must be picked up by the next run',
+        );
+        $this->assertNotFalse(get_transient('stride_registrations_migration_backoff'));
+    }
+
+    public function testV5BackfillDrainedStampsTheVersion(): void
+    {
+        $wpdb = $this->fakeWpdb([true, 1]);
+        $wpdb->getResultsQueue = [
+            [(object) ['id' => 7, 'enrollment_data' => wp_json_encode(['interest' => ['data' => ['name' => 'Anna', 'email' => 'a@x.be']]])]],
+        ];
+
+        RegistrationTable::migrate();
+
+        $this->assertSame(
+            RegistrationTable::SCHEMA_VERSION,
+            (int) get_option('stride_registrations_schema_version'),
+            'A drained backfill (< 500 rows in the last batch) stamps the version',
+        );
+        $this->assertFalse(get_transient('stride_registrations_migration_backoff'));
+    }
+
     // === Helpers ===
 
     /**
@@ -212,16 +280,34 @@ final class RegistrationTableMigrateGuardTest extends TestCase
                 return $result;
             }
 
+            /** @var array<array|null>|null v5 backfill SELECT batches (null entry = DB error). */
+            public ?array $getResultsQueue = null;
+
+            /** @var array<int|false> v5 backfill per-row UPDATE returns. */
+            public array $updateResults = [];
+
             /** v5 lead backfill SELECT — an empty lead corpus by default. */
-            public function get_results(?string $query = null): array
+            public function get_results(?string $query = null): ?array
             {
-                return [];
+                if ($this->getResultsQueue === null) {
+                    return [];
+                }
+                $result = array_shift($this->getResultsQueue);
+                $this->last_error = ($result === null) ? $this->errorOnFailure : '';
+
+                return $result ?? null;
             }
 
-            /** v5 lead backfill per-row UPDATE (unreached with an empty corpus). */
+            /** v5 lead backfill per-row UPDATE. */
             public function update(...$args): int|false
             {
-                return 1;
+                if ($this->updateResults === []) {
+                    return 1;
+                }
+                $result = array_shift($this->updateResults);
+                $this->last_error = ($result === false) ? $this->errorOnFailure : '';
+
+                return $result;
             }
         };
 
@@ -233,15 +319,17 @@ final class RegistrationTableMigrateGuardTest extends TestCase
         return $wpdb;
     }
 
-    private function assertMigrationFailureLogged(string $expectedDbError): void
-    {
+    private function assertMigrationFailureLogged(
+        string $expectedDbError,
+        string $expectedMessage = 'schema v2 migration failed',
+    ): void {
         global $_test_log_entries;
 
         $failures = array_values(array_filter(
             $_test_log_entries ?? [],
             static fn(array $entry): bool => $entry['level'] === 'error'
                 && $entry['channel'] === 'enrollment'
-                && str_contains($entry['message'], 'schema v2 migration failed'),
+                && str_contains($entry['message'], $expectedMessage),
         ));
 
         $this->assertNotEmpty(

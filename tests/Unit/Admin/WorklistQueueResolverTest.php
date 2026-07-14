@@ -73,17 +73,20 @@ final class WorklistQueueResolverTest extends TestCase
      * that emit the deep-links). A queue added server-side without the client
      * halves (or renamed on one side) fails HERE, not weeks later as a dead
      * card or a 400 on click-through.
+     *
+     * Keys are asserted INSIDE the extracted QUEUE_META object literal — a
+     * whole-file grep false-passed when a queue key collided with the status
+     * vocabulary ('pending:' also exists in STATUS_META).
      */
     public function test_queue_keys_exist_in_both_client_files(): void
     {
-        $jsDir = dirname(__DIR__, 3) . '/web/app/mu-plugins/stride-core/assets/js/admin/';
-        $gridJs = (string) file_get_contents($jsDir . 'grid.js');
-        $vandaagJs = (string) file_get_contents($jsDir . 'vandaag.js');
+        $gridQueueMeta = $this->extractJsBlock('grid.js', 'QUEUE_META');
+        $vandaagJs     = $this->clientJs('vandaag.js');
 
         foreach (WorklistQueueResolver::QUEUES as $queue) {
             $this->assertMatchesRegularExpression(
-                '/\b' . preg_quote($queue, '/') . '\b\s*:/',
-                $gridJs,
+                '/\b' . preg_quote($queue, '/') . '\s*:/',
+                $gridQueueMeta,
                 "grid.js QUEUE_META is missing queue key '{$queue}'",
             );
             $this->assertStringContainsString(
@@ -92,5 +95,89 @@ final class WorklistQueueResolverTest extends TestCase
                 "vandaag.js QUEUE_DEFS is missing queue key '{$queue}'",
             );
         }
+    }
+
+    /**
+     * Label half of the contract: the Dutch queue label is duplicated in
+     * grid.js (QUEUE_META — the filter chip) and vandaag.js (QUEUE_DEFS — the
+     * card). A wording tweak landing on one side only would rename the filter
+     * the admin just clicked — the card/click-through vocabulary drift the
+     * resolver exists to kill, at the label layer.
+     */
+    public function test_queue_labels_match_between_card_and_chip(): void
+    {
+        $gridQueueMeta = $this->extractJsBlock('grid.js', 'QUEUE_META');
+        $vandaagJs     = $this->clientJs('vandaag.js');
+
+        foreach (WorklistQueueResolver::QUEUES as $queue) {
+            $matched = preg_match(
+                '/\b' . preg_quote($queue, '/') . "\s*:\s*'((?:[^'\\\\]|\\\\.)*)'/",
+                $gridQueueMeta,
+                $m,
+            );
+            $this->assertSame(1, $matched, "grid.js QUEUE_META has no label for '{$queue}'");
+            $label = stripslashes($m[1]);
+
+            $this->assertMatchesRegularExpression(
+                "/key: '" . preg_quote($queue, '/') . "'[^\\n]*label: '" . preg_quote(addslashes($label), '/') . "'/",
+                $vandaagJs,
+                "vandaag.js QUEUE_DEFS label for '{$queue}' differs from grid.js QUEUE_META ('{$label}')",
+            );
+        }
+    }
+
+    /**
+     * Status half of the contract: every queue's server predicate starts from
+     * exactly ONE registration status (queueStatuses), and grid.js
+     * QUEUE_ROW_STATUS mirrors it so the ARMED cross-page bulk bar offers the
+     * right actions for a queue selection. A server predicate rewired to a
+     * different (or a second) status without the client half fails HERE.
+     */
+    public function test_queue_row_statuses_match_the_server_predicates(): void
+    {
+        $method = new \ReflectionMethod(WorklistQueueResolver::class, 'queueStatuses');
+        /** @var array<string, list<string>> $serverStatuses */
+        $serverStatuses = $method->invoke(null);
+
+        $this->assertSame(WorklistQueueResolver::QUEUES, array_keys($serverStatuses));
+
+        $gridRowStatus = $this->extractJsBlock('grid.js', 'QUEUE_ROW_STATUS');
+
+        foreach ($serverStatuses as $queue => $statuses) {
+            $this->assertCount(
+                1,
+                $statuses,
+                "queue '{$queue}' is no longer status-homogeneous — the client QUEUE_ROW_STATUS contract (armed bulk bar) breaks",
+            );
+            $this->assertMatchesRegularExpression(
+                '/\b' . preg_quote($queue, '/') . "\s*:\s*'" . preg_quote($statuses[0], '/') . "'/",
+                $gridRowStatus,
+                "grid.js QUEUE_ROW_STATUS['{$queue}'] must be '{$statuses[0]}' (the server predicate's status)",
+            );
+        }
+    }
+
+    private function clientJs(string $file): string
+    {
+        $jsDir = dirname(__DIR__, 3) . '/web/app/mu-plugins/stride-core/assets/js/admin/';
+
+        return (string) file_get_contents($jsDir . $file);
+    }
+
+    /**
+     * Extract ONE `const <name> = { … };` object literal from a client file, so
+     * key assertions run against the actual table — not the whole file.
+     */
+    private function extractJsBlock(string $file, string $constName): string
+    {
+        $js = $this->clientJs($file);
+        $matched = preg_match(
+            '/const ' . preg_quote($constName, '/') . '\s*=\s*\{(.*?)\};/s',
+            $js,
+            $m,
+        );
+        $this->assertSame(1, $matched, "{$file} no longer defines const {$constName}");
+
+        return $m[1];
     }
 }

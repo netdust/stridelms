@@ -131,6 +131,44 @@ test.describe('syncStateToUrl (write half, un-mocked history)', () => {
   });
 });
 
+test.describe('applyQueueDeepLink (the URL is the deep-link contract BOTH ways)', () => {
+  test('absorbs ?queue= and clears a leftover status filter', () => {
+    const win = fakeWindow('http://x/?view=inschrijvingen&queue=pending');
+    const g = makeGrid(win);
+    g.filters.status = 'confirmed';
+
+    expect(g.applyQueueDeepLink()).toBe(true);
+    expect(g.queue).toBe('pending');
+    expect(g.filters.status).toBe('');
+  });
+
+  test('REGRESSION: a re-activation WITHOUT ?queue= DROPS the stale queue pin', () => {
+    // The shell deletes ?queue= on every switchView. Keeping the old pin
+    // silently composed it with the new deep-link: Trajecten's "Toon
+    // inschrijvingen" set ?trajectory_id=X, and queue=pending AND
+    // trajectory_id=X intersected to an empty grid ("Geen resultaten") for a
+    // trajectory that has registrations.
+    const win = fakeWindow('http://x/?view=inschrijvingen&trajectory_id=5');
+    const g = makeGrid(win);
+    g.queue = 'pending';   // pinned earlier in the session
+
+    expect(g.applyQueueDeepLink()).toBe(true);
+    expect(g.queue).toBe('');                    // stale pin dropped
+    expect(g.filters.trajectory_id).toBe(5);     // new deep-link absorbed
+  });
+
+  test('repeat activation with the SAME queue is a no-op (no reload, no filter stomp)', () => {
+    const win = fakeWindow('http://x/?view=inschrijvingen&queue=nocert');
+    const g = makeGrid(win);
+    g.queue = 'nocert';
+    g.filters.q = 'anna';  // the user's in-grid search must survive
+
+    expect(g.applyQueueDeepLink()).toBe(false);
+    expect(g.queue).toBe('nocert');
+    expect(g.filters.q).toBe('anna');
+  });
+});
+
 test.describe('hydrateStateFromUrl (read half) + full round-trip through the real methods', () => {
   test('restores the full grid state from a bookmarked URL', () => {
     const win = fakeWindow('http://x/?view=inschrijvingen&status=waitlist&edition_id=7&sort=date&order=desc&p=2&per_page=50&group_by=edition_id');

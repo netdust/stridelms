@@ -311,10 +311,13 @@ defined('ABSPATH') || exit;
                 <span class="ws-bulkbar__num" x-text="selectedCount"></span>
                 <span class="ws-bulkbar__label">
                     <?php echo esc_html__('geselecteerd', 'stride'); ?>
-                    <?php // Cross-page select-all is FLAT-mode only: in grouped
-                          // mode `total` counts GROUPS, so "selecteer alle 3"
-                          // would arm a blast radius the number doesn't describe. ?>
-                    <template x-if="!groupBy && !selectAllFilter && total > selectedIds.length && selectedIds.length > 0">
+                    <?php // Cross-page select-all only where the blast radius is
+                          // describable (canArmSelectAll): flat mode (grouped
+                          // `total` counts GROUPS) AND a status-homogeneous
+                          // context (status filter or queue pin) — otherwise the
+                          // bulk bar would offer actions for off-page rows in
+                          // states it cannot know. ?>
+                    <template x-if="canArmSelectAll && !selectAllFilter && total > selectedIds.length && selectedIds.length > 0">
                         <a @click="selectAllFiltered()"><?php echo esc_html__('— selecteer alle', 'stride'); ?> <span x-text="total"></span></a>
                     </template>
                 </span>

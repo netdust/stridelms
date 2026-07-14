@@ -16,11 +16,13 @@
  *      never re-derived) to its closed-enum CSS modifier key. A wrong/unknown
  *      label must fall through to 'none', never leak an arbitrary class.
  *
- *   3. gridFilterPayload(filters) — the select-all "blast radius" computation:
+ *   3. gridFilterPayload(state) — the select-all "blast radius" computation:
  *      the structured filter subset the server expands a cross-page select-all
- *      against. It MUST drop paging/sort/group_by (the expansion ignores them)
- *      and MUST omit empty filters (so an empty payload = the whole active set,
- *      not a malformed query). The edge branch is the all-empty filter set.
+ *      against. It takes the grid STATE: the queue pin and the edition scope
+ *      are part of what the grid SHOWS, so they MUST ride along (omitting them
+ *      made the server expand an armed queue selection over the whole table —
+ *      the 2026-07-14 blast-radius regression). It MUST drop paging/sort/
+ *      group_by (the expansion ignores them) and MUST omit empty filters.
  *
  * No browser, no DDEV — the mappers are imported directly (UMD tail on grid.js
  * exposes module.exports under Node, exactly like vandaag.js).
@@ -75,17 +77,19 @@ test.describe('offerteClass', () => {
 test.describe('gridFilterPayload', () => {
   test('carries only the set structured filters (drops paging/sort/group_by)', () => {
     const payload = grid.gridFilterPayload({
-      status: 'pending',
-      edition_id: 42,
-      company_id: 7,
-      trajectory_id: 3,
-      q: 'anna',
-      // these MUST NOT appear — the server expansion ignores paging/order/group
-      page: 5,
-      per_page: 25,
-      sort: 'name',
-      order: 'asc',
-      group_by: 'status',
+      filters: {
+        status: 'pending',
+        edition_id: 42,
+        company_id: 7,
+        trajectory_id: 3,
+        q: 'anna',
+        // these MUST NOT appear — the server expansion ignores paging/order/group
+        page: 5,
+        per_page: 25,
+        sort: 'name',
+        order: 'asc',
+        group_by: 'status',
+      },
     });
     expect(payload).toEqual({
       status: 'pending',
@@ -96,15 +100,65 @@ test.describe('gridFilterPayload', () => {
     });
   });
 
+  test('REGRESSION (blast radius): the queue pin rides along — a queue view arms the QUEUE, not an empty filter', () => {
+    // A queue view deliberately clears filters.status (the queue IS the
+    // filter), so without the queue key the armed payload was {} and the
+    // server expanded select-all over the WHOLE table instead of the id-set
+    // the card counted.
+    const payload = grid.gridFilterPayload({
+      queue: 'waitlist',
+      filters: { status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' },
+    });
+    expect(payload).toEqual({ queue: 'waitlist' });
+  });
+
+  test('edition scope rides along ONLY when widened to "all" (default active scope is server-implied)', () => {
+    expect(grid.gridFilterPayload({ editionScope: 'all', filters: {} })).toEqual({ edition_scope: 'all' });
+    expect(grid.gridFilterPayload({ editionScope: 'active', filters: {} })).toEqual({});
+  });
+
+  test('DENIAL: an unknown queue key is dropped, never echoed to the server', () => {
+    expect(grid.gridFilterPayload({ queue: 'not-a-queue', filters: {} })).toEqual({});
+  });
+
   test('numeric filters are coerced to numbers (string-from-select tolerated)', () => {
-    const payload = grid.gridFilterPayload({ edition_id: '42', company_id: '7' });
+    const payload = grid.gridFilterPayload({ filters: { edition_id: '42', company_id: '7' } });
     expect(payload).toEqual({ edition_id: 42, company_id: 7 });
   });
 
-  test('EDGE: all-empty filters → {} (empty payload = whole active set, not malformed)', () => {
-    expect(grid.gridFilterPayload({ status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' })).toEqual({});
+  test('EDGE: all-empty state → {} (empty payload = whole active set, not malformed)', () => {
+    expect(grid.gridFilterPayload({ filters: { status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' } })).toEqual({});
     expect(grid.gridFilterPayload({})).toEqual({});
     expect(grid.gridFilterPayload(undefined)).toEqual({});
+  });
+});
+
+/**
+ * QUEUE_ROW_STATUS — the queue → single-row-status vocabulary the ARMED
+ * cross-page bulk bar reasons with. Every queue's server id-set is
+ * status-homogeneous (WorklistQueueResolver::queueStatuses); this table names
+ * that one status per queue so the bulk bar can offer the right actions for
+ * an armed queue selection. Keys MUST cover exactly the queue vocabulary
+ * (the PHP contract test pins the server half).
+ */
+test.describe('QUEUE_ROW_STATUS', () => {
+  const QUEUES = ['pending', 'waitlist', 'offerte', 'nocert', 'oldinterest', 'interest_to_invite'];
+
+  test('covers every queue key with a known registration status', () => {
+    const KNOWN_STATUSES = ['pending', 'waitlist', 'confirmed', 'completed', 'interest', 'cancelled'];
+    expect(Object.keys(grid.QUEUE_ROW_STATUS).sort()).toEqual([...QUEUES].sort());
+    for (const key of QUEUES) {
+      expect(KNOWN_STATUSES).toContain(grid.QUEUE_ROW_STATUS[key]);
+    }
+  });
+
+  test('the queue statuses match the server predicates (offerte=confirmed, nocert=completed)', () => {
+    expect(grid.QUEUE_ROW_STATUS.pending).toBe('pending');
+    expect(grid.QUEUE_ROW_STATUS.waitlist).toBe('waitlist');
+    expect(grid.QUEUE_ROW_STATUS.offerte).toBe('confirmed');
+    expect(grid.QUEUE_ROW_STATUS.nocert).toBe('completed');
+    expect(grid.QUEUE_ROW_STATUS.oldinterest).toBe('interest');
+    expect(grid.QUEUE_ROW_STATUS.interest_to_invite).toBe('interest');
   });
 });
 

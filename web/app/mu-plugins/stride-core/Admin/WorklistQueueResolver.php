@@ -7,7 +7,6 @@ namespace Stride\Admin;
 use Stride\Domain\OfferingStatus;
 use Stride\Domain\QuoteStatus;
 use Stride\Domain\RegistrationStatus;
-use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
@@ -18,11 +17,17 @@ use Stride\Modules\Enrollment\RegistrationTable;
  * THE single definition of the Vandaag worklist queues.
  *
  * Both consumers read the SAME resolved id-sets, so the queue card's count and
- * the grid's click-through can never drift (the RC-2 class of bug — "Afgerond
- * zonder certificaat: 3" opening a grid of 40 unrelated rows):
+ * the grid's click-through cannot drift on the definition (the RC-2 class of
+ * bug — "Afgerond zonder certificaat: 3" opening a grid of 40 unrelated rows):
  *
- *   - AdminStatsService::getWorklistQueueCounts → count() of each set;
- *   - GET /admin/registrations?queue=<key>      → WHERE r.id IN (set).
+ *   - AdminStatsService::getWorklistQueueCounts → count() of each set
+ *     (cached in the stats transient, ≤120s staleness);
+ *   - GET /admin/registrations?queue=<key>      → WHERE r.id IN (set),
+ *     resolved live per request.
+ *
+ * The definition is shared; the counts read a TTL-bounded snapshot of it, so
+ * a card can lag a live click-through by up to the stats TTL when an input
+ * outside the bust set changes (e.g. a LearnDash certificate being issued).
  *
  * Queue keys are the CLIENT vocabulary (the ?queue= deep-link values the
  * Vandaag cards emit and grid.js consumes). The stats payload's legacy count
@@ -31,7 +36,10 @@ use Stride\Modules\Enrollment\RegistrationTable;
  * Predicates involve per-row PHP decisions (capacity, LD certificate lookup,
  * offerte label), so the queues resolve to explicit id-sets rather than SQL —
  * the id-set IS the contract. Resolution is memoized per request per
- * edition-set; the corpus is bounded by the active-edition scope.
+ * (edition-set, queue-subset); a single-queue request (the grid's ?queue=
+ * path, re-hit on every pagination/sort/search interaction) only fetches the
+ * statuses and runs the per-row work THAT queue needs — never e.g. a LD
+ * certificate lookup per completed row to serve ?queue=pending.
  */
 final class WorklistQueueResolver
 {
@@ -50,7 +58,7 @@ final class WorklistQueueResolver
      */
     public const OLD_INTEREST_DAYS = 90;
 
-    /** @var array<string, array<string, list<int>>> per-request memo, keyed by edition-set hash. */
+    /** @var array<string, array<string, list<int>>> per-request memo, keyed by edition-set + queue-subset hash. */
     private array $memo = [];
 
     public function __construct(
@@ -60,6 +68,26 @@ final class WorklistQueueResolver
     ) {}
 
     /**
+     * The registration status(es) each queue's predicate starts from. Also
+     * the client contract for a status-homogeneous armed select-all (grid.js
+     * QUEUE_STATUS mirrors the single status per queue — pinned by the
+     * cross-language contract test).
+     *
+     * @return array<string, list<string>> queue key => registration statuses.
+     */
+    private static function queueStatuses(): array
+    {
+        return [
+            'pending'            => [RegistrationStatus::Pending->value],
+            'waitlist'           => [RegistrationStatus::Waitlist->value],
+            'offerte'            => [RegistrationStatus::Confirmed->value],
+            'nocert'             => [RegistrationStatus::Completed->value],
+            'oldinterest'        => [RegistrationStatus::Interest->value],
+            'interest_to_invite' => [RegistrationStatus::Interest->value],
+        ];
+    }
+
+    /**
      * The active-edition scope every queue reasons over — owned by the edition
      * domain (one predicate, no second copy here).
      *
@@ -67,7 +95,7 @@ final class WorklistQueueResolver
      */
     public function activeEditionIds(): array
     {
-        return $this->editionRepository->findActiveDateScopedIds();
+        return $this->editionRepository->findAdminActiveIds();
     }
 
     /**
@@ -81,7 +109,7 @@ final class WorklistQueueResolver
             return null;
         }
 
-        return $this->idsByQueue($activeEditionIds ?? $this->activeEditionIds())[$queue];
+        return $this->resolve($activeEditionIds ?? $this->activeEditionIds(), [$queue])[$queue];
     }
 
     /**
@@ -92,51 +120,77 @@ final class WorklistQueueResolver
      */
     public function idsByQueue(array $activeEditionIds): array
     {
+        return $this->resolve($activeEditionIds, self::QUEUES);
+    }
+
+    /**
+     * Resolve the requested queue subset over the active corpus.
+     *
+     * One row fetch covers exactly the statuses the requested queues need;
+     * the per-queue support work (capacity probes, offerte labels, LD
+     * certificate lookups, planned-date meta) only runs for queues actually
+     * requested — the expensive nocert/offerte passes never tax an unrelated
+     * single-queue grid request.
+     *
+     * @param  array<int>   $activeEditionIds
+     * @param  list<string> $queues  Subset of self::QUEUES (caller-validated).
+     * @return array<string, list<int>>  queue key => registration ids (keys = $queues).
+     */
+    private function resolve(array $activeEditionIds, array $queues): array
+    {
         $activeEditionIds = array_values(array_unique(array_filter(array_map('intval', $activeEditionIds))));
 
-        $memoKey = md5(implode(',', $activeEditionIds));
+        $memoKey = md5(implode(',', $activeEditionIds)) . '|' . implode(',', $queues);
         if (isset($this->memo[$memoKey])) {
             return $this->memo[$memoKey];
         }
 
-        $sets = array_fill_keys(self::QUEUES, []);
+        $sets = array_fill_keys($queues, []);
 
         if (empty($activeEditionIds) || !RegistrationTable::exists()) {
             return $this->memo[$memoKey] = $sets;
         }
 
-        // One row fetch covers every queue's status (structured columns, M5).
+        $wants = array_fill_keys($queues, true);
+
+        $statuses = [];
+        foreach ($queues as $queue) {
+            foreach (self::queueStatuses()[$queue] as $status) {
+                $statuses[$status] = true;
+            }
+        }
+
         $rows = $this->registrations->findByEditionsAndStatuses(
             $activeEditionIds,
-            [
-                RegistrationStatus::Pending->value,
-                RegistrationStatus::Waitlist->value,
-                RegistrationStatus::Confirmed->value,
-                RegistrationStatus::Completed->value,
-                RegistrationStatus::Interest->value,
-            ],
+            array_keys($statuses),
         );
 
         if (empty($rows)) {
             return $this->memo[$memoKey] = $sets;
         }
 
-        // Effective status per edition (INV-7) — one batched decision pass.
-        $effectiveStatuses = $this->editions->getEffectiveStatuses($activeEditionIds);
+        // Effective status per edition (INV-7) — only the waitlist queue's
+        // open-capacity rule reads it.
+        $effectiveStatuses = isset($wants['waitlist'])
+            ? $this->editions->getEffectiveStatuses($activeEditionIds)
+            : [];
 
         // Offerte resolver (the single paid-proxy definition) over confirmed regs.
-        $confirmedRegIds = [];
-        foreach ($rows as $row) {
-            if ($row->status === RegistrationStatus::Confirmed->value) {
-                $confirmedRegIds[] = (int) $row->id;
-            }
-        }
-        // Lazy container read — AdminRegistrationQueryService consumes THIS
-        // class for the queue param, so a constructor dependency would cycle.
-        $offerteByReg = !empty($confirmedRegIds)
-            ? ntdst_get(AdminRegistrationQueryService::class)->offerteStatusesForRegistrations($confirmedRegIds)
-            : [];
+        $offerteByReg = [];
         $exportedLabel = QuoteStatus::Exported->label();
+        if (isset($wants['offerte'])) {
+            $confirmedRegIds = [];
+            foreach ($rows as $row) {
+                if ($row->status === RegistrationStatus::Confirmed->value) {
+                    $confirmedRegIds[] = (int) $row->id;
+                }
+            }
+            // Lazy container read — AdminRegistrationQueryService consumes THIS
+            // class for the queue param, so a constructor dependency would cycle.
+            $offerteByReg = !empty($confirmedRegIds)
+                ? ntdst_get(AdminRegistrationQueryService::class)->offerteStatusesForRegistrations($confirmedRegIds)
+                : [];
+        }
 
         // Pre-resolve per-edition lookups ONCE per distinct edition (CR-2/CR-3).
         $waitlistEditionIds = [];
@@ -153,27 +207,27 @@ final class WorklistQueueResolver
             }
         }
         $hasSpotsByEdition = [];
-        foreach (array_keys($waitlistEditionIds) as $editionId) {
-            $hasSpotsByEdition[$editionId] = $this->editions->hasAvailableSpots($editionId);
+        if (isset($wants['waitlist'])) {
+            foreach (array_keys($waitlistEditionIds) as $editionId) {
+                $hasSpotsByEdition[$editionId] = $this->editions->hasAvailableSpots($editionId);
+            }
         }
         $courseIdByEdition = [];
-        foreach (array_keys($completedEditionIds) as $editionId) {
-            $courseIdByEdition[$editionId] = $this->editions->getCourseId($editionId) ?? 0;
+        if (isset($wants['nocert'])) {
+            foreach (array_keys($completedEditionIds) as $editionId) {
+                $courseIdByEdition[$editionId] = $this->editions->getCourseId($editionId) ?? 0;
+            }
         }
 
-        // interest_to_invite: per-distinct-edition start_date presence (one
-        // batched meta read). A non-empty start_date means the formerly
-        // dateless interest anchor now has a PLANNED date → invite.
+        // interest_to_invite: per-distinct-edition planned-date presence (one
+        // batched meta read, owned by the edition repo — INV-3). A dated
+        // edition means the formerly dateless interest anchor is now PLANNED.
         $datedByEdition = [];
-        if (!empty($interestEditionIds)) {
-            $startMeta = BatchQueryHelper::batchGetPostMeta(
-                array_keys($interestEditionIds),
-                ['_ntdst_start_date'],
+        if (isset($wants['interest_to_invite']) && !empty($interestEditionIds)) {
+            $datedByEdition = array_fill_keys(
+                $this->editionRepository->filterIdsWithStartDate(array_keys($interestEditionIds)),
+                true,
             );
-            foreach (array_keys($interestEditionIds) as $editionId) {
-                $startDate = $startMeta[$editionId]['_ntdst_start_date'] ?? null;
-                $datedByEdition[$editionId] = is_string($startDate) && trim($startDate) !== '';
-            }
         }
 
         $oldInterestCutoff = strtotime('-' . self::OLD_INTEREST_DAYS . ' days');
@@ -186,14 +240,17 @@ final class WorklistQueueResolver
 
             switch ($row->status) {
                 case RegistrationStatus::Pending->value:
-                    $sets['pending'][] = $regId;
+                    if (isset($wants['pending'])) {
+                        $sets['pending'][] = $regId;
+                    }
                     break;
 
                 case RegistrationStatus::Waitlist->value:
                     // Open capacity = edition not terminal/past (effective
                     // status) AND free spots (prefetched per distinct edition).
                     if (
-                        $effective !== null
+                        isset($wants['waitlist'])
+                        && $effective !== null
                         && !$effective->isTerminal()
                         && $effective !== OfferingStatus::Completed
                         && ($hasSpotsByEdition[$editionId] ?? false)
@@ -204,14 +261,16 @@ final class WorklistQueueResolver
 
                 case RegistrationStatus::Confirmed->value:
                     // Absent quote OR any label that is not Exported → follow-up.
-                    $label = $offerteByReg[$regId] ?? null;
-                    if ($label !== $exportedLabel) {
-                        $sets['offerte'][] = $regId;
+                    if (isset($wants['offerte'])) {
+                        $label = $offerteByReg[$regId] ?? null;
+                        if ($label !== $exportedLabel) {
+                            $sets['offerte'][] = $regId;
+                        }
                     }
                     break;
 
                 case RegistrationStatus::Completed->value:
-                    if (empty($row->completed_at)) {
+                    if (!isset($wants['nocert']) || empty($row->completed_at)) {
                         break;
                     }
                     $courseId = $courseIdByEdition[$editionId] ?? 0;
@@ -227,13 +286,15 @@ final class WorklistQueueResolver
                     break;
 
                 case RegistrationStatus::Interest->value:
-                    $registeredTs = $row->registered_at ? strtotime((string) $row->registered_at) : false;
-                    if ($registeredTs !== false && $registeredTs < $oldInterestCutoff) {
-                        $sets['oldinterest'][] = $regId;
+                    if (isset($wants['oldinterest'])) {
+                        $registeredTs = $row->registered_at ? strtotime((string) $row->registered_at) : false;
+                        if ($registeredTs !== false && $registeredTs < $oldInterestCutoff) {
+                            $sets['oldinterest'][] = $regId;
+                        }
                     }
                     // Counted INDEPENDENTLY of the age check — a row may belong
                     // to both queues (they answer different questions).
-                    if ($datedByEdition[$editionId] ?? false) {
+                    if (isset($wants['interest_to_invite']) && ($datedByEdition[$editionId] ?? false)) {
                         $sets['interest_to_invite'][] = $regId;
                     }
                     break;

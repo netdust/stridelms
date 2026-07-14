@@ -111,6 +111,12 @@ class AdminDashboardService extends AbstractService
         add_action('save_post_vad_edition', $invalidateQueue);
         add_action('save_post_vad_session', $invalidateQueue);
         add_action('save_post_vad_trajectory', $invalidateQueue);
+        //  - LearnDash course completion is when a certificate becomes
+        //    available — the nocert queue count's only input NOT covered by a
+        //    Stride write event. Without this, awarding the certificates a
+        //    card surfaced left the card's count stale for up to STATS_TTL
+        //    while the click-through (resolved live) was already empty.
+        add_action('learndash_course_completed', $invalidateQueue);
 
         add_action('admin_menu', [$this, 'registerAdminPage']);
         add_action('admin_menu', [$this, 'reorderSubmenus'], 999);

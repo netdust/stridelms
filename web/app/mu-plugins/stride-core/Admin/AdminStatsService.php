@@ -4,16 +4,11 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
-use Stride\Domain\OfferingStatus;
 use Stride\Domain\QuoteStatus;
-use Stride\Domain\RegistrationStatus;
 use Stride\Infrastructure\BatchQueryHelper;
-use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionCPT;
-use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\Trajectory\TrajectoryCPT;
@@ -30,13 +25,6 @@ use Stride\Modules\Trajectory\TrajectoryCPT;
  */
 final class AdminStatsService
 {
-    /**
-     * Interest rows older than this many days surface in the "Oude interesse"
-     * worklist queue. Matches the mockup QUEUES def ("interesse + ouder dan
-     * 90 dagen", docs/mockups/admin-workspace/assets/js/data.js).
-     */
-    private const OLD_INTEREST_DAYS = 90;
-
     /**
      * Transient key + TTL for the cached dashboard stats payload (S6).
      *
@@ -57,9 +45,6 @@ final class AdminStatsService
 
     public function __construct(
         private readonly ActionQueueService $actionQueue,
-        private readonly RegistrationRepository $registrations,
-        private readonly AdminRegistrationQueryService $registrationQuery,
-        private readonly EditionService $editions,
         private readonly EditionRepository $editionRepository,
     ) {}
 
@@ -420,7 +405,8 @@ final class AdminStatsService
      *  - nocert            — 'completed' rows with completed_at set but no
      *                        LearnDash certificate.
      *  - oldinterest       — 'interest' rows registered more than
-     *                        OLD_INTEREST_DAYS ago. Counts DATELESS-edition rows
+     *                        WorklistQueueResolver::OLD_INTEREST_DAYS ago.
+     *                        Counts DATELESS-edition rows
      *                        too, because the active subset includes dateless
      *                        editions (§10.7 carve-out — the active-set predicate
      *                        is NULL-permitting, not a start_date >= X filter).
@@ -462,22 +448,23 @@ final class AdminStatsService
     /**
      * Derive the active-edition ID set for the worklist queue counts.
      *
-     * Active = published editions whose start_date is within the 2-day grace
-     * window OR has NO start_date at all (the sessionless/dateless interest
-     * anchors — §10.7 carve-out, bug_sessionless_edition_cutoff). Mirrors the
-     * NULL-permitting predicate in AdminAPIController::getEditions() (the
-     * canonical active-scope rule): a `start_date >= X` filter would silently
-     * drop dateless editions and undercount "Oude interesse".
+     * Active = published editions the admin has NOT closed (status-based —
+     * OfferingStatus::adminClosedValues; decision 2026-07-14, F-V3). Dateless
+     * editions (the sessionless interest anchors, §10.7) are active by
+     * construction — the rule never looks at dates. NOTE this deliberately
+     * DIVERGES from the Edities agenda's date-scoped list predicate
+     * (AdminAPIController::getEditions) — reconciliation is scheduled for the
+     * Edities slice; do not treat that predicate as this rule's mirror.
      *
      * @return array<int>
      */
     private function activeEditionIds(): array
     {
-        // Canonical date-scoped active set (CR-6) — owned by the edition domain
-        // (EditionRepository::findActiveDateScopedIds), including the §10.7
-        // dateless carve-out. No second copy of the predicate here. Call the
-        // repo directly: the former EditionService pass-through was drift.
-        return $this->editionRepository->findActiveDateScopedIds();
+        // Canonical admin-active set (CR-6) — owned by the edition domain
+        // (EditionRepository::findAdminActiveIds). No second copy of the
+        // predicate here. Call the repo directly: the former EditionService
+        // pass-through was drift.
+        return $this->editionRepository->findAdminActiveIds();
     }
 
     // =========================================================================

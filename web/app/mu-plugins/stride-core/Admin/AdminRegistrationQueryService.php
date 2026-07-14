@@ -46,37 +46,9 @@ final class AdminRegistrationQueryService
      */
     public function getGridPage(array $params): array|\WP_Error
     {
-        // Worklist queue filter (?queue=): resolve the SAME id-set the Vandaag
-        // card counted (WorklistQueueResolver — one definition, RC-2) and pin
-        // the grid to it. The ids already encode the active-edition scope, so
-        // the scope join is skipped. Other filters (search, edition, status,
-        // group_by) compose on top via buildGridFilters as usual.
-        if (!empty($params['queue'])) {
-            $resolver = ntdst_get(WorklistQueueResolver::class);
-            $queueIds = $resolver->idsForQueue((string) $params['queue']);
-            if ($queueIds === null) {
-                return new \WP_Error(
-                    'invalid_queue',
-                    __('Onbekende wachtrij.', 'stride'),
-                    ['status' => 400],
-                );
-            }
-            $params['queue_ids'] = $queueIds;
-            $params['edition_scope'] = 'all';
-        }
-
-        // Active-edition scope (default): resolve the admin-active id-set ONCE
-        // (memoized in the resolver) and pin the query to it. Omitted for
-        // edition_scope=all, an explicit edition_id (a picked edition is
-        // reachable regardless of its status), or a queue pin (its ids already
-        // encode the scope). The repository carries no scope SQL of its own.
-        $editionScope = (string) ($params['edition_scope'] ?? 'active');
-        if (
-            $editionScope !== 'all'
-            && empty($params['edition_id'])
-            && !array_key_exists('queue_ids', $params)
-        ) {
-            $params['active_edition_ids'] = ntdst_get(WorklistQueueResolver::class)->activeEditionIds();
+        $params = $this->applyScopePins($params);
+        if (is_wp_error($params)) {
+            return $params;
         }
 
         $groupBy = $params['group_by'] ?? null;
@@ -97,6 +69,57 @@ final class AdminRegistrationQueryService
         $page['statusCounts'] = $this->statusCounts($params);
 
         return $page;
+    }
+
+    /**
+     * Resolve the queue pin and the default active-edition scope into the
+     * server-owned id-set filter keys — THE one place scope enters a grid
+     * filter set. Every consumer of buildGridFilters that starts from CLIENT
+     * filter input must route through here first: the grid read (getGridPage)
+     * AND the bulk select-all expansion (BulkRunner::resolveBulkIds). Skipping
+     * this step made a select-all expand UNSCOPED over the whole registrations
+     * table while the grid showed a scoped subset — mutating rows the admin
+     * never saw (review 2026-07-14, blast-radius regression).
+     *
+     * Two injections, mirroring what the grid read renders:
+     *  - queue → queue_ids: the SAME id-set the Vandaag card counted
+     *    (WorklistQueueResolver — one definition, RC-2). The ids already
+     *    encode the active-edition scope, so the scope pin is skipped.
+     *    An unknown queue key is a hard 400 — never a silent no-filter.
+     *  - default 'active' scope → active_edition_ids: resolved ONCE (memoized
+     *    in the resolver). Omitted for edition_scope=all, an explicit
+     *    edition_id (a picked edition is reachable regardless of status), or
+     *    a queue pin. The repository carries no scope SQL of its own.
+     *
+     * @param  array<string,mixed> $params  Client filter/request params.
+     * @return array<string,mixed>|\WP_Error $params with queue_ids/active_edition_ids injected.
+     */
+    public function applyScopePins(array $params): array|\WP_Error
+    {
+        if (!empty($params['queue'])) {
+            $resolver = ntdst_get(WorklistQueueResolver::class);
+            $queueIds = $resolver->idsForQueue((string) $params['queue']);
+            if ($queueIds === null) {
+                return new \WP_Error(
+                    'invalid_queue',
+                    __('Onbekende wachtrij.', 'stride'),
+                    ['status' => 400],
+                );
+            }
+            $params['queue_ids'] = $queueIds;
+            $params['edition_scope'] = 'all';
+        }
+
+        $editionScope = (string) ($params['edition_scope'] ?? 'active');
+        if (
+            $editionScope !== 'all'
+            && empty($params['edition_id'])
+            && !array_key_exists('queue_ids', $params)
+        ) {
+            $params['active_edition_ids'] = ntdst_get(WorklistQueueResolver::class)->activeEditionIds();
+        }
+
+        return $params;
     }
 
     /**
@@ -248,8 +271,8 @@ final class AdminRegistrationQueryService
 
             // Identity. Logged-in rows resolve from the joined user record.
             // Anonymous interest/waitlist rows (user_id 0/NULL) have no user
-            // record — fall back to the name/email captured in enrollment_data,
-            // mirroring the per-edition roster path (INV-3: identical decode).
+            // record — fall back to the denormalized lead identity columns
+            // (v5), stamped by the SAME extractor the search columns use.
             if ($isAnon) {
                 $identity = $this->resolveAnonymousIdentity($row);
                 $name  = $identity['name'];
@@ -332,37 +355,27 @@ final class AdminRegistrationQueryService
 
     /**
      * Resolve the captured name/email for an anonymous (user_id 0/NULL) row
-     * from its enrollment_data JSON.
+     * from the denormalized lead_name/lead_email columns (schema v5).
      *
-     * Anonymous interest/waitlist submissions store the submitter's identity
-     * in the enrollment_data envelope: enrollment_data[<stage>]['data']['name'|'email'],
-     * where <stage> equals the row's status ('interest' or 'waitlist').
+     * The columns are stamped on every write path AND backfilled by the v5
+     * migration via ONE extractor (RegistrationRepository::extractLeadIdentity),
+     * so this read shares the exact identity definition the grid SEARCH matches
+     * against. The former per-row enrollment_data JSON decode keyed on the
+     * row's CURRENT status, so a lead captured at the interest stage then moved
+     * to waitlist rendered '(anoniem)' while search still found the row by its
+     * backfilled lead_name — a hit with no visible name.
      *
-     * Decode semantics are IDENTICAL to the per-edition roster path
-     * (AdminAPIController::formatEditionRoster) — INV-3: the two reads of this
-     * one concern must not drift. Same envelope path, same '(anoniem)' / ''
-     * defaults.
-     *
-     * @param  object $row  Grid row with ->status and ->enrollment_data (raw JSON string|null).
+     * @param  object $row  Grid row with ->lead_name / ->lead_email.
      * @return array{name:string,email:string}
      */
     private function resolveAnonymousIdentity(object $row): array
     {
-        $stageData = [];
-        $raw = $row->enrollment_data ?? '';
-        if (is_string($raw) && $raw !== '') {
-            $decoded = json_decode($raw, true);
-            if (is_array($decoded)) {
-                // status maps to the stage key (interest/waitlist).
-                // Wrapped shape: $decoded[$status]['data'][field].
-                $stageEnvelope = $decoded[$row->status] ?? [];
-                $stageData = is_array($stageEnvelope['data'] ?? null) ? $stageEnvelope['data'] : [];
-            }
-        }
+        $name  = (string) ($row->lead_name ?? '');
+        $email = (string) ($row->lead_email ?? '');
 
         return [
-            'name'  => $stageData['name'] ?? '(anoniem)',
-            'email' => $stageData['email'] ?? '',
+            'name'  => $name !== '' ? $name : '(anoniem)',
+            'email' => $email,
         ];
     }
 

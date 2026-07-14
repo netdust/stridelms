@@ -59,9 +59,22 @@ final class EditionRepository extends AbstractRepository
      * AdminRegistrationQueryService) routes through THIS set instead of
      * re-deriving a predicate.
      *
+     * NOTE this is deliberately DISTINCT from the Edities agenda's own
+     * date-scoped list predicate (AdminAPIController::getEditions) — the
+     * agenda answers "what is coming up", this answers "where can admin work
+     * still live". The divergence is intentional (decision 2026-07-14) and is
+     * scheduled for reconciliation in the Edities slice.
+     *
+     * INV-7 note: this reads the STORED status meta on purpose, NOT
+     * getEffectiveStatus() — the effective layer's past-date → Completed
+     * inference is exactly the auto-closing this rule removes (an edition
+     * must stay admin-active until the admin closes it). Recorded in
+     * ARCHITECTURE-INVARIANTS.md's INV-7 known-bypass list; do not "fix"
+     * this back to the effective read.
+     *
      * @return list<int>
      */
-    public function findActiveDateScopedIds(int $graceDays = 2): array
+    public function findAdminActiveIds(): array
     {
         global $wpdb;
 
@@ -75,9 +88,7 @@ final class EditionRepository extends AbstractRepository
         // archived — OfferingStatus::adminClosedValues; stored status only
         // changes by admin action, there is no auto-recompute cron). Editions
         // without a status meta row count as active (defensive: a missing row
-        // must never hide live work). $graceDays is retained for signature
-        // compatibility but no longer used.
-        unset($graceDays);
+        // must never hide live work).
         $prefix = $this->getMetaPrefix();
         $closed = \Stride\Domain\OfferingStatus::adminClosedValues();
         $closedIn = implode(',', array_fill(0, count($closed), '%s'));
@@ -92,6 +103,36 @@ final class EditionRepository extends AbstractRepository
         ));
 
         return array_map('intval', $ids);
+    }
+
+    /**
+     * Of the given edition ids, return the subset that has a PLANNED date —
+     * a non-empty start_date meta. Owns the start_date meta vocabulary
+     * (INV-3: the CPT's field set is the schema; consumers ask the repo, they
+     * don't hardcode `_ntdst_*` keys). Consumed by WorklistQueueResolver's
+     * interest_to_invite queue: a formerly dateless interest anchor that now
+     * carries a date means its interest rows can be invited.
+     *
+     * @param  list<int> $editionIds
+     * @return list<int>  The dated subset, in input order.
+     */
+    public function filterIdsWithStartDate(array $editionIds): array
+    {
+        $editionIds = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if ($editionIds === []) {
+            return [];
+        }
+
+        $metaKey   = $this->getMetaPrefix() . 'start_date';
+        $startMeta = \Stride\Infrastructure\BatchQueryHelper::batchGetPostMeta($editionIds, [$metaKey]);
+
+        return array_values(array_filter(
+            $editionIds,
+            static function (int $editionId) use ($startMeta, $metaKey): bool {
+                $startDate = $startMeta[$editionId][$metaKey] ?? null;
+                return is_string($startDate) && trim($startDate) !== '';
+            },
+        ));
     }
 
     /**
