@@ -175,7 +175,8 @@ defined('ABSPATH') || exit;
                         <div class="ws-queue__count" :class="q.count===0 && 'is-zero'" x-text="q.count"></div>
                     </div>
                     <div class="ws-queue__title" x-text="q.label"></div>
-                    <div class="ws-queue__def" x-text="q.def"></div>
+                    <!-- 7a: the approval card shows its ready/blocked split instead of the static definition -->
+                    <div class="ws-queue__def" x-text="q.sub || q.def"></div>
                     <div class="ws-queue__foot">
                         <span class="ws-queue__action">
                             <span x-show="q.count>0" x-html="icon(q.actionIcon)"></span>

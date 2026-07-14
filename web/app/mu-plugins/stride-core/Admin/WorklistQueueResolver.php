@@ -10,6 +10,7 @@ use Stride\Domain\RegistrationStatus;
 use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
+use Stride\Modules\Enrollment\EnrollmentCompletion;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
 
@@ -133,7 +134,33 @@ final class WorklistQueueResolver
      */
     public function idsByQueue(array $activeEditionIds): array
     {
-        return $this->resolve($activeEditionIds, self::QUEUES);
+        // Strip the internal pending_ready sub-set — the public shape is
+        // exactly the QUEUES vocabulary (pinned by the contract tests).
+        return array_intersect_key(
+            $this->resolve($activeEditionIds, self::QUEUES),
+            array_flip(self::QUEUES),
+        );
+    }
+
+    /**
+     * Split of the pending queue (decision 7a — F-V4/F-V5): a pending row
+     * whose USER side is done — all user tasks completed, or no tasks at all
+     * (nothing for the user to do) — waits on the ADMIN ("klaar voor
+     * goedkeuring"); the rest wait on the participant. Same fetch, same
+     * definition as idsForQueue('pending'): ready ∪ blocked ≡ the pending
+     * queue, so the card's split can never disagree with its own total.
+     *
+     * @return array{ready: list<int>, blocked: list<int>}
+     */
+    public function pendingSplit(?array $activeEditionIds = null): array
+    {
+        $sets = $this->resolve($activeEditionIds ?? $this->activeEditionIds(), ['pending']);
+        $ready = $sets['pending_ready'] ?? [];
+
+        return [
+            'ready'   => $ready,
+            'blocked' => array_values(array_diff($sets['pending'], $ready)),
+        ];
     }
 
     /**
@@ -159,6 +186,11 @@ final class WorklistQueueResolver
         }
 
         $sets = array_fill_keys($queues, []);
+        // Internal sub-set riding along with 'pending' (pendingSplit) —
+        // stripped from the public idsByQueue shape.
+        if (in_array('pending', $queues, true)) {
+            $sets['pending_ready'] = [];
+        }
 
         if (empty($activeEditionIds) || !RegistrationTable::exists()) {
             return $this->memo[$memoKey] = $sets;
@@ -247,6 +279,10 @@ final class WorklistQueueResolver
 
         $oldInterestCutoff = strtotime('-' . self::OLD_INTEREST_DAYS . ' days');
 
+        // Readiness rule for the pending split — lazy container read, only
+        // taxed when a pending row is actually classified.
+        $completion = null;
+
         foreach ($rows as $row) {
             $regId     = (int) $row->id;
             $userId    = (int) $row->user_id;
@@ -257,6 +293,15 @@ final class WorklistQueueResolver
                 case RegistrationStatus::Pending->value:
                     if (isset($sets['pending'])) {
                         $sets['pending'][] = $regId;
+
+                        // Split (7a): user tasks all done, or NO tasks at all
+                        // (F-V5 — nothing for the user to do) → the row waits
+                        // on the ADMIN.
+                        $tasks = is_array($row->completion_tasks ?? null) ? $row->completion_tasks : [];
+                        $completion ??= ntdst_get(EnrollmentCompletion::class);
+                        if ($completion->areUserTasksComplete($tasks)) {
+                            $sets['pending_ready'][] = $regId;
+                        }
                     }
                     break;
 

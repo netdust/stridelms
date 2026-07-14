@@ -1244,15 +1244,17 @@ final class RegistrationRepository
         $idPlaceholders     = implode(',', array_fill(0, count($ids), '%d'));
         $statusPlaceholders = implode(',', array_fill(0, count($statuses), '%s'));
 
+        // completion_tasks rides along (decoded) for the pending-split
+        // readiness rule (WorklistQueueResolver::pendingSplit, decision 7a).
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, user_id, edition_id, status, registered_at, completed_at
+            "SELECT id, user_id, edition_id, status, registered_at, completed_at, completion_tasks
              FROM {$this->table()}
              WHERE edition_id IN ({$idPlaceholders})
                AND status IN ({$statusPlaceholders})",
             ...array_merge($ids, $statuses),
         ));
 
-        return $rows ?: [];
+        return $this->decodeCompletionTaskRows($rows ?: []);
     }
 
     /**
@@ -1807,28 +1809,39 @@ final class RegistrationRepository
     /**
      * Approvals scan, enrollment phase (INV-3, panel drift Important-2):
      * pending registrations that can still yield a pending-approvals item —
-     * an open admin-approval task or stale-aged. The caller's PHP re-checks
-     * stay authoritative; this SQL filter is shaped to only ever OVER-fetch.
-     * The task status comparison carries an explicit COLLATE utf8mb4_bin so
-     * SQL matches PHP's strict ===/!== exactly (CR-E1); the LIMIT is the
-     * caller's scan cap (CR-E2 — a full result set means "maybe clipped").
+     * an open admin-approval task, NO tasks at all (F-V5: nothing blocks the
+     * row except the admin — the old IS NOT NULL pre-filter made those rows
+     * count on the queue card yet stay invisible here), or stale-aged. The
+     * caller's PHP re-checks stay authoritative; this SQL filter is shaped
+     * to only ever OVER-fetch. The task status comparison carries an
+     * explicit COLLATE utf8mb4_bin so SQL matches PHP's strict ===/!==
+     * exactly (CR-E1); the LIMIT is the caller's scan cap (CR-E2 — a full
+     * result set means "maybe clipped").
      *
+     * $editionIds scopes the scan to the admin-active edition set (F-V4 —
+     * the same corpus every other Vandaag number reasons over); rows with
+     * NO edition (trajectory parents) always pass.
+     *
+     * @param array<int> $editionIds
      * @return array<object> rows with ->id (int), ->user_id, ->edition_id,
      *                       ->registered_at and ->completion_tasks
      *                       (array|null — JSON-decoded, repo convention)
      */
-    public function findPendingWithOpenApproval(string $staleThreshold, int $scanCap): array
+    public function findPendingWithOpenApproval(string $staleThreshold, int $scanCap, array $editionIds = []): array
     {
         global $wpdb;
+
+        $scopeSql = $this->editionScopeSql($editionIds);
 
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT id, user_id, edition_id, registered_at, completion_tasks
              FROM {$this->table()}
              WHERE status = 'pending'
-               AND completion_tasks IS NOT NULL
+               {$scopeSql}
                AND (
-                   (JSON_EXTRACT(completion_tasks, '$.approval') IS NOT NULL
-                    AND COALESCE(JSON_VALUE(completion_tasks, '$.approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed')
+                   completion_tasks IS NULL
+                   OR (JSON_EXTRACT(completion_tasks, '$.approval') IS NOT NULL
+                       AND COALESCE(JSON_VALUE(completion_tasks, '$.approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed')
                    OR registered_at <= %s
                )
              ORDER BY registered_at ASC
@@ -1841,21 +1854,40 @@ final class RegistrationRepository
     }
 
     /**
+     * Optional admin-active edition scope fragment for the approvals scans.
+     * Empty scope = unscoped (backward-compatible); edition-less rows
+     * (trajectory parents) always pass.
+     */
+    private function editionScopeSql(array $editionIds): string
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if (empty($ids)) {
+            return '';
+        }
+
+        return 'AND (edition_id IS NULL OR edition_id IN (' . implode(',', $ids) . '))';
+    }
+
+    /**
      * Approvals scan, post-course phase (INV-3): confirmed registrations
      * with an open post_approval task whose post-course user tasks (fixed
-     * keys) are absent-or-completed. Same over-fetch + COLLATE + scan-cap
-     * contract as findPendingWithOpenApproval().
+     * keys) are absent-or-completed. Same over-fetch + COLLATE + scan-cap +
+     * edition-scope contract as findPendingWithOpenApproval().
      *
+     * @param array<int> $editionIds
      * @return array<object> same row shape as findPendingWithOpenApproval()
      */
-    public function findConfirmedWithOpenPostApproval(int $scanCap): array
+    public function findConfirmedWithOpenPostApproval(int $scanCap, array $editionIds = []): array
     {
         global $wpdb;
+
+        $scopeSql = $this->editionScopeSql($editionIds);
 
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT id, user_id, edition_id, registered_at, completion_tasks
              FROM {$this->table()}
              WHERE status = 'confirmed'
+               {$scopeSql}
                AND completion_tasks IS NOT NULL
                AND JSON_EXTRACT(completion_tasks, '$.post_approval') IS NOT NULL
                AND COALESCE(JSON_VALUE(completion_tasks, '$.post_approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed'

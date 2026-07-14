@@ -450,11 +450,18 @@ final class AdminStatsService
         // card number and its click-through can never drift (RC-2). Lazy
         // container read: the resolver also serves AdminRegistrationQueryService,
         // which this service already owns — a constructor dep would cycle.
-        $ids = ntdst_get(WorklistQueueResolver::class)->idsByQueue($activeEditionIds);
+        $resolver = ntdst_get(WorklistQueueResolver::class);
+        $ids = $resolver->idsByQueue($activeEditionIds);
+
+        // Decision 7a: the pending card renders a ready/blocked split —
+        // same fetch+definition as the pending set itself (ready ∪ blocked
+        // ≡ pending, so the split can never disagree with the card total).
+        $split = $resolver->pendingSplit($activeEditionIds);
 
         // Payload keys are the legacy stats vocabulary (vandaag.js countKey map).
         return [
             'pending'            => count($ids['pending']),
+            'pending_ready'      => count($split['ready']),
             'waitlist_open'      => count($ids['waitlist']),
             'offerte_opvolging'  => count($ids['offerte']),
             'nocert'             => count($ids['nocert']),

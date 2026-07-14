@@ -1753,13 +1753,22 @@ final class AdminAPIController
         // RegistrationRepository; the controller keeps bucketing/pagination.
         $registrationRepo = $this->registrationRepository;
 
+        // F-V4: the panel reasons over the SAME admin-active edition corpus
+        // as the queue cards and the grid default — previously it scanned
+        // the whole table while the "Wacht op goedkeuring" card next to it
+        // was scoped, so the two showed different numbers for "waiting on
+        // approval" one panel apart. Edition-less rows (trajectory parents)
+        // always pass.
+        $activeEditionIds = ntdst_get(WorklistQueueResolver::class)->activeEditionIds();
+
         // Enrollment phase: pending registrations that can still yield an item —
-        // an open admin-approval task (bucket 1) or stale-aged (bucket 3 candidate).
-        $pendingRows = $registrationRepo->findPendingWithOpenApproval($staleThreshold, self::APPROVALS_SCAN_CAP);
+        // an open admin-approval task or no tasks at all (bucket 1) or
+        // stale-aged (bucket 3 candidate).
+        $pendingRows = $registrationRepo->findPendingWithOpenApproval($staleThreshold, self::APPROVALS_SCAN_CAP, $activeEditionIds);
 
         // Post-course phase: confirmed registrations with an open post_approval
         // task whose post-course user tasks (fixed keys) are absent-or-completed.
-        $confirmedRows = $registrationRepo->findConfirmedWithOpenPostApproval(self::APPROVALS_SCAN_CAP);
+        $confirmedRows = $registrationRepo->findConfirmedWithOpenPostApproval(self::APPROVALS_SCAN_CAP, $activeEditionIds);
 
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
         /** @var list<array{0: object, 1: array, 2: string, 3: array}> $matches */
@@ -1770,12 +1779,15 @@ final class AdminAPIController
             $tasks = is_array($row->completion_tasks) ? $row->completion_tasks : [];
             $userTasksDone = $completionService->areUserTasksComplete($tasks);
 
-            // Bucket 1: user is done, waiting on admin approval
-            if (
-                $userTasksDone
-                && isset($tasks['approval'])
-                && ($tasks['approval']['status'] ?? 'pending') !== 'completed'
-            ) {
+            // Bucket 1: the row waits on the ADMIN — user tasks all done
+            // with an open approval task, or NO tasks at all (F-V5: nothing
+            // for the user to do, only the admin's confirm is missing; the
+            // old isset($tasks['approval']) condition made those rows count
+            // on the queue card yet never appear here). Same readiness rule
+            // as WorklistQueueResolver::pendingSplit (decision 7a).
+            $approvalOpen = isset($tasks['approval'])
+                && ($tasks['approval']['status'] ?? 'pending') !== 'completed';
+            if ($userTasksDone && ($approvalOpen || empty($tasks))) {
                 $matches[] = [$row, $tasks, 'approval', []];
                 $counts['approval']++;
                 continue;

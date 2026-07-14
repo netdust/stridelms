@@ -99,12 +99,18 @@ final class WorklistQueueResolverTest extends TestCase
 
         try {
             $rows = [
-                // → pending queue.
-                (object) ['id' => 1, 'user_id' => 10, 'edition_id' => 100, 'status' => 'pending', 'registered_at' => '2026-07-01 10:00:00', 'completed_at' => null],
+                // → pending queue; NULL tasks = nothing for the user to do →
+                //   ADMIN-ready (F-V5: these rows counted on the card but
+                //   were invisible in the approvals panel).
+                (object) ['id' => 1, 'user_id' => 10, 'edition_id' => 100, 'status' => 'pending', 'registered_at' => '2026-07-01 10:00:00', 'completed_at' => null, 'completion_tasks' => null],
+                // → pending, open user task → BLOCKED on the participant.
+                (object) ['id' => 4, 'user_id' => 11, 'edition_id' => 100, 'status' => 'pending', 'registered_at' => '2026-07-01 10:00:00', 'completed_at' => null, 'completion_tasks' => ['questionnaire' => ['status' => 'pending']]],
+                // → pending, user done + open approval → ADMIN-ready.
+                (object) ['id' => 5, 'user_id' => 12, 'edition_id' => 100, 'status' => 'pending', 'registered_at' => '2026-07-01 10:00:00', 'completed_at' => null, 'completion_tasks' => ['questionnaire' => ['status' => 'completed'], 'approval' => ['status' => 'pending']]],
                 // → oldinterest (200 days old, undated edition).
-                (object) ['id' => 2, 'user_id' => 0, 'edition_id' => 101, 'status' => 'interest', 'registered_at' => gmdate('Y-m-d H:i:s', strtotime('-200 days')), 'completed_at' => null],
+                (object) ['id' => 2, 'user_id' => 0, 'edition_id' => 101, 'status' => 'interest', 'registered_at' => gmdate('Y-m-d H:i:s', strtotime('-200 days')), 'completed_at' => null, 'completion_tasks' => null],
                 // → interest_to_invite (fresh, edition 102 has a start date).
-                (object) ['id' => 3, 'user_id' => 0, 'edition_id' => 102, 'status' => 'interest', 'registered_at' => gmdate('Y-m-d H:i:s'), 'completed_at' => null],
+                (object) ['id' => 3, 'user_id' => 0, 'edition_id' => 102, 'status' => 'interest', 'registered_at' => gmdate('Y-m-d H:i:s'), 'completed_at' => null, 'completion_tasks' => null],
             ];
 
             $registrations = Mockery::mock(RegistrationRepository::class);
@@ -116,15 +122,37 @@ final class WorklistQueueResolverTest extends TestCase
             $editionRepo->shouldReceive('filterIdsWithStartDate')
                 ->with([101, 102])->andReturn([102]);
 
+            // Readiness rule (pendingSplit): "user tasks done" = every
+            // non-approval task completed; empty/NULL = nothing to do.
+            $completion = Mockery::mock(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+            $completion->shouldReceive('areUserTasksComplete')->andReturnUsing(
+                static function (array $tasks): bool {
+                    foreach ($tasks as $type => $task) {
+                        if ($type !== 'approval' && ($task['status'] ?? 'pending') !== 'completed') {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                },
+            );
+            ntdst_set(\Stride\Modules\Enrollment\EnrollmentCompletion::class, $completion);
+
             $resolver = new WorklistQueueResolver($registrations, $editions, $editionRepo);
             $sets = $resolver->idsByQueue([100, 101, 102]);
 
-            $this->assertSame([1], $sets['pending'], 'a pending row must land in the pending queue');
+            $this->assertSame([1, 4, 5], $sets['pending'], 'pending rows must land in the pending queue');
+            $this->assertArrayNotHasKey('pending_ready', $sets, 'the split sub-set is internal — not part of the public queue vocabulary');
             $this->assertSame([2], $sets['oldinterest'], 'a 200-day-old interest row must land in oldinterest');
             $this->assertSame([3], $sets['interest_to_invite'], 'an interest row on a dated edition must land in interest_to_invite');
             $this->assertSame([], $sets['waitlist']);
             $this->assertSame([], $sets['offerte']);
             $this->assertSame([], $sets['nocert']);
+
+            // Decision 7a: ready ∪ blocked ≡ pending, same fetch + definition.
+            $split = $resolver->pendingSplit([100, 101, 102]);
+            $this->assertSame([1, 5], $split['ready'], 'NULL-task and user-done rows wait on the ADMIN');
+            $this->assertSame([4], $split['blocked'], 'an open user task blocks on the participant');
         } finally {
             $wpdb = $previousWpdb;
         }

@@ -102,16 +102,31 @@
   ];
   function mapQueues(worklistQueues) {
     const w = worklistQueues || {};
-    return QUEUE_DEFS.map((d) => ({
-      key: d.key,
-      label: d.label,
-      def: d.def,
-      accent: d.accent,
-      icon: d.icon,
-      action: d.action,
-      actionIcon: d.actionIcon,
-      count: Number(w[d.countKey]) || 0,
-    }));
+    return QUEUE_DEFS.map((d) => {
+      const count = Number(w[d.countKey]) || 0;
+      const q = {
+        key: d.key,
+        label: d.label,
+        def: d.def,
+        accent: d.accent,
+        icon: d.icon,
+        action: d.action,
+        actionIcon: d.actionIcon,
+        count,
+        sub: '',
+      };
+      // Decision 7a — the approval card splits its total into the two
+      // sub-states (server-derived, same definition as the count: ready ∪
+      // blocked ≡ pending). Rendered instead of the static def line; only
+      // when the payload actually carries the split (older cached payloads
+      // within the stats TTL may not) and there is something to split.
+      if (d.key === 'pending' && count > 0 && w.pending_ready != null) {
+        const ready = Number(w.pending_ready) || 0;
+        const blocked = Math.max(0, count - ready);
+        q.sub = `${ready} klaar voor goedkeuring · ${blocked} wacht op deelnemer`;
+      }
+      return q;
+    });
   }
 
   /* ---- "sinds Nd" age microcopy from an ISO-ish timestamp -------------- */

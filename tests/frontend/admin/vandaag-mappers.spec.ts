@@ -220,3 +220,28 @@ test.describe('mapMeldingen — navigation targets', () => {
     expect(rows[0].target).toBeNull();
   });
 });
+
+/**
+ * Decision 7a — the approval card's ready/blocked split. Server-derived
+ * (worklistQueues.pending_ready, same definition as the count); the card
+ * renders it instead of the static def line. Older cached payloads within
+ * the stats TTL may lack the key → no split, no NaN.
+ */
+test.describe('mapQueues — pending split (7a)', () => {
+  test('renders the split line when pending_ready is present', () => {
+    const queues = mappers.mapQueues({ pending: 5, pending_ready: 2 });
+    const pending = queues.find((q: any) => q.key === 'pending');
+    expect(pending.sub).toBe('2 klaar voor goedkeuring · 3 wacht op deelnemer');
+    expect(pending.count).toBe(5);
+  });
+
+  test('no split without the payload key (stale cache) or at count 0', () => {
+    expect(mappers.mapQueues({ pending: 5 }).find((q: any) => q.key === 'pending').sub).toBe('');
+    expect(mappers.mapQueues({ pending: 0, pending_ready: 0 }).find((q: any) => q.key === 'pending').sub).toBe('');
+  });
+
+  test('a ready count above the total never renders a negative blocked number', () => {
+    const pending = mappers.mapQueues({ pending: 2, pending_ready: 9 }).find((q: any) => q.key === 'pending');
+    expect(pending.sub).toContain('0 wacht op deelnemer');
+  });
+});
