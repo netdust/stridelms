@@ -42,8 +42,10 @@ defined('ABSPATH') || exit;
 
             <div class="ws-toolbar__spacer"></div>
             <!-- honest count (F-U1: "10 resultaten" presented a capped page
-                 as the complete set) — the true total, ranged. -->
-            <div class="ws-count" x-show="searched && total > 0">
+                 as the complete set) — the true total, ranged. Hidden while
+                 a request is in flight so a NEW term never displays the
+                 PREVIOUS term's total. -->
+            <div class="ws-count" x-show="!loading && searched && total > 0">
                 <?php echo esc_html__('Toont', 'stride'); ?> <b x-text="rangeFrom"></b>–<b x-text="rangeTo"></b>
                 <?php echo esc_html__('van', 'stride'); ?> <b x-text="total.toLocaleString('nl-BE')"></b>
                 <?php echo esc_html__('gebruikers', 'stride'); ?>
@@ -102,8 +104,10 @@ defined('ABSPATH') || exit;
                                     <div class="ws-namecell__name">
                                         <span x-text="u.name"></span>
                                         <!-- GDPR-scrubbed account kept for history (F-U1):
-                                             flagged, so it never reads as an odd real person. -->
-                                        <span class="ws-badge ws-badge--cancelled" x-show="u.anonymised"
+                                             flagged, so it never reads as an odd real person.
+                                             is_anonymised — the same key name as the dossier
+                                             and cohort-lens payloads. -->
+                                        <span class="ws-badge ws-badge--cancelled" x-show="u.is_anonymised"
                                               style="margin-left:6px"
                                               title="<?php echo esc_attr__('GDPR-geanonimiseerd account — persoonsgegevens zijn gewist', 'stride'); ?>"><?php echo esc_html__('Geanonimiseerd', 'stride'); ?></span>
                                     </div>
@@ -126,12 +130,16 @@ defined('ABSPATH') || exit;
         </table>
     </div>
 
-    <!-- ===== PAGINATION (F-U1: the capped 10 had no way to reach the rest) ===== -->
-    <div class="ws-pager" x-show="!error && searched && pageCount > 1">
+    <!-- ===== PAGINATION (F-U1: the capped 10 had no way to reach the rest) =====
+         Hidden while loading (a stale pager for the previous term invites an
+         out-of-range page click). :key is the INDEX — pageList() emits the
+         '…' sentinel twice mid-range, and duplicate keys corrupt Alpine's
+         keyed reconciliation. -->
+    <div class="ws-pager" x-show="!loading && !error && searched && pageCount > 1">
         <div class="ws-count"><?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="pageCount"></b></div>
         <div class="ws-pager__pages">
             <button class="ws-page-btn" :disabled="page===1" @click="goPage(page-1)"><span x-html="icon('chevRight')" style="transform:rotate(180deg);width:15px;height:15px"></span></button>
-            <template x-for="p in pageList()" :key="p">
+            <template x-for="(p, pi) in pageList()" :key="pi">
                 <template x-if="p === '…'"><span class="ws-page-ellipsis">…</span></template>
                 <template x-if="p !== '…'"><button class="ws-page-btn" :class="p===page && 'is-active'" @click="goPage(p)" x-text="p"></button></template>
             </template>

@@ -16,8 +16,11 @@
 
    This factory owns its own loading / empty / error / prompt state, with a
    _searchReq token so a slow earlier response never overwrites a faster
-   later one (the shared list-race rule). userRows() normalizes the envelope
-   and stays tolerant of the legacy bare array.
+   later one (the shared list-race rule). userRows() reads the envelope; a
+   legacy bare array degrades to [] on purpose (it was the capped shape —
+   rendering it under the honest count would lie, see the normalizer note).
+   The toolbar count and pager hide while a request is in flight, so a NEW
+   term never shows the PREVIOUS term's total or stale page buttons.
 
    INV-5: x-html binds CONSTANT icon names only. Names/emails/orgs via x-text.
    ========================================================================== */
@@ -37,10 +40,13 @@
   'use strict';
 
   /* Envelope normalizer (PURE): the endpoint emits { items } since the
-     Gebruikers slice; the legacy bare array is tolerated defensively, and a
-     malformed payload degrades to [] — never a crash. */
+     Gebruikers slice. A legacy BARE ARRAY deliberately degrades to [] — NOT
+     a pass-through: the old bare shape was the capped-at-10 response, and
+     rendering it under the honest "Toont x–y van N" count would present a
+     capped set as complete (the exact F-U1 lie). Client and server deploy
+     atomically from one repo, so a bare array is a stale/malformed response;
+     a blank list with the empty state beats a lying complete one. */
   function userRows(payload) {
-    if (Array.isArray(payload)) return payload;
     if (payload && Array.isArray(payload.items)) return payload.items;
     return [];
   }
@@ -51,8 +57,14 @@
   }
 
   /* The server rejects q shorter than this (minLength) — guard client-side
-     so a short query shows the prompt, never a raw 400 flash (F-U1). */
+     so a short query shows the prompt, never a raw 400 flash (F-U1). Length
+     is counted in CODE POINTS (Array.from), matching the server's mb_strlen:
+     a single emoji is length 2 in UTF-16 units and would slip past a .length
+     guard straight into the 400. */
   const MIN_QUERY = 2;
+  function queryLength(q) {
+    return Array.from(q).length;
+  }
 
   function gebruikers() {
     return {
@@ -78,7 +90,7 @@
       async search(page) {
         if (page != null) this.page = page;
         const q = (this.query || '').trim();
-        if (q.length < MIN_QUERY) {
+        if (queryLength(q) < MIN_QUERY) {
           // Empty/too-short query → the prompt. Never an error, never a
           // request (the server's minLength 400 must stay unreachable from
           // normal typing). Bump the token so an in-flight longer-query

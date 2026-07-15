@@ -385,7 +385,10 @@ defined('ABSPATH') || exit;
         <div class="ws-count"><?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="pageCount"></b><span x-show="groupBy"> — <?php echo esc_html__('groepen per pagina', 'stride'); ?></span></div>
         <div class="ws-pager__pages">
             <button class="ws-page-btn" :disabled="page===1" @click="goPage(page-1)"><span x-html="icon('chevRight')" style="transform:rotate(180deg);width:15px;height:15px"></span></button>
-            <template x-for="p in pageList()" :key="p">
+            <!-- :key is the INDEX — pageList() emits the '…' sentinel twice
+                     mid-range, and duplicate keys corrupt Alpine's keyed
+                     reconciliation (shared ws-pager contract fix). -->
+            <template x-for="(p, pi) in pageList()" :key="pi">
                 <template x-if="p === '…'"><span class="ws-page-ellipsis">…</span></template>
                 <template x-if="p !== '…'"><button class="ws-page-btn" :class="p===page && 'is-active'" @click="goPage(p)" x-text="p"></button></template>
             </template>

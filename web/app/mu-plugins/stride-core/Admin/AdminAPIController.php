@@ -2288,6 +2288,11 @@ final class AdminAPIController
         $page = max(1, (int) ($request->get_param('page') ?: 1));
         $perPage = min(100, max(1, (int) ($request->get_param('per_page') ?: 25))); // clamp ceiling (4B.3)
 
+        // ACCEPTED COST: the leading-wildcard LIKE over three user columns
+        // cannot use an index, and count_total adds a matched-set count —
+        // per debounced keystroke, admin-only, single-digit ms at LMS scale
+        // (thousands of users). Same trade as the offertes customer search;
+        // revisit only if a large user migration lands.
         $userQuery = new \WP_User_Query([
             'search' => "*{$query}*",
             'search_columns' => ['user_login', 'user_email', 'display_name'],
@@ -2301,20 +2306,16 @@ final class AdminAPIController
         $results = $userQuery->get_results();
         $total = (int) $userQuery->get_total();
 
-        if (empty($results)) {
-            return new WP_REST_Response([
-                'items' => [],
-                'total' => $total,
-                'page' => $page,
-                'perPage' => $perPage,
-                'totalPages' => (int) ceil($total / $perPage),
-            ]);
-        }
-
-        // Prime user-meta cache once so the per-row get_user_meta() calls
-        // below are cache hits — drops 2×N queries on a full page.
+        // ONE exit — both batch callees no-op on an empty page, so the empty
+        // case flows through the same envelope literal (no second copy to
+        // drift when the payload gains a field).
         $userIds = array_map(static fn($u) => (int) $u->ID, $results);
-        update_meta_cache('user', $userIds);
+
+        // Prime user-meta cache once so the per-row get_user_meta() /
+        // isAnonymised() calls below are cache hits — drops 2×N queries.
+        if (!empty($userIds)) {
+            update_meta_cache('user', $userIds);
+        }
 
         // Aggregate registration counts in a single GROUP BY query instead of
         // one COUNT(*) per row.
@@ -2328,9 +2329,10 @@ final class AdminAPIController
                 'email' => $user->user_email,
                 'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
                 'registration_count' => $counts[$userId] ?? 0,
-                // GDPR-anonymised account (UserLifecycleService) — flagged so
-                // the surface can badge it (F-U1).
-                'anonymised' => (bool) get_user_meta($userId, \Stride\Modules\User\UserLifecycleService::META_ANONYMISED_AT, true),
+                // THE one anonymised predicate (CR-6 convergence point) —
+                // never an inline meta read; same key name as the dossier
+                // and cohort-lens payloads.
+                'is_anonymised' => \Stride\Modules\User\UserLifecycleService::isAnonymised($userId),
             ];
         }, $results);
 
