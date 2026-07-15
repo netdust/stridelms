@@ -288,6 +288,15 @@ final class AdminAPIController
             ],
         ]);
 
+        // Quotes CSV export for the Exact Online handoff (F-A9): the exact
+        // Offertes predicate (search/status/tag/date), stride_manage gated
+        // like every export (PII + financial egress).
+        register_rest_route(self::NAMESPACE, '/admin/quotes/export', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'getQuotesExport'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+        ]);
+
         // Trajectories list
         register_rest_route(self::NAMESPACE, '/admin/trajectories', [
             'methods' => 'GET',
@@ -1735,6 +1744,64 @@ final class AdminAPIController
         $result = ntdst_get(\Stride\Admin\AdminQuoteService::class)->getQuoteList($filters);
 
         return new WP_REST_Response($result);
+    }
+
+    /**
+     * GET /admin/quotes/export
+     *
+     * Streams the Exact-handoff CSV of the exact Offertes predicate (F-A9).
+     * Param parsing mirrors getQuotes; row assembly in AdminQuoteService::
+     * getExportRows (the same getQuoteList pipeline as the surface read);
+     * the controller keeps only the streaming — headers + BOM + fputcsv +
+     * exit (F-A5: never return after streaming).
+     */
+    public function getQuotesExport(WP_REST_Request $request): void
+    {
+        $filters = [
+            'search'     => sanitize_text_field($request->get_param('search') ?? ''),
+            'status'     => sanitize_text_field($request->get_param('status') ?? ''),
+            'edition_id' => (int) $request->get_param('edition_id'),
+            'tag'        => (int) $request->get_param('tag'),
+            'date_from'  => sanitize_text_field($request->get_param('date_from') ?? ''),
+            'date_to'    => sanitize_text_field($request->get_param('date_to') ?? ''),
+        ];
+
+        $result = ntdst_get(\Stride\Admin\AdminQuoteService::class)->getExportRows($filters);
+        $export = ntdst_get(\Stride\Admin\AdminExportService::class);
+
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="offertes-' . current_time('Y-m-d-Hi') . '.csv"');
+        header('X-Content-Type-Options: nosniff');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $output = fopen('php://output', 'w');
+        // BOM for Excel UTF-8 compatibility; semicolons + decimal commas for
+        // Dutch Excel / the Exact import.
+        fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+        fputcsv($output, ['Nummer', 'Klant', 'E-mail', 'Bedrijf', 'Editie', 'Datum', 'Status', 'Subtotaal', 'BTW', 'Totaal'], ';');
+
+        foreach ($result['items'] as $item) {
+            $billing = is_array($item['billing'] ?? null) ? $item['billing'] : [];
+            fputcsv($output, array_map([$export, 'sanitizeCsvCell'], [
+                $item['number'] ?? ('#' . ($item['id'] ?? '')),
+                $item['user']['name'] ?? '',
+                $item['user']['email'] ?? '',
+                (string) ($billing['company'] ?? ''),
+                $item['edition']['title'] ?? '',
+                $item['dateLabel'] ?? '',
+                $item['statusLabel'] ?? '',
+                number_format((float) ($item['subtotal'] ?? 0), 2, ',', ''),
+                number_format((float) ($item['tax'] ?? 0), 2, ',', ''),
+                number_format((float) ($item['total'] ?? 0), 2, ',', ''),
+            ]), ';');
+        }
+
+        fclose($output);
+        exit;
     }
 
     /**

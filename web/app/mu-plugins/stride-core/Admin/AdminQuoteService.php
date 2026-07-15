@@ -30,9 +30,59 @@ use Stride\Modules\Invoicing\QuoteRepository;
  */
 final class AdminQuoteService
 {
+    /**
+     * Ceiling for the quotes CSV export — far above any real filtered view;
+     * hitting it logs a trip-wire (no silent caps).
+     */
+    private const EXPORT_MAX_ROWS = 10000;
+
     public function __construct(
         private readonly QuoteRepository $quotes,
     ) {}
+
+    /**
+     * Every quote item matching the CURRENT Offertes predicate — the read
+     * behind the Exact-handoff CSV export (F-A9). Routes through the SAME
+     * getQuoteList pipeline as the surface read (search incl. quote numbers,
+     * status, edition tag, date range), paged internally.
+     *
+     * @param  array<string,mixed> $filters  Pre-sanitised filters (page/per_page ignored).
+     * @return array{items: array<int,array<string,mixed>>, total: int, clipped: bool}
+     */
+    public function getExportRows(array $filters): array
+    {
+        unset($filters['page'], $filters['per_page']);
+        $filters['per_page'] = 100;
+
+        $items = [];
+        $total = 0;
+        $page = 1;
+        while (true) {
+            $filters['page'] = $page;
+            $result = $this->getQuoteList($filters);
+            $total = (int) ($result['total'] ?? 0);
+            $pageItems = $result['items'] ?? [];
+            if (empty($pageItems)) {
+                break;
+            }
+            $items = array_merge($items, $pageItems);
+            if (count($items) >= $total || count($items) >= self::EXPORT_MAX_ROWS) {
+                break;
+            }
+            $page++;
+        }
+
+        $clipped = $total > self::EXPORT_MAX_ROWS;
+        if ($clipped) {
+            ntdst_log('admin')->warning('Quotes export clipped at the row ceiling — the file is incomplete', [
+                'total'   => $total,
+                'ceiling' => self::EXPORT_MAX_ROWS,
+            ]);
+            $items = array_slice($items, 0, self::EXPORT_MAX_ROWS);
+        }
+
+        return ['items' => $items, 'total' => $total, 'clipped' => $clipped];
+    }
 
     /**
      * Build the admin quote-list read-model for the given (pre-sanitised) filters.

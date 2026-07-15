@@ -77,6 +77,16 @@ defined('ABSPATH') || exit;
             </button>
 
             <div class="ws-toolbar__spacer"></div>
+
+            <!-- Exact-handoff CSV (F-A9): the exact predicate on screen, via
+                 the same filterParams() the list read uses. stride_manage
+                 only (financial + PII egress). -->
+            <button class="ws-btn ws-btn--ghost ws-btn--sm" x-show="canManage && total > 0"
+                    @click="exportCurrentView()"
+                    title="<?php echo esc_attr__('Download deze weergave (met de actieve filters) als CSV voor Exact', 'stride'); ?>">
+                <span x-html="icon('download')"></span> <?php echo esc_html__('Exporteer voor Exact', 'stride'); ?>
+            </button>
+
             <div class="ws-count">
                 <?php echo esc_html__('Toont', 'stride'); ?> <b x-text="rangeFrom"></b>–<b x-text="rangeTo"></b>
                 <?php echo esc_html__('van', 'stride'); ?> <b x-text="total.toLocaleString('nl-BE')"></b>

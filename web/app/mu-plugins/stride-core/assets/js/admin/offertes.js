@@ -165,15 +165,11 @@
         this.loading = true;
         this.error = ''; // clear at the TOP so a successful reload recovers (cluster-B lesson)
 
-        const params = new URLSearchParams();
+        // ONE filter-param source shared with the CSV export (F-A9) — the
+        // exported file provably matches the predicate on screen.
+        const params = this.filterParams();
         params.set('page', String(this.page));
         params.set('per_page', String(this.perPage));
-        const f = this.filters;
-        if (f.q) params.set('search', f.q);
-        if (f.status) params.set('status', f.status);
-        if (f.tag) params.set('tag', String(f.tag));
-        if (f.dateFrom) params.set('date_from', f.dateFrom);
-        if (f.dateTo) params.set('date_to', f.dateTo);
 
         try {
           const data = await this.api(`/admin/quotes?${params.toString()}`);
@@ -196,6 +192,30 @@
       /* Background/refresh reload keeps the CURRENT page — a ws-refresh
          after a lens mutation must never snap the admin back to page 1
          (their place in the list is work state). */
+      /* The CURRENT VIEW's filter predicate — consumed by load() (which adds
+         paging) and by the export URL, so the two can never drift (F-A9). */
+      filterParams() {
+        const params = new URLSearchParams();
+        const f = this.filters;
+        if (f.q) params.set('search', f.q);
+        if (f.status) params.set('status', f.status);
+        if (f.tag) params.set('tag', String(f.tag));
+        if (f.dateFrom) params.set('date_from', f.dateFrom);
+        if (f.dateTo) params.set('date_to', f.dateTo);
+        return params;
+      },
+
+      get canManage() { return !!(window.StrideConfig || {}).canManage; },
+
+      /* Exact-handoff CSV of the exact predicate on screen (F-A9). Navigation
+         (not fetch) so the browser downloads; auth via the _wpnonce param. */
+      exportCurrentView() {
+        const cfg = window.StrideConfig || {};
+        const params = this.filterParams();
+        params.set('_wpnonce', cfg.nonce || '');
+        window.location.href = `${cfg.apiUrl || ''}/admin/quotes/export?${params.toString()}`;
+      },
+
       reload() { this.load(); },
       onFilterChange() { this.load(1); },
       onSearchChange() { this.load(1); },

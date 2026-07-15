@@ -80,6 +80,31 @@ defined('ABSPATH') || exit;
                     <template x-if="!loading && !error">
                         <div>
 
+                            <!-- Per-edition exports (F-A9/F-E3): the five existing
+                                 exporters, finally reachable from the workspace.
+                                 Plain download links (server streams + exits);
+                                 stride_manage gated server-side. -->
+                            <div style="margin-bottom:12px" x-show="canManage && rows.length > 0">
+                                <div class="ws-eyebrow" style="margin-bottom:6px"><?php echo esc_html__('Exporteer', 'stride'); ?></div>
+                                <div class="ws-row" style="flex-wrap:wrap;gap:6px">
+                                    <a class="ws-btn ws-btn--ghost ws-btn--sm" :href="exportUrl('registration')" download>
+                                        <span x-html="icon('download')"></span> <?php echo esc_html__('Deelnemerslijst', 'stride'); ?>
+                                    </a>
+                                    <a class="ws-btn ws-btn--ghost ws-btn--sm" :href="exportUrl('attendance')" download>
+                                        <span x-html="icon('download')"></span> <?php echo esc_html__('Presentielijst', 'stride'); ?>
+                                    </a>
+                                    <a class="ws-btn ws-btn--ghost ws-btn--sm" :href="exportUrl('namecard')" download>
+                                        <span x-html="icon('download')"></span> <?php echo esc_html__('Naamkaartjes', 'stride'); ?>
+                                    </a>
+                                    <a class="ws-btn ws-btn--ghost ws-btn--sm" :href="exportUrl('files')" download>
+                                        <span x-html="icon('download')"></span> <?php echo esc_html__('Bestanden (zip)', 'stride'); ?>
+                                    </a>
+                                    <a class="ws-btn ws-btn--ghost ws-btn--sm" :href="exportUrl('bundle')" download>
+                                        <span x-html="icon('download')"></span> <?php echo esc_html__('Bundel (zip)', 'stride'); ?>
+                                    </a>
+                                </div>
+                            </div>
+
                             <!-- Session picker chips -->
                             <div style="margin-bottom:12px" x-show="sessions.length > 0">
                                 <div class="ws-eyebrow" style="margin-bottom:6px"><?php echo esc_html__('Sessie', 'stride'); ?></div>

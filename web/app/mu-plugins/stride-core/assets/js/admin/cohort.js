@@ -340,6 +340,17 @@
         }
       },
 
+      /* ===== per-edition exports (F-A9/F-E3) =====
+         Direct download links to the FIVE existing exporters — the endpoints
+         and their server-side type allowlist (CM-4) predate this; the lens is
+         their first workspace affordance. Navigation-style auth via the
+         _wpnonce query param (the same wp_rest nonce api() sends as a
+         header); stride_manage gated server-side (PII egress). */
+      exportUrl(type) {
+        const cfg = window.StrideConfig || {};
+        return `${cfg.apiUrl || ''}/admin/editions/${this.editionId}/export/${type}?_wpnonce=${encodeURIComponent(cfg.nonce || '')}`;
+      },
+
       /* ===== presentational helpers ===== */
       statusLabel(value) { return statusLabel(value); },
       statusBadgeClass(value) { return statusBadgeClass(value); },
