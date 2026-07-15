@@ -40,7 +40,22 @@ defined('ABSPATH') || exit;
 
             <div class="ws-select-wrap">
                 <span x-html="icon('filter')" style="width:14px;height:14px"></span>
-                <?php echo esc_html__('Tag', 'stride'); ?>
+                <?php echo esc_html__('Status', 'stride'); ?>
+                <select class="ws-select" x-model="filters.status" @change="onFilterChange()">
+                    <option value=""><?php echo esc_html__('Alle statussen', 'stride'); ?></option>
+                    <?php
+                    // The filter speaks the SAME vocabulary the badge renders —
+                    // the QuoteStatus enum (workflow status, not payment).
+                    foreach (\Stride\Domain\QuoteStatus::cases() as $quoteStatus) : ?>
+                        <option value="<?php echo esc_attr($quoteStatus->value); ?>"><?php echo esc_html($quoteStatus->label()); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="ws-select-wrap"
+                 title="<?php echo esc_attr__('Filtert via de cursustag van de gekoppelde editie — offertes zonder editie vallen buiten elke tag.', 'stride'); ?>">
+                <span x-html="icon('filter')" style="width:14px;height:14px"></span>
+                <?php echo esc_html__('Editietag', 'stride'); ?>
                 <select class="ws-select" x-model="filters.tag" @change="onFilterChange()">
                     <option value=""><?php echo esc_html__('Alle tags', 'stride'); ?></option>
                     <template x-for="o in tagOptions" :key="o.id"><option :value="o.id" x-text="o.name"></option></template>
@@ -92,8 +107,10 @@ defined('ABSPATH') || exit;
                     <th><?php echo esc_html__('Offerte', 'stride'); ?></th>
                     <th><?php echo esc_html__('Klant', 'stride'); ?></th>
                     <th><?php echo esc_html__('Editie', 'stride'); ?></th>
+                    <th><?php echo esc_html__('Datum', 'stride'); ?></th>
                     <th class="ws-col-status"><?php echo esc_html__('Status', 'stride'); ?></th>
                     <th style="text-align:right"><?php echo esc_html__('Bedrag', 'stride'); ?></th>
+                    <th style="text-align:right;white-space:nowrap"></th>
                 </tr>
             </thead>
             <tbody>
@@ -119,11 +136,40 @@ defined('ABSPATH') || exit;
                             </template>
                             <template x-if="!(r.edition && r.edition.title)"><span class="ws-muted">—</span></template>
                         </td>
+                        <!-- Datum (F-O2): the date filter finally filters a
+                             VISIBLE column. Server-owned Dutch label. -->
+                        <td>
+                            <span class="ws-org-cell">
+                                <span x-html="icon('calendar')"></span>
+                                <span x-text="r.dateLabel || '—'"></span>
+                            </span>
+                        </td>
                         <td>
                             <span class="ws-badge" :class="'ws-badge--'+badgeClass(r.status)" x-text="r.statusLabel"></span>
+                            <!-- lock (F-O1): finalized on the edit screen —
+                                 the admin sees a row is read-only BEFORE
+                                 clicking through. -->
+                            <span x-show="r.locked" x-html="icon('lock')"
+                                  style="width:13px;height:13px;vertical-align:middle;margin-left:4px;color:var(--ws-text-3)"
+                                  title="<?php echo esc_attr__('Vergrendeld — niet meer bewerkbaar', 'stride'); ?>"></span>
                         </td>
                         <td style="text-align:right">
                             <b x-text="'€ ' + (r.totalFormatted || '0,00')"></b>
+                        </td>
+                        <!-- row actions (F-O1): dossier jump + an HONEST edit
+                             affordance (the row click already navigates to the
+                             WP edit screen — the quote workbench; now it says
+                             so instead of being a surprise). -->
+                        <td style="text-align:right;white-space:nowrap">
+                            <button class="ws-btn ws-btn--ghost ws-btn--sm" @click="openPerson(r, $event)"
+                                    :disabled="!(r.user && r.user.id)"
+                                    title="<?php echo esc_attr__('Open het dossier van deze klant', 'stride'); ?>">
+                                <span x-html="icon('users')"></span> <?php echo esc_html__('Dossier', 'stride'); ?>
+                            </button>
+                            <button class="ws-btn ws-btn--ghost ws-btn--sm" @click="openRow(r)"
+                                    title="<?php echo esc_attr__('Opent het bewerkscherm (verzenden, status, voucher, PDF)', 'stride'); ?>">
+                                <span x-html="icon('edit')"></span> <?php echo esc_html__('Bewerken', 'stride'); ?>
+                            </button>
                         </td>
                     </tr>
                 </template>

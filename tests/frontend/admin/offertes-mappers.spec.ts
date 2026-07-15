@@ -69,3 +69,39 @@ test.describe('quoteBadgeClass', () => {
     expect(offertes.quoteBadgeClass(null)).toBe('cancelled');
   });
 });
+
+/* Factory behaviors added at the Offertes slice (F-O1/F-O2). */
+test.describe('offertes() factory', () => {
+  const factory = () => offertes.offertes();
+
+  test('status filter rides the request and counts as an active filter', () => {
+    const f = factory();
+    f.filters.status = 'sent';
+    expect(f.hasFilters).toBe(true);
+    f.filters.status = '';
+    expect(f.hasFilters).toBe(false);
+  });
+
+  test('clearAllFilters resets status too and issues exactly one load', () => {
+    const f = factory();
+    let loads = 0;
+    f.load = () => { loads++; };
+    f.filters = { q: 'x', status: 'sent', tag: '3', dateFrom: '2026-01-01', dateTo: '2026-01-31' };
+    // simulate flatpickr clear() firing the cleared branch, as init wires it
+    f._fp = { clear: () => f.onDateChange([]) };
+    f.clearAllFilters();
+    expect(f.filters.status).toBe('');
+    expect(loads).toBe(1); // the cleared-branch both-empty guard
+  });
+
+  test('openPerson only navigates for a real user id (deleted/lead customers stay put)', () => {
+    const f = factory();
+    const jumps = [];
+    f.switchView = (view, params) => { jumps.push([view, params]); };
+    f.openPerson({ user: { id: 7 } });
+    f.openPerson({ user: { id: 0 } });
+    f.openPerson({});
+    f.openPerson(null);
+    expect(jumps).toEqual([['dossier', { user: 7 }]]);
+  });
+});

@@ -19,10 +19,12 @@ use Stride\Modules\Invoicing\QuoteRepository;
  * QuoteRepository (countAdminList / findAdminListRows / findUserIdsByNameOrEmail)
  * and BatchQueryHelper (INV-3). Does NOT contain business logic.
  *
- * Moved VERBATIM from AdminAPIController::getQuotes (Task D1, behavior-preserving
- * strangle) — same WHERE construction, same param order, same query semantics,
- * same response shape, including the deliberate search-short-circuit envelope
- * divergence (data/total/page/per_page vs the main items/.../totalPages).
+ * Strangled from AdminAPIController::getQuotes (Task D1). The Phase-1
+ * search-short-circuit envelope divergence (data/total/page/per_page on a
+ * zero-user match) was REMOVED at the Offertes slice (F-A8/F-O2): search now
+ * also matches quote numbers, so there is no zero-match branch and every path
+ * returns the one main envelope (items/total/page/perPage/totalPages). The
+ * client-side quoteRows() normalizer stays as defensive tolerance only.
  *
  * Registered in plugin-config.php.
  */
@@ -36,10 +38,7 @@ final class AdminQuoteService
      * Build the admin quote-list read-model for the given (pre-sanitised) filters.
      *
      * @param array{page:int,per_page:int,search:string,status:string,edition_id:int,tag?:int,date_from?:string,date_to?:string} $filters
-     * @return array<string,mixed>  Main envelope (items/total/page/perPage/totalPages),
-     *                              OR the search-short-circuit envelope
-     *                              (data/total/page/per_page) when the user search
-     *                              resolves to zero users.
+     * @return array<string,mixed>  The main envelope (items/total/page/perPage/totalPages) — always.
      */
     public function getQuoteList(array $filters): array
     {
@@ -59,34 +58,39 @@ final class AdminQuoteService
         $where = ["p.post_type = %s", "p.post_status = 'publish'"];
         $params = [QuoteCPT::POST_TYPE];
 
-        // Search by user name or email. Resolve to user IDs first so the main
-        // quote query only filters by meta_value IN (...) instead of running a
-        // double LIKE join against wp_users for every candidate quote.
+        // Search matches CUSTOMER (name/e-mail, resolved to user ids first so
+        // the main query filters by meta IN (...) instead of a double LIKE
+        // join per candidate quote) OR QUOTE NUMBER (F-O2 — the search box
+        // promises "Zoek op nummer, klant…" but only the customer half
+        // existed). With the number half in the OR there is NO zero-match
+        // short-circuit anymore — and with it went the divergent
+        // data/per_page envelope (F-A8): every path now returns the one main
+        // items/totalPages envelope.
         if (!empty($search)) {
             $searchPattern = '%' . $wpdb->esc_like($search) . '%';
-            $matchedUserIds = $this->quotes->findUserIdsByNameOrEmail($searchPattern);
 
-            if (empty($matchedUserIds)) {
-                // No matching users — short-circuit with an empty result set.
-                return [
-                    'data'     => [],
-                    'total'    => 0,
-                    'page'     => $page,
-                    'per_page' => $perPage,
-                ];
+            $or = ["EXISTS (
+                SELECT 1 FROM {$wpdb->postmeta} pm_num
+                WHERE pm_num.post_id = p.ID
+                AND pm_num.meta_key = 'quote_number'
+                AND pm_num.meta_value LIKE %s
+            )"];
+            $orParams = [$searchPattern];
+
+            $matchedUserIds = array_map('intval', $this->quotes->findUserIdsByNameOrEmail($searchPattern));
+            if (!empty($matchedUserIds)) {
+                $idPlaceholders = implode(',', array_fill(0, count($matchedUserIds), '%d'));
+                $or[] = "EXISTS (
+                    SELECT 1 FROM {$wpdb->postmeta} pm_user
+                    WHERE pm_user.post_id = p.ID
+                    AND pm_user.meta_key = 'user_id'
+                    AND pm_user.meta_value IN ({$idPlaceholders})
+                )";
+                array_push($orParams, ...$matchedUserIds);
             }
 
-            $matchedUserIds = array_map('intval', $matchedUserIds);
-            $idPlaceholders = implode(',', array_fill(0, count($matchedUserIds), '%d'));
-            $where[] = "EXISTS (
-                SELECT 1 FROM {$wpdb->postmeta} pm_user
-                WHERE pm_user.post_id = p.ID
-                AND pm_user.meta_key = 'user_id'
-                AND pm_user.meta_value IN ({$idPlaceholders})
-            )";
-            foreach ($matchedUserIds as $uid) {
-                $params[] = $uid;
-            }
+            $where[] = '(' . implode(' OR ', $or) . ')';
+            array_push($params, ...$orParams);
         }
 
         // Filter by status
@@ -149,7 +153,7 @@ final class AdminQuoteService
         $quoteMeta = BatchQueryHelper::batchGetPostMeta($quoteIds, [
             'quote_number', 'status', 'total', 'subtotal',
             'tax', 'user_id', 'edition_id', 'sent_at',
-            'valid_until', 'items', 'billing',
+            'valid_until', 'items', 'billing', 'locked',
         ]);
 
         // Collect unique user IDs and edition IDs for batch fetch
@@ -218,6 +222,14 @@ final class AdminQuoteService
                 'total' => $quoteTotal,
                 'totalFormatted' => number_format($quoteTotal, 2, ',', '.'),
                 'date' => $quote->post_date,
+                // Server-owned Dutch date label (INV-7) — the list renders a
+                // Datum column now (F-O2: the date filter filtered a column
+                // nobody could see). Raw-value fallback on an unparseable date.
+                'dateLabel' => stride_format_date((string) $quote->post_date) ?: (string) $quote->post_date,
+                // Locked = finalized on the edit screen (sent/exported); the
+                // list shows the lock so an admin knows a row is no longer
+                // editable BEFORE clicking through (F-O1).
+                'locked' => (bool) ($meta['locked'] ?? false),
                 'sentAt' => $sentAt ?: null,
                 'validUntil' => $validUntil ?: null,
                 'user' => [
