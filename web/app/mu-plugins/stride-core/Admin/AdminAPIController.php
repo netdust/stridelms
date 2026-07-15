@@ -452,7 +452,12 @@ final class AdminAPIController
             'callback' => [$this, 'searchUsers'],
             'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
+                // minLength stays as server-side defense; the CLIENT guards
+                // short queries too (F-U1 — the raw 400 rendered as an
+                // English error flash on every 1-character keystroke).
                 'q' => ['type' => 'string', 'required' => true, 'minLength' => 2],
+                'page' => ['type' => 'integer', 'default' => 1, 'minimum' => 1],
+                'per_page' => ['type' => 'integer', 'default' => 25, 'minimum' => 1, 'maximum' => 100],
             ],
         ]);
 
@@ -2270,27 +2275,44 @@ final class AdminAPIController
     /**
      * GET /admin/users/search
      *
-     * Search users by name, email, or login. Returns max 10 results.
+     * Search users by name, email, or login — PAGED (F-U1: the old hard cap
+     * of 10 was presented as the complete result set with no way to reach
+     * the rest). Returns the standard envelope
+     * { items, total, page, perPage, totalPages }; each item carries an
+     * `anonymised` flag (GDPR-scrubbed accounts kept for history must be
+     * recognisable as such in the picker, not look like odd real people).
      */
     public function searchUsers(WP_REST_Request $request): WP_REST_Response
     {
         $query = sanitize_text_field($request->get_param('q'));
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = min(100, max(1, (int) ($request->get_param('per_page') ?: 25))); // clamp ceiling (4B.3)
 
         $userQuery = new \WP_User_Query([
             'search' => "*{$query}*",
             'search_columns' => ['user_login', 'user_email', 'display_name'],
-            'number' => 10,
+            'number' => $perPage,
+            'offset' => ($page - 1) * $perPage,
+            'count_total' => true,
             'orderby' => 'display_name',
             'fields' => ['ID', 'display_name', 'user_email'],
         ]);
 
         $results = $userQuery->get_results();
+        $total = (int) $userQuery->get_total();
+
         if (empty($results)) {
-            return new WP_REST_Response([]);
+            return new WP_REST_Response([
+                'items' => [],
+                'total' => $total,
+                'page' => $page,
+                'perPage' => $perPage,
+                'totalPages' => (int) ceil($total / $perPage),
+            ]);
         }
 
-        // Prime user-meta cache once so the per-row get_user_meta() call below
-        // is a cache hit — drops 10 queries on a full result set.
+        // Prime user-meta cache once so the per-row get_user_meta() calls
+        // below are cache hits — drops 2×N queries on a full page.
         $userIds = array_map(static fn($u) => (int) $u->ID, $results);
         update_meta_cache('user', $userIds);
 
@@ -2306,10 +2328,19 @@ final class AdminAPIController
                 'email' => $user->user_email,
                 'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
                 'registration_count' => $counts[$userId] ?? 0,
+                // GDPR-anonymised account (UserLifecycleService) — flagged so
+                // the surface can badge it (F-U1).
+                'anonymised' => (bool) get_user_meta($userId, \Stride\Modules\User\UserLifecycleService::META_ANONYMISED_AT, true),
             ];
         }, $results);
 
-        return new WP_REST_Response($users);
+        return new WP_REST_Response([
+            'items' => $users,
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalPages' => (int) ceil($total / $perPage),
+        ]);
     }
 
     /**
