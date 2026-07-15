@@ -228,7 +228,17 @@
             url.searchParams.set('edition_id', String(params.edition_id));
           }
         }
-        window.history.replaceState(null, '', url.toString());
+        // A REAL view switch pushes a history entry carrying the origin view
+        // (F-S2): the browser Back button returns to where the admin came
+        // from — URL params included (their filters, page, search term) —
+        // and the dossier's Terug reads wsFrom to know an origin exists.
+        // A same-view call (param seeding only) must NOT grow history.
+        url.searchParams.set('view', view);
+        if (view !== this.view) {
+          window.history.pushState({ wsFrom: this.view }, '', url.toString());
+        } else {
+          window.history.replaceState(window.history.state, '', url.toString());
+        }
         this.view = view;
       },
 
@@ -237,11 +247,13 @@
       },
 
       /* Write ?view= without reloading the page. Preserves any other query
-         params already present (e.g. WordPress's `page=stride-dashboard`). */
+         params already present (e.g. WordPress's `page=stride-dashboard`) AND
+         the current history state — replaceState(null) would wipe the wsFrom
+         origin the pushState navigation just recorded. */
       writeViewToUrl(view) {
         const url = new URL(window.location.href);
         url.searchParams.set('view', view);
-        window.history.replaceState(null, '', url.toString());
+        window.history.replaceState(window.history.state, '', url.toString());
       },
 
       icon(name, cls) {
@@ -270,10 +282,13 @@
     };
   }
 
-  /* Node export for the unit spec (shell-lazyload.spec.ts) — exposes the
-     PURE first-activation guard. The window block above is guarded, so requiring
-     this module under Node runs cleanly without a browser global. */
+  /* Node export for the unit specs — the PURE first-activation guard plus the
+     shell factory (the navigation spec drives switchView/writeViewToUrl
+     against a stubbed window/history). The window block above is guarded, so
+     requiring this module under Node runs cleanly without a browser global;
+     wsShell() itself reads window at CALL time, so the spec defines its stub
+     first. */
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { wsLazyLoad: wsLazyLoad };
+    module.exports = { wsLazyLoad: wsLazyLoad, wsShell: wsShell };
   }
 })();

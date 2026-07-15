@@ -32,6 +32,10 @@ defined('ABSPATH') || exit;
          x-show="view === 'inschrijvingen'"
          x-data="grid()"
          @ws-refresh.window="if ($event.detail && $event.detail.view === 'inschrijvingen') reload()"
+         <?php // Escape-close parity (F-S2): the result modal closed only via
+               // the overlay click / footer button. View-guarded like the
+               // trajecten slide-over — never close a hidden modal cross-view. ?>
+         @keydown.escape.window="view === 'inschrijvingen' && showResult && closeResult()"
          x-cloak>
 
     <!-- ===== TOOLBAR ===== -->

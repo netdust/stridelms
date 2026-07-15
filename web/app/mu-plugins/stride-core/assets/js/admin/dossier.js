@@ -731,8 +731,23 @@
       avatarColor(name) { return avatarColor(name); },
       initials(name) { return initials(name); },
 
-      /* back to the grid */
-      backToGrid() { this.switchView('inschrijvingen'); },
+      /* Back to where the admin CAME FROM (origin-aware, F-S2): the shell
+         pushes a history entry with the origin view on every real view
+         switch, so history.back() restores it — URL params included (their
+         filters, page, search term). Fallback: the grid, for a cold or
+         bookmarked dossier with no origin entry. */
+      backToGrid() {
+        const state = window.history.state;
+        if (state && state.wsFrom) {
+          window.history.back();
+          return;
+        }
+        this.switchView('inschrijvingen');
+      },
+      /* true when a real origin exists (drives the breadcrumb wording). */
+      get hasOrigin() {
+        return !!(window.history.state && window.history.state.wsFrom);
+      },
     };
   }
 

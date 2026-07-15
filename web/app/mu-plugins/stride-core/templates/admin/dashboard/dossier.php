@@ -59,7 +59,7 @@ defined('ABSPATH') || exit;
                 <p x-text="errors.detail"></p>
                 <button class="ws-btn ws-btn--ghost ws-btn--sm" @click="backToGrid()" style="margin-top:var(--ws-4)">
                     <span x-html="icon('chevRight')" style="transform:rotate(180deg)"></span>
-                    <?php echo esc_html__('Terug naar grid', 'stride'); ?>
+                    <?php echo esc_html__('Terug', 'stride'); ?>
                 </button>
             </div>
         </div>
@@ -71,7 +71,11 @@ defined('ABSPATH') || exit;
 
             <!-- breadcrumb / back -->
             <div class="ws-topbar__crumbs" style="margin-bottom:var(--ws-6)">
-                <a href="#" @click.prevent="backToGrid()" style="color:var(--ws-text-2)"><?php echo esc_html__('Inschrijvingen', 'stride'); ?></a>
+                <!-- origin-aware (F-S2): "Terug" when the admin navigated here
+                     from another view (history.back() restores it, filters and
+                     all); "Inschrijvingen" for a cold/bookmarked dossier. -->
+                <a href="#" @click.prevent="backToGrid()" style="color:var(--ws-text-2)"
+                   x-text="hasOrigin ? '<?php echo esc_js(__('← Terug', 'stride')); ?>' : '<?php echo esc_js(__('Inschrijvingen', 'stride')); ?>'"></a>
                 <span class="sep" x-html="icon('chevRight')" style="width:14px;height:14px"></span>
                 <span><?php echo esc_html__('Gebruikers', 'stride'); ?></span>
                 <span class="sep" x-html="icon('chevRight')" style="width:14px;height:14px"></span>
