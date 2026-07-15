@@ -827,15 +827,12 @@ final class EditionRegistrationExporter
 
     private function quoteStatusLabel(string $status): string
     {
-        return match ($status) {
-            'draft' => 'Concept',
-            'sent' => 'Verzonden',
-            'accepted' => 'Aanvaard',
-            'rejected' => 'Afgewezen',
-            'cancelled' => 'Geannuleerd',
-            'paid' => 'Betaald',
-            default => $status ?: '—',
-        };
+        // THE enum vocabulary (F-A7): the old hand map knew fictional
+        // statuses (accepted/rejected/paid — no writer ever produces them)
+        // and MISSED the real 'exported', so every quote handed to Exact
+        // rendered as a raw slug in the Facturatie sheet. Unknown/empty →
+        // the raw value / em-dash, like before.
+        return \Stride\Domain\QuoteStatus::tryFrom($status)?->label() ?? ($status ?: '—');
     }
 
     private function enrollmentPathLabel(string $path): string
@@ -1020,8 +1017,14 @@ final class EditionRegistrationExporter
                     continue;
                 }
                 if ($post->post_type === 'vad_session') {
-                    $date = get_post_meta($post->ID, 'session_date', true);
-                    $names[] = $post->post_title . ($date ? ' (' . date_i18n('d/m/Y', strtotime($date)) . ')' : '');
+                    // Via the owning repository (INV-3, F-A7): the old bare
+                    // 'session_date' get_post_meta read never matched anything
+                    // (the layer applies the _ntdst_ prefix), so the date
+                    // suffix in "Originele keuze" was always blank. Same fix
+                    // as RegistrationModalController.
+                    $date = ntdst_get(\Stride\Modules\Edition\SessionRepository::class)
+                        ->getField($post->ID, 'date');
+                    $names[] = $post->post_title . ($date ? ' (' . date_i18n('d/m/Y', strtotime((string) $date)) . ')' : '');
                 } else {
                     $names[] = $post->post_title;
                 }

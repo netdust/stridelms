@@ -140,6 +140,18 @@ defined('ABSPATH') || exit;
             </div>
 
             <div class="ws-toolbar__spacer"></div>
+
+            <!-- "Exporteer huidige weergave" (F-A9): CSV of the EXACT
+                 predicate on screen — same filterParams() the grid read uses.
+                 stride_manage only (exports egress the full PII set — the
+                 per-edition exporter posture); hidden in grouped mode (the
+                 export is flat rows, not group aggregates). -->
+            <button class="ws-btn ws-btn--ghost ws-btn--sm" x-show="canManage && !groupBy && total > 0"
+                    @click="exportCurrentView()"
+                    title="<?php echo esc_attr__('Download deze weergave (met de actieve filters) als CSV', 'stride'); ?>">
+                <span x-html="icon('download')"></span> <?php echo esc_html__('Exporteer huidige weergave', 'stride'); ?>
+            </button>
+
             <?php // Grouped mode: `total` is the DISTINCT GROUP count (server
                   // contract) — the unit word must say so, or "Toont 1–25 van 3"
                   // reads as nonsense (F-G5). ?>

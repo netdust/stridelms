@@ -359,3 +359,50 @@ test.describe('gridStateFromParams', () => {
     expect(round.perPage).toBe(s.perPage);
   });
 });
+
+/* "Exporteer huidige weergave" (F-A9): the export URL must carry the EXACT
+   filter predicate the grid read uses — one filterParams() source. */
+test.describe('grid filterParams / exportCurrentView', () => {
+  // eslint-disable-next-line @typescript-eslint/no-var-requires
+  const grid = require('../../../web/app/mu-plugins/stride-core/assets/js/admin/grid.js');
+
+  const factory = () => {
+    const f = grid.grid();
+    f.queue = 'pending';
+    f.editionScope = 'all';
+    f.filters = { status: 'confirmed', edition_id: 12, company_id: 0, trajectory_id: 7, q: 'anna' };
+    f.sortKey = 'name';
+    f.sortDir = 'asc';
+    return f;
+  };
+
+  test('filterParams carries queue/scope/filters/sort and skips empty values', () => {
+    const p = factory().filterParams();
+    expect(p.get('queue')).toBe('pending');
+    expect(p.get('edition_scope')).toBe('all');
+    expect(p.get('status')).toBe('confirmed');
+    expect(p.get('edition_id')).toBe('12');
+    expect(p.get('trajectory_id')).toBe('7');
+    expect(p.get('q')).toBe('anna');
+    expect(p.get('sort')).toBe('name');
+    expect(p.get('order')).toBe('asc');
+    expect(p.has('company_id')).toBe(false); // falsy filter never rides
+    expect(p.has('page')).toBe(false);       // paging is load()'s concern
+    expect(p.has('group_by')).toBe(false);
+  });
+
+  test('exportCurrentView navigates to /admin/registrations/export with the same predicate + _wpnonce', () => {
+    const f = factory();
+    (global as any).window = (global as any).window || {};
+    const w = (global as any).window;
+    w.StrideConfig = { apiUrl: 'https://x.test/wp-json/stride/v1', nonce: 'N0NCE' };
+    const loc: any = {};
+    Object.defineProperty(w, 'location', { value: loc, configurable: true });
+    f.exportCurrentView();
+    expect(loc.href).toContain('/admin/registrations/export?');
+    expect(loc.href).toContain('queue=pending');
+    expect(loc.href).toContain('sort=name');
+    expect(loc.href).toContain('_wpnonce=N0NCE');
+    expect(loc.href).not.toContain('page=');
+  });
+});

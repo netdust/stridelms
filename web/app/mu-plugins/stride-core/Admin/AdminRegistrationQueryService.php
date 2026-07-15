@@ -24,6 +24,12 @@ use Stride\Modules\Trajectory\TrajectoryCPT;
  */
 final class AdminRegistrationQueryService
 {
+    /**
+     * Ceiling for "Exporteer huidige weergave" (F-A9) — far above any real
+     * filtered view; hitting it logs a trip-wire (no silent caps).
+     */
+    private const EXPORT_MAX_ROWS = 10000;
+
     public function __construct(
         private readonly RegistrationRepository $registrations,
         private readonly QuoteRepository $quotes,
@@ -74,6 +80,61 @@ final class AdminRegistrationQueryService
         );
 
         return $page;
+    }
+
+    /**
+     * Every composed row matching the CURRENT grid predicate — the read
+     * behind "Exporteer huidige weergave" (F-A9). Routes through the SAME
+     * applyScopePins + queryForGrid + composeFromRows pipeline as the grid
+     * read, so the CSV can never contain rows the admin was not looking at
+     * (or miss rows they were). Pages internally in repo-cap chunks; bounded
+     * by EXPORT_MAX_ROWS with a trip-wire log (no silent caps).
+     *
+     * @param  array<string,mixed> $params  Pre-sanitised filter params
+     *                                      (page/per_page/group_by ignored).
+     * @return array{items: array<int,array<string,mixed>>, total: int, clipped: bool}|\WP_Error
+     */
+    public function getExportRows(array $params): array|\WP_Error
+    {
+        $params = $this->applyScopePins($params);
+        if (is_wp_error($params)) {
+            return $params;
+        }
+        unset($params['group_by']);
+        $params['per_page'] = 100; // queryForGrid's hard page cap
+
+        $items = [];
+        $total = 0;
+        $page = 1;
+        while (true) {
+            $params['page'] = $page;
+            $result = $this->registrations->queryForGrid($params);
+            $total = (int) $result['total'];
+            $rows = $result['rows'];
+            if (empty($rows)) {
+                break;
+            }
+
+            $regIds = array_map(static fn($row) => (int) $row->id, $rows);
+            $offerteByReg = $this->resolveOfferteStatuses($regIds);
+            $items = array_merge($items, $this->composeFromRows($rows, $offerteByReg));
+
+            if (count($items) >= $total || count($items) >= self::EXPORT_MAX_ROWS) {
+                break;
+            }
+            $page++;
+        }
+
+        $clipped = $total > self::EXPORT_MAX_ROWS;
+        if ($clipped) {
+            ntdst_log('admin')->warning('Grid export clipped at the row ceiling — the file is incomplete', [
+                'total'   => $total,
+                'ceiling' => self::EXPORT_MAX_ROWS,
+            ]);
+            $items = array_slice($items, 0, self::EXPORT_MAX_ROWS);
+        }
+
+        return ['items' => $items, 'total' => $total, 'clipped' => $clipped];
     }
 
     /**

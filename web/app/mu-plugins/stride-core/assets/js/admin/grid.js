@@ -507,9 +507,27 @@
         // (the classic "filters don't work" symptom, F-G8).
         const seq = ++this.loadSeq;
 
-        const params = new URLSearchParams();
+        // ONE filter-param source (filterParams) shared by the grid read AND
+        // the CSV export — "Exporteer huidige weergave" provably exports the
+        // exact predicate this view renders (F-A9).
+        const params = this.filterParams();
         params.set('page', String(this.page));
         params.set('per_page', String(this.perPage));
+        if (this.groupBy) params.set('group_by', this.groupBy);
+
+        // Sync the grid's view state into the browser URL so a filtered/sorted/
+        // paged view is bookmarkable + reload-safe. Uses replaceState (same idiom
+        // as shell.js) and PRESERVES shell's own params — never clobbers them.
+        this.syncStateToUrl();
+
+        return this.performLoad(params, seq);
+      },
+
+      /* The CURRENT VIEW's filter predicate as URLSearchParams — queue, scope,
+         filters, sort. THE one builder consumed by load() (which adds paging/
+         grouping) and by the export URL, so the two can never drift (F-A9). */
+      filterParams() {
+        const params = new URLSearchParams();
         const f = this.filters;
         if (this.queue) params.set('queue', this.queue);
         if (this.editionScope === 'all') params.set('edition_scope', 'all');
@@ -522,12 +540,21 @@
           params.set('sort', this.sortKey);
           params.set('order', this.sortDir);
         }
-        if (this.groupBy) params.set('group_by', this.groupBy);
+        return params;
+      },
 
-        // Sync the grid's view state into the browser URL so a filtered/sorted/
-        // paged view is bookmarkable + reload-safe. Uses replaceState (same idiom
-        // as shell.js) and PRESERVES shell's own params — never clobbers them.
-        this.syncStateToUrl();
+      /* "Exporteer huidige weergave" (F-A9 — the owner's explicit ask): a
+         server-streamed CSV of the EXACT predicate on screen. Navigation (not
+         fetch) so the browser handles the download; auth rides the _wpnonce
+         query param (the same wp_rest nonce api() sends as a header). */
+      exportCurrentView() {
+        const cfg = window.StrideConfig || {};
+        const params = this.filterParams();
+        params.set('_wpnonce', cfg.nonce || '');
+        window.location.href = `${cfg.apiUrl || ''}/admin/registrations/export?${params.toString()}`;
+      },
+
+      async performLoad(params, seq) {
 
         try {
           const data = await this.api(`/admin/registrations?${params.toString()}`);

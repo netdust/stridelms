@@ -563,6 +563,16 @@ final class AdminAPIController
             'callback'            => [$this, 'getRegistrations'],
             'permission_callback' => [$this, 'canViewAdmin'],
         ]);
+
+        // "Exporteer huidige weergave" (F-A9): a CSV of the EXACT grid
+        // predicate — same params, same scope pins, same composer as the
+        // grid read. canManageAdmin like the per-edition exporters: exports
+        // egress the full non-field-scoped PII set.
+        register_rest_route(self::NAMESPACE, '/admin/registrations/export', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'getRegistrationsGridExport'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+        ]);
     }
 
     /**
@@ -1764,6 +1774,69 @@ final class AdminAPIController
         }
 
         return new WP_REST_Response($result);
+    }
+
+    /**
+     * GET /admin/registrations/export
+     *
+     * "Exporteer huidige weergave" (F-A9): streams a UTF-8 CSV of the exact
+     * grid predicate. Param parsing mirrors getRegistrations (ONE vocabulary);
+     * row assembly lives in AdminRegistrationQueryService::getExportRows (the
+     * same scope pins + composer as the grid read); the controller keeps only
+     * the HTTP streaming — headers + BOM + fputcsv + exit, per the
+     * exportRegistrations precedent (F-A5: never return after streaming).
+     */
+    public function getRegistrationsGridExport(WP_REST_Request $request): WP_Error
+    {
+        $params = [
+            'edition_id'    => absint($request->get_param('edition_id') ?: 0) ?: null,
+            'company_id'    => absint($request->get_param('company_id') ?: 0) ?: null,
+            'trajectory_id' => absint($request->get_param('trajectory_id') ?: 0) ?: null,
+            'status'        => sanitize_text_field((string) ($request->get_param('status') ?? '')),
+            'sort'          => sanitize_text_field((string) ($request->get_param('sort') ?? '')),
+            'order'         => sanitize_text_field((string) ($request->get_param('order') ?? '')),
+            'q'             => sanitize_text_field((string) ($request->get_param('q') ?? '')),
+            'edition_scope' => sanitize_text_field((string) ($request->get_param('edition_scope') ?? 'active')),
+            'queue'         => sanitize_key((string) ($request->get_param('queue') ?? '')),
+        ];
+        $params = array_filter($params, fn($v) => $v !== '' && $v !== null);
+
+        $result = ntdst_get(\Stride\Admin\AdminRegistrationQueryService::class)->getExportRows($params);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $export = ntdst_get(\Stride\Admin\AdminExportService::class);
+
+        if (ob_get_level()) {
+            ob_end_clean();
+        }
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="inschrijvingen-weergave-' . current_time('Y-m-d-Hi') . '.csv"');
+        header('X-Content-Type-Options: nosniff');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $output = fopen('php://output', 'w');
+        // BOM for Excel UTF-8 compatibility; semicolons for Dutch Excel.
+        fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+        fputcsv($output, ['Naam', 'E-mail', 'Editie', 'Traject', 'Status', 'Offerte', 'Aanwezigheid %', 'Bedrijf'], ';');
+
+        foreach ($result['items'] as $item) {
+            fputcsv($output, array_map([$export, 'sanitizeCsvCell'], [
+                $item['user']['name'] ?? '',
+                $item['user']['email'] ?? '',
+                $item['edition']['title'] ?? '',
+                $item['trajectory']['title'] ?? '',
+                $item['status']['label'] ?? '',
+                $item['offerteStatus'] ?? '',
+                $item['attendancePct'] === null ? '' : (string) $item['attendancePct'],
+                $item['company']['name'] ?? '',
+            ]), ';');
+        }
+
+        fclose($output);
+        exit;
     }
 
     /**
