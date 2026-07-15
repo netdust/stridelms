@@ -63,5 +63,10 @@ defined('ABSPATH') || exit;
               // event the Edities row dispatches. Rendered last so it layers above.?>
         <?php require __DIR__ . '/dashboard/_cohort-lens.php'; ?>
 
+        <?php // Global search palette (⌘K, Phase 3c / F-S1) — an overlay like
+              // the cohort lens, opened via ⌘K/Ctrl+K or the topbar search box
+              // (ws-gsearch-open event). Rendered last so it layers above. ?>
+        <?php require __DIR__ . '/dashboard/_gsearch.php'; ?>
+
     </main>
 </div>

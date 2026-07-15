@@ -415,6 +415,9 @@ class AdminDashboardService extends AbstractService
             // on the shell, opened over any surface via the `ws-cohort-open` event
             // the Edities row dispatches. Reads /admin/editions/{id}/roster (frozen).
             'admin/cohort.js',
+            // Global search palette (⌘K, Phase 3c / F-S1) — searches the three
+            // existing typeahead endpoints; opened via ⌘K or the topbar box.
+            'admin/gsearch.js',
         ];
     }
 

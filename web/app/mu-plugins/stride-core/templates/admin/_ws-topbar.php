@@ -41,9 +41,14 @@ $ws_crumb_labels = [
         <b x-text="crumbs[view] || view"></b>
     </div>
     <div class="ws-topbar__spacer"></div>
-    <div class="ws-search">
+    <?php // Global search (F-S1): no longer a DISABLED input with a dead ⌘K
+          // hint — clicking (or focusing) it opens the palette, which owns the
+          // real input. readonly (not disabled) so it stays clickable and
+          // focusable for keyboard users. ?>
+    <div class="ws-search" @click="$dispatch('ws-gsearch-open')" style="cursor:pointer">
         <span x-html="icon('search')"></span>
-        <input type="text" placeholder="<?php echo esc_attr__('Zoek persoon, editie, organisatie…', 'stride'); ?>" disabled>
+        <input type="text" placeholder="<?php echo esc_attr__('Zoek persoon, editie of traject…', 'stride'); ?>"
+               readonly style="cursor:pointer" @focus="$dispatch('ws-gsearch-open')">
         <kbd>⌘K</kbd>
     </div>
     <button class="ws-btn ws-btn--ghost ws-btn--icon"
