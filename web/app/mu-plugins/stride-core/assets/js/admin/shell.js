@@ -135,7 +135,36 @@
     window.WS.icon = icon;
     window.WS.ICONS = ICONS;
     window.WS.lazyLoad = wsLazyLoad;
+    window.WS.download = wsDownload;
     window.wsShell = wsShell;
+  }
+
+  /* THE authenticated file download for the workspace (the export buttons).
+     fetch with the X-WP-Nonce HEADER (like api()) + blob + a[download] —
+     NEVER window.location.href with ?_wpnonce: the page-load nonce expires
+     after ~12-24h while the session cookie lives on, and a hard navigation
+     to a 403 replaces the ENTIRE workspace with a raw JSON error body. Here
+     an expired nonce THROWS and the caller shows its own Dutch message.
+     The filename comes from the server's Content-Disposition. */
+  async function wsDownload(endpoint) {
+    const cfg = window.StrideConfig || {};
+    const response = await fetch(`${cfg.apiUrl}${endpoint}`, {
+      headers: { 'X-WP-Nonce': cfg.nonce },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(error.message || 'Download mislukt.');
+    }
+    const blob = await response.blob();
+    const dispo = response.headers.get('Content-Disposition') || '';
+    const match = dispo.match(/filename="([^"]+)"/);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = match ? match[1] : 'export';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
   }
 
   /* ---- the shell Alpine component ----
@@ -232,14 +261,20 @@
         // (F-S2): the browser Back button returns to where the admin came
         // from — URL params included (their filters, page, search term) —
         // and the dossier's Terug reads wsFrom to know an origin exists.
-        // A same-view call (param seeding only) must NOT grow history.
+        // A same-view call (param seeding only) must NOT grow history — but
+        // it MUST still signal: the $watch never fires when the view doesn't
+        // change, and the surfaces re-read their deep-link params only on
+        // ws-view-changed. Without the dispatch, a ⌘K pick targeting the
+        // CURRENT surface rewrote the URL and did nothing (a dossier could
+        // even show person A under a ?user=B URL).
         url.searchParams.set('view', view);
         if (view !== this.view) {
           window.history.pushState({ wsFrom: this.view }, '', url.toString());
+          this.view = view; // $watch dispatches ws-view-changed
         } else {
           window.history.replaceState(window.history.state, '', url.toString());
+          window.dispatchEvent(new CustomEvent('ws-view-changed', { detail: { view: view } }));
         }
-        this.view = view;
       },
 
       isActive(view) {

@@ -82,26 +82,26 @@ defined('ABSPATH') || exit;
 
                             <!-- Per-edition exports (F-A9/F-E3): the five existing
                                  exporters, finally reachable from the workspace.
-                                 Plain download links (server streams + exits);
+                                 Via WS.download (soft-failing header-auth fetch);
                                  stride_manage gated server-side. -->
                             <div style="margin-bottom:12px" x-show="canManage && rows.length > 0">
                                 <div class="ws-eyebrow" style="margin-bottom:6px"><?php echo esc_html__('Exporteer', 'stride'); ?></div>
                                 <div class="ws-row" style="flex-wrap:wrap;gap:6px">
-                                    <a class="ws-btn ws-btn--ghost ws-btn--sm" :href="exportUrl('registration')" download>
+                                    <button type="button" class="ws-btn ws-btn--ghost ws-btn--sm" @click="exportFile('registration')">
                                         <span x-html="icon('download')"></span> <?php echo esc_html__('Deelnemerslijst', 'stride'); ?>
-                                    </a>
-                                    <a class="ws-btn ws-btn--ghost ws-btn--sm" :href="exportUrl('attendance')" download>
+                                    </button>
+                                    <button type="button" class="ws-btn ws-btn--ghost ws-btn--sm" @click="exportFile('attendance')">
                                         <span x-html="icon('download')"></span> <?php echo esc_html__('Presentielijst', 'stride'); ?>
-                                    </a>
-                                    <a class="ws-btn ws-btn--ghost ws-btn--sm" :href="exportUrl('namecard')" download>
+                                    </button>
+                                    <button type="button" class="ws-btn ws-btn--ghost ws-btn--sm" @click="exportFile('namecard')">
                                         <span x-html="icon('download')"></span> <?php echo esc_html__('Naamkaartjes', 'stride'); ?>
-                                    </a>
-                                    <a class="ws-btn ws-btn--ghost ws-btn--sm" :href="exportUrl('files')" download>
+                                    </button>
+                                    <button type="button" class="ws-btn ws-btn--ghost ws-btn--sm" @click="exportFile('files')">
                                         <span x-html="icon('download')"></span> <?php echo esc_html__('Bestanden (zip)', 'stride'); ?>
-                                    </a>
-                                    <a class="ws-btn ws-btn--ghost ws-btn--sm" :href="exportUrl('bundle')" download>
+                                    </button>
+                                    <button type="button" class="ws-btn ws-btn--ghost ws-btn--sm" @click="exportFile('bundle')">
                                         <span x-html="icon('download')"></span> <?php echo esc_html__('Bundel (zip)', 'stride'); ?>
-                                    </a>
+                                    </button>
                                 </div>
                             </div>
 

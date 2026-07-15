@@ -1767,26 +1767,11 @@ final class AdminAPIController
         ];
 
         $result = ntdst_get(\Stride\Admin\AdminQuoteService::class)->getExportRows($filters);
-        $export = ntdst_get(\Stride\Admin\AdminExportService::class);
 
-        if (ob_get_level()) {
-            ob_end_clean();
-        }
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="offertes-' . current_time('Y-m-d-Hi') . '.csv"');
-        header('X-Content-Type-Options: nosniff');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-
-        $output = fopen('php://output', 'w');
-        // BOM for Excel UTF-8 compatibility; semicolons + decimal commas for
-        // Dutch Excel / the Exact import.
-        fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
-        fputcsv($output, ['Nummer', 'Klant', 'E-mail', 'Bedrijf', 'Editie', 'Datum', 'Status', 'Subtotaal', 'BTW', 'Totaal'], ';');
-
-        foreach ($result['items'] as $item) {
+        // Decimal commas for Dutch Excel / the Exact import.
+        $rows = array_map(static function (array $item): array {
             $billing = is_array($item['billing'] ?? null) ? $item['billing'] : [];
-            fputcsv($output, array_map([$export, 'sanitizeCsvCell'], [
+            return [
                 $item['number'] ?? ('#' . ($item['id'] ?? '')),
                 $item['user']['name'] ?? '',
                 $item['user']['email'] ?? '',
@@ -1797,11 +1782,14 @@ final class AdminAPIController
                 number_format((float) ($item['subtotal'] ?? 0), 2, ',', ''),
                 number_format((float) ($item['tax'] ?? 0), 2, ',', ''),
                 number_format((float) ($item['total'] ?? 0), 2, ',', ''),
-            ]), ';');
-        }
+            ];
+        }, $result['items']);
 
-        fclose($output);
-        exit;
+        ntdst_get(\Stride\Admin\AdminExportService::class)->streamCsv(
+            'offertes-' . current_time('Y-m-d-Hi') . '.csv',
+            ['Nummer', 'Klant', 'E-mail', 'Bedrijf', 'Editie', 'Datum', 'Status', 'Subtotaal', 'BTW', 'Totaal'],
+            $rows,
+        );
     }
 
     /**
@@ -1873,37 +1861,22 @@ final class AdminAPIController
             return $result;
         }
 
-        $export = ntdst_get(\Stride\Admin\AdminExportService::class);
+        $rows = array_map(static fn(array $item): array => [
+            $item['user']['name'] ?? '',
+            $item['user']['email'] ?? '',
+            $item['edition']['title'] ?? '',
+            $item['trajectory']['title'] ?? '',
+            $item['status']['label'] ?? '',
+            $item['offerteStatus'] ?? '',
+            $item['attendancePct'] === null ? '' : (string) $item['attendancePct'],
+            $item['company']['name'] ?? '',
+        ], $result['items']);
 
-        if (ob_get_level()) {
-            ob_end_clean();
-        }
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="inschrijvingen-weergave-' . current_time('Y-m-d-Hi') . '.csv"');
-        header('X-Content-Type-Options: nosniff');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-
-        $output = fopen('php://output', 'w');
-        // BOM for Excel UTF-8 compatibility; semicolons for Dutch Excel.
-        fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
-        fputcsv($output, ['Naam', 'E-mail', 'Editie', 'Traject', 'Status', 'Offerte', 'Aanwezigheid %', 'Bedrijf'], ';');
-
-        foreach ($result['items'] as $item) {
-            fputcsv($output, array_map([$export, 'sanitizeCsvCell'], [
-                $item['user']['name'] ?? '',
-                $item['user']['email'] ?? '',
-                $item['edition']['title'] ?? '',
-                $item['trajectory']['title'] ?? '',
-                $item['status']['label'] ?? '',
-                $item['offerteStatus'] ?? '',
-                $item['attendancePct'] === null ? '' : (string) $item['attendancePct'],
-                $item['company']['name'] ?? '',
-            ]), ';');
-        }
-
-        fclose($output);
-        exit;
+        ntdst_get(\Stride\Admin\AdminExportService::class)->streamCsv(
+            'inschrijvingen-weergave-' . current_time('Y-m-d-Hi') . '.csv',
+            ['Naam', 'E-mail', 'Editie', 'Traject', 'Status', 'Offerte', 'Aanwezigheid %', 'Bedrijf'],
+            $rows,
+        );
     }
 
     /**
@@ -2937,37 +2910,17 @@ final class AdminAPIController
             wp_die('Registration table not found.');
         }
 
-        // Read-model assembly (the confirmed-upcoming SELECT + per-row enrichment
-        // + formula-injection control) lives in AdminExportService (Task D3, INV-3).
-        // The controller keeps ONLY the HTTP streaming: headers + BOM + fputcsv.
+        // Read-model assembly lives in AdminExportService (Task D3, INV-3);
+        // streaming (headers + BOM + fputcsv + per-cell injection control +
+        // exit) is THE shared streamCsv — one streaming block for all three
+        // CSV exports, never three drifting copies.
         $today = current_time('Y-m-d');
         $export = ntdst_get(\Stride\Admin\AdminExportService::class);
-        $rows = $export->buildExportRows($today);
 
-        // Set download headers. nosniff mirrors the universal file-response
-        // posture (NTDST_Response::fileHeaders / M4): a browser must never
-        // content-sniff an attacker-influenced CSV into HTML.
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="inschrijvingen-' . date('Y-m-d') . '.csv"');
-        header('X-Content-Type-Options: nosniff');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-
-        $output = fopen('php://output', 'w');
-        // BOM for Excel UTF-8 compatibility
-        fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
-
-        // Header row (semicolons for Dutch Excel)
-        fputcsv($output, ['Naam', 'E-mail', 'Organisatie', 'Editie', 'Datum', 'Status', 'Offerte #'], ';');
-
-        // Each assembled cell is passed through the service's formula-injection
-        // control before streaming (the security control's home is the service;
-        // the controller invokes it per-cell at stream time).
-        foreach ($rows as $row) {
-            fputcsv($output, array_map([$export, 'sanitizeCsvCell'], $row), ';');
-        }
-
-        fclose($output);
-        exit;
+        $export->streamCsv(
+            'inschrijvingen-' . $today . '.csv',
+            ['Naam', 'E-mail', 'Organisatie', 'Editie', 'Datum', 'Status', 'Offerte #'],
+            $export->buildExportRows($today),
+        );
     }
 }

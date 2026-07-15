@@ -341,14 +341,18 @@
       },
 
       /* ===== per-edition exports (F-A9/F-E3) =====
-         Direct download links to the FIVE existing exporters — the endpoints
-         and their server-side type allowlist (CM-4) predate this; the lens is
-         their first workspace affordance. Navigation-style auth via the
-         _wpnonce query param (the same wp_rest nonce api() sends as a
-         header); stride_manage gated server-side (PII egress). */
-      exportUrl(type) {
-        const cfg = window.StrideConfig || {};
-        return `${cfg.apiUrl || ''}/admin/editions/${this.editionId}/export/${type}?_wpnonce=${encodeURIComponent(cfg.nonce || '')}`;
+         The FIVE existing exporters — the endpoints and their server-side
+         type allowlist (CM-4) predate this; the lens is their first
+         workspace affordance. Via the shared WS.download (header-auth fetch
+         + blob): an expired nonce fails SOFT as a toast; a ?_wpnonce
+         navigation replaced the whole workspace with a raw JSON 403 after an
+         overnight tab. stride_manage gated server-side (PII egress). */
+      async exportFile(type) {
+        try {
+          await window.WS.download(`/admin/editions/${this.editionId}/export/${type}`);
+        } catch (e) {
+          this.toast('mixed', '', (e && e.message) || 'Export mislukt.');
+        }
       },
 
       /* ===== presentational helpers ===== */

@@ -18,10 +18,13 @@
 
 defined('ABSPATH') || exit;
 ?>
+<?php // NO x-init: Alpine v3 auto-invokes an init() method on the x-data
+      // object — declaring x-init="init()" too would register the ⌘K window
+      // listener TWICE, permanently. Escape is handled inside init()'s
+      // capture-phase listener (it must swallow the event so a modal
+      // UNDERNEATH the palette doesn't close on the same keypress). ?>
 <div x-data="gsearch()"
-     x-init="init()"
      @ws-gsearch-open.window="openPalette()"
-     @keydown.escape.window="open && close()"
      x-cloak>
     <template x-if="open">
         <div>

@@ -204,6 +204,12 @@
           this.page = (data && data.page) || 1;
           this.perPage = (data && data.perPage) || this.perPage;
           this.pageCount = (data && data.totalPages) || 1;
+          // Keep-page reload clamp (the trajecten precedent): a background
+          // refresh can land past the shrunk result set — clamp + refetch.
+          if (this.page > this.pageCount) {
+            this.page = this.pageCount;
+            return this.load();
+          }
         } catch (e) {
           if (req !== this._listReq) return;
           this.error = (e && e.message) ? e.message : 'Kon de edities niet laden.';

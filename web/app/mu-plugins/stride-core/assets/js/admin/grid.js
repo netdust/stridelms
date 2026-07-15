@@ -523,35 +523,34 @@
         return this.performLoad(params, seq);
       },
 
-      /* The CURRENT VIEW's filter predicate as URLSearchParams — queue, scope,
-         filters, sort. THE one builder consumed by load() (which adds paging/
-         grouping) and by the export URL, so the two can never drift (F-A9). */
+      /* The CURRENT VIEW's filter predicate as URLSearchParams — DERIVED from
+         gridStateToParams (the tested pure mapper that also feeds the URL
+         sync), minus the non-predicate keys. One encoding of the grid state:
+         a new filter added to gridStateToParams automatically rides load()
+         AND the export URL — hand-enumerating a third copy here is how an
+         export silently ships without the newest filter (more PII rows than
+         the screen shows, the exact F-A9 egress promise). */
       filterParams() {
+        const state = gridStateToParams(this);
+        delete state.p;
+        delete state.per_page;
+        delete state.group_by;
         const params = new URLSearchParams();
-        const f = this.filters;
-        if (this.queue) params.set('queue', this.queue);
-        if (this.editionScope === 'all') params.set('edition_scope', 'all');
-        if (f.status) params.set('status', f.status);
-        if (f.edition_id) params.set('edition_id', String(f.edition_id));
-        if (f.company_id) params.set('company_id', String(f.company_id));
-        if (f.trajectory_id) params.set('trajectory_id', String(f.trajectory_id));
-        if (f.q) params.set('q', f.q);
-        if (this.sortKey) {
-          params.set('sort', this.sortKey);
-          params.set('order', this.sortDir);
-        }
+        Object.keys(state).forEach((k) => params.set(k, state[k]));
         return params;
       },
 
       /* "Exporteer huidige weergave" (F-A9 — the owner's explicit ask): a
-         server-streamed CSV of the EXACT predicate on screen. Navigation (not
-         fetch) so the browser handles the download; auth rides the _wpnonce
-         query param (the same wp_rest nonce api() sends as a header). */
-      exportCurrentView() {
-        const cfg = window.StrideConfig || {};
-        const params = this.filterParams();
-        params.set('_wpnonce', cfg.nonce || '');
-        window.location.href = `${cfg.apiUrl || ''}/admin/registrations/export?${params.toString()}`;
+         server-streamed CSV of the EXACT predicate on screen, via the shared
+         WS.download (header-auth fetch + blob — an expired nonce fails SOFT
+         as a toast; a ?_wpnonce navigation replaced the whole workspace with
+         a raw JSON 403 after an overnight tab). */
+      async exportCurrentView() {
+        try {
+          await window.WS.download(`/admin/registrations/export?${this.filterParams().toString()}`);
+        } catch (e) {
+          this.toast('mixed', '', (e && e.message) || 'Export mislukt.');
+        }
       },
 
       async performLoad(params, seq) {
@@ -571,6 +570,13 @@
           this.page = data.page || 1;
           this.perPage = data.perPage || this.perPage;
           this.pageCount = data.totalPages || 1;
+          // Keep-page reload clamp (the trajecten precedent): a background
+          // refresh can land on a page past the shrunk result set — clamp
+          // and refetch instead of rendering a lying empty state.
+          if (this.page > this.pageCount) {
+            this.page = this.pageCount;
+            return this.load();
+          }
           // A bookmarked ?edition_id= restores the FILTER but not the picked
           // title (the typeahead options are a capped search result, so the
           // chip degraded to "Editie: #123"). The loaded rows carry the
@@ -616,7 +622,11 @@
           .forEach((k) => url.searchParams.delete(k));
         const gridParams = gridStateToParams(this);
         Object.keys(gridParams).forEach((k) => url.searchParams.set(k, gridParams[k]));
-        window.history.replaceState(null, '', url.toString());
+        // Preserve history.state: replaceState(null) wiped the wsFrom origin
+        // the shell's pushState navigation records (F-S2) — a background grid
+        // reload (ws-refresh after a lens mutation) must never break the
+        // dossier's origin-aware Terug.
+        window.history.replaceState(window.history.state, '', url.toString());
       },
 
       /* Edition typeahead: every (debounced) keystroke queries the server-side

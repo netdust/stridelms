@@ -17,7 +17,7 @@ use Stride\Support\EnrollmentDataExtras;
  * Given an edition, assembles its loaded registration set into roster rows:
  * each registrant's session selections (read through the
  * RegistrationRepository convergence point — never the raw `selections` column,
- * INV-6b), batch-read attendance (AttendanceRepository::getByUsers over the
+ * INV-6b), batch-read attendance (AttendanceRepository::getLatestBySessionForUsers over the
  * loaded set, CM-3), and a per-row anonymise redaction (CM-3b — a GDPR-erased
  * registrant appears with PII tombstoned, not omitted, not in full).
  *
@@ -180,14 +180,17 @@ final class AdminEditionRosterService
     }
 
     /**
-     * Attendance per user for the loaded set in one batched read: a
-     * per-session latest-wins status map, plus aggregate counts DERIVED from
-     * that map (one definition, F-C2 — duplicate historical records for the
-     * same user+session no longer double-count, and the client's optimistic
-     * recompute matches byte-for-byte).
+     * Attendance per user for the loaded set: a per-session status map, plus
+     * aggregate counts DERIVED from that map (one definition, F-C2 — the
+     * client's optimistic recompute matches byte-for-byte).
      *
-     * getByUsers orders by marked_at DESC, so the FIRST record seen per
-     * (user, session) is the latest — later duplicates are skipped.
+     * The input is ALREADY one non-empty record per (user, session) — the
+     * deduped latest-wins read (AttendanceRepository::
+     * getLatestBySessionForUsers), the SAME reader the Partner API consumes,
+     * so the two surfaces can never disagree about duplicate or empty-status
+     * artifact records. No skip-guards here: the dedup semantics live in ONE
+     * place (the repository) — never re-add an isset()/empty-status guard in
+     * this loop.
      *
      * @param  array<int> $userIds
      * @return array{
@@ -201,20 +204,13 @@ final class AdminEditionRosterService
             return [[], []];
         }
 
-        // THE deduped latest-wins read (one record per user+session) — the
-        // same reader the Partner API consumes, so the two surfaces can never
-        // disagree about duplicate historical records.
         $records = $this->attendance->getLatestBySessionForUsers($userIds, $editionId);
 
         $sessionsByUser = [];
         foreach ($records as $record) {
             $uid = (int) $record->user_id;
             $sessionKey = (string) (int) ($record->session_id ?? 0);
-            $status = (string) $record->status;
-            if ($status === '') {
-                continue; // cleared marks carry no state
-            }
-            $sessionsByUser[$uid][$sessionKey] = $status;
+            $sessionsByUser[$uid][$sessionKey] = (string) $record->status;
         }
 
         $byUser = [];

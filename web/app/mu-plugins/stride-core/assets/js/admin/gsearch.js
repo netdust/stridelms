@@ -57,14 +57,25 @@
       failed: { users: false, editions: false, trajectories: false },
       active: 0, // index into flat()
       _req: 0,
+      _searchedQ: '', // the query the CURRENT results answer (Enter gate)
 
+      /* Alpine auto-invokes init() — the template must NOT also declare
+         x-init="init()" (that registered this permanent listener twice).
+         CAPTURE phase: when the palette is open its Escape must be swallowed
+         BEFORE the bubble-phase @keydown.escape.window handlers of whatever
+         modal/slide-over sits underneath — one keypress closes ONE layer. */
       init() {
         window.addEventListener('keydown', (e) => {
           if ((e.metaKey || e.ctrlKey) && String(e.key).toLowerCase() === 'k') {
             e.preventDefault();
             this.openPalette();
+            return;
           }
-        });
+          if (e.key === 'Escape' && this.open) {
+            e.stopPropagation();
+            this.close();
+          }
+        }, true);
       },
 
       openPalette() {
@@ -78,6 +89,7 @@
         this._req++; // drop any in-flight response
         this.open = false;
         this.q = '';
+        this._searchedQ = '';
         this.loading = false;
         this.searched = false;
         this.results = { users: [], editions: [], trajectories: [] };
@@ -125,6 +137,7 @@
         };
         this.active = 0;
         this.searched = true;
+        this._searchedQ = q;
         this.loading = false;
       },
 
@@ -134,7 +147,12 @@
         this.active = Math.min(last, Math.max(0, this.active + delta));
       },
 
+      /* Enter gate: the rendered results answer _searchedQ, not necessarily
+         the CURRENT q (the 300ms debounce / in-flight window). Picking while
+         they diverge would navigate to the top hit of the PREVIOUS query —
+         the wrong person's PII one keystroke after a fast Enter. */
       pickActive() {
+        if (this.loading || (this.q || '').trim() !== this._searchedQ) return;
         const hit = this.flat[this.active];
         if (hit) this.pick(hit.group, hit.item);
       },

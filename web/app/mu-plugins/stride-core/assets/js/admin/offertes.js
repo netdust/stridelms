@@ -179,6 +179,12 @@
           this.page = (data && data.page) || 1;
           this.perPage = (data && data.perPage) || this.perPage;
           this.pageCount = (data && data.totalPages) || 1;
+          // Keep-page reload clamp (the trajecten precedent): a background
+          // refresh can land past the shrunk result set — clamp + refetch.
+          if (this.page > this.pageCount) {
+            this.page = this.pageCount;
+            return this.load();
+          }
         } catch (e) {
           if (req !== this._listReq) return;
           this.error = (e && e.message) ? e.message : 'Kon de offertes niet laden.';
@@ -207,13 +213,18 @@
 
       get canManage() { return !!(window.StrideConfig || {}).canManage; },
 
-      /* Exact-handoff CSV of the exact predicate on screen (F-A9). Navigation
-         (not fetch) so the browser downloads; auth via the _wpnonce param. */
-      exportCurrentView() {
-        const cfg = window.StrideConfig || {};
-        const params = this.filterParams();
-        params.set('_wpnonce', cfg.nonce || '');
-        window.location.href = `${cfg.apiUrl || ''}/admin/quotes/export?${params.toString()}`;
+      /* Exact-handoff CSV of the exact predicate on screen (F-A9), via the
+         shared WS.download (header-auth fetch + blob — an expired nonce
+         fails SOFT; a ?_wpnonce navigation nuked the workspace into a raw
+         JSON 403 after an overnight tab). Error display: alert until the
+         shared notice pattern lands in the 3d helper pass — this surface has
+         no toast zone yet. */
+      async exportCurrentView() {
+        try {
+          await window.WS.download(`/admin/quotes/export?${this.filterParams().toString()}`);
+        } catch (e) {
+          window.alert((e && e.message) || 'Export mislukt.');
+        }
       },
 
       reload() { this.load(); },

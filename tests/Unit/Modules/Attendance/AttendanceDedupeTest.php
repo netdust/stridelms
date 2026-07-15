@@ -50,4 +50,22 @@ final class AttendanceDedupeTest extends TestCase
     {
         $this->assertSame([], AttendanceRepository::dedupeLatestBySession([]));
     }
+
+    public function test_an_empty_status_artifact_neither_reports_nor_masks_an_older_real_mark(): void
+    {
+        // Legacy/migration rows can carry status '' (clears DELETE records
+        // today). Such a row must not be emitted (the Partner API would
+        // report "" with billable hours) and must not claim the (user,
+        // session) slot — the older real mark wins, as the admin roster's
+        // original guard always ruled.
+        $out = AttendanceRepository::dedupeLatestBySession([
+            $this->rec(7, 10, '', 5),         // latest — artifact
+            $this->rec(7, 10, 'present', 2),  // older real mark → wins
+            $this->rec(8, 11, '', 3),         // artifact with no older mark → gone
+        ]);
+
+        $this->assertCount(1, $out);
+        $this->assertSame('present', $out[0]->status);
+        $this->assertSame(7, $out[0]->user_id);
+    }
 }

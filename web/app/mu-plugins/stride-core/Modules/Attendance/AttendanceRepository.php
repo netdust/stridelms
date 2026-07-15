@@ -219,8 +219,15 @@ final class AttendanceRepository
 
     /**
      * The pure dedup over an ALREADY latest-first-ordered record list: keep
-     * the first record seen per (user_id, session_id). Static + pure so the
-     * unit suite pins the contract without a database.
+     * the first NON-EMPTY-status record seen per (user_id, session_id).
+     * Static + pure so the unit suite pins the contract without a database.
+     *
+     * Empty-status rows are SKIPPED WITHOUT claiming the slot: a clear
+     * deletes its record today, so an empty status is a legacy/migration
+     * artifact carrying no state — it must neither be reported (the Partner
+     * API would emit status "" WITH billable hours) nor mask an older real
+     * mark (the admin roster's original guard let the older mark win; both
+     * consumers now share that rule).
      *
      * @param array<object> $records
      * @return array<object>
@@ -230,6 +237,9 @@ final class AttendanceRepository
         $seen = [];
         $out = [];
         foreach ($records as $record) {
+            if ((string) ($record->status ?? '') === '') {
+                continue; // artifact — carries no state, claims no slot
+            }
             $key = (int) ($record->user_id ?? 0) . ':' . (int) ($record->session_id ?? 0);
             if (isset($seen[$key])) {
                 continue;

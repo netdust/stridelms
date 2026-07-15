@@ -391,18 +391,31 @@ test.describe('grid filterParams / exportCurrentView', () => {
     expect(p.has('group_by')).toBe(false);
   });
 
-  test('exportCurrentView navigates to /admin/registrations/export with the same predicate + _wpnonce', () => {
+  test('exportCurrentView downloads /admin/registrations/export with the same predicate via WS.download', async () => {
     const f = factory();
     (global as any).window = (global as any).window || {};
     const w = (global as any).window;
-    w.StrideConfig = { apiUrl: 'https://x.test/wp-json/stride/v1', nonce: 'N0NCE' };
-    const loc: any = {};
-    Object.defineProperty(w, 'location', { value: loc, configurable: true });
-    f.exportCurrentView();
-    expect(loc.href).toContain('/admin/registrations/export?');
-    expect(loc.href).toContain('queue=pending');
-    expect(loc.href).toContain('sort=name');
-    expect(loc.href).toContain('_wpnonce=N0NCE');
-    expect(loc.href).not.toContain('page=');
+    w.WS = w.WS || {};
+    const calls: string[] = [];
+    w.WS.download = async (endpoint: string) => { calls.push(endpoint); };
+    await f.exportCurrentView();
+    expect(calls.length).toBe(1);
+    expect(calls[0]).toContain('/admin/registrations/export?');
+    expect(calls[0]).toContain('queue=pending');
+    expect(calls[0]).toContain('sort=name');
+    expect(calls[0]).not.toContain('page=');
+    expect(calls[0]).not.toContain('group_by=');
+  });
+
+  test('a failed download surfaces as a toast, never a navigation (the overnight-nonce case)', async () => {
+    const f = factory();
+    (global as any).window = (global as any).window || {};
+    const w = (global as any).window;
+    w.WS = w.WS || {};
+    w.WS.download = async () => { throw new Error('Download mislukt.'); };
+    const toasts: string[] = [];
+    f.toast = (_k: string, _l: string, body: string) => toasts.push(body);
+    await f.exportCurrentView();
+    expect(toasts).toEqual(['Download mislukt.']);
   });
 });
