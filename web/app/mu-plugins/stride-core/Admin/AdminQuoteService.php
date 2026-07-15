@@ -69,15 +69,24 @@ final class AdminQuoteService
         if (!empty($search)) {
             $searchPattern = '%' . $wpdb->esc_like($search) . '%';
 
-            $or = ["EXISTS (
-                SELECT 1 FROM {$wpdb->postmeta} pm_num
-                WHERE pm_num.post_id = p.ID
-                AND pm_num.meta_key = 'quote_number'
-                AND pm_num.meta_value LIKE %s
-            )"];
-            $orParams = [$searchPattern];
+            // Number half — fragment owned by the repo (INV-3).
+            [$numberSql, $numberParams] = $this->quotes->numberSearchWhereFragment($searchPattern, 'p');
+            $or = [$numberSql];
+            $orParams = $numberParams;
 
+            // Customer half. ACCEPTED COST: this double-wildcard LIKE over
+            // wp_users runs on every search (no O(1) no-match exit anymore —
+            // the number half can still match) — single-digit ms at LMS scale
+            // (thousands of users), admin-only, 350ms-debounced. Revisit only
+            // if a large user migration lands. The finder caps at 500 ids; a
+            // hit on that cap means customer matches were silently dropped —
+            // trip-wire log so it can't degrade quietly.
             $matchedUserIds = array_map('intval', $this->quotes->findUserIdsByNameOrEmail($searchPattern));
+            if (count($matchedUserIds) === 500) {
+                ntdst_log('admin')->warning('AdminQuoteService: customer search hit the 500-user cap; results may be incomplete', [
+                    'search' => $search,
+                ]);
+            }
             if (!empty($matchedUserIds)) {
                 $idPlaceholders = implode(',', array_fill(0, count($matchedUserIds), '%d'));
                 $or[] = "EXISTS (
@@ -93,9 +102,17 @@ final class AdminQuoteService
             array_push($params, ...$orParams);
         }
 
-        // Filter by status
+        // Filter by status. The read-model defaults a MISSING status meta row
+        // to 'draft' (the badge shows "In behandeling"), so the draft filter
+        // must also match quotes with no status row at all — otherwise the
+        // filter and the badge disagree about the same row.
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $statusExists = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            if ($status === \Stride\Domain\QuoteStatus::Draft->value) {
+                $where[] = "({$statusExists} OR NOT EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status_any WHERE pm_status_any.post_id = p.ID AND pm_status_any.meta_key = 'status'))";
+            } else {
+                $where[] = $statusExists;
+            }
             $params[] = $status;
         }
 
@@ -192,13 +209,19 @@ final class AdminQuoteService
             $quoteItems = $meta['items'] ?? [];
             $billing = $meta['billing'] ?? [];
 
-            // Get user info from batch
+            // Get user info from batch. A DELETED WP account keeps its stale
+            // user_id in quote meta — emit id 0 for it (the roster rule,
+            // lead-identity invariant), so the client's "has a dossier"
+            // checks (Dossier button, openPerson) can key on id alone
+            // instead of navigating to a nonexistent case view.
             $userName = '';
             $userEmail = '';
             $user = $users[$userId] ?? null;
             if ($user) {
                 $userName = $user->display_name;
                 $userEmail = $user->user_email;
+            } else {
+                $userId = 0;
             }
 
             // Get edition info from batch

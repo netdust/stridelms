@@ -70,22 +70,10 @@ final class TrajectenStatusVocabularyTest extends TestCase
         // Every key in STATUS_BADGE must belong to one of the two enums — a
         // leftover fictional key ('closed', 'active') means someone edited the
         // table against an imagined vocabulary again.
-        $badge = $this->extractJsBlock('trajecten.js', 'STATUS_BADGE');
-        preg_match_all("/^\s*([a-z_]+)\s*:\s*'/m", $badge, $m);
-        $this->assertNotEmpty($m[1], 'STATUS_BADGE parsed to zero keys — extraction regex broke');
-
-        $known = array_merge(
+        $this->assertJsMapKeysWithinEnum('trajecten.js', 'STATUS_BADGE', array_merge(
             array_map(static fn(OfferingStatus $s) => $s->value, OfferingStatus::cases()),
             array_map(static fn(RegistrationStatus $s) => $s->value, RegistrationStatus::cases()),
-        );
-
-        foreach ($m[1] as $key) {
-            $this->assertContains(
-                $key,
-                $known,
-                "trajecten.js STATUS_BADGE key '{$key}' exists in neither OfferingStatus nor RegistrationStatus — fictional vocabulary",
-            );
-        }
+        ));
     }
 
     /** Read a `key: 'hue',` entry from the flat STATUS_BADGE literal. */

@@ -44,18 +44,11 @@ final class EditiesStatusVocabularyTest extends TestCase
 
     public function test_status_meta_holds_no_fictional_statuses(): void
     {
-        $meta = $this->extractJsBlock('edities.js', 'STATUS_META');
-        preg_match_all('/^\s*([a-z_]+)\s*:\s*\{/m', $meta, $m);
-        $this->assertNotEmpty($m[1], 'STATUS_META parsed to zero keys — extraction regex broke');
-
-        $known = array_map(static fn(OfferingStatus $s) => $s->value, OfferingStatus::cases());
-        foreach ($m[1] as $key) {
-            $this->assertContains(
-                $key,
-                $known,
-                "edities.js STATUS_META key '{$key}' is not an OfferingStatus value — fictional vocabulary",
-            );
-        }
+        $this->assertJsMapKeysWithinEnum(
+            'edities.js',
+            'STATUS_META',
+            array_map(static fn(OfferingStatus $s) => $s->value, OfferingStatus::cases()),
+        );
     }
 
     public function test_admin_closed_mirror_matches_the_enum(): void

@@ -40,10 +40,11 @@
   'use strict';
 
   /* ---- envelope normalizer (PURE, Tier-A) --------------------------------
-     The backend emits `items` normally but `data` on the zero-user-search
-     short-circuit (Phase-1 deferred; backend frozen). Tolerate BOTH, in that
-     precedence (items wins if both somehow present), and degrade an
-     absent/malformed payload to [] — never a crash, never undefined rows. */
+     The backend emits ONE envelope (`items`) on every path since the Offertes
+     slice removed the zero-user-search short-circuit (F-A8). This normalizer
+     stays as DEFENSIVE tolerance only: it still accepts the legacy `data` key
+     (items wins if both somehow present) and degrades an absent/malformed
+     payload to [] — never a crash, never undefined rows. */
   function quoteRows(payload) {
     if (!payload || typeof payload !== 'object') return [];
     if (Array.isArray(payload.items)) return payload.items;
@@ -57,6 +58,10 @@
      only. Unknown/empty → 'cancelled' (the neutral slate hue), never an
      arbitrary class. */
   const QUOTE_BADGE = {
+    // DELIBERATE cross-surface exception: 'draft' is slate on the edition/
+    // trajectory tables (an inert concept), but a quote draft labels as
+    // "In behandeling" — work AWAITING the admin — so it takes the amber
+    // 'pending' hue on purpose. Not drift; do not "fix" for consistency.
     draft:     'pending',    // In behandeling — amber/awaiting
     sent:      'confirmed',  // Verzonden — out the door
     exported:  'completed',  // Verwerkt — done in Exact
@@ -85,9 +90,13 @@
          status — the same value the badge renders) + Tag + Date. */
       filters: { q: '', status: '', tag: '', dateFrom: '', dateTo: '' },
 
-      /* per-surface load state */
+      /* per-surface load state. _listReq is a monotonic request token (the
+         grid/trajecten pattern): with search + status + tag + date all
+         triggering loads, a slow earlier response must never overwrite a
+         faster later one. */
       loading: false,
       error: '',
+      _listReq: 0,
 
       /* flatpickr instance (set in init, used by clearAllFilters). */
       _fp: null,
@@ -152,6 +161,7 @@
 
       async load(page) {
         if (page != null) this.page = page;
+        const req = ++this._listReq;
         this.loading = true;
         this.error = ''; // clear at the TOP so a successful reload recovers (cluster-B lesson)
 
@@ -167,17 +177,19 @@
 
         try {
           const data = await this.api(`/admin/quotes?${params.toString()}`);
-          this.rows = quoteRows(data); // tolerate items|data envelope
+          if (req !== this._listReq) return; // superseded mid-flight — drop stale response
+          this.rows = quoteRows(data); // defensive envelope tolerance
           this.total = (data && data.total) || 0;
           this.page = (data && data.page) || 1;
           this.perPage = (data && data.perPage) || this.perPage;
           this.pageCount = (data && data.totalPages) || 1;
         } catch (e) {
+          if (req !== this._listReq) return;
           this.error = (e && e.message) ? e.message : 'Kon de offertes niet laden.';
           this.rows = [];
           this.total = 0;
         } finally {
-          this.loading = false;
+          if (req === this._listReq) this.loading = false;
         }
       },
 
@@ -232,6 +244,9 @@
 
       emptyTitle() {
         if (this.filters.q) return `Geen offertes voor "${this.filters.q}"`;
+        // Any other active filter (status/tag/date): the emptiness is
+        // filter-caused, not data-caused — say so.
+        if (this.hasFilters) return 'Geen offertes voor deze filters';
         return 'Geen offertes gevonden';
       },
     };

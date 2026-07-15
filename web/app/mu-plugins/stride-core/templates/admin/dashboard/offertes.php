@@ -5,8 +5,9 @@
  * In-shell list of quotes. Its own per-surface Alpine factory
  * (assets/js/admin/offertes.js) owns ALL its data: fetches GET /admin/quotes
  * server-side, owns its loading/empty/error state, re-loads on filter/page
- * change. It tolerates the Phase-1-deferred items|data envelope client-side
- * (quoteRows) — the backend is FROZEN, never normalized here.
+ * change. The backend emits ONE envelope on every path (the zero-user-search
+ * divergence was removed at the Offertes slice, F-A8); quoteRows() stays as
+ * defensive tolerance only.
  *
  * Quote `status` is WORKFLOW status (Draft/Sent/Exported/Cancelled), NOT
  * payment. The server sends `statusLabel` AS RECEIVED (INV-7) — rendered
@@ -148,9 +149,12 @@ defined('ABSPATH') || exit;
                             <span class="ws-badge" :class="'ws-badge--'+badgeClass(r.status)" x-text="r.statusLabel"></span>
                             <!-- lock (F-O1): finalized on the edit screen —
                                  the admin sees a row is read-only BEFORE
-                                 clicking through. -->
+                                 clicking through. inline-flex so the 13px box
+                                 actually applies (a bare inline span ignores
+                                 width/height and the SVG blows up to the
+                                 cell). -->
                             <span x-show="r.locked" x-html="icon('lock')"
-                                  style="width:13px;height:13px;vertical-align:middle;margin-left:4px;color:var(--ws-text-3)"
+                                  style="display:inline-flex;width:13px;height:13px;vertical-align:middle;margin-left:4px;color:var(--ws-text-3)"
                                   title="<?php echo esc_attr__('Vergrendeld — niet meer bewerkbaar', 'stride'); ?>"></span>
                         </td>
                         <td style="text-align:right">
@@ -166,9 +170,18 @@ defined('ABSPATH') || exit;
                                     title="<?php echo esc_attr__('Open het dossier van deze klant', 'stride'); ?>">
                                 <span x-html="icon('users')"></span> <?php echo esc_html__('Dossier', 'stride'); ?>
                             </button>
-                            <button class="ws-btn ws-btn--ghost ws-btn--sm" @click="openRow(r)"
-                                    title="<?php echo esc_attr__('Opent het bewerkscherm (verzenden, status, voucher, PDF)', 'stride'); ?>">
-                                <span x-html="icon('edit')"></span> <?php echo esc_html__('Bewerken', 'stride'); ?>
+                            <!-- .stop: without it the click bubbles to the
+                                 row's @click="openRow" and fires twice.
+                                 Locked rows say Bekijken — the workbench
+                                 opens read-only there, and a button promising
+                                 write actions next to a lock icon is the
+                                 exact surprise F-O1 removes. Strings inside
+                                 the Alpine expressions are JS-string
+                                 context → esc_js. -->
+                            <button class="ws-btn ws-btn--ghost ws-btn--sm" @click.stop="openRow(r)"
+                                    :title="r.locked ? '<?php echo esc_js(__('Opent het bewerkscherm (alleen-lezen — vergrendeld)', 'stride')); ?>' : '<?php echo esc_js(__('Opent het bewerkscherm (verzenden, status, voucher, PDF)', 'stride')); ?>'">
+                                <span x-html="icon('edit')"></span>
+                                <span x-text="r.locked ? '<?php echo esc_js(__('Bekijken', 'stride')); ?>' : '<?php echo esc_js(__('Bewerken', 'stride')); ?>'"></span>
                             </button>
                         </td>
                     </tr>

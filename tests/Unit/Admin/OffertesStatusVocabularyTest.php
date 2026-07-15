@@ -34,17 +34,10 @@ final class OffertesStatusVocabularyTest extends TestCase
 
     public function test_quote_badge_holds_no_fictional_statuses(): void
     {
-        $badge = $this->extractJsBlock('offertes.js', 'QUOTE_BADGE');
-        preg_match_all("/^\s*([a-z_]+)\s*:\s*'/m", $badge, $m);
-        $this->assertNotEmpty($m[1], 'QUOTE_BADGE parsed to zero keys — extraction regex broke');
-
-        $known = array_map(static fn(QuoteStatus $s) => $s->value, QuoteStatus::cases());
-        foreach ($m[1] as $key) {
-            $this->assertContains(
-                $key,
-                $known,
-                "offertes.js QUOTE_BADGE key '{$key}' is not a QuoteStatus value — fictional vocabulary",
-            );
-        }
+        $this->assertJsMapKeysWithinEnum(
+            'offertes.js',
+            'QUOTE_BADGE',
+            array_map(static fn(QuoteStatus $s) => $s->value, QuoteStatus::cases()),
+        );
     }
 }

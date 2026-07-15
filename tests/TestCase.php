@@ -389,6 +389,40 @@ abstract class TestCase extends BaseTestCase
     }
 
     /**
+     * The TOP-LEVEL keys of a `const <name> = { … };` object literal. The ^
+     * anchor keeps inline nested keys (label:, cls:) out; digits are allowed
+     * in key tails so a key like 'on_hold2' cannot dodge the scan.
+     *
+     * @return list<string>
+     */
+    protected function extractJsMapKeys(string $file, string $constName): array
+    {
+        $block = $this->extractJsBlock($file, $constName);
+        preg_match_all('/^\s*([a-z_][a-z0-9_]*)\s*:/m', $block, $m);
+        $this->assertNotEmpty($m[1], "{$file} {$constName} parsed to zero keys — extraction regex broke");
+
+        return $m[1];
+    }
+
+    /**
+     * Assert every top-level key of a client-side JS map belongs to the given
+     * PHP enum vocabulary — THE no-fictional-keys half of the cross-language
+     * vocabulary contracts (one implementation for every status table).
+     *
+     * @param list<string> $knownValues
+     */
+    protected function assertJsMapKeysWithinEnum(string $file, string $constName, array $knownValues): void
+    {
+        foreach ($this->extractJsMapKeys($file, $constName) as $key) {
+            $this->assertContains(
+                $key,
+                $knownValues,
+                "{$file} {$constName} key '{$key}' is outside the enum vocabulary — fictional key",
+            );
+        }
+    }
+
+    /**
      * Extract ONE `const <name> = [ … ];` array literal from a client file
      * as the list of its single-quoted string entries.
      *
