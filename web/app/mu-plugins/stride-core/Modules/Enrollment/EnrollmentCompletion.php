@@ -495,6 +495,21 @@ final class EnrollmentCompletion
     }
 
     /**
+     * THE "waits on the admin" rule for a PENDING registration (decision 7a
+     * — F-V4/F-V5): the user side is done — every user-completable task
+     * completed, or no tasks at all (nothing for the user to do) — so only
+     * the admin's approve/confirm is missing. The Vandaag card's
+     * ready/blocked split (WorklistQueueResolver::pendingSplit) and the
+     * approvals panel's "Wacht op mij" bucket (AdminAPIController::
+     * getPendingApprovals) BOTH call this; a second hand-rolled variant is
+     * how the card and the panel showed different numbers one panel apart.
+     */
+    public function awaitsAdmin(array $tasks): bool
+    {
+        return $this->areUserTasksComplete($tasks);
+    }
+
+    /**
      * Check if all user-completable tasks are done (excludes approval types).
      */
     public function areUserTasksComplete(array $tasks): bool
@@ -579,6 +594,38 @@ final class EnrollmentCompletion
             'post_approval'     => __('Aftekening', 'stride'),
             default             => $type,
         };
+    }
+
+    /**
+     * The tasks column as a renderable admin list (Dutch label + per-task
+     * status + formatted completion date). SINGLE source for admin surfaces
+     * (dossier read-model; the edition registration modal should converge on
+     * this too) — never re-derive a parallel checklist elsewhere.
+     *
+     * @param  array<string,mixed> $tasks  Decoded completion_tasks column.
+     * @return list<array{type:string, label:string, status:string, completed_at:string, phase:string}>
+     */
+    public static function taskDisplayList(array $tasks): array
+    {
+        $list = [];
+        foreach ($tasks as $type => $task) {
+            if (!is_array($task)) {
+                continue;
+            }
+            $completedAt = (string) ($task['completed_at'] ?? '');
+            $ts = $completedAt !== '' ? strtotime($completedAt) : false;
+            $list[] = [
+                'type' => (string) $type,
+                'label' => self::taskTypeLabel((string) $type),
+                'status' => (string) ($task['status'] ?? 'pending'),
+                // Guarded: a malformed legacy stamp must render '' — never
+                // the 01/01/1970 epoch.
+                'completed_at' => $ts !== false ? wp_date('d/m/Y', (int) $ts) : '',
+                'phase' => (string) ($task['phase'] ?? 'enrollment'),
+            ];
+        }
+
+        return $list;
     }
 
     /**

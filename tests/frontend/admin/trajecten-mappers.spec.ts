@@ -53,8 +53,8 @@ const listPayload = {
       id: 57346,
       title: 'test-trajectory',
       description: '',
-      status: 'closed',
-      statusLabel: 'Gesloten',
+      status: 'in_progress',
+      statusLabel: 'Lopend',
       mode: 'cohort',
       modeLabel: 'Cohort',
       capacity: 24,
@@ -82,11 +82,27 @@ test.describe('mapTrajectories', () => {
   });
 
   test('derives a closed status→badge-class lookup (INV-5 styling), unknown falls back', () => {
-    const [open, closed] = mappers.mapTrajectories(listPayload);
+    const [open, inProgress] = mappers.mapTrajectories(listPayload);
     expect(open.badgeClass).toBe('confirmed'); // open → green
-    expect(closed.badgeClass).toBe('pending'); // closed → amber
+    expect(inProgress.badgeClass).toBe('interest'); // in_progress → Lopend hue (mirrors edities.js)
     const unknown = mappers.mapTrajectories({ items: [{ id: 1, status: 'weird', statusLabel: 'X', modeLabel: '' }] });
     expect(unknown[0].badgeClass).toBe('completed'); // safe slate fallback, no crash
+  });
+
+  test('the vocabulary is REAL (F-T2/F-T3): all OfferingStatus + RegistrationStatus values have a hue; the fictional closed/active do not', () => {
+    const trajectoryStatuses = ['draft', 'announcement', 'open', 'full', 'in_progress', 'postponed', 'cancelled', 'completed', 'archived'];
+    const registrationStatuses = ['interest', 'waitlist', 'pending', 'confirmed', 'completed', 'cancelled'];
+    for (const s of [...trajectoryStatuses, ...registrationStatuses]) {
+      const cls = mappers.badgeClass(s);
+      expect(['confirmed', 'waitlist', 'interest', 'pending', 'completed', 'cancelled']).toContain(cls);
+    }
+    // The fictional statuses the old map knew fall through to the neutral
+    // fallback — they must never get a deliberate hue again.
+    expect(mappers.badgeClass('closed')).toBe('completed');
+    expect(mappers.badgeClass('active')).toBe('completed');
+    // Cross-surface parity: same status, same hue as grid.js/edities.js.
+    expect(mappers.badgeClass('confirmed')).toBe('confirmed');
+    expect(mappers.badgeClass('waitlist')).toBe('waitlist');
   });
 
   test('empty / missing payload → [] (no crash)', () => {

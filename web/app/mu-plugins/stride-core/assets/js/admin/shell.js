@@ -54,6 +54,8 @@
     receipt:    '<path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"/><path d="M8 7h8M8 11h8M8 15h5"/>',
     download:   '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>',
     edit:       '<path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4Z"/>',
+    lock:       '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+    slash:      '<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>',
     tag:        '<path d="M12.586 2.586A2 2 0 0 0 11.172 2H4a2 2 0 0 0-2 2v7.172a2 2 0 0 0 .586 1.414l8.704 8.704a2.426 2.426 0 0 0 3.42 0l6.58-6.58a2.426 2.426 0 0 0 0-3.42z"/><circle cx="7.5" cy="7.5" r=".5"/>',
     swap:       '<path d="M16 3h5v5M21 3l-7 7M8 21H3v-5M3 21l7-7"/>',
     phone:      '<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92Z"/>',
@@ -109,6 +111,53 @@
     }
   }
 
+  /* wsPageList(page, pageCount) — THE compact pager model (PURE):
+     1 … cur-1 cur cur+1 … last, ≤7 pages verbatim. Consolidates the five
+     per-surface copies (grid/trajecten/edities/offertes/gebruikers) that had
+     already drifted once into a template bug (duplicate '…' entries corrupted
+     Alpine's keyed reconciliation until the templates switched to index keys).
+     One encoding of the ellipsis rule; surfaces delegate:
+       pageList() { return window.WS.pageList(this.page, this.pageCount); }
+     The delegation dereferences window at CALL time, which is safe because
+     pageList() is a RENDER-path method (only Alpine templates invoke it,
+     always in a browser with shell.js loaded first). Node specs test this
+     function directly via module.exports — never through a surface factory.
+     That render-only property is exactly what the load()/search() race-token
+     counters DON'T have (specs drive them under bare Node), which is why
+     those stay inline per surface instead of becoming a shared WS helper.
+     NOTE for the templates: the two '…' entries are identical strings — pager
+     x-for MUST key by INDEX ((p, pi) :key="pi"), never by value. */
+  function wsPageList(page, pageCount) {
+    const last = pageCount, cur = page, out = [];
+    if (last <= 7) { for (let i = 1; i <= last; i++) out.push(i); return out; }
+    out.push(1);
+    if (cur > 3) out.push('…');
+    for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) out.push(i);
+    if (cur < last - 2) out.push('…');
+    out.push(last);
+    return out;
+  }
+
+  /* wsNonceExpired(body) — F-S5: the ONE place that recognizes the
+     expired-nonce REST failure. The workspace nonce (wp_rest) expires after
+     ~12-24h while the login cookie lives on, so an overnight tab fails EVERY
+     action with what used to be a generic per-surface error the admin would
+     retry forever. When the WP_Error body is rest_cookie_invalid_nonce this
+     dispatches ws-nonce-expired (the shell shows its persistent Vernieuwen
+     banner) and returns the Dutch message for the caller to throw; any other
+     body returns null and the caller keeps its own message. The sentence
+     below is DUPLICATED in the banner template (dashboard.php, translatable
+     via esc_html__) — keep the two in sync when editing the copy. */
+  function wsNonceExpired(body) {
+    if (!body || body.code !== 'rest_cookie_invalid_nonce') {
+      return null;
+    }
+    if (typeof window !== 'undefined' && window.dispatchEvent) {
+      window.dispatchEvent(new CustomEvent('ws-nonce-expired'));
+    }
+    return 'Je sessie is verlopen. Vernieuw de pagina om verder te werken.';
+  }
+
   /* icon(name, cls) — INV-5 safe: `name` is a literal key from the markup,
      resolved to a CONSTANT SVG path. An unknown name renders an empty SVG. */
   function icon(name, cls) {
@@ -133,7 +182,38 @@
     window.WS.icon = icon;
     window.WS.ICONS = ICONS;
     window.WS.lazyLoad = wsLazyLoad;
+    window.WS.download = wsDownload;
+    window.WS.pageList = wsPageList;
+    window.WS.nonceExpired = wsNonceExpired;
     window.wsShell = wsShell;
+  }
+
+  /* THE authenticated file download for the workspace (the export buttons).
+     fetch with the X-WP-Nonce HEADER (like api()) + blob + a[download] —
+     NEVER window.location.href with ?_wpnonce: the page-load nonce expires
+     after ~12-24h while the session cookie lives on, and a hard navigation
+     to a 403 replaces the ENTIRE workspace with a raw JSON error body. Here
+     an expired nonce THROWS and the caller shows its own Dutch message.
+     The filename comes from the server's Content-Disposition. */
+  async function wsDownload(endpoint) {
+    const cfg = window.StrideConfig || {};
+    const response = await fetch(`${cfg.apiUrl}${endpoint}`, {
+      headers: { 'X-WP-Nonce': cfg.nonce },
+    });
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}));
+      throw new Error(wsNonceExpired(error) || error.message || 'Download mislukt.');
+    }
+    const blob = await response.blob();
+    const dispo = response.headers.get('Content-Disposition') || '';
+    const match = dispo.match(/filename="([^"]+)"/);
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = match ? match[1] : 'export';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(a.href);
   }
 
   /* ---- the shell Alpine component ----
@@ -145,8 +225,15 @@
       views: VIEWS,
       view: 'vandaag',
 
+      /* F-S5: the wp_rest nonce has expired (an overnight tab). Latched by the
+         ws-nonce-expired event wsNonceExpired() dispatches from api()/download;
+         the shell renders a persistent banner with a Vernieuwen button — the
+         only remedy IS a reload (a fresh page prints a fresh nonce). */
+      nonceExpired: false,
+
       init() {
         this.view = this.resolveView();
+        window.addEventListener('ws-nonce-expired', () => { this.nonceExpired = true; });
         // Keep the URL in sync when the active surface changes (bookmarkable
         // ?view= per the dashboard-tabs convention) AND broadcast the change so
         // each nested per-surface factory can lazily load on its first
@@ -187,7 +274,13 @@
           return;
         }
         const url = new URL(window.location.href);
-        // Clear any previous deep-link params before seeding the new ones.
+        // Clear any previous DEEP-LINK-owned params before seeding the new
+        // ones. trajectory_id is deliberately NOT in this delete list: it is a
+        // first-class grid FILTER (the Traject select) as well as a deep-link,
+        // and deleting it here wiped a user-picked filter on every view
+        // round-trip while status/edition/q survived. Like those filters it
+        // lives in the URL until the user clears its chip; the Trajecten
+        // deep-link below OVERWRITES it when a new target is passed.
         url.searchParams.delete('queue');
         url.searchParams.delete('user');
         url.searchParams.delete('reg');
@@ -204,9 +297,40 @@
           if (params.reg != null && params.reg !== '') {
             url.searchParams.set('reg', String(params.reg));
           }
+          // ?trajectory_id=<id> deep-links the grid scoped to a trajectory's
+          // child edition-rows ("Toon inschrijvingen" on the Trajecten
+          // slide-over). The old whitelist silently DROPPED it, so that button
+          // switched views without filtering anything (F-T1).
+          if (params.trajectory_id != null && params.trajectory_id !== '' && Number(params.trajectory_id) > 0) {
+            url.searchParams.set('trajectory_id', String(params.trajectory_id));
+          }
+          // ?edition_id=<id> deep-links the grid scoped to one edition
+          // (Vandaag meldingen: capacity / editie-start alerts). Same
+          // contract as trajectory_id: it is ALSO a first-class grid filter,
+          // so it is absorb-only — set when a deep-link passes it, never
+          // deleted here (the grid owns clearing via its filter chip).
+          if (params.edition_id != null && params.edition_id !== '' && Number(params.edition_id) > 0) {
+            url.searchParams.set('edition_id', String(params.edition_id));
+          }
         }
-        window.history.replaceState(null, '', url.toString());
-        this.view = view;
+        // A REAL view switch pushes a history entry carrying the origin view
+        // (F-S2): the browser Back button returns to where the admin came
+        // from — URL params included (their filters, page, search term) —
+        // and the dossier's Terug reads wsFrom to know an origin exists.
+        // A same-view call (param seeding only) must NOT grow history — but
+        // it MUST still signal: the $watch never fires when the view doesn't
+        // change, and the surfaces re-read their deep-link params only on
+        // ws-view-changed. Without the dispatch, a ⌘K pick targeting the
+        // CURRENT surface rewrote the URL and did nothing (a dossier could
+        // even show person A under a ?user=B URL).
+        url.searchParams.set('view', view);
+        if (view !== this.view) {
+          window.history.pushState({ wsFrom: this.view }, '', url.toString());
+          this.view = view; // $watch dispatches ws-view-changed
+        } else {
+          window.history.replaceState(window.history.state, '', url.toString());
+          window.dispatchEvent(new CustomEvent('ws-view-changed', { detail: { view: view } }));
+        }
       },
 
       isActive(view) {
@@ -214,15 +338,22 @@
       },
 
       /* Write ?view= without reloading the page. Preserves any other query
-         params already present (e.g. WordPress's `page=stride-dashboard`). */
+         params already present (e.g. WordPress's `page=stride-dashboard`) AND
+         the current history state — replaceState(null) would wipe the wsFrom
+         origin the pushState navigation just recorded. */
       writeViewToUrl(view) {
         const url = new URL(window.location.href);
         url.searchParams.set('view', view);
-        window.history.replaceState(null, '', url.toString());
+        window.history.replaceState(window.history.state, '', url.toString());
       },
 
       icon(name, cls) {
         return icon(name, cls);
+      },
+
+      /* The nonce-banner Vernieuwen action (F-S5). */
+      reloadPage() {
+        window.location.reload();
       },
 
       /* The shared API helper EVERY per-surface loader reuses. Sends the
@@ -240,17 +371,25 @@
         });
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
-          throw new Error(error.message || 'API error');
+          throw new Error(wsNonceExpired(error) || error.message || 'API error');
         }
         return response.json();
       },
     };
   }
 
-  /* Node export for the unit spec (shell-lazyload.spec.ts) — exposes the
-     PURE first-activation guard. The window block above is guarded, so requiring
-     this module under Node runs cleanly without a browser global. */
+  /* Node export for the unit specs — the PURE first-activation guard plus the
+     shell factory (the navigation spec drives switchView/writeViewToUrl
+     against a stubbed window/history). The window block above is guarded, so
+     requiring this module under Node runs cleanly without a browser global;
+     wsShell() itself reads window at CALL time, so the spec defines its stub
+     first. */
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { wsLazyLoad: wsLazyLoad };
+    module.exports = {
+      wsLazyLoad: wsLazyLoad,
+      wsShell: wsShell,
+      wsPageList: wsPageList,
+      wsNonceExpired: wsNonceExpired,
+    };
   }
 })();

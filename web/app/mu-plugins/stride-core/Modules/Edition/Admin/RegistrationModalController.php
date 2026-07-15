@@ -210,7 +210,12 @@ final class RegistrationModalController
                 }
                 $label = $post->post_title;
                 if ($post->post_type === 'vad_session') {
-                    $date = get_post_meta($post->ID, 'session_date', true);
+                    // Via the owning repository (INV-3: bare field name, the
+                    // layer applies the prefix) — the old bare 'session_date'
+                    // get_post_meta read never matched anything, so the date
+                    // suffix silently never rendered here.
+                    $date = ntdst_get(\Stride\Modules\Edition\SessionRepository::class)
+                        ->getField($post->ID, 'date');
                     if ($date) {
                         $label .= ' — ' . date_i18n('d/m/Y', strtotime((string) $date));
                     }

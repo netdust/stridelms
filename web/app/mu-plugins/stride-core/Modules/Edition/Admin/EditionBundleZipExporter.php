@@ -29,8 +29,19 @@ final class EditionBundleZipExporter
         $slug = $this->filesExporter->editionSlug($editionId);
         $downloadName = 'export-' . $slug . '-' . date('Y-m-d') . '.zip';
 
+        // F-A5: abort-proof cleanup — a cancelled download terminates PHP
+        // inside the streaming loop, skipping everything below; the shutdown
+        // hook still runs and removes the full-PII temp dir (see the same
+        // pattern in EditionFilesZipExporter::export()). cleanupTempDir is
+        // idempotent, so the normal path below double-running it is harmless.
+        register_shutdown_function(function () use ($zipPath): void {
+            $this->cleanupTempDir(dirname($zipPath));
+        });
         $this->filesExporter->streamZipToBrowser($zipPath, $downloadName);
         $this->cleanupTempDir(dirname($zipPath));
+        // F-A5: terminal, like the other three exporters — see
+        // EditionFilesZipExporter::export(). Cleanup runs BEFORE the exit.
+        exit;
     }
 
     /**

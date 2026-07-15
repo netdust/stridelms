@@ -22,9 +22,11 @@ use Stride\Domain\QuoteStatus;
  * full read-model SHAPE for two fixture cases:
  *   1. empty-filter (all quotes for the seeded user)
  *   2. filtered-by-status (only the matching status, others excluded)
- * plus the load-bearing envelope edge — the search short-circuit, whose envelope
- * (data/total/page/per_page) is DELIBERATELY different from the main envelope
- * (items/total/page/perPage/totalPages) and must be preserved verbatim.
+ * plus the search behavior (F-O2/F-A8, Offertes slice): search matches
+ * CUSTOMER (name/e-mail) OR QUOTE NUMBER, and every path — including a
+ * no-match search — returns the ONE main envelope
+ * (items/total/page/perPage/totalPages). The Phase-1 zero-user short-circuit
+ * with its divergent data/per_page envelope is gone.
  *
  * Run: ddev exec vendor/bin/phpunit -c phpunit-integration.xml.dist --filter AdminQuoteService
  */
@@ -126,6 +128,10 @@ final class AdminQuoteServiceTest extends IntegrationTestCase
         $this->assertArrayHasKey('editUrl', $sent);
         $this->assertArrayHasKey('sentAt', $sent);
         $this->assertArrayHasKey('validUntil', $sent);
+        // Offertes-slice additions: the Datum column's Dutch label + the
+        // lock indicator (F-O1/F-O2).
+        $this->assertNotSame('', $sent['dateLabel'], 'dateLabel carries the Dutch post_date label');
+        $this->assertFalse($sent['locked'], 'a fixture quote without locked meta reports locked=false');
     }
 
     /** @test */
@@ -204,19 +210,41 @@ final class AdminQuoteServiceTest extends IntegrationTestCase
     }
 
     /** @test */
-    public function searchWithNoMatchingUsersShortCircuitsWithTheDataEnvelope(): void
+    public function searchMatchingAQuoteNumberReturnsThatQuote(): void
     {
-        // The deliberate envelope divergence: when the user-search resolves to zero
-        // users, getQuotes short-circuits with data/total/page/per_page (NOT the main
-        // items/.../totalPages envelope). This must be preserved verbatim.
+        // F-O2: the search box promises "Zoek op nummer, klant…" — the number
+        // half must actually match, independent of any user match.
+        $token = 'QNUM' . strtoupper(wp_generate_password(6, false));
+        $mine = $this->createTestQuote(self::$testUserId, $this->editionId, [
+            'meta' => ['status' => QuoteStatus::Sent->value, 'quote_number' => 'OFF-' . $token],
+        ]);
+        $other = $this->createTestQuote(self::$testUserId, $this->editionId, [
+            'meta' => ['status' => QuoteStatus::Sent->value, 'quote_number' => 'OFF-ELSE-1'],
+        ]);
+
+        $result = $this->service->getQuoteList($this->filters(['search' => $token]));
+
+        $this->assertArrayHasKey('items', $result);
+        $ids = array_map(fn($i) => $i['id'], $result['items']);
+        $this->assertContains($mine, $ids, 'the quote whose number contains the term is returned');
+        $this->assertNotContains($other, $ids, 'quotes matching neither number nor customer are excluded');
+    }
+
+    /** @test */
+    public function searchWithNoMatchesReturnsTheMainEnvelopeEmpty(): void
+    {
+        // F-A8: the old zero-user short-circuit returned a DIVERGENT
+        // data/per_page envelope. Gone — a no-match search is an ordinary
+        // empty result in the one main envelope.
         $result = $this->service->getQuoteList($this->filters([
             'search' => 'zzz_no_such_user_' . wp_generate_password(8, false),
         ]));
 
-        $this->assertSame([], $result['data']);
+        $this->assertSame([], $result['items']);
         $this->assertSame(0, $result['total']);
-        $this->assertArrayHasKey('per_page', $result);
-        $this->assertArrayNotHasKey('items', $result);
-        $this->assertArrayNotHasKey('totalPages', $result);
+        $this->assertArrayHasKey('totalPages', $result);
+        $this->assertArrayHasKey('perPage', $result);
+        $this->assertArrayNotHasKey('data', $result);
+        $this->assertArrayNotHasKey('per_page', $result);
     }
 }

@@ -18,8 +18,10 @@
  *     detailCourses.{editions,online} (no required/elective structure on this
  *     endpoint — that lives on the dossier per-user endpoint). The "kies N uit M"
  *     elective microcopy is dropped (data not available here).
- *   - the roster is `detail.registrations` (id,name,email,status,status_label);
- *     a row links to the person's dossier via switchView('dossier',{user:r.id}),
+ *   - the roster is `detail.registrations` (regId,id,name,email,status,
+ *     status_label); regId = registration row id, THE stable :key — id is the
+ *     USER id and is 0 for a deleted account. A row links to the person's
+ *     dossier via switchView('dossier',{user:r.id}) (disabled when id=0),
  *     NOT a hardcoded dossier.html#reg-103. No WS.COMPANIES lookup.
  *
  * Scope: mounted with x-data="trajecten()" INSIDE the shell's wsShell() scope,
@@ -39,6 +41,7 @@ defined('ABSPATH') || exit;
          x-show="view === 'trajecten'"
          x-data="trajecten()"
          @ws-refresh.window="if ($event.detail && $event.detail.view === 'trajecten') loadList()"
+         @keydown.escape.window="view === 'trajecten' && (detail || detailLoading || detailError) && closeDetail()"
          x-cloak>
     <div class="ws-stagger">
 
@@ -54,9 +57,15 @@ defined('ABSPATH') || exit;
         <!-- ===== TOOLBAR: scope pill + status filter + search ===== -->
         <div class="ws-traj-toolbar">
             <!-- the "Actieve trajecten" default-scope pill (server-owned scope) -->
+            <!-- Strings inside the Alpine :title EXPRESSION are JS-string
+                 context → esc_js, not esc_attr (an esc_attr'd apostrophe
+                 HTML-decodes back to a raw quote and breaks the expression).
+                 x-html icons stay CONSTANT literals per INV-5 — two x-show'd
+                 spans, never a dynamic icon(cond ? … : …) expression. -->
             <span class="ws-chip" :class="scope==='active' && 'is-active'" @click="toggleScope()"
-                  :title="scope==='active' ? '<?php echo esc_attr__('Toon ook afgesloten trajecten', 'stride'); ?>' : '<?php echo esc_attr__('Beperk tot actieve trajecten', 'stride'); ?>'">
-                <span x-html="icon(scope==='active' ? 'check' : 'archive')" style="width:13px;height:13px"></span>
+                  :title="scope==='active' ? '<?php echo esc_js(__('Toon ook afgesloten trajecten', 'stride')); ?>' : '<?php echo esc_js(__('Beperk tot actieve trajecten', 'stride')); ?>'">
+                <span x-show="scope==='active'" x-html="icon('check')" style="width:13px;height:13px"></span>
+                <span x-show="scope!=='active'" x-html="icon('archive')" style="width:13px;height:13px"></span>
                 <span x-text="scope==='active' ? '<?php echo esc_js(__('Actieve trajecten', 'stride')); ?>' : '<?php echo esc_js(__('Alle trajecten', 'stride')); ?>'"></span>
             </span>
 
@@ -65,11 +74,14 @@ defined('ABSPATH') || exit;
                 <?php echo esc_html__('Status', 'stride'); ?>
                 <select class="ws-select" x-model="statusFilter" @change="onFilterChange()">
                     <option value=""><?php echo esc_html__('Alle statussen', 'stride'); ?></option>
-                    <option value="draft"><?php echo esc_html__('Concept', 'stride'); ?></option>
-                    <option value="open"><?php echo esc_html__('Open', 'stride'); ?></option>
-                    <option value="full"><?php echo esc_html__('Volzet', 'stride'); ?></option>
-                    <option value="closed"><?php echo esc_html__('Afgesloten', 'stride'); ?></option>
-                    <option value="archived"><?php echo esc_html__('Gearchiveerd', 'stride'); ?></option>
+                    <?php
+                    // The REAL trajectory vocabulary (F-T2): trajectories carry
+                    // OfferingStatus values; the old hardcoded list offered a
+                    // nonexistent 'closed' (matched nothing) and omitted
+                    // in_progress/cancelled/completed entirely.
+                    foreach (\Stride\Domain\OfferingStatus::cases() as $offeringStatus) : ?>
+                        <option value="<?php echo esc_attr($offeringStatus->value); ?>"><?php echo esc_html($offeringStatus->label()); ?></option>
+                    <?php endforeach; ?>
                 </select>
             </div>
 
@@ -150,6 +162,25 @@ defined('ABSPATH') || exit;
                 <h3><?php echo esc_html__('Geen actieve trajecten', 'stride'); ?></h3>
                 <p><?php echo esc_html__('Pas de zoekterm, status of het bereik aan.', 'stride'); ?></p>
             </div>
+
+        </div>
+
+        <!-- pager (F-T4: the list was hard-capped at the first 50 with no way to
+             reach the rest). SAME shared ws-pager markup + goPage(p)/pageList()
+             contract as edities/offertes — no per-surface pager dialect. -->
+        <div class="ws-pager" x-show="!loading && !error && pageCount > 1">
+            <div class="ws-count"><?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="pageCount"></b></div>
+            <div class="ws-pager__pages">
+                <button class="ws-page-btn" :disabled="page===1" @click="goPage(page-1)"><span x-html="icon('chevRight')" style="transform:rotate(180deg);width:15px;height:15px"></span></button>
+                <!-- :key is the INDEX — pageList() emits the '…' sentinel twice
+                     mid-range, and duplicate keys corrupt Alpine's keyed
+                     reconciliation (shared ws-pager contract fix). -->
+            <template x-for="(p, pi) in pageList()" :key="pi">
+                    <template x-if="p === '…'"><span class="ws-page-ellipsis">…</span></template>
+                    <template x-if="p !== '…'"><button class="ws-page-btn" :class="p===page && 'is-active'" @click="goPage(p)" x-text="p"></button></template>
+                </template>
+                <button class="ws-page-btn" :disabled="page===pageCount" @click="goPage(page+1)"><span x-html="icon('chevRight')" style="width:15px;height:15px"></span></button>
+            </div>
         </div>
     </div>
 
@@ -198,8 +229,14 @@ defined('ABSPATH') || exit;
                         </div>
 
                         <div class="ws-slideover__body">
-                            <!-- jump to the grid filtered to this trajectory -->
-                            <button class="ws-btn" style="width:100%;margin-bottom:var(--ws-5)" @click="switchView('inschrijvingen')">
+                            <!-- jump to the grid SCOPED to this trajectory: the
+                                 trajectory_id deep-link rides switchView (shell
+                                 whitelist) and the grid absorbs it on activation
+                                 (child edition-rows via the parent→child join).
+                                 It used to pass NOTHING — a plain view switch
+                                 that landed on the unfiltered grid (F-T1). -->
+                            <button class="ws-btn" style="width:100%;margin-bottom:var(--ws-5)"
+                                    @click="switchView('inschrijvingen', { trajectory_id: detail && detail.id })">
                                 <span x-html="icon('grid')"></span> <?php echo esc_html__('Toon inschrijvingen', 'stride'); ?>
                             </button>
 
@@ -243,12 +280,25 @@ defined('ABSPATH') || exit;
                             </div>
 
                             <!-- ENROLLED DEELNEMERS (roster) -->
-                            <div class="ws-section-title"><span x-html="icon('users')"></span> <?php echo esc_html__('Ingeschreven deelnemers', 'stride'); ?> <span class="ws-grouphead__count" x-text="(detail.registrations || []).length"></span><span class="ws-section-title__line"></span></div>
+                            <!-- Count = the REAL participant total (enrolledCount), not the
+                                 clamped roster length; when the roster is clipped at 50 the
+                                 note says so instead of silently under-reporting (F-T4). -->
+                            <div class="ws-section-title"><span x-html="icon('users')"></span> <?php echo esc_html__('Ingeschreven deelnemers', 'stride'); ?> <span class="ws-grouphead__count" x-text="detail.enrolledCount"></span><span class="ws-section-title__line"></span></div>
+                            <p class="ws-muted" style="margin:calc(-1 * var(--ws-2)) 0 var(--ws-3);font-size:var(--ws-fs-sm)"
+                               x-show="detail.enrolledCount > (detail.registrations || []).length"
+                               x-text="'<?php echo esc_js(__('Alleen de %d recentste worden getoond.', 'stride')); ?>'.replace('%d', (detail.registrations || []).length)"></p>
 
                             <template x-if="detail.registrations && detail.registrations.length">
                                 <div class="ws-traj-roster">
-                                    <template x-for="r in detail.registrations" :key="r.id">
-                                        <button class="ws-traj-rosteritem" @click="openPerson(r)">
+                                    <!-- keyed on regId (registration row id) — r.id is the USER id
+                                         and is 0 for every deleted account; keying on it collapses
+                                         those rows. A deleted-account row has no dossier to open:
+                                         the button is disabled with an explanatory title. -->
+                                    <template x-for="r in detail.registrations" :key="r.regId">
+                                        <button class="ws-traj-rosteritem" @click="openPerson(r)"
+                                                :disabled="!r.id"
+                                                :title="r.id ? '' : '<?php echo esc_js(__('Account verwijderd — geen dossier beschikbaar', 'stride')); ?>'"
+                                                :style="r.id ? '' : 'cursor:default;opacity:.65'">
                                             <div class="ws-traj-rosteritem__body">
                                                 <div class="ws-traj-rosteritem__name" x-text="r.name"></div>
                                                 <div class="ws-traj-rosteritem__sub" x-text="r.email"></div>

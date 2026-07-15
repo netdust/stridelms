@@ -1860,7 +1860,6 @@ $adapter->getCertificateLink($userId, $courseId): ?string
 |--------|---------|------|
 | `stride_submit_enrollment` | Submit enrollment form | logged-in |
 | `stride_validate_voucher` | Validate discount code | public |
-| `stride_save_session_selection` | Save session choices | logged-in |
 | `stride_update_profile` | Update user profile | logged-in |
 | `stride_download_ical` | Generate .ics file | logged-in |
 | `stride_update_quote_status` | Quote status changes | logged-in |

@@ -108,6 +108,20 @@ final class AdminAPIController
                     'default' => 'agenda',
                     'enum' => ['agenda', 'list'],
                 ],
+                'scope' => [
+                    // upcoming (default) = the 2-day-lookback cutoff;
+                    // all = no default cutoff (F-E2: the lookback was silent
+                    // and had no UI escape hatch). An explicit date_from
+                    // always overrides the default cutoff, either scope.
+                    // DELIBERATELY named 'upcoming', not 'active': the
+                    // typeahead's scope=active (/admin/editions/options) and
+                    // the trajecten scope are STATUS-based (not admin-closed),
+                    // while this one is a pure DATE cutoff — two different
+                    // boundaries; one word for both would conflate them.
+                    'type' => 'string',
+                    'default' => 'upcoming',
+                    'enum' => ['upcoming', 'all'],
+                ],
             ],
         ]);
 
@@ -274,6 +288,15 @@ final class AdminAPIController
             ],
         ]);
 
+        // Quotes CSV export for the Exact Online handoff (F-A9): the exact
+        // Offertes predicate (search/status/tag/date), stride_manage gated
+        // like every export (PII + financial egress).
+        register_rest_route(self::NAMESPACE, '/admin/quotes/export', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'getQuotesExport'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+        ]);
+
         // Trajectories list
         register_rest_route(self::NAMESPACE, '/admin/trajectories', [
             'methods' => 'GET',
@@ -438,7 +461,12 @@ final class AdminAPIController
             'callback' => [$this, 'searchUsers'],
             'permission_callback' => [$this, 'canViewAdmin'],
             'args' => [
+                // minLength stays as server-side defense; the CLIENT guards
+                // short queries too (F-U1 — the raw 400 rendered as an
+                // English error flash on every 1-character keystroke).
                 'q' => ['type' => 'string', 'required' => true, 'minLength' => 2],
+                'page' => ['type' => 'integer', 'default' => 1, 'minimum' => 1],
+                'per_page' => ['type' => 'integer', 'default' => 25, 'minimum' => 1, 'maximum' => 100],
             ],
         ]);
 
@@ -450,6 +478,9 @@ final class AdminAPIController
             'args' => [
                 'id' => ['type' => 'integer', 'required' => true],
                 'reg_page' => ['type' => 'integer', 'default' => 1],
+                // Widened (clamped server-side to ≤100) by the dossier's soft
+                // refresh so already-loaded pages survive a reload in one request.
+                'reg_per_page' => ['type' => 'integer', 'default' => 20],
             ],
         ]);
 
@@ -541,6 +572,16 @@ final class AdminAPIController
             'callback'            => [$this, 'getRegistrations'],
             'permission_callback' => [$this, 'canViewAdmin'],
         ]);
+
+        // "Exporteer huidige weergave" (F-A9): a CSV of the EXACT grid
+        // predicate — same params, same scope pins, same composer as the
+        // grid read. canManageAdmin like the per-edition exporters: exports
+        // egress the full non-field-scoped PII set.
+        register_rest_route(self::NAMESPACE, '/admin/registrations/export', [
+            'methods'             => 'GET',
+            'callback'            => [$this, 'getRegistrationsGridExport'],
+            'permission_callback' => [$this, 'canManageAdmin'],
+        ]);
     }
 
     /**
@@ -580,6 +621,17 @@ final class AdminAPIController
      */
     public function getStats(WP_REST_Request $request): WP_REST_Response
     {
+        // F-V10: ?fresh=1 (the Vernieuwen button) busts THIS endpoint's read
+        // caches before the read — the stats transient + the resolver
+        // id-sets feeding its queue counts. Endpoint-scoped on purpose: the
+        // pulse fires this and /admin/action-queue in PARALLEL, and a full
+        // bustCaches() from both raced to delete the transient the sibling
+        // request had just repopulated (double recompute per click).
+        if ($request->get_param('fresh')) {
+            delete_transient(AdminStatsService::STATS_TRANSIENT_KEY);
+            AdminStatsService::bumpQueueRev();
+        }
+
         // Thin delegator — all $wpdb / read-model assembly lives in
         // AdminStatsService (strangle §12.4 / S1, INV-3).
         $service = ntdst_get(\Stride\Admin\AdminStatsService::class);
@@ -612,13 +664,17 @@ final class AdminAPIController
         $themeId = (int) $request->get_param('theme');
         $formatId = (int) $request->get_param('format');
         $tagId = (int) $request->get_param('tag');
+        $scope = (string) ($request->get_param('scope') ?? 'upcoming');
+        if (!in_array($scope, ['upcoming', 'all'], true)) {
+            $scope = 'upcoming';
+        }
         $offset = ($page - 1) * $perPage;
 
         $today = current_time('Y-m-d');
         $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
 
         if ($view === 'agenda') {
-            return $this->getEditionsAgendaView($request, $today, $twoDaysAgo);
+            return $this->getEditionsAgendaView($request, $today, $twoDaysAgo, $scope);
         }
 
         // LIST VIEW: One row per edition
@@ -626,12 +682,14 @@ final class AdminAPIController
         $where = ["p.post_type = %s", "p.post_status = 'publish'"];
         $params = [EditionCPT::POST_TYPE];
 
-        // By default, only show editions that haven't passed more than 2 days ago.
-        // Permit NULL start_date so dateless editions (no sessions -> no
-        // start_date meta, the interest-list anchors) show in the default scope.
-        // Same fix the Admin Workspace spec §10.7 / Task 1.2 inherits — see
+        // By default (scope=upcoming), only show editions that haven't passed
+        // more than 2 days ago; scope=all lifts the cutoff (F-E2 — the
+        // lookback was invisible and inescapable). Permit NULL start_date so
+        // dateless editions (no sessions -> no start_date meta, the
+        // interest-list anchors) show in the default scope. Same fix the
+        // Admin Workspace spec §10.7 / Task 1.2 inherits — see
         // docs/plans/2026-06-13-admin-workspace-spec.md.
-        if (empty($dateFrom)) {
+        if (empty($dateFrom) && $scope !== 'all') {
             $where[] = "(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)";
             $params[] = $twoDaysAgo;
         }
@@ -641,9 +699,14 @@ final class AdminAPIController
             $params[] = '%' . $wpdb->esc_like($search) . '%';
         }
 
-        if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
-            $params[] = $status;
+        // Status filter matches the EFFECTIVE status — the badge the row
+        // actually displays (F-E2). The old stored-meta EXISTS filter
+        // disagreed with the rendered label for exactly the rows where they
+        // diverge (e.g. stored 'open' + past dates renders "Afgelopen" but
+        // matched status=open, not status=completed) — the F-T2 lesson: a
+        // filter must speak the vocabulary the surface renders.
+        if (!$this->spliceEffectiveStatusFilter($status, 'p.ID', $where, $params, $filterStatusMap)) {
+            return $this->emptyEditionsResponse($page, $perPage, 'list');
         }
 
         // Date range filter
@@ -669,8 +732,13 @@ final class AdminAPIController
         // The §10.7 NULL-permitting default-scope predicate + LEFT JOIN +
         // NULL-last ordering are decided by $where/$whereClause above and
         // reproduced verbatim in the repo. Behavior-preserving move.
+        // Ordering: upcoming scope reads ASC (next first); the widened
+        // scope=all reads DESC (most recent first) — the widen exists to
+        // reach recently-finished editions, which ASC would bury behind the
+        // full history. An explicit date range keeps ASC (chronological).
+        $order = ($scope === 'all' && empty($dateFrom)) ? 'DESC' : 'ASC';
         $total = $this->editionRepository->countAdminList($whereClause, $params, $tagJoin);
-        $editions = $this->editionRepository->findAdminListRows($whereClause, $params, $tagJoin, $perPage, $offset);
+        $editions = $this->editionRepository->findAdminListRows($whereClause, $params, $tagJoin, $perPage, $offset, $order);
 
         // Format editions with meta
         $items = [];
@@ -696,10 +764,12 @@ final class AdminAPIController
         // INV-7 (C1): batch-resolve EFFECTIVE status for every visible edition,
         // the same read the typeahead (getEditionOptions) uses, so the grid and
         // the typeahead agree. Passed into the mapper $context; the mapper does
-        // NO queries.
-        $effectiveStatuses = !empty($editionIds)
-            ? ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($editionIds)
-            : [];
+        // NO queries. A status-filtered request already resolved the full
+        // corpus — reuse that map instead of resolving again.
+        $effectiveStatuses = $filterStatusMap
+            ?? (!empty($editionIds)
+                ? ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($editionIds)
+                : []);
 
         foreach ($editions as $edition) {
             $editionId = (int) $edition->ID;
@@ -727,9 +797,16 @@ final class AdminAPIController
             // Get registration count from batch
             $registeredCount = $regCounts[$editionId] ?? 0;
 
-            // Check if edition is today
-            $isToday = $startDate === $today || ($startDate <= $today && $endDate >= $today);
-            $isPast = !empty($endDate) ? $endDate < $today : $startDate < $today;
+            // Check if edition is today. A DATELESS edition (no start_date —
+            // the sessionless interest anchors, §10.7) is neither today nor
+            // past: the old string comparisons flagged it isPast ('' < today
+            // is true) and, with only an end_date, even isToday (F-A8/F-E1 —
+            // latent while the list view had no UI caller; it has one now).
+            // isPast delegates to THE calendar predicate the effective-status
+            // badge runs on (EditionService::isPastDates) — the row flag and
+            // the badge must never disagree.
+            $isToday = $startDate !== '' && ($startDate === $today || ($endDate !== '' && $startDate <= $today && $endDate >= $today));
+            $isPast = \Stride\Modules\Edition\EditionService::isPastDates($endDate ?: null, $startDate ?: null);
 
             // Common edition->item shaping shared with the agenda view, deduped
             // into EditionAdminMapper (id, course{id,title}, capacity,
@@ -752,6 +829,10 @@ final class AdminAPIController
             $base['course']['tags'] = $courseTagList;
             $base['startDate'] = $startDate ?: null;
             $base['endDate'] = $endDate ?: null;
+            // Server-owned Dutch date label (INV-7 — cells rendered raw ISO,
+            // F-E2). Empty for a dateless edition; the template shows its own
+            // 'Geen datum' state.
+            $base['dateLabel'] = $this->editionDateRangeLabel($startDate, $endDate);
             $base['venue'] = $venue ?: null;
             $base['isToday'] = $isToday;
             $base['isPast'] = $isPast;
@@ -892,8 +973,11 @@ final class AdminAPIController
 
     /**
      * Agenda view: Each session date is a row.
+     *
+     * $scope arrives validated from getEditions (the one param-assembly
+     * site) — never re-parse it here, or the two views' whitelists drift.
      */
-    private function getEditionsAgendaView(WP_REST_Request $request, string $today, string $twoDaysAgo): WP_REST_Response
+    private function getEditionsAgendaView(WP_REST_Request $request, string $today, string $twoDaysAgo, string $scope): WP_REST_Response
     {
         global $wpdb;
 
@@ -917,12 +1001,13 @@ final class AdminAPIController
         ];
         $params = [SessionCPT::POST_TYPE, EditionCPT::POST_TYPE];
 
-        // Default: only show sessions from 2 days ago onwards. Sessions ALWAYS
-        // carry a date (INNER JOIN on _ntdst_date in the repo), so unlike the
-        // LIST view there is NO §10.7 NULL-permitting carve-out here — dateless
-        // editions have no session rows and never appear in the agenda. Keep
-        // this predicate non-NULL-permitting.
-        if (empty($dateFrom)) {
+        // Default (scope=upcoming): only show sessions from 2 days ago onwards;
+        // scope=all lifts the cutoff (F-E2). Sessions ALWAYS carry a date
+        // (INNER JOIN on _ntdst_date in the repo), so unlike the LIST view
+        // there is NO §10.7 NULL-permitting carve-out here — dateless editions
+        // have no session rows and never appear in the agenda (they live in
+        // the LIST view, F-E1). Keep this predicate non-NULL-permitting.
+        if (empty($dateFrom) && $scope !== 'all') {
             $where[] = "pm_date.meta_value >= %s";
             $params[] = $twoDaysAgo;
         }
@@ -933,10 +1018,10 @@ final class AdminAPIController
             $params[] = '%' . $wpdb->esc_like($search) . '%';
         }
 
-        // Filter by edition status
-        if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = e.ID AND pm_status.meta_key = '_ntdst_status' AND pm_status.meta_value = %s)";
-            $params[] = $status;
+        // Filter by the edition's EFFECTIVE status — the badge the row
+        // displays (F-E2; same rationale as the LIST view above).
+        if (!$this->spliceEffectiveStatusFilter($status, 'e.ID', $where, $params, $filterStatusMap)) {
+            return $this->emptyEditionsResponse($page, $perPage, 'agenda');
         }
 
         // Date range filter on session date
@@ -960,12 +1045,15 @@ final class AdminAPIController
         $whereClause = implode(' AND ', $where);
 
         // Read SQL extracted to EditionRepository (INV-3, strangle Task 2a.5).
-        // The session->edition->date INNER JOINs + the (date ASC, edition ASC)
-        // ordering are reproduced verbatim in the repo. The controller keeps
-        // ONLY param assembly + the taxonomy-join helper (shared with the LIST
-        // view, getEditions). Behavior-preserving move.
+        // The session->edition->date INNER JOINs + the (date, edition) ordering
+        // are reproduced verbatim in the repo. The controller keeps ONLY param
+        // assembly + the taxonomy-join helper (shared with the LIST view,
+        // getEditions). Ordering direction mirrors the LIST view: scope=all
+        // without an explicit range reads DESC (most recent first — the widen
+        // targets recently-finished editions, which ASC would bury).
+        $order = ($scope === 'all' && empty($dateFrom)) ? 'DESC' : 'ASC';
         $total = $this->editionRepository->countAgendaRows($whereClause, $params, $tagJoin);
-        $sessions = $this->editionRepository->findAgendaRows($whereClause, $params, $tagJoin, $perPage, $offset);
+        $sessions = $this->editionRepository->findAgendaRows($whereClause, $params, $tagJoin, $perPage, $offset, $order);
 
         // Format items
         $items = [];
@@ -996,9 +1084,11 @@ final class AdminAPIController
         // INV-7 (C1): batch-resolve EFFECTIVE status for every visible edition
         // (same read as the typeahead) so the agenda grid and the typeahead
         // agree. Passed into the mapper $context; the mapper does NO queries.
-        $effectiveStatuses = !empty($editionIds)
-            ? ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($editionIds)
-            : [];
+        // A status-filtered request already resolved the full corpus — reuse.
+        $effectiveStatuses = $filterStatusMap
+            ?? (!empty($editionIds)
+                ? ntdst_get(\Stride\Modules\Edition\EditionService::class)->getEffectiveStatuses($editionIds)
+                : []);
 
         foreach ($sessions as $session) {
             $sessionId = (int) $session->session_id;
@@ -1055,6 +1145,10 @@ final class AdminAPIController
             $base['title'] = $session->edition_title;
             $base['sessionTitle'] = $session->session_title;
             $base['date'] = $sessionDate;
+            // Server-owned Dutch date label (INV-7 — the cell rendered the raw
+            // ISO date, F-E2). Falls back to '' on an unparseable date; the
+            // template then shows the raw ISO value rather than nothing.
+            $base['dateLabel'] = stride_format_date((string) $sessionDate);
             $base['startTime'] = $startTime ?: null;
             $base['endTime'] = $endTime ?: null;
             $base['venue'] = $location ?: $venue ?: null;
@@ -1072,6 +1166,88 @@ final class AdminAPIController
             'totalPages' => (int) ceil($total / $perPage),
             'view' => 'agenda',
         ]);
+    }
+
+    /**
+     * Splice the EFFECTIVE-status filter into a WHERE assembly (F-E2; INV-7:
+     * one decision engine — EditionService::findIdsByEffectiveStatus). ONE
+     * implementation for the LIST and AGENDA views, so the filter semantics
+     * can never drift between the two halves of the same toolbar dropdown.
+     *
+     * Returns FALSE when the filter matches nothing (incl. an unknown status
+     * value — matches nothing, like the old stored-meta equality did); the
+     * caller then returns the empty envelope. On a match the id set is
+     * spliced as one prepared IN clause (SQL paging stays intact) and
+     * $statusMap receives the FULL corpus effective-status map so the
+     * caller's badge shaping reuses it — never resolve twice per request.
+     *
+     * @param array<int, \Stride\Domain\OfferingStatus>|null $statusMap
+     */
+    private function spliceEffectiveStatusFilter(
+        string $status,
+        string $idColumn,
+        array &$where,
+        array &$params,
+        ?array &$statusMap,
+    ): bool {
+        $statusMap = null;
+        if ($status === '') {
+            return true;
+        }
+
+        $enum = \Stride\Domain\OfferingStatus::tryFrom($status);
+        $ids = [];
+        if ($enum !== null) {
+            $result = ntdst_get(\Stride\Modules\Edition\EditionService::class)->findIdsByEffectiveStatus($enum);
+            $ids = $result['ids'];
+            $statusMap = $result['statuses'];
+        }
+
+        if ($ids === []) {
+            return false;
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+        $where[] = "{$idColumn} IN ({$placeholders})";
+        array_push($params, ...$ids);
+
+        return true;
+    }
+
+    /**
+     * The shared empty paged envelope for GET /admin/editions (both views).
+     */
+    private function emptyEditionsResponse(int $page, int $perPage, string $view): WP_REST_Response
+    {
+        return new WP_REST_Response([
+            'items' => [],
+            'total' => 0,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalPages' => 0,
+            'view' => $view,
+        ]);
+    }
+
+    /**
+     * Dutch date(-range) label for a LIST-view edition row (F-E2 — cells
+     * rendered raw ISO). '' ONLY for a truly dateless edition (§10.7
+     * anchors); a bound that exists but fails to parse falls back to its raw
+     * ISO value (the agenda path's documented behavior — never hide a date
+     * that exists), and a missing bound never leaves a dangling separator.
+     */
+    private function editionDateRangeLabel(string $startDate, string $endDate): string
+    {
+        $fmt = static fn(string $d): string => $d === '' ? '' : (stride_format_date($d) ?: $d);
+
+        $start = $fmt($startDate);
+        $end = ($endDate !== '' && $endDate !== $startDate) ? $fmt($endDate) : '';
+
+        if ($start === '') {
+            return $end;
+        }
+
+        return $end === '' ? $start : $start . ' – ' . $end;
     }
 
     /**
@@ -1178,9 +1354,11 @@ final class AdminAPIController
 
         $editionId = (int) $request->get_param('id');
 
-        // Get edition
+        // Get edition. CR-4 publish guard (F-A2): every list surface filters
+        // post_status='publish'; without the same guard here a trashed/draft
+        // edition's detail stayed readable by id.
         $edition = get_post($editionId);
-        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE) {
+        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE || $edition->post_status !== 'publish') {
             return new WP_Error('not_found', 'Edition not found', ['status' => 404]);
         }
 
@@ -1264,9 +1442,11 @@ final class AdminAPIController
     {
         $editionId = (int) $request->get_param('id');
 
-        // Verify edition exists
+        // Verify edition exists. CR-4 publish guard (F-A2): without it a
+        // trashed/draft edition's participant rows (names, e-mails) stayed
+        // readable by anyone with stride_view.
         $edition = get_post($editionId);
-        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE) {
+        if (!$edition || $edition->post_type !== EditionCPT::POST_TYPE || $edition->post_status !== 'publish') {
             return new WP_Error('not_found', 'Edition not found', ['status' => 404]);
         }
 
@@ -1301,8 +1481,8 @@ final class AdminAPIController
         // Get registrations — the per-edition reg-rows query is owned by
         // RegistrationRepository::findByEdition (its SELECT * ... WHERE
         // edition_id ... ORDER BY registered_at ASC is identical to the prior
-        // inline query; INV-3). The anon enrollment_data name fallback below
-        // (user_id=0 interest/waitlist rows) is PRESERVED verbatim.
+        // inline query; INV-3). SELECT * includes the v5 lead_name/lead_email
+        // columns the anon-identity fallback below reads.
         $registrations = $this->registrationRepository->findByEdition($editionId);
 
         // Collect user IDs for batch fetch
@@ -1316,7 +1496,7 @@ final class AdminAPIController
 
         // Format registrations with pre-fetched data.
         // Anonymous interest/waitlist rows have no user record — fall back to
-        // the name/email captured in enrollment_data so admin can see them.
+        // the denormalized lead identity columns (v5) so admin can see them.
         $items = [];
         foreach ($registrations as $reg) {
             $userId = (int) $reg->user_id;
@@ -1327,19 +1507,12 @@ final class AdminAPIController
             $isAnon = !$user;
 
             if ($isAnon) {
-                $stageData = [];
-                $raw = $reg->enrollment_data ?? '';
-                if (is_string($raw) && $raw !== '') {
-                    $decoded = json_decode($raw, true);
-                    if (is_array($decoded)) {
-                        // status maps to the stage key (interest/waitlist).
-                        // Wrapped shape: $decoded[$status]['data'][field].
-                        $stageEnvelope = $decoded[$reg->status] ?? [];
-                        $stageData = is_array($stageEnvelope['data'] ?? null) ? $stageEnvelope['data'] : [];
-                    }
-                }
-                $name = $stageData['name'] ?? '(anoniem)';
-                $email = $stageData['email'] ?? '';
+                // The ONE lead-identity presenter (INV-3) — the same
+                // '(anoniem)' rule the grid renders, so a row can never show
+                // two identities across admin surfaces.
+                $identity = \Stride\Modules\Enrollment\RegistrationRepository::presentLeadIdentity($reg);
+                $name  = $identity['name'];
+                $email = $identity['email'];
             }
 
             // Build attendance map for this user (anon rows have empty attendance)
@@ -1574,6 +1747,52 @@ final class AdminAPIController
     }
 
     /**
+     * GET /admin/quotes/export
+     *
+     * Streams the Exact-handoff CSV of the exact Offertes predicate (F-A9).
+     * Param parsing mirrors getQuotes; row assembly in AdminQuoteService::
+     * getExportRows (the same getQuoteList pipeline as the surface read);
+     * the controller keeps only the streaming — headers + BOM + fputcsv +
+     * exit (F-A5: never return after streaming).
+     */
+    public function getQuotesExport(WP_REST_Request $request): void
+    {
+        $filters = [
+            'search'     => sanitize_text_field($request->get_param('search') ?? ''),
+            'status'     => sanitize_text_field($request->get_param('status') ?? ''),
+            'edition_id' => (int) $request->get_param('edition_id'),
+            'tag'        => (int) $request->get_param('tag'),
+            'date_from'  => sanitize_text_field($request->get_param('date_from') ?? ''),
+            'date_to'    => sanitize_text_field($request->get_param('date_to') ?? ''),
+        ];
+
+        $result = ntdst_get(\Stride\Admin\AdminQuoteService::class)->getExportRows($filters);
+
+        // Decimal commas for Dutch Excel / the Exact import.
+        $rows = array_map(static function (array $item): array {
+            $billing = is_array($item['billing'] ?? null) ? $item['billing'] : [];
+            return [
+                $item['number'] ?? ('#' . ($item['id'] ?? '')),
+                $item['user']['name'] ?? '',
+                $item['user']['email'] ?? '',
+                (string) ($billing['company'] ?? ''),
+                $item['edition']['title'] ?? '',
+                $item['dateLabel'] ?? '',
+                $item['statusLabel'] ?? '',
+                number_format((float) ($item['subtotal'] ?? 0), 2, ',', ''),
+                number_format((float) ($item['tax'] ?? 0), 2, ',', ''),
+                number_format((float) ($item['total'] ?? 0), 2, ',', ''),
+            ];
+        }, $result['items']);
+
+        ntdst_get(\Stride\Admin\AdminExportService::class)->streamCsv(
+            'offertes-' . current_time('Y-m-d-Hi') . '.csv',
+            ['Nummer', 'Klant', 'E-mail', 'Bedrijf', 'Editie', 'Datum', 'Status', 'Subtotaal', 'BTW', 'Totaal'],
+            $rows,
+        );
+    }
+
+    /**
      * GET /admin/registrations
      *
      * Registration grid — thin callback, all logic in AdminRegistrationQueryService.
@@ -1594,6 +1813,9 @@ final class AdminAPIController
             'q'            => sanitize_text_field((string) ($request->get_param('q') ?? '')),
             'edition_scope' => sanitize_text_field((string) ($request->get_param('edition_scope') ?? 'active')),
             'group_by'     => sanitize_text_field((string) ($request->get_param('group_by') ?? '')),
+            // Worklist queue key (?queue= from the Vandaag cards) — validated
+            // against WorklistQueueResolver::QUEUES in the service (400 on miss).
+            'queue'        => sanitize_key((string) ($request->get_param('queue') ?? '')),
         ];
 
         // Remove empty strings so queryForGrid's isset/!empty checks work correctly.
@@ -1607,6 +1829,54 @@ final class AdminAPIController
         }
 
         return new WP_REST_Response($result);
+    }
+
+    /**
+     * GET /admin/registrations/export
+     *
+     * "Exporteer huidige weergave" (F-A9): streams a UTF-8 CSV of the exact
+     * grid predicate. Param parsing mirrors getRegistrations (ONE vocabulary);
+     * row assembly lives in AdminRegistrationQueryService::getExportRows (the
+     * same scope pins + composer as the grid read); the controller keeps only
+     * the HTTP streaming — headers + BOM + fputcsv + exit, per the
+     * exportRegistrations precedent (F-A5: never return after streaming).
+     */
+    public function getRegistrationsGridExport(WP_REST_Request $request): WP_Error
+    {
+        $params = [
+            'edition_id'    => absint($request->get_param('edition_id') ?: 0) ?: null,
+            'company_id'    => absint($request->get_param('company_id') ?: 0) ?: null,
+            'trajectory_id' => absint($request->get_param('trajectory_id') ?: 0) ?: null,
+            'status'        => sanitize_text_field((string) ($request->get_param('status') ?? '')),
+            'sort'          => sanitize_text_field((string) ($request->get_param('sort') ?? '')),
+            'order'         => sanitize_text_field((string) ($request->get_param('order') ?? '')),
+            'q'             => sanitize_text_field((string) ($request->get_param('q') ?? '')),
+            'edition_scope' => sanitize_text_field((string) ($request->get_param('edition_scope') ?? 'active')),
+            'queue'         => sanitize_key((string) ($request->get_param('queue') ?? '')),
+        ];
+        $params = array_filter($params, fn($v) => $v !== '' && $v !== null);
+
+        $result = ntdst_get(\Stride\Admin\AdminRegistrationQueryService::class)->getExportRows($params);
+        if (is_wp_error($result)) {
+            return $result;
+        }
+
+        $rows = array_map(static fn(array $item): array => [
+            $item['user']['name'] ?? '',
+            $item['user']['email'] ?? '',
+            $item['edition']['title'] ?? '',
+            $item['trajectory']['title'] ?? '',
+            $item['status']['label'] ?? '',
+            $item['offerteStatus'] ?? '',
+            $item['attendancePct'] === null ? '' : (string) $item['attendancePct'],
+            $item['company']['name'] ?? '',
+        ], $result['items']);
+
+        ntdst_get(\Stride\Admin\AdminExportService::class)->streamCsv(
+            'inschrijvingen-weergave-' . current_time('Y-m-d-Hi') . '.csv',
+            ['Naam', 'E-mail', 'Editie', 'Traject', 'Status', 'Offerte', 'Aanwezigheid %', 'Bedrijf'],
+            $rows,
+        );
     }
 
     /**
@@ -1629,10 +1899,11 @@ final class AdminAPIController
      *
      * Params:
      *  - q        server-side title LIKE (bound via $wpdb->prepare + esc_like).
-     *  - scope    active (default) | all. active restricts to non-terminal
-     *             statuses (announcement/open/in_progress — mirrors
-     *             TrajectoryRepository::findActive). Trajectories have no dates,
-     *             so the active scope is purely status-based.
+     *  - scope    active (default) | all. active = NOT admin-closed
+     *             (TrajectoryRepository::adminActiveWhereFragment — the same
+     *             boundary the Trajecten list scope uses; meta-less passes,
+     *             cancelled stays visible). Trajectories have no dates, so
+     *             the active scope is purely status-based.
      *  - page / per_page  paged, per_page capped at 100 (clamp, not 400).
      *
      * §10.6: scope=all warrants NO extra capability — gate is canViewAdmin only.
@@ -1747,20 +2018,37 @@ final class AdminAPIController
             ]);
         }
 
-        $staleThreshold = gmdate('Y-m-d H:i:s', time() - ($staleDays * DAY_IN_SECONDS));
+        // F-V9: registered_at is written in SITE time (current_time('mysql')),
+        // so the threshold string must be site-time too — gmdate() compared a
+        // UTC string against site-tz timestamps (±offset staleness skew, day-
+        // boundary off-by-ones).
+        $staleThreshold = wp_date('Y-m-d H:i:s', time() - ($staleDays * DAY_IN_SECONDS));
 
         // INV-3: the registrations table is repository-owned — both scan
         // queries (exact SQL incl. COLLATE pin + scan cap) live in
         // RegistrationRepository; the controller keeps bucketing/pagination.
         $registrationRepo = $this->registrationRepository;
 
-        // Enrollment phase: pending registrations that can still yield an item —
-        // an open admin-approval task (bucket 1) or stale-aged (bucket 3 candidate).
-        $pendingRows = $registrationRepo->findPendingWithOpenApproval($staleThreshold, self::APPROVALS_SCAN_CAP);
+        // F-V4: the panel reasons over the SAME admin-active edition corpus
+        // as the queue cards and the grid default — previously it scanned
+        // the whole table while the "Wacht op goedkeuring" card next to it
+        // was scoped, so the two showed different numbers for "waiting on
+        // approval" one panel apart. Edition-less rows (trajectory parents)
+        // always pass.
+        $activeEditionIds = ntdst_get(WorklistQueueResolver::class)->activeEditionIds();
+
+        // Enrollment phase: every pending registration in scope — the bucket
+        // rule (awaitsAdmin vs stale) runs in PHP below; SQL task-shape
+        // pre-filters kept hiding row subsets the queue card counted.
+        $pendingRows = $registrationRepo->findPendingForApprovalScan(self::APPROVALS_SCAN_CAP, $activeEditionIds);
 
         // Post-course phase: confirmed registrations with an open post_approval
         // task whose post-course user tasks (fixed keys) are absent-or-completed.
-        $confirmedRows = $registrationRepo->findConfirmedWithOpenPostApproval(self::APPROVALS_SCAN_CAP);
+        // Deliberately UNSCOPED (null): post-course work arrives around/after
+        // course end, when admins have often already closed the edition —
+        // scoping hid open post_approvals on closed editions from EVERY
+        // surface (no queue card carries them either).
+        $confirmedRows = $registrationRepo->findConfirmedWithOpenPostApproval(self::APPROVALS_SCAN_CAP, null);
 
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
         /** @var list<array{0: object, 1: array, 2: string, 3: array}> $matches */
@@ -1769,14 +2057,15 @@ final class AdminAPIController
 
         foreach ($pendingRows as $row) {
             $tasks = is_array($row->completion_tasks) ? $row->completion_tasks : [];
-            $userTasksDone = $completionService->areUserTasksComplete($tasks);
 
-            // Bucket 1: user is done, waiting on admin approval
-            if (
-                $userTasksDone
-                && isset($tasks['approval'])
-                && ($tasks['approval']['status'] ?? 'pending') !== 'completed'
-            ) {
+            // Bucket 1: the row waits on the ADMIN. THE shared rule
+            // (EnrollmentCompletion::awaitsAdmin — the same predicate the
+            // Vandaag card's ready/blocked split classifies with): user side
+            // done, or nothing for the user to do (F-V5). Every hand-rolled
+            // variant here (isset approval / approvalOpen / empty checks)
+            // hid a row subset the card counted.
+            $userTasksDone = $completionService->awaitsAdmin($tasks);
+            if ($userTasksDone) {
                 $matches[] = [$row, $tasks, 'approval', []];
                 $counts['approval']++;
                 continue;
@@ -1785,14 +2074,17 @@ final class AdminAPIController
             // Bucket 3: user-side stale pending — user hasn't finished tasks and the
             // registration is older than the threshold. Capacity is held until admin
             // contacts the user or cancels.
-            if (!$userTasksDone && $row->registered_at && $row->registered_at <= $staleThreshold) {
+            if ($row->registered_at && $row->registered_at <= $staleThreshold) {
                 $openTask = $completionService->getFirstOpenUserTask($tasks);
                 $matches[] = [$row, $tasks, 'stale_user', array_merge([
                     'open_task' => $openTask,
                     'open_task_label' => $openTask
                         ? \Stride\Modules\Enrollment\EnrollmentCompletion::taskTypeLabel($openTask)
                         : null,
-                    'days_idle' => (int) floor((time() - strtotime($row->registered_at)) / DAY_IN_SECONDS),
+                    // F-V9: strtotime() parses the site-time string on the
+                    // server's tz — current_time('timestamp') carries the same
+                    // shift, so the pair is consistent (time() was not).
+                    'days_idle' => (int) floor(((int) current_time('timestamp') - strtotime($row->registered_at)) / DAY_IN_SECONDS),
                 ], $this->buildDeadlineCountdown($completionService, $tasks, $openTask, (int) ($row->edition_id ?? 0)))];
                 $counts['stale_user']++;
             }
@@ -1903,10 +2195,13 @@ final class AdminAPIController
 
         $result = ['activeDeadline' => $deadline, 'overdue' => $overdue];
 
+        // F-V9: the deadline is a site-time date string parsed on the server's
+        // tz — pair it with current_time('timestamp') (same shift), not time().
+        $now = (int) current_time('timestamp');
         if ($overdue) {
-            $result['days_overdue'] = (int) floor((time() - strtotime($deadline)) / DAY_IN_SECONDS);
+            $result['days_overdue'] = (int) floor(($now - strtotime($deadline)) / DAY_IN_SECONDS);
         } else {
-            $result['days_left'] = max(0, (int) floor((strtotime($deadline) - time()) / DAY_IN_SECONDS));
+            $result['days_left'] = max(0, (int) floor((strtotime($deadline) - $now) / DAY_IN_SECONDS));
         }
 
         return $result;
@@ -1927,10 +2222,14 @@ final class AdminAPIController
 
         $completionService = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
 
-        // Mark approval task as completed
+        // Mark approval task as completed. 'task_not_required' is fine: a
+        // pending row with NO tasks (or no approval task) still legitimately
+        // waits on the admin (awaitsAdmin — the "Wacht op mij" bucket) and
+        // approving it means confirming; a hard error here left those rows
+        // listed with a dead Goedkeuren button.
         $result = $completionService->completeTask($registrationId, 'approval');
 
-        if (is_wp_error($result)) {
+        if (is_wp_error($result) && $result->get_error_code() !== 'task_not_required') {
             return $result;
         }
 
@@ -1986,6 +2285,14 @@ final class AdminAPIController
     public function getActionQueue(WP_REST_Request $request): WP_REST_Response
     {
         $rules = StrideSettingsService::getNotificationRules();
+
+        // F-V10: ?fresh=1 (the Vernieuwen button) busts THIS endpoint's read
+        // cache before the read, so the toasted "vernieuwd" is true instead
+        // of re-serving a transient younger than its TTL. Endpoint-scoped —
+        // see getStats for why not a full bustCaches().
+        if ($request->get_param('fresh')) {
+            delete_transient(AdminStatsService::ACTION_QUEUE_TRANSIENT_KEY);
+        }
 
         // SQL data-gathering + rule evaluation + transient caching live in
         // AdminStatsService (strangle §12.4 / S1, INV-3). The per-user
@@ -2081,29 +2388,47 @@ final class AdminAPIController
     /**
      * GET /admin/users/search
      *
-     * Search users by name, email, or login. Returns max 10 results.
+     * Search users by name, email, or login — PAGED (F-U1: the old hard cap
+     * of 10 was presented as the complete result set with no way to reach
+     * the rest). Returns the standard envelope
+     * { items, total, page, perPage, totalPages }; each item carries an
+     * `anonymised` flag (GDPR-scrubbed accounts kept for history must be
+     * recognisable as such in the picker, not look like odd real people).
      */
     public function searchUsers(WP_REST_Request $request): WP_REST_Response
     {
         $query = sanitize_text_field($request->get_param('q'));
+        $page = max(1, (int) ($request->get_param('page') ?: 1));
+        $perPage = min(100, max(1, (int) ($request->get_param('per_page') ?: 25))); // clamp ceiling (4B.3)
 
+        // ACCEPTED COST: the leading-wildcard LIKE over three user columns
+        // cannot use an index, and count_total adds a matched-set count —
+        // per debounced keystroke, admin-only, single-digit ms at LMS scale
+        // (thousands of users). Same trade as the offertes customer search;
+        // revisit only if a large user migration lands.
         $userQuery = new \WP_User_Query([
             'search' => "*{$query}*",
             'search_columns' => ['user_login', 'user_email', 'display_name'],
-            'number' => 10,
+            'number' => $perPage,
+            'offset' => ($page - 1) * $perPage,
+            'count_total' => true,
             'orderby' => 'display_name',
             'fields' => ['ID', 'display_name', 'user_email'],
         ]);
 
         $results = $userQuery->get_results();
-        if (empty($results)) {
-            return new WP_REST_Response([]);
-        }
+        $total = (int) $userQuery->get_total();
 
-        // Prime user-meta cache once so the per-row get_user_meta() call below
-        // is a cache hit — drops 10 queries on a full result set.
+        // ONE exit — both batch callees no-op on an empty page, so the empty
+        // case flows through the same envelope literal (no second copy to
+        // drift when the payload gains a field).
         $userIds = array_map(static fn($u) => (int) $u->ID, $results);
-        update_meta_cache('user', $userIds);
+
+        // Prime user-meta cache once so the per-row get_user_meta() /
+        // isAnonymised() calls below are cache hits — drops 2×N queries.
+        if (!empty($userIds)) {
+            update_meta_cache('user', $userIds);
+        }
 
         // Aggregate registration counts in a single GROUP BY query instead of
         // one COUNT(*) per row.
@@ -2117,10 +2442,20 @@ final class AdminAPIController
                 'email' => $user->user_email,
                 'organisation' => get_user_meta($userId, 'organisation', true) ?: '',
                 'registration_count' => $counts[$userId] ?? 0,
+                // THE one anonymised predicate (CR-6 convergence point) —
+                // never an inline meta read; same key name as the dossier
+                // and cohort-lens payloads.
+                'is_anonymised' => \Stride\Modules\User\UserLifecycleService::isAnonymised($userId),
             ];
         }, $results);
 
-        return new WP_REST_Response($users);
+        return new WP_REST_Response([
+            'items' => $users,
+            'total' => $total,
+            'page' => $page,
+            'perPage' => $perPage,
+            'totalPages' => (int) ceil($total / $perPage),
+        ]);
     }
 
     /**
@@ -2254,7 +2589,11 @@ final class AdminAPIController
                 get_current_user_id() ?: null,
                 [
                     'target_user_id' => $userId,
-                    'fields' => array_keys($profileData) + ($hasCoreChange ? ['core'] : []),
+                    // array_merge, NOT `+`: both operands are numeric-keyed
+                    // lists, so union keeps the LEFT index 0 and silently
+                    // dropped the 'core' marker whenever meta fields changed
+                    // in the same request (F-A8).
+                    'fields' => array_merge(array_keys($profileData), $hasCoreChange ? ['core'] : []),
                 ],
             );
         }
@@ -2575,37 +2914,17 @@ final class AdminAPIController
             wp_die('Registration table not found.');
         }
 
-        // Read-model assembly (the confirmed-upcoming SELECT + per-row enrichment
-        // + formula-injection control) lives in AdminExportService (Task D3, INV-3).
-        // The controller keeps ONLY the HTTP streaming: headers + BOM + fputcsv.
+        // Read-model assembly lives in AdminExportService (Task D3, INV-3);
+        // streaming (headers + BOM + fputcsv + per-cell injection control +
+        // exit) is THE shared streamCsv — one streaming block for all three
+        // CSV exports, never three drifting copies.
         $today = current_time('Y-m-d');
         $export = ntdst_get(\Stride\Admin\AdminExportService::class);
-        $rows = $export->buildExportRows($today);
 
-        // Set download headers. nosniff mirrors the universal file-response
-        // posture (NTDST_Response::fileHeaders / M4): a browser must never
-        // content-sniff an attacker-influenced CSV into HTML.
-        header('Content-Type: text/csv; charset=utf-8');
-        header('Content-Disposition: attachment; filename="inschrijvingen-' . date('Y-m-d') . '.csv"');
-        header('X-Content-Type-Options: nosniff');
-        header('Pragma: no-cache');
-        header('Expires: 0');
-
-        $output = fopen('php://output', 'w');
-        // BOM for Excel UTF-8 compatibility
-        fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
-
-        // Header row (semicolons for Dutch Excel)
-        fputcsv($output, ['Naam', 'E-mail', 'Organisatie', 'Editie', 'Datum', 'Status', 'Offerte #'], ';');
-
-        // Each assembled cell is passed through the service's formula-injection
-        // control before streaming (the security control's home is the service;
-        // the controller invokes it per-cell at stream time).
-        foreach ($rows as $row) {
-            fputcsv($output, array_map([$export, 'sanitizeCsvCell'], $row), ';');
-        }
-
-        fclose($output);
-        exit;
+        $export->streamCsv(
+            'inschrijvingen-' . $today . '.csv',
+            ['Naam', 'E-mail', 'Organisatie', 'Editie', 'Datum', 'Status', 'Offerte #'],
+            $export->buildExportRows($today),
+        );
     }
 }

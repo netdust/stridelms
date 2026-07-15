@@ -42,7 +42,10 @@ test.describe('syncStateToUrl (write half, un-mocked history)', () => {
   test('writes the active grid state into the URL, preserving shell + WP params', () => {
     const win = fakeWindow('http://x/wp/wp-admin/admin.php?page=stride-dashboard&view=inschrijvingen&queue=pending');
     const g = makeGrid(win);
-    // simulate an in-grid filter/sort/page change
+    // simulate an in-grid filter/sort/page change. `queue` is GRID-owned once
+    // the deep-link arrived (applyQueueDeepLink stamps it) — the sync writes it
+    // from grid state, so the fixture mirrors the real flow and sets it.
+    g.queue = 'pending';
     g.filters = { status: 'confirmed', edition_id: 42, company_id: 0, trajectory_id: 0, q: 'anna' };
     g.sortKey = 'name'; g.sortDir = 'desc'; g.page = 3; g.perPage = 50; g.groupBy = 'status';
 
@@ -96,6 +99,88 @@ test.describe('syncStateToUrl (write half, un-mocked history)', () => {
     expect(out.get('status')).toBeNull();       // the cleared key is GONE
     expect(out.get('edition_id')).toBeNull();
     expect(out.get('view')).toBe('inschrijvingen'); // shell param still preserved
+  });
+
+  test('edition scope: only the NON-default (all) is URL-written; active drops the key', () => {
+    const win = fakeWindow('http://x/?view=inschrijvingen&edition_scope=all');
+    const g = makeGrid(win);
+    g.filters = { status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' };
+    g.sortKey = ''; g.page = 1; g.perPage = 25; g.groupBy = '';
+
+    g.editionScope = 'all';
+    g.syncStateToUrl();
+    expect(new URL(win.location.href).searchParams.get('edition_scope')).toBe('all');
+
+    g.editionScope = 'active';   // narrowed back to the default
+    g.syncStateToUrl();
+    expect(new URL(win.location.href).searchParams.get('edition_scope')).toBeNull();
+  });
+
+  test('NEGATIVE: dismissing the queue chip DROPS ?queue= (a reload must not resurrect it)', () => {
+    const win = fakeWindow('http://x/?view=inschrijvingen&queue=nocert');
+    const g = makeGrid(win);
+    g.queue = '';   // user removed the "Wachtrij:" chip
+    g.filters = { status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' };
+    g.sortKey = ''; g.page = 1; g.perPage = 25; g.groupBy = '';
+
+    g.syncStateToUrl();
+
+    const out = new URL(win.location.href).searchParams;
+    expect(out.get('queue')).toBeNull();
+    expect(out.get('view')).toBe('inschrijvingen');
+  });
+});
+
+test.describe('applyQueueDeepLink (the URL is the deep-link contract BOTH ways)', () => {
+  test('absorbs ?queue= and clears a leftover status filter', () => {
+    const win = fakeWindow('http://x/?view=inschrijvingen&queue=pending');
+    const g = makeGrid(win);
+    g.filters.status = 'confirmed';
+
+    expect(g.applyQueueDeepLink()).toBe(true);
+    expect(g.queue).toBe('pending');
+    expect(g.filters.status).toBe('');
+  });
+
+  test('REGRESSION: a re-activation WITHOUT ?queue= DROPS the stale queue pin', () => {
+    // The shell deletes ?queue= on every switchView. Keeping the old pin
+    // silently composed it with the new deep-link: Trajecten's "Toon
+    // inschrijvingen" set ?trajectory_id=X, and queue=pending AND
+    // trajectory_id=X intersected to an empty grid ("Geen resultaten") for a
+    // trajectory that has registrations.
+    const win = fakeWindow('http://x/?view=inschrijvingen&trajectory_id=5');
+    const g = makeGrid(win);
+    g.queue = 'pending';   // pinned earlier in the session
+
+    expect(g.applyQueueDeepLink()).toBe(true);
+    expect(g.queue).toBe('');                    // stale pin dropped
+    expect(g.filters.trajectory_id).toBe(5);     // new deep-link absorbed
+  });
+
+  test('a user-picked trajectory FILTER survives a queue deep-link (it is a filter, not a pin)', () => {
+    // trajectory_id is a first-class grid filter (the Traject select) as well
+    // as a deep-link target: unlike ?queue= it must behave like status/
+    // edition/q — surviving view round-trips (the shell no longer deletes it)
+    // and composing VISIBLY (chips) with a newly clicked queue card, never
+    // being silently wiped.
+    const win = fakeWindow('http://x/?view=inschrijvingen&queue=pending&trajectory_id=5');
+    const g = makeGrid(win);
+    g.filters.trajectory_id = 5;   // picked in-grid earlier (URL mirrors it)
+
+    expect(g.applyQueueDeepLink()).toBe(true);   // the queue absorb changed state
+    expect(g.queue).toBe('pending');
+    expect(g.filters.trajectory_id).toBe(5);     // the user's filter survives
+  });
+
+  test('repeat activation with the SAME queue is a no-op (no reload, no filter stomp)', () => {
+    const win = fakeWindow('http://x/?view=inschrijvingen&queue=nocert');
+    const g = makeGrid(win);
+    g.queue = 'nocert';
+    g.filters.q = 'anna';  // the user's in-grid search must survive
+
+    expect(g.applyQueueDeepLink()).toBe(false);
+    expect(g.queue).toBe('nocert');
+    expect(g.filters.q).toBe('anna');
   });
 });
 

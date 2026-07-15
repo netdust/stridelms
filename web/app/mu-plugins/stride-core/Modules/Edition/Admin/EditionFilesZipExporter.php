@@ -49,8 +49,20 @@ class EditionFilesZipExporter
         $zip->close();
 
         $downloadName = 'uploads-' . $slug . '-' . date('Y-m-d') . '.zip';
+        // F-A5: abort-proof cleanup. A cancelled download / dropped connection
+        // terminates PHP INSIDE the streaming echo loop (ignore_user_abort is
+        // off), skipping any code after it — without this hook the full-PII
+        // temp ZIP persisted indefinitely in stride-export-tmp (whose .htaccess
+        // deny is inert on nginx). Shutdown functions still run on abort.
+        register_shutdown_function(static function () use ($zipPath): void {
+            @unlink($zipPath);
+        });
         $this->streamZipToBrowser($zipPath, $downloadName);
         @unlink($zipPath);
+        // F-A5: terminal, like the other three exporters. Without this the REST
+        // route appends its error-JSON envelope (and admin-ajax appends '0')
+        // AFTER the ZIP bytes — a corrupt archive on every download.
+        exit;
     }
 
     /**

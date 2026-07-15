@@ -102,16 +102,31 @@
   ];
   function mapQueues(worklistQueues) {
     const w = worklistQueues || {};
-    return QUEUE_DEFS.map((d) => ({
-      key: d.key,
-      label: d.label,
-      def: d.def,
-      accent: d.accent,
-      icon: d.icon,
-      action: d.action,
-      actionIcon: d.actionIcon,
-      count: Number(w[d.countKey]) || 0,
-    }));
+    return QUEUE_DEFS.map((d) => {
+      const count = Number(w[d.countKey]) || 0;
+      const q = {
+        key: d.key,
+        label: d.label,
+        def: d.def,
+        accent: d.accent,
+        icon: d.icon,
+        action: d.action,
+        actionIcon: d.actionIcon,
+        count,
+        sub: '',
+      };
+      // Decision 7a — the approval card splits its total into the two
+      // sub-states (server-derived, same definition as the count: ready ∪
+      // blocked ≡ pending). Rendered instead of the static def line; only
+      // when the payload actually carries the split (older cached payloads
+      // within the stats TTL may not) and there is something to split.
+      if (d.key === 'pending' && count > 0 && w.pending_ready != null) {
+        const ready = Number(w.pending_ready) || 0;
+        const blocked = Math.max(0, count - ready);
+        q.sub = `${ready} klaar voor goedkeuring · ${blocked} ${blocked === 1 ? 'wacht' : 'wachten'} op deelnemer`;
+      }
+      return q;
+    });
   }
 
   /* ---- "sinds Nd" age microcopy from an ISO-ish timestamp -------------- */
@@ -198,18 +213,24 @@
   }
 
   /* ---- meldingen ← /admin/action-queue (flat aggregate alert rows) ------
-     The action-queue is a flat array [{rule, priority, text, subject_id, url}].
-     Mapped to the same row shape the Acties markup renders. `regId` = a stable
-     key (rule+subject); these rows are aggregate, so name = the alert text and
-     there is no avatar/person link — they open their own url. */
+     The action-queue is a flat array
+     [{rule, priority, text, subject_id, url, target}]. Mapped to the same row
+     shape the Acties markup renders. `regId` = a stable key (rule+subject);
+     these rows are aggregate, so name = the alert text and there is no
+     avatar/person link. Navigation: `target` ({view, params}) routes through
+     the shell's switchView (stays in the workspace); `url` is the wp-admin
+     fallback (quotes); neither → informational, no navigation. */
   function mapMeldingen(actionQueue) {
     const arr = Array.isArray(actionQueue) ? actionQueue : [];
     return arr.map((a) => ({
       regId: `${a.rule}-${a.subject_id || 0}`,
+      rule: a.rule || '',
+      subjectId: a.subject_id || 0,
       name: a.text || '',
       meta: '',
       age: '',
       url: a.url || '',
+      target: (a.target && a.target.view) ? a.target : null,
       priority: a.priority || 'blue',
       isMelding: true,
     }));
@@ -228,9 +249,16 @@
       loading: { stats: true, actions: true },
       errors: { stats: '', actions: '' },
 
+      // F-V11: the approvals scan hit its cap — counts/pills are lower bounds.
+      clipped: false,
+      // F-V8: server-derived DISTINCT total across the queues (a row may sit
+      // in two queues); null until a payload carries it → fall back to sum.
+      queueTotal: null,
+
       today: new Date().toLocaleDateString('nl-BE', { weekday: 'long', day: 'numeric', month: 'long' }),
 
       get totalActions() {
+        if (Number.isFinite(this.queueTotal)) return this.queueTotal;
         return this.queues.reduce((n, q) => n + (q.count || 0), 0);
       },
 
@@ -246,20 +274,26 @@
          and again (bypassing the latch) by pulse() for an explicit refresh.
          Both fetches run in parallel; a panel that fails shows its own error,
          the rest still renders (AF-1 mid-flow). */
-      load() {
+      load(fresh = false) {
         // Clear any prior error banners so a successful retry (pulse) recovers
         // cleanly — otherwise a stale error survives a now-successful load.
         this.errors.stats = '';
         this.errors.actions = '';
+        // F-V10: an explicit refresh (Vernieuwen) busts the server read
+        // caches (?fresh=1) — otherwise the toasted "vernieuwd" re-served a
+        // transient younger than its TTL.
+        const freshQ = fresh ? '?fresh=1' : '';
         Promise.allSettled([
-          this.api('/admin/stats'),
+          this.api(`/admin/stats${freshQ}`),
           this.api('/admin/pending-approvals?stale_days=7&per_page=100'),
-          this.api('/admin/action-queue'),
+          this.api(`/admin/action-queue${freshQ}`),
         ]).then(([stats, approvals, queue]) => {
           // ---- stat strip + 5 queues (from /admin/stats) ----
           if (stats.status === 'fulfilled') {
             this.stats = window.WS.mapStats(stats.value);
             this.queues = window.WS.mapQueues(stats.value.worklistQueues);
+            const total = Number(stats.value.worklistQueues && stats.value.worklistQueues.total);
+            this.queueTotal = Number.isFinite(total) ? total : null;
           } else {
             this.errors.stats = 'Kon de statistieken niet laden.';
           }
@@ -275,9 +309,12 @@
             const buckets = window.WS.mapActionBuckets(approvals.value, meldingen.length);
             this.aq = { mij: buckets.mij, gebruiker: buckets.gebruiker, meldingen };
             this.actTab = buckets.defaultTab;
+            // F-V11: surface the scan-cap flag — pills are lower bounds then.
+            this.clipped = !!approvals.value.clipped;
           } else {
             this.aq = { mij: [], gebruiker: [], meldingen };
             this.actTab = 'meldingen';
+            this.clipped = false;
             this.errors.actions = 'Kon de goedkeuringslijst niet laden.';
           }
           // If only the meldingen call failed, surface it but keep mij/gebruiker.
@@ -289,18 +326,31 @@
       },
 
       /* Open a queue → grid, pre-filtered by ?queue=<key> (cluster C reads it
-         from the URL on its own init). Uses the shell's extended switchView. */
+         from the URL on its own init). Uses the shell's extended switchView.
+         A count-0 card still opens (spec F1): the grid shows the queue's
+         truthful empty state — a silent no-op read as a broken card. */
       openQueue(q) {
-        if (!q || q.count === 0) return;
+        if (!q) return;
         this.switchView('inschrijvingen', { queue: q.key });
       },
 
       /* Click an Acties row → that person's dossier (cluster D reads ?user=),
          deep-linked to the SPECIFIC waiting registration via ?reg= so the
          dossier opens the right edition rather than the person's newest one.
-         Meldingen rows open their own url instead. */
+         Meldingen rows route their workspace `target` through switchView
+         (a `vandaag` target is a LOCAL tab switch — e.g. the stale-tasks
+         aggregate opens "Wacht op gebruiker" one tab over); `url` opens the
+         wp-admin fallback (quotes); neither → informational, no-op. */
       openAction(item) {
         if (item.isMelding) {
+          if (item.target) {
+            if (item.target.view === 'vandaag') {
+              this.actTab = (item.target.params && item.target.params.tab) || 'gebruiker';
+            } else {
+              this.switchView(item.target.view, item.target.params || {});
+            }
+            return;
+          }
           if (item.url) window.open(item.url, '_blank', 'noopener');
           return;
         }
@@ -308,12 +358,34 @@
         if (id) this.switchView('dossier', { user: id, reg: item.regId });
       },
 
+      /* Dismiss a melding for THIS admin (6a — F-V7): the endpoint stores a
+         per-user {rule, subject_id} marker (30-day prune server-side) and the
+         action-queue read filters on it. Optimistic: the row disappears now
+         and is restored if the write fails — a melding that stays visible is
+         the honest failure mode. */
+      async dismissMelding(item) {
+        this.aq.meldingen = this.aq.meldingen.filter((m) => m.regId !== item.regId);
+        try {
+          await this.api('/admin/action-queue/dismiss', {
+            method: 'POST',
+            body: JSON.stringify({ rule: item.rule, subject_id: item.subjectId || 0 }),
+          });
+        } catch (e) {
+          // Re-insert ONLY the failed row — restoring a pre-dismiss array
+          // snapshot would clobber whatever happened while the POST was in
+          // flight (a second dismissal that succeeded, a pulse() refresh).
+          if (!this.aq.meldingen.some((m) => m.regId === item.regId)) {
+            this.aq.meldingen = [...this.aq.meldingen, item];
+          }
+        }
+      },
+
       pulse() {
-        // Re-run the full load (bypassing the first-activation latch), then
-        // toast the result.
+        // Re-run the full load (bypassing the first-activation latch) with a
+        // server cache bust (F-V10), then toast the result.
         this.loading.stats = true;
         this.loading.actions = true;
-        this.load();
+        this.load(true);
         window.dispatchEvent(new CustomEvent('ws-toast'));
       },
 

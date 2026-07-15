@@ -256,41 +256,57 @@ final class EnrollmentService extends AbstractService
                 ? RegistrationStatus::Pending
                 : RegistrationStatus::Confirmed;
 
-            // Check for existing interest registration to upgrade (before duplicate check).
-            // Only allowed when the enrolling user is acting on their own account
-            // (self-enrollment): any other path lets an attacker pre-seed an
-            // interest row with a victim's email and silently merge their data
-            // into the victim's eventual enrollment.
+            // Resolve the registration's partner scoping once — used by the
+            // lead-upgrade path AND the create path below (parity: whichever
+            // branch runs, the row ends up with the same company_id).
+            $companyId = null;
+            if (!isset($options['company_id'])) {
+                $companyId = CompanyAffiliation::getCompanyId($userId) ?: null;
+            } elseif ($options['company_id']) {
+                $companyId = (int) $options['company_id'];
+            }
+
+            // Check for an existing LEAD row (interest OR waitlist) to adopt
+            // (before duplicate check). A lead waitlist row is adopted the same
+            // way as interest — skipping it minted a second row for the same
+            // person+edition that a later promotion re-homed onto the account
+            // (review round 2). Only allowed when the enrolling user is acting
+            // on their own account (self-enrollment): any other path lets an
+            // attacker pre-seed a lead row with a victim's email and silently
+            // merge their data into the victim's eventual enrollment.
             $upgradedRegistrationId = null;
             $callerId = get_current_user_id();
             $isSelfEnrolment = ($callerId > 0 && $callerId === $userId);
             $user = get_userdata($userId);
             $userEmail = $user ? $user->user_email : '';
             if ($isSelfEnrolment && $userEmail) {
-                $existingInterest = $this->registrations->findByEmailAndEdition($userEmail, $editionId);
-                $interestHasNoUser = $existingInterest && (int) ($existingInterest->user_id ?? 0) === 0;
-                if ($existingInterest
-                    && $interestHasNoUser
-                    && $existingInterest->status === RegistrationStatus::Interest->value
-                ) {
+                $existingLead = $this->registrations->findAnonymousForEmailAndEdition($userEmail, $editionId);
+                if ($existingLead) {
                     // Upgrade: set user_id, merge enrollment data
-                    $existingData = is_array($existingInterest->enrollment_data)
-                        ? $existingInterest->enrollment_data
-                        : (json_decode($existingInterest->enrollment_data ?? '{}', true) ?: []);
+                    $existingData = is_array($existingLead->enrollment_data)
+                        ? $existingLead->enrollment_data
+                        : (json_decode($existingLead->enrollment_data ?? '{}', true) ?: []);
                     $newData = is_array($options['enrollment_data'] ?? null)
                         ? $options['enrollment_data']
                         : [];
                     $mergedData = array_merge($existingData, $newData);
 
-                    $this->registrations->upgradeFromInterest(
-                        (int) $existingInterest->id,
+                    $upgraded = $this->registrations->upgradeFromInterest(
+                        (int) $existingLead->id,
                         $userId,
                         $initialStatus->value,
                         $options['enrollment_path'] ?? RegistrationRepository::PATH_INDIVIDUAL,
                         $mergedData,
+                        $companyId,
                     );
 
-                    $upgradedRegistrationId = (int) $existingInterest->id;
+                    if ($upgraded) {
+                        $upgradedRegistrationId = (int) $existingLead->id;
+                    }
+                    // On false (concurrent bind won the row) fall through to the
+                    // normal duplicate-check + create() path, which resolves the
+                    // now-bound row under the enroll lock — never assume the
+                    // upgrade happened.
                 }
             }
 
@@ -303,11 +319,7 @@ final class EnrollmentService extends AbstractService
                 // represent prior intent and get reactivated by RegistrationRepository::create().
                 $existing = $this->registrations->findByUserAndEdition($userId, $editionId);
                 $existingStatus = $existing ? RegistrationStatus::tryFrom($existing->status) : null;
-                $isReactivatable = in_array($existingStatus, [
-                    RegistrationStatus::Cancelled,
-                    RegistrationStatus::Interest,
-                    RegistrationStatus::Waitlist,
-                ], true);
+                $isReactivatable = $existingStatus && $existingStatus->isReactivatable();
 
                 if ($existing && !$isReactivatable && $existingStatus && $existingStatus->blocksDuplicate()) {
                     $wpdb->query('ROLLBACK');
@@ -330,14 +342,10 @@ final class EnrollmentService extends AbstractService
                     'enrollment_data' => $options['enrollment_data'] ?? null,
                 ];
 
-                // Propagate company_id from user meta if not explicitly provided
-                if (!isset($options['company_id'])) {
-                    $companyId = CompanyAffiliation::getCompanyId($userId);
-                    if ($companyId) {
-                        $registrationData['company_id'] = $companyId;
-                    }
-                } elseif ($options['company_id']) {
-                    $registrationData['company_id'] = $options['company_id'];
+                // Partner scoping resolved once above the upgrade branch —
+                // options['company_id'] wins, user-meta affiliation otherwise.
+                if ($companyId) {
+                    $registrationData['company_id'] = $companyId;
                 }
 
                 // Create registration
@@ -692,6 +700,28 @@ final class EnrollmentService extends AbstractService
             $resolvedToExistingAnon = $resolved['was_existing'];
             $createdNewAnonAccount = !$resolved['was_existing'];
 
+            // Duplicate guard (review round 2): the resolved EXISTING account
+            // may already hold a registration for this edition — the person
+            // submitted the waitlist form logged-out AND has (or had) an
+            // account-bound row. Binding + confirming would mint the
+            // user+edition duplicate shape the enroll lock exists to prevent
+            // (double capacity count, double grant/mail/quote). Refuse and
+            // hand it to the admin with the existing row named — exactly the
+            // triage semantics of scripts/adopt-leads.php.
+            if ($resolvedToExistingAnon) {
+                $accountRow = $this->registrations->findByUserAndEdition($resolved['user_id'], $editionId);
+                if ($accountRow && (int) $accountRow->id !== $registrationId) {
+                    $accountRowStatus = RegistrationStatus::tryFrom((string) $accountRow->status);
+
+                    return new WP_Error('duplicate_registration', sprintf(
+                        /* translators: 1: status label, 2: registration id */
+                        __('Dit e-mailadres hoort bij een account dat al een inschrijving voor deze editie heeft (%1$s, #%2$d). Los eerst dat dubbel op.', 'stride'),
+                        $accountRowStatus ? $accountRowStatus->label() : (string) $accountRow->status,
+                        (int) $accountRow->id,
+                    ));
+                }
+            }
+
             // M-META-MAP — new account only: map the captured reserved-name fields
             // onto the new user via the existing convergence (getUserMetaMapping /
             // updateUserProfile, which re-sanitizes). M-NO-OVERWRITE — an existing
@@ -703,12 +733,18 @@ final class EnrollmentService extends AbstractService
             // M-PER-ROW: the relink is committed standalone BEFORE the capacity
             // transaction. Guard its outcome — a failed re-link must become a
             // per-row WP_Error, never a confirm against the stale user_id=0 row
-            // (which would orphan-grant access to user 0). `=== false` (not `!`)
-            // mirrors attachUserToWaitlistRow's own `$result !== false`: a 0-rows
-            // write is success, only a SQL error is failure (and M-IDEMPOTENT
-            // already gates re-entry on user_id===0, so the idempotent retry never
-            // reaches this branch at all).
-            if ($this->registrations->attachUserToWaitlistRow($registrationId, $resolved['user_id']) === false) {
+            // (which would orphan-grant access to user 0). bindLeadToUser is
+            // guarded on the row still being account-less; 0 affected rows now
+            // counts as a failed bind too (a concurrent bind means THIS confirm
+            // must not proceed against assumptions — M-IDEMPOTENT gates re-entry
+            // on user_id===0, so the idempotent retry never reaches this branch).
+            // Partner scoping parity travels IN the bind statement: the bound
+            // account's company affiliation is stamped once, guarded so an
+            // admin-set company on the row is never overwritten — or the
+            // promoted registration stays invisible to the Partner API purely
+            // because it started as a lead.
+            $leadCompanyId = \Stride\Modules\User\CompanyAffiliation::getCompanyId($resolved['user_id']);
+            if ($this->registrations->bindLeadToUser($registrationId, $resolved['user_id'], $leadCompanyId ?: null) === false) {
                 ntdst_log('enrollment')->error('Failed to relink waitlist row to resolved account', [
                     'registration_id' => $registrationId,
                     'user_id' => $resolved['user_id'],
@@ -720,10 +756,27 @@ final class EnrollmentService extends AbstractService
                 );
             }
 
-            // Only user_id changed; reflect it on the in-memory row (avoids an
-            // unguarded re-find + an extra query that could null-deref on a
-            // concurrently-deleted row).
+            // Only user_id (+ company) changed; reflect it on the in-memory row
+            // (avoids an unguarded re-find + an extra query that could
+            // null-deref on a concurrently-deleted row).
             $registration->user_id = $resolved['user_id'];
+            if ($leadCompanyId && empty($registration->company_id)) {
+                $registration->company_id = $leadCompanyId;
+            }
+        }
+
+        // Profile-type enroll gate (INV-12 M1): promotion IS an enrollment —
+        // a blocked profile type must not reach Confirmed via the waitlist
+        // route. enroll() and registerWaitlist() both enforce this; the
+        // promote path was the one gap. Runs after account resolution so it
+        // covers freshly-resolved leads too (a benign bind having happened is
+        // the documented idempotent state).
+        $participantId = (int) $registration->user_id;
+        if ($participantId) {
+            $policy = ntdst_get(\Stride\Modules\User\ProfileTypePolicy::class);
+            if ($policy->blocksEnrollment($participantId, $editionId, 'vad_edition')) {
+                return new WP_Error('profiletype_blocked', __('Niet beschikbaar voor jouw profieltype', 'stride'));
+            }
         }
 
         // Race-safe per-row capacity re-check + status transition under one

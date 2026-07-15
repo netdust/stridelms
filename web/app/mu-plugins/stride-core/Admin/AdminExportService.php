@@ -128,4 +128,40 @@ final class AdminExportService
         }
         return $str;
     }
+
+    /**
+     * THE CSV download streamer — headers, BOM, Dutch-Excel semicolons, the
+     * per-cell formula-injection control, exit. Promoted when the THIRD
+     * streaming copy landed (exportRegistrations + the grid + quotes view
+     * exports — the INV-3 third-consumer rule): a security fix to the
+     * streaming block must never need finding in three places.
+     *
+     * Drains ALL output-buffer levels (a single ob_end_clean left nested
+     * buffers leaking markup into the file). Terminal: never returns.
+     *
+     * @param string                    $filename Attachment filename.
+     * @param array<int,string>         $header   Header row (not sanitised — server-owned literals).
+     * @param iterable<array<int,mixed>> $rows    Data rows; every cell passes sanitizeCsvCell.
+     */
+    public function streamCsv(string $filename, array $header, iterable $rows): never
+    {
+        while (ob_get_level()) {
+            ob_end_clean();
+        }
+        header('Content-Type: text/csv; charset=utf-8');
+        header('Content-Disposition: attachment; filename="' . $filename . '"');
+        header('X-Content-Type-Options: nosniff');
+        header('Pragma: no-cache');
+        header('Expires: 0');
+
+        $output = fopen('php://output', 'w');
+        // BOM for Excel UTF-8 compatibility; semicolons for Dutch Excel.
+        fprintf($output, chr(0xEF) . chr(0xBB) . chr(0xBF));
+        fputcsv($output, $header, ';');
+        foreach ($rows as $row) {
+            fputcsv($output, array_map([$this, 'sanitizeCsvCell'], $row), ';');
+        }
+        fclose($output);
+        exit;
+    }
 }

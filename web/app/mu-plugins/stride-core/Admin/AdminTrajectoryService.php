@@ -4,6 +4,8 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
+use Stride\Domain\OfferingStatus;
+use Stride\Domain\RegistrationStatus;
 use Stride\Domain\TrajectoryMode;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Edition\EditionCPT;
@@ -84,14 +86,18 @@ final class AdminTrajectoryService
 
         // CR-3: server-side active-scope so the active subset spans ALL pages,
         // not just the loaded one (a client-side filter over a server-paged
-        // list hid active trajectories on pages 2+). 'active' excludes the
-        // terminal statuses; a trajectory with NO _ntdst_status row counts as
-        // active (NOT terminal) — match how the tab treats an unset status.
+        // list hid active trajectories on pages 2+). 'active' = NOT
+        // admin-closed (F-T2): the SAME boundary the edition workspace scope
+        // uses (OfferingStatus::adminClosedValues — completed/archived;
+        // cancelled stays visible because it still carries cleanup work). A
+        // trajectory with NO _ntdst_status row counts as active (NOT closed).
+        // THE one admin-active trajectory predicate lives in the repo
+        // (adminActiveWhereFragment) — the grid typeahead splices the same
+        // fragment, so the two surfaces can never drift apart.
         if ($scope === 'active') {
-            $terminal = ['closed', 'archived'];
-            $placeholders = implode(',', array_fill(0, count($terminal), '%s'));
-            $where[] = "NOT EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_scope WHERE pm_scope.post_id = p.ID AND pm_scope.meta_key = '_ntdst_status' AND pm_scope.meta_value IN ({$placeholders}))";
-            array_push($params, ...$terminal);
+            [$scopeSql, $scopeParams] = $this->trajectoryRepository->adminActiveWhereFragment('p');
+            $where[] = $scopeSql;
+            array_push($params, ...$scopeParams);
         }
 
         $whereClause = implode(' AND ', $where);
@@ -157,37 +163,32 @@ final class AdminTrajectoryService
             }
         }
 
-        // Batch fetch trajectory enrollments via canonical RegistrationRepository
+        // Enrollment COUNTS only via canonical RegistrationRepository
         // (stride_vad_registrations is the unified source; the legacy
         // stride_vad_trajectory_enrollments table is no longer written to.)
-        $registrationRepo = $this->registrationRepo;
-        $enrollmentCounts = $registrationRepo->countByTrajectoryIds($trajectoryIds);
-        $allEnrollments = $registrationRepo->findByTrajectoryIds($trajectoryIds, 50);
-
-        $allEnrollmentUserIds = [];
-        foreach ($allEnrollments as $rows) {
-            foreach ($rows as $row) {
-                $allEnrollmentUserIds[] = (int) $row->user_id;
-            }
-        }
+        // The list renders NO roster — it binds only enrolledCount — so the
+        // old per-trajectory 50-row enrollment fetch + user batch shipped up
+        // to ~2,500 rows of names/e-mails per page that were discarded
+        // client-side. The roster is fetched ONLY on the detail path.
+        $enrollmentCounts = $this->registrationRepo->countByTrajectoryIds($trajectoryIds);
 
         // Batch fetch editions for courses
         $editionsMap = BatchQueryHelper::batchGetPosts($allEditionIds, EditionCPT::POST_TYPE);
-
-        // Batch fetch users for enrollments
-        $usersMap = BatchQueryHelper::batchGetUsers($allEnrollmentUserIds);
 
         // === FORMAT TRAJECTORIES ===
 
         $items = [];
         foreach ($trajectories as $trajectory) {
-            $items[] = $this->formatTrajectoryItem($trajectory, [
+            $item = $this->formatTrajectoryItem($trajectory, [
                 'meta'             => $trajectoryMeta,
                 'editions'         => $editionsMap,
                 'enrollmentCounts' => $enrollmentCounts,
-                'enrollments'      => $allEnrollments,
-                'users'            => $usersMap,
+                'enrollments'      => [],
+                'users'            => [],
             ]);
+            // Always-empty on this path — never ship a misleading [] roster key.
+            unset($item['enrolledUsers']);
+            $items[] = $item;
         }
 
         return new WP_REST_Response([
@@ -232,7 +233,9 @@ final class AdminTrajectoryService
         $enrollmentDeadline = $meta['_ntdst_enrollment_deadline'] ?? '';
         $choiceDeadline = $meta['_ntdst_choice_deadline'] ?? '';
         $price = (int) ($meta['_ntdst_price'] ?? 0);
-        $priceNonMember = (float) ($meta['_ntdst_price_non_member'] ?? 0);
+        // Both prices are canonical CENTS — one type. The old (float) cast on
+        // the non-member price implied a euro-float storage that doesn't exist.
+        $priceNonMember = (int) ($meta['_ntdst_price_non_member'] ?? 0);
         $choiceAvailableDate = $meta['_ntdst_choice_available_date'] ?? '';
 
         // Parse courses
@@ -274,36 +277,41 @@ final class AdminTrajectoryService
         foreach ($trajectoryEnrollments as $enrollment) {
             $userId = (int) $enrollment->user_id;
             $user = $context['users'][$userId] ?? null;
-            if ($user) {
-                $enrolledUsers[] = [
-                    'id' => $userId,
-                    'name' => $user->display_name,
-                    'email' => $user->user_email,
-                    'status' => $enrollment->status,
-                    'enrolledAt' => $enrollment->registered_at,
-                ];
-            }
+
+            // A deleted WP account must not silently DROP the row (F-T4 —
+            // enrolledCount then exceeded the rendered roster with no hint).
+            // Identity falls back through THE one presenter, like the grid
+            // and the edition roster (lead-identity invariant 2).
+            $identity = $user
+                ? ['name' => $user->display_name, 'email' => $user->user_email]
+                : RegistrationRepository::presentLeadIdentity($enrollment);
+
+            $enrolledUsers[] = [
+                // regId is the stable row key (deleted accounts share id 0).
+                'regId' => (int) $enrollment->id,
+                'id' => $user ? $userId : 0,
+                'name' => $identity['name'],
+                'email' => $identity['email'],
+                'status' => $enrollment->status,
+                'enrolledAt' => $enrollment->registered_at,
+            ];
         }
 
         // Get description from already fetched post_content
         $description = $trajectory->post_content;
 
-        // Get status label
-        $statusLabel = match ($trajectoryStatus) {
-            'open' => 'Open',
-            'closed' => 'Gesloten',
-            'full' => 'Volzet',
-            'archived' => 'Gearchiveerd',
-            'draft' => 'Concept',
-            default => ucfirst($trajectoryStatus ?: 'draft'),
-        };
+        // Status label from THE enum (F-T2): trajectories carry OfferingStatus
+        // values; the old hand-rolled map knew a nonexistent 'closed', missed
+        // the real in_progress/cancelled/completed/announcement/postponed
+        // (rendered as ucfirst'd English slugs), and disagreed with the filter
+        // dropdown's wording. Meta-less/unknown → Concept, like everywhere else.
+        $statusLabel = (OfferingStatus::tryFrom($trajectoryStatus) ?? OfferingStatus::Draft)->label();
 
-        // Get mode label
-        $modeLabel = match ($mode) {
-            'cohort' => 'Cohort',
-            'open' => 'Open inschrijving',
-            default => ucfirst($mode ?: 'cohort'),
-        };
+        // Mode label from THE enum: the old match knew a fictional 'open' mode
+        // (real vocabulary is cohort|self_paced, TrajectoryMode) and ucfirst'd
+        // the rest — self_paced rendered "Self_paced". Unknown/empty → Cohort,
+        // matching the 'mode' fallback below.
+        $modeLabel = (TrajectoryMode::tryFrom($mode) ?? TrajectoryMode::Cohort)->label();
 
         return [
             'id' => $trajectoryId,
@@ -318,10 +326,15 @@ final class AdminTrajectoryService
             'courseCount' => $courseCount,
             'courses' => $coursesWithDetails,
             'enrolledUsers' => $enrolledUsers,
+            // Trajectory price meta is canonical CENTS (TrajectoryAdminController
+            // save + seed builders both write cents; the theme divides by 100).
+            // Formatting them as euros overstated every price 100× (F-T4:
+            // €1.695 rendered "169.500,00") — latent until a template renders
+            // these keys, but the payload must be truthful.
             'price' => $price,
-            'priceFormatted' => number_format($price, 2, ',', '.'),
+            'priceFormatted' => number_format($price / 100, 2, ',', '.'),
             'priceNonMember' => $priceNonMember,
-            'priceNonMemberFormatted' => number_format($priceNonMember, 2, ',', '.'),
+            'priceNonMemberFormatted' => number_format($priceNonMember / 100, 2, ',', '.'),
             'enrollmentDeadline' => $enrollmentDeadline ?: null,
             'choiceAvailableDate' => $choiceAvailableDate ?: null,
             'choiceDeadline' => $choiceDeadline ?: null,
@@ -405,7 +418,10 @@ final class AdminTrajectoryService
 
                 $requiredCourses[] = [
                     'title' => $course->post_title,
-                    'edition' => $editionId,
+                    // The dossier sub-label — a TITLE, never the raw FK int
+                    // (which invited '[object 512]'-class bindings). Post cache
+                    // is warm (getProgressData).
+                    'edition_title' => $editionId > 0 ? (string) get_the_title($editionId) : '',
                     'state' => $state,
                 ];
             }
@@ -426,10 +442,8 @@ final class AdminTrajectoryService
                 $chosen = [];
                 foreach ($courses as $course) {
                     if (in_array((int) $course->ID, $selectedCourseIds, true)) {
-                        $chosen[] = [
-                            'title' => $course->post_title,
-                            'edition' => $editionByCourse[(int) $course->ID] ?? 0,
-                        ];
+                        // Title only — the raw edition FK was never rendered.
+                        $chosen[] = ['title' => $course->post_title];
                     }
                 }
 
@@ -561,19 +575,24 @@ final class AdminTrajectoryService
         ]);
 
         // Remap enrolledUsers to registrations for the slide-over template.
-        $regStatusLabels = [
-            'active' => 'Actief', 'completed' => 'Afgerond',
-            'cancelled' => 'Geannuleerd', 'pending' => 'In afwachting',
-        ];
-        $registrations = array_map(function (array $u) use ($regStatusLabels) {
+        // Labels come from THE enum (F-T3): the old hand-rolled map was keyed
+        // on a nonexistent 'active' status and rendered the most common real
+        // statuses (confirmed, waitlist, interest) as ucfirst'd English.
+        $registrations = array_map(static function (array $u) {
+            $status = RegistrationStatus::tryFrom((string) ($u['status'] ?? ''));
+
             return [
+                'regId' => $u['regId'],
                 'id' => $u['id'],
                 'name' => $u['name'],
                 'email' => $u['email'],
                 'status' => $u['status'],
-                'status_label' => $regStatusLabels[$u['status']] ?? ucfirst($u['status'] ?? ''),
+                'status_label' => $status ? $status->label() : __('Onbekend', 'stride'),
             ];
         }, $item['enrolledUsers'] ?? []);
+
+        // registrations IS the roster — drop the raw duplicate.
+        unset($item['enrolledUsers']);
 
         return new WP_REST_Response(array_merge($item, [
             'registrations' => $registrations,

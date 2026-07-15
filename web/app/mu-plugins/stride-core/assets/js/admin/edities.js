@@ -1,33 +1,44 @@
 /* ==========================================================================
-   Stride Admin Workspace — Edities AGENDA surface (Cluster F)
+   Stride Admin Workspace — Edities surface (Cluster F)
    --------------------------------------------------------------------------
    One of the four functional list surfaces. Its own per-surface Alpine factory
-   owns ALL of its data in init(): it fetches GET /admin/editions?view=agenda
-   server-side (paging/filter server-owned) and re-loads on every filter/page
-   change. It owns its own loading / empty / error state.
+   owns ALL of its data: it fetches GET /admin/editions server-side
+   (paging/filter server-owned) and re-loads on every filter/page change. It
+   owns its own loading / empty / error state.
 
-   AGENDA view = ONE ROW PER SESSION DATE. A multi-session edition appears once
-   per session date, ordered by date (the same shape the old WP editions page
-   had). Each row therefore carries a session identity (sessionId, date,
-   startTime/endTime) layered on the edition base.
+   TWO VIEWS (viewMode, F-E1):
+     - 'agenda' (default) = ONE ROW PER SESSION DATE. A multi-session edition
+       appears once per session date, ordered by date. Each row carries a
+       session identity (sessionId, date, dateLabel, startTime/endTime)
+       layered on the edition base. Dateless editions have no session rows —
+       they NEVER appear here.
+     - 'list' = ONE ROW PER EDITION, NULL-date-permitting (§10.7) — the ONLY
+       place the sessionless interest-anchor editions are visible. Rows carry
+       startDate/endDate + a server dateLabel instead of a session identity.
+
+   SCOPE (F-E2): 'upcoming' (default) = the server's 2-day-lookback cutoff,
+   shown as a toggle pill so the cutoff is visible and escapable; 'all' lifts
+   it. An explicit date filter always overrides the default cutoff.
 
    The endpoint returns editions with the EFFECTIVE status (INV-7) — the same
    read the typeahead uses. The item carries `status` (an OfferingStatus VALUE,
    e.g. 'open'/'full'/'in_progress') but NO label, so we map the VALUE to a
    Dutch label + a closed-enum badge-hue class here (presentation only; we do
    NOT re-derive the status — the value is rendered as the server decided it).
+   The Status FILTER matches this same effective status server-side.
 
-   Item shape (ground-truthed from getEditionsAgendaView, AdminAPIController):
-     { id (editionId), sessionId, title (edition title), sessionTitle,
-       date (YYYY-MM-DD session date), startTime|null, endTime|null,
-       status:<OfferingStatus value>, capacity, registeredCount,
-       course{id,title}, venue|null, isToday, isPast, editUrl }
-   NOTE: agenda uses `date` (single session date) + startTime/endTime —
-   NOT startDate/endDate.
+   Item shape (ground-truthed from getEditions/getEditionsAgendaView):
+     common: { id (editionId), title, status:<OfferingStatus value>, capacity,
+               registeredCount, course{id,title}, venue|null, isToday, isPast,
+               dateLabel (server Dutch label), editUrl }
+     agenda adds: { sessionId, sessionTitle, date (YYYY-MM-DD),
+                    startTime|null, endTime|null }
+     list adds:   { startDate|null, endDate|null, course.tags }
 
-   FILTERS (exactly three): Search (edition title) + Tag (one dropdown from
-   GET /admin/course-tags `.tag`) + a single flatpickr field (mode:'range' →
-   single date OR range, with a clear ✕ that resets to the default cutoff).
+   FILTERS: Search (edition title) + Status (OfferingStatus dropdown) + Tag
+   (one dropdown from GET /admin/course-tags `.tag`) + a single flatpickr
+   field (mode:'range' → single date OR range, with a clear ✕ that resets to
+   the default cutoff).
 
    INV-5: every x-html binds a CONSTANT icon name via icon('<literal>'). Data via
    x-text (auto-escaped). INV-7: status value rendered as received; the label +
@@ -73,6 +84,12 @@
     return m ? m.cls : 'cancelled';
   }
 
+  /* Mirror of OfferingStatus::adminClosedValues() (PHP) — the statuses whose
+     rows live in the past by definition, so picking one under the upcoming
+     scope auto-widens. Pinned by EditiesStatusVocabularyTest; never inline
+     these strings in a conditional. */
+  const ADMIN_CLOSED = ['completed', 'archived'];
+
   function edities() {
     return {
       rows: [],
@@ -81,23 +98,29 @@
       perPage: 25,
       pageCount: 1,
 
+      /* Agenda (one row per session date) vs Lijst (one row per edition,
+         NULL-date-permitting — the only home of dateless editions, F-E1). */
+      viewMode: 'agenda',
+
+      /* 'upcoming' (default, the visible 2-day-lookback pill) | 'all' (F-E2). */
+      scope: 'upcoming',
+
       /* The Tag dropdown options — fetched ONCE from /admin/course-tags `.tag`. */
       tagOptions: [],
 
-      filters: { q: '', tag: '', dateFrom: '', dateTo: '' },
+      filters: { q: '', status: '', tag: '', dateFrom: '', dateTo: '' },
 
+      /* _listReq is a monotonic request token (the shared list-race rule):
+         search/status/tag/date/scope/view all trigger loads, and a slow
+         earlier response must never overwrite a faster later one. */
       loading: false,
       error: '',
+      _listReq: 0,
 
       /* flatpickr instance (set in init, used by clearAllFilters). */
       _fp: null,
 
       init() {
-        // The Tag vocabulary is independent of the edition load — fetch it once,
-        // regardless of lazy-load, so the dropdown is populated when the surface
-        // first paints.
-        this.loadFilterOptions();
-
         // The single date field is a flatpickr range picker. Instantiate it on
         // the x-ref input AFTER it exists (we're inside init()). nl locale +
         // the picker are enqueued globally before Alpine boots.
@@ -110,8 +133,13 @@
           });
         }
 
-        // I-1: load the FIRST time edities becomes active, not on mount.
-        window.WS.lazyLoad(this, 'edities', () => this.load(1));
+        // I-1: load the FIRST time edities becomes active, not on mount. The
+        // Tag vocabulary rides the same gate (F-E3 — it was fetched eagerly on
+        // mount for a surface the admin may never open).
+        window.WS.lazyLoad(this, 'edities', () => {
+          this.loadFilterOptions();
+          this.load(1);
+        });
       },
 
       /* Fetch the Tag vocabulary ONCE. We use only the `.tag` array (free-form
@@ -130,7 +158,10 @@
          - 2 dates → a range:    date_from = dates[0], date_to = dates[1]
          - 0 dates → cleared:    both empty (back to the default cutoff)
          Dates are formatted to YYYY-MM-DD via the picker so they match the
-         endpoint's date_from/date_to (sanitize_text_field, no parsing). */
+         endpoint's date_from/date_to (sanitize_text_field, no parsing).
+         The cleared branch is a no-op when both are ALREADY empty — this is
+         the guard clearAllFilters relies on (its _fp.clear() fires this
+         handler; without the guard every 'Filters wissen' double-fetched). */
       onDateChange(dates) {
         const fmt = (d) => (this._fp ? this._fp.formatDate(d, 'Y-m-d') : '');
         if (dates && dates.length === 1) {
@@ -140,6 +171,7 @@
           this.filters.dateFrom = fmt(dates[0]);
           this.filters.dateTo = fmt(dates[1]);
         } else {
+          if (!this.filters.dateFrom && !this.filters.dateTo) return;
           this.filters.dateFrom = '';
           this.filters.dateTo = '';
         }
@@ -148,75 +180,129 @@
 
       async load(page) {
         if (page != null) this.page = page;
+        const req = ++this._listReq;
         this.loading = true;
         this.error = ''; // clear at the TOP (cluster-B lesson)
 
         const params = new URLSearchParams();
-        params.set('view', 'agenda');
+        params.set('view', this.viewMode);
         params.set('page', String(this.page));
         params.set('per_page', String(this.perPage));
+        if (this.scope === 'all') params.set('scope', 'all');
         const f = this.filters;
         if (f.q) params.set('search', f.q);
+        if (f.status) params.set('status', f.status);
         if (f.tag) params.set('tag', String(f.tag));
         if (f.dateFrom) params.set('date_from', f.dateFrom);
         if (f.dateTo) params.set('date_to', f.dateTo);
 
         try {
           const data = await this.api(`/admin/editions?${params.toString()}`);
+          if (req !== this._listReq) return; // superseded — drop stale response
           this.rows = (data && data.items) || [];
           this.total = (data && data.total) || 0;
           this.page = (data && data.page) || 1;
           this.perPage = (data && data.perPage) || this.perPage;
           this.pageCount = (data && data.totalPages) || 1;
+          // Keep-page reload clamp (the trajecten precedent): a background
+          // refresh can land past the shrunk result set — clamp + refetch.
+          if (this.page > this.pageCount) {
+            this.page = this.pageCount;
+            return this.load();
+          }
         } catch (e) {
+          if (req !== this._listReq) return;
           this.error = (e && e.message) ? e.message : 'Kon de edities niet laden.';
           this.rows = [];
           this.total = 0;
         } finally {
-          this.loading = false;
+          if (req === this._listReq) this.loading = false;
         }
       },
 
-      reload() { this.load(1); },
+      /* Background/refresh reload keeps the CURRENT page — a ws-refresh
+         after a lens mutation must never snap the admin back to page 1
+         (their place in the list is work state). */
+      reload() { this.load(); },
+
       onFilterChange() { this.load(1); },
+
+      /* STATUS changes only (the select's own handler — NOT the shared
+         onFilterChange, which the Tag dropdown also fires: widening there
+         re-overrode a scope the user had explicitly narrowed back).
+         Picking an admin-closed status under the upcoming scope is
+         structurally near-empty (those rows live in the past) — auto-widen,
+         same rule as the Trajecten surface. */
+      onStatusChange() {
+        if (this.scope === 'upcoming' && ADMIN_CLOSED.includes(this.filters.status)) {
+          this.scope = 'all';
+        }
+        this.load(1);
+      },
       onSearchChange() { this.load(1); },
       goPage(p) { if (p >= 1 && p <= this.pageCount && p !== this.page) this.load(p); },
       onPerPageChange() { this.load(1); },
 
+      setViewMode(mode) {
+        if (mode !== this.viewMode && (mode === 'agenda' || mode === 'list')) {
+          this.viewMode = mode;
+          this.load(1);
+        }
+      },
+      toggleScope() {
+        this.scope = (this.scope === 'upcoming' ? 'all' : 'upcoming');
+        this.load(1);
+      },
+
       get hasFilters() {
         const f = this.filters;
-        return !!(f.q || f.tag || f.dateFrom || f.dateTo);
+        return !!(f.q || f.status || f.tag || f.dateFrom || f.dateTo);
       },
       clearAllFilters() {
-        this.filters = { q: '', tag: '', dateFrom: '', dateTo: '' };
-        // clear() fires onChange([]) → guarded to both-empty; avoid a double
-        // load by clearing the picker first, then loading once below.
+        // Restore the DEFAULT surface, not just empty filters: the status
+        // auto-widen may have flipped scope to 'all', and a reset that keeps
+        // showing the full multi-year history breaks the "back to the
+        // default cutoff" promise. viewMode is a presentation choice, not a
+        // filter — it stays.
+        this.filters = { q: '', status: '', tag: '', dateFrom: '', dateTo: '' };
+        this.scope = 'upcoming';
+        // clear() fires onChange([]) → its cleared branch no-ops when both
+        // dates are already empty (they are — we just reset them), so only
+        // the load(1) below runs. One fetch per reset.
         if (this._fp) this._fp.clear();
         this.load(1);
       },
 
       get rangeFrom() { return this.total === 0 ? 0 : (this.page - 1) * this.perPage + 1; },
       get rangeTo() { return Math.min(this.page * this.perPage, this.total); },
-      pageList() {
-        const last = this.pageCount, cur = this.page, out = [];
-        if (last <= 7) { for (let i = 1; i <= last; i++) out.push(i); return out; }
-        out.push(1);
-        if (cur > 3) out.push('…');
-        for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) out.push(i);
-        if (cur < last - 2) out.push('…');
-        out.push(last);
-        return out;
-      },
+      /* Delegates to THE shared pager model (WS.pageList in shell.js) — the
+         five per-surface copies of the ellipsis rule are gone (3d). */
+      pageList() { return window.WS.pageList(this.page, this.pageCount); },
 
       statusLabel(value) { return editionStatusLabel(value); },
       badgeClass(value) { return editionBadgeClass(value); },
 
-      /* Session date + time-range cell. The row carries a single session `date`
-         plus optional startTime/endTime (agenda shape). */
+      /* Date cell text: the server's Dutch dateLabel (INV-7), falling back to
+         the raw agenda `date` for an unparseable value. '' = dateless (list
+         view only) — the template renders its own 'Geen datum' state. */
+      dateText(r) {
+        if (!r) return '';
+        return r.dateLabel || r.date || '';
+      },
+
+      /* Session time-range (agenda rows only — list rows carry no times). */
       timeLabel(r) {
         if (!r) return '';
         if (r.startTime && r.endTime) return `${r.startTime}–${r.endTime}`;
         return r.startTime || r.endTime || '';
+      },
+
+      /* x-for :key — agenda rows are session rows, list rows are edition
+         rows; the prefixes keep the two key spaces disjoint across a view
+         switch (a bare number could collide and confuse Alpine's keyed
+         reconciliation). */
+      rowKey(r) {
+        return r && r.sessionId ? 's' + r.sessionId : 'e' + ((r && r.id) || 0);
       },
 
       /* capacity meter — registered / capacity, clamped, '—' when uncapped */
@@ -247,7 +333,7 @@
 
       emptyTitle() {
         if (this.filters.q) return `Geen edities voor "${this.filters.q}"`;
-        return 'Geen sessies gevonden';
+        return this.viewMode === 'list' ? 'Geen edities gevonden' : 'Geen sessies gevonden';
       },
     };
   }

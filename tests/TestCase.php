@@ -44,6 +44,13 @@ abstract class TestCase extends BaseTestCase
         global $_test_new_user_notification_calls;
         global $_test_rest_routes, $_test_rest_route_calls;
         global $_test_did_action_counts, $_test_doing_it_wrong_calls;
+        global $_test_current_user_id;
+
+        // Back to the stub default (wordpress-stubs.php seeds user 1): a test
+        // that logs in as another user via $_test_current_user_id must not
+        // leak that session into later test classes (order-dependent flakes:
+        // get_current_user_id() disagreeing with an emptied $_test_users map).
+        $_test_current_user_id = 1;
 
         $_test_user_meta = [];
         $_test_post_meta = [];
@@ -349,6 +356,90 @@ abstract class TestCase extends BaseTestCase
         $_test_posts[$session->ID] = $session;
 
         return $session;
+    }
+
+    /**
+     * Load a workspace admin client file (assets/js/admin/<file>) for the
+     * cross-language vocabulary contract tests.
+     */
+    protected function adminJs(string $file): string
+    {
+        $jsDir = dirname(__DIR__) . '/web/app/mu-plugins/stride-core/assets/js/admin/';
+
+        return (string) file_get_contents($jsDir . $file);
+    }
+
+    /**
+     * Extract ONE `const <name> = { … };` object literal from a client file,
+     * so key/label assertions run against the actual table — not the whole
+     * file. Shared by the vocabulary contract tests (Worklist queues,
+     * Trajecten/Edities statuses). NOTE: the non-greedy body match stops at
+     * the FIRST `};` — keep these consts flat (no nested `};` inside).
+     */
+    protected function extractJsBlock(string $file, string $constName): string
+    {
+        $matched = preg_match(
+            '/const ' . preg_quote($constName, '/') . '\s*=\s*\{(.*?)\};/s',
+            $this->adminJs($file),
+            $m,
+        );
+        $this->assertSame(1, $matched, "{$file} no longer defines const {$constName}");
+
+        return $m[1];
+    }
+
+    /**
+     * The TOP-LEVEL keys of a `const <name> = { … };` object literal. The ^
+     * anchor keeps inline nested keys (label:, cls:) out; digits are allowed
+     * in key tails so a key like 'on_hold2' cannot dodge the scan.
+     *
+     * @return list<string>
+     */
+    protected function extractJsMapKeys(string $file, string $constName): array
+    {
+        $block = $this->extractJsBlock($file, $constName);
+        preg_match_all('/^\s*([a-z_][a-z0-9_]*)\s*:/m', $block, $m);
+        $this->assertNotEmpty($m[1], "{$file} {$constName} parsed to zero keys — extraction regex broke");
+
+        return $m[1];
+    }
+
+    /**
+     * Assert every top-level key of a client-side JS map belongs to the given
+     * PHP enum vocabulary — THE no-fictional-keys half of the cross-language
+     * vocabulary contracts (one implementation for every status table).
+     *
+     * @param list<string> $knownValues
+     */
+    protected function assertJsMapKeysWithinEnum(string $file, string $constName, array $knownValues): void
+    {
+        foreach ($this->extractJsMapKeys($file, $constName) as $key) {
+            $this->assertContains(
+                $key,
+                $knownValues,
+                "{$file} {$constName} key '{$key}' is outside the enum vocabulary — fictional key",
+            );
+        }
+    }
+
+    /**
+     * Extract ONE `const <name> = [ … ];` array literal from a client file
+     * as the list of its single-quoted string entries.
+     *
+     * @return list<string>
+     */
+    protected function extractJsStringArray(string $file, string $constName): array
+    {
+        $matched = preg_match(
+            '/const ' . preg_quote($constName, '/') . '\s*=\s*\[(.*?)\];/s',
+            $this->adminJs($file),
+            $m,
+        );
+        $this->assertSame(1, $matched, "{$file} no longer defines const {$constName}");
+
+        preg_match_all("/'((?:[^'\\\\]|\\\\.)*)'/", $m[1], $strings);
+
+        return array_map('stripslashes', $strings[1]);
     }
 
     /**

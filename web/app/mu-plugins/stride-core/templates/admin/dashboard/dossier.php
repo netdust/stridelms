@@ -34,7 +34,10 @@ defined('ABSPATH') || exit;
 <section class="ws-content ws-content--flush"
          x-show="view === 'dossier'"
          x-data="dossier()"
-         @ws-refresh.window="if ($event.detail && $event.detail.view === 'dossier') init()"
+         <?php // ws-refresh calls load(), NOT init() — init() registers the
+               // ws-view-changed listener, so re-running it on every refresh
+               // click accumulated one extra permanent listener per refresh. ?>
+         @ws-refresh.window="if ($event.detail && $event.detail.view === 'dossier') load()"
          x-cloak>
 
     <!-- ===== LOADING ===== -->
@@ -56,7 +59,7 @@ defined('ABSPATH') || exit;
                 <p x-text="errors.detail"></p>
                 <button class="ws-btn ws-btn--ghost ws-btn--sm" @click="backToGrid()" style="margin-top:var(--ws-4)">
                     <span x-html="icon('chevRight')" style="transform:rotate(180deg)"></span>
-                    <?php echo esc_html__('Terug naar grid', 'stride'); ?>
+                    <?php echo esc_html__('Terug', 'stride'); ?>
                 </button>
             </div>
         </div>
@@ -68,7 +71,11 @@ defined('ABSPATH') || exit;
 
             <!-- breadcrumb / back -->
             <div class="ws-topbar__crumbs" style="margin-bottom:var(--ws-6)">
-                <a href="#" @click.prevent="backToGrid()" style="color:var(--ws-text-2)"><?php echo esc_html__('Inschrijvingen', 'stride'); ?></a>
+                <!-- origin-aware (F-S2): "Terug" when the admin navigated here
+                     from another view (history.back() restores it, filters and
+                     all); "Inschrijvingen" for a cold/bookmarked dossier. -->
+                <a href="#" @click.prevent="backToGrid()" style="color:var(--ws-text-2)"
+                   x-text="hasOrigin ? '<?php echo esc_js(__('← Terug', 'stride')); ?>' : '<?php echo esc_js(__('Inschrijvingen', 'stride')); ?>'"></a>
                 <span class="sep" x-html="icon('chevRight')" style="width:14px;height:14px"></span>
                 <span><?php echo esc_html__('Gebruikers', 'stride'); ?></span>
                 <span class="sep" x-html="icon('chevRight')" style="width:14px;height:14px"></span>
@@ -84,10 +91,15 @@ defined('ABSPATH') || exit;
                      :style="`background:linear-gradient(135deg, ${avatarColor(person.display_name)}, #1d4ed8)`"
                      x-text="initials(person.display_name)"></div>
                 <div class="ws-person-head__info">
-                    <div class="ws-person-head__name" x-text="person.display_name"></div>
+                    <div class="ws-person-head__name">
+                        <span x-text="person.display_name"></span>
+                        <span class="ws-badge ws-badge--cancelled ws-badge--dotless" x-show="person.is_anonymised" x-text="person.anonymised_label || '<?php echo esc_js(__('Geanonimiseerd', 'stride')); ?>'" style="vertical-align:middle;margin-left:8px"></span>
+                    </div>
                     <div class="ws-person-head__meta">
-                        <span x-show="person.profile_type">
-                            <span x-html="icon('briefcase')"></span><span x-text="person.profile_type"></span>
+                        <?php // profile_type is an OBJECT {name, color} — bind .name
+                              // (a bare x-text rendered "[object Object]"). ?>
+                        <span x-show="person.profile_type && person.profile_type.name">
+                            <span x-html="icon('briefcase')"></span><span x-text="person.profile_type ? person.profile_type.name : ''"></span>
                         </span>
                         <span x-show="person.organisation || person.department">
                             <span x-html="icon('building')"></span>
@@ -168,7 +180,8 @@ defined('ABSPATH') || exit;
                                                 <span class="ws-att-row__dot" :class="'ws-att-row__dot--'+courseStateClass(c.state)"></span>
                                                 <div class="ws-traj-courserow__body">
                                                     <span class="ws-traj-courserow__title" x-text="c.title"></span>
-                                                    <small x-text="c.cohort || c.edition || ''"></small>
+                                                    <?php // edition_title — never the raw FK int (c.edition). ?>
+                                                    <small x-text="c.edition_title || ''"></small>
                                                 </div>
                                                 <span class="ws-att-row__state" :class="'ws-att-row__state--'+courseStateClass(c.state)" x-text="courseStateLabel(c.state)"></span>
                                             </div>
@@ -214,7 +227,8 @@ defined('ABSPATH') || exit;
                     <!-- ===== REGISTRATIONS ===== -->
                     <div class="ws-section-title ws-mt-0">
                         <span x-html="icon('grid')"></span> <?php echo esc_html__('Inschrijvingen', 'stride'); ?>
-                        <span class="ws-grouphead__count" x-text="regs.length"></span>
+                        <?php // The TRUE total (server count), not the loaded page size. ?>
+                        <span class="ws-grouphead__count" x-text="regsTotal || regs.length"></span>
                         <span class="ws-section-title__line"></span>
                     </div>
 
@@ -232,8 +246,8 @@ defined('ABSPATH') || exit;
                             <div class="ws-reg__head" @click="r.open = !r.open">
                                 <span class="ws-reg__chev" x-html="icon('chevRight')"></span>
                                 <div class="ws-reg__title">
-                                    <b x-text="r.edition_title"></b>
-                                    <small><?php echo esc_html__('ingeschreven', 'stride'); ?> <span x-text="r.registered_at"></span></small>
+                                    <b x-text="r.edition_title"></b><span class="ws-badge ws-badge--lead ws-badge--dotless" x-show="r.is_trajectory"><?php echo esc_html__('Traject', 'stride'); ?></span>
+                                    <small><?php echo esc_html__('ingeschreven', 'stride'); ?> <span x-text="r.registered_at_display || r.registered_at"></span></small>
                                 </div>
                                 <div class="ws-reg__badges">
                                     <!-- offerte (quote-workflow) badge — hidden for cancelled regs: the
@@ -251,9 +265,9 @@ defined('ABSPATH') || exit;
 
                                 <!-- detail grid (status lives in the reg header badge — not duplicated here) -->
                                 <div class="ws-detail-grid">
-                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Inschrijvingspad', 'stride'); ?></div><div class="ws-field__val" x-text="r.enrollment_path"></div></div>
-                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Ingeschreven op', 'stride'); ?></div><div class="ws-field__val" x-text="r.registered_at"></div></div>
-                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Afgerond op', 'stride'); ?></div><div class="ws-field__val" x-text="r.completed_at || '—'"></div></div>
+                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Inschrijvingspad', 'stride'); ?></div><div class="ws-field__val" x-text="r.enrollment_path_label || r.enrollment_path"></div></div>
+                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Ingeschreven op', 'stride'); ?></div><div class="ws-field__val" x-text="r.registered_at_display || r.registered_at"></div></div>
+                                    <div class="ws-field"><div class="ws-field__label"><?php echo esc_html__('Afgerond op', 'stride'); ?></div><div class="ws-field__val" x-text="r.completed_at_display || '—'"></div></div>
                                 </div>
 
                                 <!-- pending hint: server-computed per-row reason (waiting on user vs admin) -->
@@ -307,11 +321,31 @@ defined('ABSPATH') || exit;
                                         <!-- attendance per session -->
                                         <div class="ws-section-title"><span x-html="icon('calendar')"></span> <?php echo esc_html__('Aanwezigheid', 'stride'); ?> <span class="ws-section-title__line"></span></div>
                                         <template x-if="r.attendance">
-                                            <div class="ws-att-summary">
-                                                <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--present"></span> <b x-text="r.attendance.present"></b> <?php echo esc_html__('aanwezig', 'stride'); ?></span>
-                                                <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--absent"></span> <b x-text="r.attendance.absent"></b> <?php echo esc_html__('afwezig', 'stride'); ?></span>
-                                                <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--excused"></span> <b x-text="r.attendance.excused"></b> <?php echo esc_html__('verontschuldigd', 'stride'); ?></span>
-                                                <span class="ws-att-summary__item"><?php echo esc_html__('van', 'stride'); ?> <b x-text="r.attendance.total_sessions"></b> <?php echo esc_html__('sessies', 'stride'); ?> · <b x-text="r.attendance.hours"></b><?php echo esc_html__('u', 'stride'); ?></span>
+                                            <div>
+                                                <div class="ws-att-summary">
+                                                    <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--present"></span> <b x-text="r.attendance.present"></b> <?php echo esc_html__('aanwezig', 'stride'); ?></span>
+                                                    <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--absent"></span> <b x-text="r.attendance.absent"></b> <?php echo esc_html__('afwezig', 'stride'); ?></span>
+                                                    <span class="ws-att-summary__item"><span class="ws-att-row__dot ws-att-row__dot--excused"></span> <b x-text="r.attendance.excused"></b> <?php echo esc_html__('verontschuldigd', 'stride'); ?></span>
+                                                    <span class="ws-att-summary__item"><?php echo esc_html__('van', 'stride'); ?> <b x-text="r.attendance.total_sessions"></b> <?php echo esc_html__('sessies', 'stride'); ?><template x-if="r.attendance.hours > 0"><span> · <b x-text="r.attendance.hours"></b><?php echo esc_html__('u', 'stride'); ?></span></template></span>
+                                                    <template x-if="(r.attendance.sessions || []).length">
+                                                        <button class="ws-btn ws-btn--ghost ws-btn--sm" type="button" @click="toggleAttendance(r.id)">
+                                                            <span x-text="isAttendanceOpen(r.id) ? '<?php echo esc_js(__('Verberg sessies', 'stride')); ?>' : '<?php echo esc_js(__('Per sessie', 'stride')); ?>'"></span>
+                                                        </button>
+                                                    </template>
+                                                </div>
+                                                <?php // per-session rows: WHICH day was missed ?>
+                                                <template x-if="isAttendanceOpen(r.id)">
+                                                    <div class="ws-att-rows" style="margin-top:var(--ws-2)">
+                                                        <template x-for="s in r.attendance.sessions" :key="s.id">
+                                                            <div class="ws-att-row" style="display:flex;align-items:center;gap:8px;padding:3px 0;font-size:var(--ws-fs-sm)">
+                                                                <span class="ws-att-row__dot" :class="'ws-att-row__dot--' + sessionMark(s.status).cls"></span>
+                                                                <span x-text="s.title" style="flex:1"></span>
+                                                                <span class="ws-muted" x-text="[s.date, s.time].filter(Boolean).join(' · ')"></span>
+                                                                <span class="ws-att-row__state" x-text="sessionMark(s.status).label"></span>
+                                                            </div>
+                                                        </template>
+                                                    </div>
+                                                </template>
                                             </div>
                                         </template>
                                         <template x-if="!r.attendance">
@@ -336,13 +370,22 @@ defined('ABSPATH') || exit;
                                             </div>
                                             <div>
                                                 <div class="ws-section-title"><span x-html="icon('checkCircle')"></span> <?php echo esc_html__('Voltooiingstaken', 'stride'); ?> <span class="ws-section-title__line"></span></div>
-                                                <div class="ws-pill-list">
-                                                    <template x-for="(task, ti) in completionFor(r)" :key="ti">
-                                                        <span class="ws-pill" :class="task.done ? 'ws-pill--done' : 'ws-pill--todo'">
-                                                            <span x-html="icon(task.done ? 'check' : 'clock')"></span><span x-text="task.label"></span>
-                                                        </span>
-                                                    </template>
-                                                </div>
+                                                <?php // r.tasks = the registration's REAL completion_tasks
+                                                      // (server-labelled, per-task status) — never a
+                                                      // client-derived checklist. ?>
+                                                <template x-if="(r.tasks || []).length">
+                                                    <div class="ws-pill-list">
+                                                        <template x-for="task in r.tasks" :key="task.type">
+                                                            <span class="ws-pill" :class="task.status === 'completed' ? 'ws-pill--done' : 'ws-pill--todo'"
+                                                                  :title="task.completed_at ? '<?php echo esc_js(__('Afgerond', 'stride')); ?> ' + task.completed_at : ''">
+                                                                <span x-html="icon(task.status === 'completed' ? 'check' : 'clock')"></span><span x-text="task.label"></span>
+                                                            </span>
+                                                        </template>
+                                                    </div>
+                                                </template>
+                                                <template x-if="!(r.tasks || []).length">
+                                                    <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0"><?php echo esc_html__('Geen taken voor deze inschrijving.', 'stride'); ?></p>
+                                                </template>
                                             </div>
                                         </div>
                                     </div>
@@ -360,42 +403,142 @@ defined('ABSPATH') || exit;
                                     <p class="ws-muted" style="font-size:var(--ws-fs-sm);font-style:italic;margin:0"><?php echo esc_html__('Geen notities.', 'stride'); ?></p>
                                 </template>
 
-                                <!-- state-appropriate actions (derived, presentational) -->
-                                <div class="ws-reg-actions">
-                                    <div class="ws-reg-actions__label"><span x-html="icon('sparkle')"></span> <?php echo esc_html__('Acties voor deze inschrijving', 'stride'); ?></div>
-                                    <div class="ws-reg-actions__row">
-                                        <template x-for="(a, i) in actionsFor(r.status)" :key="a.id">
-                                            <button class="ws-action-btn"
-                                                    :class="a.danger ? 'ws-action-btn--danger' : (i===0 ? 'ws-action-btn--primary' : 'ws-action-btn--secondary')"
-                                                    :title="a.label"
-                                                    :disabled="actionBusy === r.id"
-                                                    @click="runSmartAction(a, r)">
-                                                <span class="ws-action-btn__ico" x-html="icon(a.icon)"></span>
-                                                <span x-text="a.label"></span>
-                                            </button>
-                                        </template>
-                                        <template x-if="actionsFor(r.status).length === 0">
-                                            <span class="ws-reg-actions__none">
-                                                <span x-html="icon('info')"></span>
-                                                <?php echo esc_html__('Geen acties — geannuleerd. Een nieuwe inschrijving start een nieuw dossier.', 'stride'); ?>
-                                            </span>
+                                <!-- state-appropriate actions — stride_manage only (view-only
+                                     roles get no buttons that would 403; the endpoint re-checks
+                                     the capability regardless). Deferred stubs render DISABLED
+                                     with a "volgt binnenkort" tooltip, never as live buttons. -->
+                                <template x-if="canManage">
+                                    <div class="ws-reg-actions">
+                                        <div class="ws-reg-actions__label"><span x-html="icon('sparkle')"></span> <?php echo esc_html__('Acties voor deze inschrijving', 'stride'); ?></div>
+                                        <div class="ws-reg-actions__row">
+                                            <template x-for="(a, i) in actionsFor(r)" :key="a.id">
+                                                <button class="ws-action-btn"
+                                                        :class="a.danger ? 'ws-action-btn--danger' : (i===0 ? 'ws-action-btn--primary' : 'ws-action-btn--secondary')"
+                                                        :title="a.deferred ? deferredHint() : a.label"
+                                                        :disabled="a.deferred || actionBusy === r.id"
+                                                        :style="a.deferred ? 'opacity:.5;cursor:not-allowed' : ''"
+                                                        @click="runSmartAction(a, r)">
+                                                    <span class="ws-action-btn__ico" x-html="icon(a.icon)"></span>
+                                                    <span x-text="a.label"></span>
+                                                </button>
+                                            </template>
+                                            <template x-if="actionsFor(r).length === 0">
+                                                <span class="ws-reg-actions__none">
+                                                    <span x-html="icon('info')"></span>
+                                                    <?php echo esc_html__('Geen acties — geannuleerd. Een nieuwe inschrijving start een nieuw dossier.', 'stride'); ?>
+                                                </span>
+                                            </template>
+                                        </div>
+                                        <template x-if="actionFeedback[r.id]">
+                                            <p class="ws-reg-actions__feedback"
+                                               :class="actionFeedback[r.id].kind === 'ok' ? 'is-ok' : 'is-err'"
+                                               x-text="actionFeedback[r.id].text"
+                                               style="margin:var(--ws-2) 0 0;font-size:var(--ws-fs-sm)"></p>
                                         </template>
                                     </div>
-                                    <template x-if="actionFeedback[r.id]">
-                                        <p class="ws-reg-actions__feedback"
-                                           :class="actionFeedback[r.id].kind === 'ok' ? 'is-ok' : 'is-err'"
-                                           x-text="actionFeedback[r.id].text"
-                                           style="margin:var(--ws-2) 0 0;font-size:var(--ws-fs-sm)"></p>
-                                    </template>
-                                </div>
+                                </template>
 
                             </div>
                         </div>
                     </template>
+
+                    <!-- more registrations than the loaded pages → load next page -->
+                    <template x-if="hasMoreRegs">
+                        <button class="ws-btn ws-btn--ghost ws-btn--sm" style="margin-top:var(--ws-3)"
+                                :disabled="loadingMore"
+                                @click="loadMoreRegs()">
+                            <span x-html="icon('chevDown')"></span>
+                            <span x-text="loadingMore
+                                ? '<?php echo esc_js(__('Laden…', 'stride')); ?>'
+                                : '<?php echo esc_js(__('Toon meer', 'stride')); ?> (' + regs.length + ' <?php echo esc_js(__('van', 'stride')); ?> ' + regsTotal + ')'"></span>
+                        </button>
+                    </template>
                 </div>
 
-                <!-- ===== RIGHT: history timeline ===== -->
+                <!-- ===== RIGHT: quotes + profile details + history timeline ===== -->
                 <div>
+
+                    <!-- quotes (manager-gated: the server returns [] for view-only roles) -->
+                    <template x-if="quotes.length">
+                        <div class="ws-card" style="margin-bottom:var(--ws-4)">
+                            <div class="ws-card__head">
+                                <span x-html="icon('receipt')" style="width:17px;height:17px;color:var(--ws-primary)"></span>
+                                <span class="ws-card__title"><?php echo esc_html__('Offertes', 'stride'); ?></span>
+                            </div>
+                            <div class="ws-card__body">
+                                <template x-for="q in quotes" :key="q.id">
+                                    <div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--ws-border, #eee);font-size:var(--ws-fs-sm)">
+                                        <div style="flex:1;min-width:0">
+                                            <a :href="q.edit_url" target="_blank" rel="noopener" style="font-weight:600" x-text="q.number || q.title"></a>
+                                            <div class="ws-muted" x-text="q.edition_title" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap"></div>
+                                        </div>
+                                        <span class="ws-offerte" :class="'ws-offerte--'+offerteClass(q.status_label)">
+                                            <span class="ws-offerte__dot"></span><span x-text="q.status_label"></span>
+                                        </span>
+                                        <b x-text="q.total_display"></b>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+
+                    <!-- billing + identity (identity fields masked; reveal is manager-only,
+                         audited + rate-limited server-side) -->
+                    <?php
+                    // BOTH the card's visibility gate and the rows below derive
+                    // from these two maps — adding a field is a one-line change,
+                    // never a second edit in a hand-enumerated x-if.
+                    $billingFields = [
+                        'billing_company' => __('Bedrijf', 'stride'),
+                        'billing_vat' => __('BTW-nummer', 'stride'),
+                        'invoice_email' => __('Factuur-e-mail', 'stride'),
+                        'gln_number' => __('GLN-nummer', 'stride'),
+                    ];
+                    // Masked identity fields — value stays '••••••' until the
+                    // manager clicks Toon (server audits + rate-limits reveals).
+                    $piiFields = [
+                        'national_id' => __('Rijksregisternr.', 'stride'),
+                        'date_of_birth' => __('Geboortedatum', 'stride'),
+                        'professional_license_number' => __('Visumnummer', 'stride'),
+                    ];
+                    $cardGate = implode(' || ', array_merge(
+                        array_map(static fn(string $k): string => 'person.' . $k, array_keys($billingFields)),
+                        ['person.billing_address_1', 'person.billing_city'],
+                        array_map(static fn(string $k): string => 'person.' . $k . '_present', array_keys($piiFields)),
+                    ));
+                    ?>
+                    <template x-if="<?php echo esc_attr($cardGate); ?>">
+                        <div class="ws-card" style="margin-bottom:var(--ws-4)">
+                            <div class="ws-card__head">
+                                <span x-html="icon('building')" style="width:17px;height:17px;color:var(--ws-primary)"></span>
+                                <span class="ws-card__title"><?php echo esc_html__('Facturatie & identiteit', 'stride'); ?></span>
+                            </div>
+                            <div class="ws-card__body">
+                                <dl class="ws-kv">
+                                    <?php foreach ($billingFields as $bKey => $bLabel) : ?>
+                                    <template x-if="person.<?php echo esc_attr($bKey); ?>"><div class="ws-kv__row"><dt><?php echo esc_html($bLabel); ?></dt><dd x-text="person.<?php echo esc_attr($bKey); ?>"></dd></div></template>
+                                    <?php endforeach; ?>
+                                    <template x-if="person.billing_address_1 || person.billing_postcode || person.billing_city"><div class="ws-kv__row"><dt><?php echo esc_html__('Adres', 'stride'); ?></dt><dd x-text="[person.billing_address_1, [person.billing_postcode, person.billing_city].filter(Boolean).join(' ')].filter(Boolean).join(', ')"></dd></div></template>
+                                    <?php foreach ($piiFields as $piiKey => $piiLabel) : ?>
+                                    <template x-if="person.<?php echo esc_attr($piiKey); ?>_present">
+                                        <div class="ws-kv__row">
+                                            <dt><?php echo esc_html($piiLabel); ?></dt>
+                                            <dd>
+                                                <span x-text="revealed['<?php echo esc_js($piiKey); ?>'] || person.<?php echo esc_attr($piiKey); ?> || '••••••'"></span>
+                                                <template x-if="canManage && !revealed['<?php echo esc_js($piiKey); ?>']">
+                                                    <button class="ws-btn ws-btn--ghost ws-btn--sm" type="button"
+                                                            :disabled="revealBusy === '<?php echo esc_js($piiKey); ?>'"
+                                                            @click="revealField('<?php echo esc_js($piiKey); ?>')"><?php echo esc_html__('Toon', 'stride'); ?></button>
+                                                </template>
+                                            </dd>
+                                        </div>
+                                    </template>
+                                    <?php endforeach; ?>
+                                </dl>
+                            </div>
+                        </div>
+                    </template>
+
                     <div class="ws-card ws-timeline-card">
                         <div class="ws-card__head">
                             <span x-html="icon('history')" style="width:17px;height:17px;color:var(--ws-primary)"></span>

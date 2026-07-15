@@ -76,19 +76,42 @@ trait BulkRunner
      * MAX_BATCH + 1 ids so an over-cap result is rejected by runBulk's cap guard as
      * too_many — never truncated. A plain {ids:[…]} payload is returned unchanged.
      *
+     * The client filter is routed through AdminRegistrationQueryService::
+     * applyScopePins FIRST — the same queue→queue_ids and default
+     * active-edition-scope injection the grid READ applies — so the expansion
+     * covers exactly the set the grid showed and the confirm dialog counted.
+     * Without it, a select-all inside a ?queue= view (whose payload carries
+     * queue but no status) or under the default active scope expanded UNSCOPED
+     * over the whole edition-grained table (2026-07-14 blast-radius bug).
+     * An unknown queue key is a WP_Error(400), propagated by runBulk.
+     *
      * @param  array<string,mixed> $params registry params (full POST body).
-     * @return array<string,mixed>         $params with ['ids'] populated under select_all.
+     * @return array<string,mixed>|WP_Error $params with ['ids'] populated under select_all.
      */
-    private function resolveBulkIds(array $params): array
+    private function resolveBulkIds(array $params): array|WP_Error
     {
         if (empty($params['select_all'])) {
             return $params;
         }
 
         $filter = is_array($params['filter'] ?? null) ? $params['filter'] : [];
-        $repo   = ntdst_get(RegistrationRepository::class);
 
-        $params['ids'] = $repo->idsForGridFilter($filter, self::EXPANSION_FETCH_LIMIT);
+        // The id-set pin keys are SERVER vocabulary (applyScopePins output) —
+        // a client filter carrying them (stale/buggy/crafted payload) would
+        // both bypass the default scope injection (applyScopePins skips when
+        // queue_ids is present) and pin the expansion to arbitrary ids the
+        // grid never showed. Strip them so the pins can only ever be the
+        // server's own resolution of the client's queue/scope keys.
+        unset($filter['queue_ids'], $filter['active_edition_ids']);
+
+        $scoped = ntdst_get(\Stride\Admin\AdminRegistrationQueryService::class)->applyScopePins($filter);
+        if (is_wp_error($scoped)) {
+            return $scoped;
+        }
+
+        $repo = ntdst_get(RegistrationRepository::class);
+
+        $params['ids'] = $repo->idsForGridFilter($scoped, self::EXPANSION_FETCH_LIMIT);
 
         return $params;
     }
@@ -112,6 +135,9 @@ trait BulkRunner
         // handler routes through, so a future handler cannot forget it and
         // silently no-op a select_all request. Idempotent for a plain {ids:[…]}.
         $params = $this->resolveBulkIds($params);
+        if (is_wp_error($params)) {
+            return $params;
+        }
 
         $ids = array_values(array_unique(array_map('absint', (array) ($params['ids'] ?? []))));
 
@@ -192,5 +218,41 @@ trait BulkRunner
         do_action('stride/registration/bulk_completed', ['summary' => $report['summary'] ?? []]);
 
         return $report;
+    }
+
+    /**
+     * The ONE approve core every bulk-approve surface runs per row (grid,
+     * dossier single-id, edition roster, trajectory roster): transition-map
+     * gate → completeTask('approval') with the task_not_required exemption →
+     * domain confirm. Previously copy-pasted three times with "kept in
+     * lockstep" comments — this is the lockstep.
+     *
+     * task_not_required = the row has NO approval task (legacy/admin-created
+     * pendings, approval not enabled on the offering). There is nothing to
+     * complete, but the row is still legitimately approvable — the domain
+     * confirmRegistration() re-guards the status transition itself. Treating
+     * it as failure made such rows permanently un-approvable with an
+     * untranslated internal error in the failure report.
+     *
+     * @return true|WP_Error
+     */
+    private function approveRow(int $id, object $reg): true|WP_Error
+    {
+        $from = \Stride\Domain\RegistrationStatus::tryFrom((string) $reg->status);
+        if ($from === null || !\Stride\Modules\Enrollment\RegistrationTransitions::isAllowed($from, \Stride\Domain\RegistrationStatus::Confirmed)) {
+            return new WP_Error('invalid_status', __('Deze inschrijving kan niet goedgekeurd worden.', 'stride'));
+        }
+
+        $completion = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+        $enrollment = ntdst_get(\Stride\Modules\Enrollment\EnrollmentService::class);
+
+        $task = $completion->completeTask($id, 'approval');
+        if (is_wp_error($task) && $task->get_error_code() !== 'task_not_required') {
+            return $task;
+        }
+
+        // The domain confirm re-guards (invalid_status for non-pending), so an
+        // already-confirmed row never double-grants LD access.
+        return $enrollment->confirmRegistration($id);
     }
 }

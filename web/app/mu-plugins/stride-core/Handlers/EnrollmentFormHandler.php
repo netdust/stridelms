@@ -7,7 +7,6 @@ namespace Stride\Handlers;
 use Stride\Domain\Money;
 use Stride\Modules\Edition\EditionRepository;
 use Stride\Modules\Edition\EditionService;
-use Stride\Modules\Edition\SessionSelection;
 use Stride\Modules\Enrollment\EnrollmentService;
 use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Invoicing\VoucherService;
@@ -36,7 +35,11 @@ final class EnrollmentFormHandler
         // Register API action handlers
         add_filter('ntdst/api_data/stride_submit_enrollment', [$this, 'handleSubmitEnrollment'], 10, 2);
         add_filter('ntdst/api_data/stride_validate_voucher', [$this, 'handleValidateVoucher'], 10, 2);
-        add_filter('ntdst/api_data/stride_save_session_selection', [$this, 'handleSaveSessionSelection'], 10, 2);
+        // NOTE: session selection has exactly ONE endpoint — stride_complete_task
+        // with task_type=session_selection (CompletionTaskHandler). A second
+        // action (stride_save_session_selection) existed here with a stricter
+        // owner-only gate and zero callers; it was removed so the two could
+        // never drift on authorization again (form-identity review round 2).
         add_filter('ntdst/api_data/stride_save_trajectory_choices', [$this, 'handleSaveTrajectoryChoices'], 10, 2);
     }
 
@@ -501,61 +504,6 @@ final class EnrollmentFormHandler
         $userId = get_current_user_id() ?: null;
 
         return $editions->getPrice($itemId, $userId);
-    }
-
-    /**
-     * Handle session selection save.
-     *
-     * @param mixed $data Existing data (unused)
-     * @param array<string, mixed> $params Request parameters
-     * @return array<string, mixed>|WP_Error
-     */
-    public function handleSaveSessionSelection(mixed $data, array $params): array|WP_Error
-    {
-        $registrationId = absint($params['registration_id'] ?? 0);
-        $sessionsJson = $params['sessions'] ?? '[]';
-        $sessionIds = json_decode($sessionsJson, true) ?: [];
-
-        if (!$registrationId) {
-            return new WP_Error('invalid_input', __('Geen registratie opgegeven.', 'stride'));
-        }
-
-        $userId = get_current_user_id();
-        if (!$userId) {
-            return new WP_Error('not_logged_in', __('Je moet ingelogd zijn.', 'stride'));
-        }
-
-        $repo = ntdst_get(RegistrationRepository::class);
-        $reg = $repo->find($registrationId);
-        if (!$reg || (int) $reg->user_id !== $userId) {
-            return new WP_Error('forbidden', __('Geen toegang.', 'stride'));
-        }
-
-        $sessionSelection = ntdst_get(SessionSelection::class);
-        if (!$sessionSelection) {
-            return new WP_Error('service_unavailable', __('Service niet beschikbaar.', 'stride'));
-        }
-
-        $result = $sessionSelection->setSelections($registrationId, array_map('intval', $sessionIds));
-        if (is_wp_error($result)) {
-            ntdst_log('enrollment')->error('Session selection failed', [
-                'registration_id' => $registrationId,
-                'session_ids' => $sessionIds,
-                'error' => $result->get_error_message(),
-            ]);
-            return $result;
-        }
-
-        ntdst_log('enrollment')->info('Session selection saved', [
-            'registration_id' => $registrationId,
-            'session_ids' => $sessionIds,
-        ]);
-
-        return [
-            'success' => true,
-            'message' => __('Je sessiekeuze is opgeslagen.', 'stride'),
-            'reload' => true,
-        ];
     }
 
     /**

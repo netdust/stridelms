@@ -19,27 +19,76 @@ use Stride\Modules\Invoicing\QuoteRepository;
  * QuoteRepository (countAdminList / findAdminListRows / findUserIdsByNameOrEmail)
  * and BatchQueryHelper (INV-3). Does NOT contain business logic.
  *
- * Moved VERBATIM from AdminAPIController::getQuotes (Task D1, behavior-preserving
- * strangle) — same WHERE construction, same param order, same query semantics,
- * same response shape, including the deliberate search-short-circuit envelope
- * divergence (data/total/page/per_page vs the main items/.../totalPages).
+ * Strangled from AdminAPIController::getQuotes (Task D1). The Phase-1
+ * search-short-circuit envelope divergence (data/total/page/per_page on a
+ * zero-user match) was REMOVED at the Offertes slice (F-A8/F-O2): search now
+ * also matches quote numbers, so there is no zero-match branch and every path
+ * returns the one main envelope (items/total/page/perPage/totalPages). The
+ * client-side quoteRows() normalizer stays as defensive tolerance only.
  *
  * Registered in plugin-config.php.
  */
 final class AdminQuoteService
 {
+    /**
+     * Ceiling for the quotes CSV export — far above any real filtered view;
+     * hitting it logs a trip-wire (no silent caps).
+     */
+    private const EXPORT_MAX_ROWS = 10000;
+
     public function __construct(
         private readonly QuoteRepository $quotes,
     ) {}
 
     /**
+     * Every quote item matching the CURRENT Offertes predicate — the read
+     * behind the Exact-handoff CSV export (F-A9). Routes through the SAME
+     * getQuoteList pipeline as the surface read (search incl. quote numbers,
+     * status, edition tag, date range), paged internally.
+     *
+     * @param  array<string,mixed> $filters  Pre-sanitised filters (page/per_page ignored).
+     * @return array{items: array<int,array<string,mixed>>, total: int, clipped: bool}
+     */
+    public function getExportRows(array $filters): array
+    {
+        unset($filters['page'], $filters['per_page']);
+        $filters['per_page'] = 100;
+
+        $items = [];
+        $total = 0;
+        $page = 1;
+        while (true) {
+            $filters['page'] = $page;
+            $result = $this->getQuoteList($filters);
+            $total = (int) ($result['total'] ?? 0);
+            $pageItems = $result['items'] ?? [];
+            if (empty($pageItems)) {
+                break;
+            }
+            $items = array_merge($items, $pageItems);
+            if (count($items) >= $total || count($items) >= self::EXPORT_MAX_ROWS) {
+                break;
+            }
+            $page++;
+        }
+
+        $clipped = $total > self::EXPORT_MAX_ROWS;
+        if ($clipped) {
+            ntdst_log('admin')->warning('Quotes export clipped at the row ceiling — the file is incomplete', [
+                'total'   => $total,
+                'ceiling' => self::EXPORT_MAX_ROWS,
+            ]);
+            $items = array_slice($items, 0, self::EXPORT_MAX_ROWS);
+        }
+
+        return ['items' => $items, 'total' => $total, 'clipped' => $clipped];
+    }
+
+    /**
      * Build the admin quote-list read-model for the given (pre-sanitised) filters.
      *
      * @param array{page:int,per_page:int,search:string,status:string,edition_id:int,tag?:int,date_from?:string,date_to?:string} $filters
-     * @return array<string,mixed>  Main envelope (items/total/page/perPage/totalPages),
-     *                              OR the search-short-circuit envelope
-     *                              (data/total/page/per_page) when the user search
-     *                              resolves to zero users.
+     * @return array<string,mixed>  The main envelope (items/total/page/perPage/totalPages) — always.
      */
     public function getQuoteList(array $filters): array
     {
@@ -59,39 +108,61 @@ final class AdminQuoteService
         $where = ["p.post_type = %s", "p.post_status = 'publish'"];
         $params = [QuoteCPT::POST_TYPE];
 
-        // Search by user name or email. Resolve to user IDs first so the main
-        // quote query only filters by meta_value IN (...) instead of running a
-        // double LIKE join against wp_users for every candidate quote.
+        // Search matches CUSTOMER (name/e-mail, resolved to user ids first so
+        // the main query filters by meta IN (...) instead of a double LIKE
+        // join per candidate quote) OR QUOTE NUMBER (F-O2 — the search box
+        // promises "Zoek op nummer, klant…" but only the customer half
+        // existed). With the number half in the OR there is NO zero-match
+        // short-circuit anymore — and with it went the divergent
+        // data/per_page envelope (F-A8): every path now returns the one main
+        // items/totalPages envelope.
         if (!empty($search)) {
             $searchPattern = '%' . $wpdb->esc_like($search) . '%';
-            $matchedUserIds = $this->quotes->findUserIdsByNameOrEmail($searchPattern);
 
-            if (empty($matchedUserIds)) {
-                // No matching users — short-circuit with an empty result set.
-                return [
-                    'data'     => [],
-                    'total'    => 0,
-                    'page'     => $page,
-                    'per_page' => $perPage,
-                ];
+            // Number half — fragment owned by the repo (INV-3).
+            [$numberSql, $numberParams] = $this->quotes->numberSearchWhereFragment($searchPattern, 'p');
+            $or = [$numberSql];
+            $orParams = $numberParams;
+
+            // Customer half. ACCEPTED COST: this double-wildcard LIKE over
+            // wp_users runs on every search (no O(1) no-match exit anymore —
+            // the number half can still match) — single-digit ms at LMS scale
+            // (thousands of users), admin-only, 350ms-debounced. Revisit only
+            // if a large user migration lands. The finder caps at 500 ids; a
+            // hit on that cap means customer matches were silently dropped —
+            // trip-wire log so it can't degrade quietly.
+            $matchedUserIds = array_map('intval', $this->quotes->findUserIdsByNameOrEmail($searchPattern));
+            if (count($matchedUserIds) === 500) {
+                ntdst_log('admin')->warning('AdminQuoteService: customer search hit the 500-user cap; results may be incomplete', [
+                    'search' => $search,
+                ]);
+            }
+            if (!empty($matchedUserIds)) {
+                $idPlaceholders = implode(',', array_fill(0, count($matchedUserIds), '%d'));
+                $or[] = "EXISTS (
+                    SELECT 1 FROM {$wpdb->postmeta} pm_user
+                    WHERE pm_user.post_id = p.ID
+                    AND pm_user.meta_key = 'user_id'
+                    AND pm_user.meta_value IN ({$idPlaceholders})
+                )";
+                array_push($orParams, ...$matchedUserIds);
             }
 
-            $matchedUserIds = array_map('intval', $matchedUserIds);
-            $idPlaceholders = implode(',', array_fill(0, count($matchedUserIds), '%d'));
-            $where[] = "EXISTS (
-                SELECT 1 FROM {$wpdb->postmeta} pm_user
-                WHERE pm_user.post_id = p.ID
-                AND pm_user.meta_key = 'user_id'
-                AND pm_user.meta_value IN ({$idPlaceholders})
-            )";
-            foreach ($matchedUserIds as $uid) {
-                $params[] = $uid;
-            }
+            $where[] = '(' . implode(' OR ', $or) . ')';
+            array_push($params, ...$orParams);
         }
 
-        // Filter by status
+        // Filter by status. The read-model defaults a MISSING status meta row
+        // to 'draft' (the badge shows "In behandeling"), so the draft filter
+        // must also match quotes with no status row at all — otherwise the
+        // filter and the badge disagree about the same row.
         if (!empty($status)) {
-            $where[] = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            $statusExists = "EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status WHERE pm_status.post_id = p.ID AND pm_status.meta_key = 'status' AND pm_status.meta_value = %s)";
+            if ($status === \Stride\Domain\QuoteStatus::Draft->value) {
+                $where[] = "({$statusExists} OR NOT EXISTS (SELECT 1 FROM {$wpdb->postmeta} pm_status_any WHERE pm_status_any.post_id = p.ID AND pm_status_any.meta_key = 'status'))";
+            } else {
+                $where[] = $statusExists;
+            }
             $params[] = $status;
         }
 
@@ -149,7 +220,7 @@ final class AdminQuoteService
         $quoteMeta = BatchQueryHelper::batchGetPostMeta($quoteIds, [
             'quote_number', 'status', 'total', 'subtotal',
             'tax', 'user_id', 'edition_id', 'sent_at',
-            'valid_until', 'items', 'billing',
+            'valid_until', 'items', 'billing', 'locked',
         ]);
 
         // Collect unique user IDs and edition IDs for batch fetch
@@ -188,13 +259,19 @@ final class AdminQuoteService
             $quoteItems = $meta['items'] ?? [];
             $billing = $meta['billing'] ?? [];
 
-            // Get user info from batch
+            // Get user info from batch. A DELETED WP account keeps its stale
+            // user_id in quote meta — emit id 0 for it (the roster rule,
+            // lead-identity invariant), so the client's "has a dossier"
+            // checks (Dossier button, openPerson) can key on id alone
+            // instead of navigating to a nonexistent case view.
             $userName = '';
             $userEmail = '';
             $user = $users[$userId] ?? null;
             if ($user) {
                 $userName = $user->display_name;
                 $userEmail = $user->user_email;
+            } else {
+                $userId = 0;
             }
 
             // Get edition info from batch
@@ -218,6 +295,14 @@ final class AdminQuoteService
                 'total' => $quoteTotal,
                 'totalFormatted' => number_format($quoteTotal, 2, ',', '.'),
                 'date' => $quote->post_date,
+                // Server-owned Dutch date label (INV-7) — the list renders a
+                // Datum column now (F-O2: the date filter filtered a column
+                // nobody could see). Raw-value fallback on an unparseable date.
+                'dateLabel' => stride_format_date((string) $quote->post_date) ?: (string) $quote->post_date,
+                // Locked = finalized on the edit screen (sent/exported); the
+                // list shows the lock so an admin knows a row is no longer
+                // editable BEFORE clicking through (F-O1).
+                'locked' => (bool) ($meta['locked'] ?? false),
                 'sentAt' => $sentAt ?: null,
                 'validUntil' => $validUntil ?: null,
                 'user' => [

@@ -4,14 +4,20 @@
  *
  * A right-anchored ws-* slideover that overlays the current surface with the
  * per-edition roster: session-filter chips, loaded-set extras-filter chips
- * (CF3), per-session attendance marking (CF2), and the roster bulk bar driven
- * by RosterBulkHandler. Its own per-surface Alpine factory (assets/js/admin/
- * cohort.js) owns ALL its data; it is NOT a tab inside another slideover.
+ * (CF3), and per-session attendance marking (CF2 — optimistic, with the
+ * active mark lit and the cell showing the SELECTED session's state). Its own
+ * per-surface Alpine factory (assets/js/admin/cohort.js) owns ALL its data.
+ *
+ * READ + ATTENDANCE ONLY (decision 5a, F-C1): the roster bulk bar was
+ * removed — the cohort roster is confirmed/completed only (CR-1), so the one
+ * lifecycle action could never appear and the rest were stubs. Lifecycle work
+ * lives on the Inschrijvingen grid.
  *
  * Mounted INSIDE the shell's wsShell() scope, so it inherits api() / icon()
  * (Alpine v3 nested-scope). It is OPENED via the `ws-cohort-open` window event
  * the Edities surface dispatches (a sibling x-data scope cannot call into this
- * one directly), and renders nothing until then (x-show="open").
+ * one directly), and renders nothing until then (x-show="open"). On close
+ * after a mark it dispatches ws-refresh for the surfaces underneath (F-C3).
  *
  * INV-5: every x-html binds a CONSTANT icon name via icon('<literal>'); never a
  * data field. Names/labels render via x-text (auto-escaped). INV-6b: the session
@@ -24,7 +30,6 @@
 defined('ABSPATH') || exit;
 ?>
 <div x-data="cohort()"
-     x-init="init()"
      @ws-cohort-open.window="openForEdition($event.detail && $event.detail.editionId)"
      @keydown.escape.window="open && close()"
      x-cloak>
@@ -58,7 +63,9 @@ defined('ABSPATH') || exit;
                         <div class="ws-empty" style="padding-top:48px"><p><?php echo esc_html__('Rooster laden…', 'stride'); ?></p></div>
                     </template>
 
-                    <!-- Error (with retry) -->
+                    <!-- Error (with retry) — also covers a failed edition-detail
+                         fetch (F-C4: it used to be swallowed, silently producing a
+                         sessionless lens where marking was impossible). -->
                     <template x-if="!loading && error">
                         <div class="ws-empty" style="padding-top:48px">
                             <div class="ws-empty__icon" x-html="icon('alert')"></div>
@@ -72,6 +79,31 @@ defined('ABSPATH') || exit;
 
                     <template x-if="!loading && !error">
                         <div>
+
+                            <!-- Per-edition exports (F-A9/F-E3): the five existing
+                                 exporters, finally reachable from the workspace.
+                                 Via WS.download (soft-failing header-auth fetch);
+                                 stride_manage gated server-side. -->
+                            <div style="margin-bottom:12px" x-show="canManage && rows.length > 0">
+                                <div class="ws-eyebrow" style="margin-bottom:6px"><?php echo esc_html__('Exporteer', 'stride'); ?></div>
+                                <div class="ws-row" style="flex-wrap:wrap;gap:6px">
+                                    <button type="button" class="ws-btn ws-btn--ghost ws-btn--sm" @click="exportFile('registration')">
+                                        <span x-html="icon('download')"></span> <?php echo esc_html__('Deelnemerslijst', 'stride'); ?>
+                                    </button>
+                                    <button type="button" class="ws-btn ws-btn--ghost ws-btn--sm" @click="exportFile('attendance')">
+                                        <span x-html="icon('download')"></span> <?php echo esc_html__('Presentielijst', 'stride'); ?>
+                                    </button>
+                                    <button type="button" class="ws-btn ws-btn--ghost ws-btn--sm" @click="exportFile('namecard')">
+                                        <span x-html="icon('download')"></span> <?php echo esc_html__('Naamkaartjes', 'stride'); ?>
+                                    </button>
+                                    <button type="button" class="ws-btn ws-btn--ghost ws-btn--sm" @click="exportFile('files')">
+                                        <span x-html="icon('download')"></span> <?php echo esc_html__('Bestanden (zip)', 'stride'); ?>
+                                    </button>
+                                    <button type="button" class="ws-btn ws-btn--ghost ws-btn--sm" @click="exportFile('bundle')">
+                                        <span x-html="icon('download')"></span> <?php echo esc_html__('Bundel (zip)', 'stride'); ?>
+                                    </button>
+                                </div>
+                            </div>
 
                             <!-- Session picker chips -->
                             <div style="margin-bottom:12px" x-show="sessions.length > 0">
@@ -112,12 +144,9 @@ defined('ABSPATH') || exit;
                             <table class="ws-table" x-show="rows.length > 0 && visibleCount > 0" style="margin-top:8px">
                                 <thead>
                                     <tr>
-                                        <th class="ws-col-check" x-show="canManage" style="width:32px">
-                                            <input type="checkbox" :checked="pageAllSelected" @change="toggleAll()"
-                                                   aria-label="<?php echo esc_attr__('Selecteer alle zichtbare', 'stride'); ?>">
-                                        </th>
                                         <th><?php echo esc_html__('Deelnemer', 'stride'); ?></th>
                                         <th><?php echo esc_html__('Organisatie', 'stride'); ?></th>
+                                        <th x-show="extrasKeys.length > 0"><?php echo esc_html__('Extra\'s', 'stride'); ?></th>
                                         <th class="ws-col-status"><?php echo esc_html__('Status', 'stride'); ?></th>
                                         <th><?php echo esc_html__('Aanwezigheid', 'stride'); ?></th>
                                         <th x-show="canMarkAttendance"><?php echo esc_html__('Markeer', 'stride'); ?></th>
@@ -125,35 +154,48 @@ defined('ABSPATH') || exit;
                                 </thead>
                                 <tbody>
                                     <template x-for="row in visibleRows" :key="row.registration_id">
-                                        <tr :class="{ 'is-selected': isSelected(row.registration_id) }">
-                                            <td x-show="canManage">
-                                                <input type="checkbox" :checked="isSelected(row.registration_id)"
-                                                       @change="toggleRow(row.registration_id)"
-                                                       :aria-label="'<?php echo esc_js(__('Selecteer', 'stride')); ?> ' + row.name">
-                                            </td>
+                                        <tr>
                                             <td>
                                                 <span x-text="row.name"></span>
                                                 <em x-show="row.is_anonymised" class="ws-muted" style="font-style:italic"> (<?php echo esc_html__('verwijderd', 'stride'); ?>)</em>
                                             </td>
                                             <td><span x-text="row.organisation || '—'"></span></td>
+                                            <!-- per-row extras (F-C4: the keys were fetched but
+                                                 only ever rendered as filter chips) -->
+                                            <td x-show="extrasKeys.length > 0">
+                                                <span class="ws-muted" style="font-size:var(--ws-fs-sm)" x-text="extrasSummary(row) || '—'"></span>
+                                            </td>
                                             <td><span class="ws-badge" :class="'ws-badge--'+statusBadgeClass(row.status)" x-text="statusLabel(row.status)"></span></td>
-                                            <td><span x-text="attendanceLabel(row.attendance)"></span></td>
+                                            <!-- with a session selected this is THAT session's
+                                                 state (the question being answered); otherwise
+                                                 the cross-session aggregate (F-C2) -->
+                                            <td><span x-text="attendanceCellLabel(row)"></span></td>
                                             <td x-show="canMarkAttendance">
                                                 <div class="ws-row" style="gap:4px">
+                                                    <!-- the ACTIVE mark is lit; clicking it again
+                                                         clears (toggle) — buttons finally reflect
+                                                         current state (F-C2). The ROW is passed
+                                                         (rows key on registration_id — a user can
+                                                         hold two cohort rows) and buttons disable
+                                                         while that row's mark is in flight. -->
                                                     <button type="button" class="ws-btn ws-btn--subtle ws-btn--sm" style="color:var(--ws-success-text)"
-                                                            @click="markAttendance(row.user_id, 'present')" title="<?php echo esc_attr__('Aanwezig', 'stride'); ?>">
+                                                            :class="{ 'is-active': markFor(row) === 'present' }" :disabled="isMarking(row)"
+                                                            @click="markAttendance(row, 'present')" title="<?php echo esc_attr__('Aanwezig', 'stride'); ?>">
                                                         <span x-html="icon('check')"></span>
                                                     </button>
                                                     <button type="button" class="ws-btn ws-btn--subtle ws-btn--sm" style="color:var(--ws-danger)"
-                                                            @click="markAttendance(row.user_id, 'absent')" title="<?php echo esc_attr__('Afwezig', 'stride'); ?>">
+                                                            :class="{ 'is-active': markFor(row) === 'absent' }" :disabled="isMarking(row)"
+                                                            @click="markAttendance(row, 'absent')" title="<?php echo esc_attr__('Afwezig', 'stride'); ?>">
                                                         <span x-html="icon('x')"></span>
                                                     </button>
                                                     <button type="button" class="ws-btn ws-btn--subtle ws-btn--sm" style="color:var(--ws-warning-text)"
-                                                            @click="markAttendance(row.user_id, 'excused')" title="<?php echo esc_attr__('Verontschuldigd', 'stride'); ?>">
+                                                            :class="{ 'is-active': markFor(row) === 'excused' }" :disabled="isMarking(row)"
+                                                            @click="markAttendance(row, 'excused')" title="<?php echo esc_attr__('Verontschuldigd', 'stride'); ?>">
                                                         <span x-html="icon('info')"></span>
                                                     </button>
                                                     <button type="button" class="ws-btn ws-btn--subtle ws-btn--sm ws-muted"
-                                                            @click="markAttendance(row.user_id, '')" title="<?php echo esc_attr__('Wissen', 'stride'); ?>">
+                                                            x-show="markFor(row)" :disabled="isMarking(row)"
+                                                            @click="markAttendance(row, '')" title="<?php echo esc_attr__('Wissen', 'stride'); ?>">
                                                         <span x-html="icon('slash')"></span>
                                                     </button>
                                                 </div>
@@ -184,72 +226,7 @@ defined('ABSPATH') || exit;
                     </template>
                 </div>
 
-                <!-- ===== ROSTER BULK BAR (CF4) ===== -->
-                <div class="ws-bulkbar" x-show="canManage && selectedCount > 0" x-transition>
-                    <div class="ws-bulkbar__count">
-                        <span class="ws-bulkbar__num" x-text="selectedCount"></span>
-                        <span class="ws-bulkbar__label"><?php echo esc_html__('geselecteerd', 'stride'); ?></span>
-                    </div>
-                    <div class="ws-bulkbar__div"></div>
-                    <template x-if="mixedHint">
-                        <span class="ws-bulkbar__hint">
-                            <span x-html="icon('alert')"></span>
-                            <span x-text="'<?php echo esc_js(__('Geen gedeelde actie voor:', 'stride')); ?> ' + statesSummary()"></span>
-                        </span>
-                    </template>
-                    <div class="ws-bulkbar__actions" x-show="!mixedHint">
-                        <template x-for="a in bulkActions" :key="a.id">
-                            <button type="button" class="ws-bbtn ws-bbtn--primary" :disabled="bulkBusy !== null" @click="runBulk(a.id)">
-                                <template x-if="bulkBusy===a.id"><span x-html="icon('refresh')" style="animation:spin 0.8s linear infinite"></span></template>
-                                <template x-if="bulkBusy!==a.id"><span x-html="icon(a.icon)"></span></template>
-                                <span x-text="a.label"></span>
-                            </button>
-                        </template>
-                        <div class="ws-bulkbar__div"></div>
-                        <button type="button" class="ws-bbtn ws-bbtn--close" @click="clearSelection()" title="<?php echo esc_attr__('Selectie wissen', 'stride'); ?>">
-                            <span x-html="icon('x')"></span>
-                        </button>
-                    </div>
-                </div>
-
             </aside>
-
-            <!-- ===== RESULT MODAL (partial-failure report) ===== -->
-            <template x-if="resultOpen && result">
-                <div>
-                    <div class="ws-overlay" @click="closeResult()"></div>
-                    <div class="ws-modal" role="dialog" aria-modal="true">
-                        <div class="ws-modal__head">
-                            <div class="ws-modal__icon" :class="result.err === 0 ? 'ws-modal__icon--ok' : 'ws-modal__icon--mixed'"
-                                 x-html="icon(result.err === 0 ? 'checkCircle' : 'alert')"></div>
-                            <div>
-                                <div class="ws-modal__title" x-text="result.action + ' <?php echo esc_js(__('afgerond', 'stride')); ?>'"></div>
-                                <div class="ws-modal__sub" x-text="result.ok + ' <?php echo esc_js(__('van', 'stride')); ?> ' + result.total + ' <?php echo esc_js(__('geslaagd', 'stride')); ?>' + (result.err ? ' · ' + result.err + ' <?php echo esc_js(__('mislukt', 'stride')); ?>' : '')"></div>
-                            </div>
-                        </div>
-                        <div class="ws-modal__body">
-                            <template x-if="result.err > 0">
-                                <div class="ws-fail-list">
-                                    <div class="ws-fail-list__head"><?php echo esc_html__('Mislukte inschrijvingen — niet gewijzigd', 'stride'); ?></div>
-                                    <template x-for="f in result.failed" :key="f.id">
-                                        <div class="ws-fail-row">
-                                            <div class="ws-fail-row__icon" x-html="icon('x')"></div>
-                                            <div style="flex:1;min-width:0">
-                                                <div class="ws-fail-row__name" x-text="f.name"></div>
-                                                <div class="ws-fail-row__msg" x-text="f.message"></div>
-                                            </div>
-                                            <span class="ws-fail-row__code" x-text="f.code"></span>
-                                        </div>
-                                    </template>
-                                </div>
-                            </template>
-                        </div>
-                        <div class="ws-modal__foot">
-                            <button class="ws-btn ws-btn--ghost" @click="closeResult()"><?php echo esc_html__('Sluiten', 'stride'); ?></button>
-                        </div>
-                    </div>
-                </div>
-            </template>
 
             <!-- ===== TOASTS ===== -->
             <div class="ws-toast-zone">

@@ -407,16 +407,19 @@ class PromoteFromWaitlistTest extends IntegrationTestCase
             'email' => $email,
         ]);
 
-        // Force ONLY the relink UPDATE (attachUserToWaitlistRow → $wpdb->update of
-        // user_id on this row) to fail with a SQL error, so it returns false.
-        // resolveLeadAccount's user creation and the capacity SELECTs use other
-        // statements and stay intact: the account IS created, only the re-link
-        // write fails. Rewrite to a guaranteed-error query for that one UPDATE.
+        // Force ONLY the relink UPDATE (bindLeadToUser — raw prepared
+        // "UPDATE {table} SET user_id = …, lead_name = '' …", NO backticks,
+        // unlike the $wpdb->update() it replaced) to fail with a SQL error, so
+        // it returns false. resolveLeadAccount's user creation and the capacity
+        // SELECTs use other statements and stay intact: the account IS created,
+        // only the re-link write fails. Rewrite to a guaranteed-error query for
+        // that one UPDATE.
         $table = $GLOBALS['wpdb']->prefix . 'vad_registrations';
         $filter = static function (string $query) use ($table): string {
-            if (stripos($query, "UPDATE `{$table}`") !== false
-                && stripos($query, 'SET `user_id`') !== false) {
-                return "UPDATE `{$table}` SET `user_id` = (SELECT 1 FROM nonexistent_relink_table_xyz)";
+            if (stripos($query, "UPDATE {$table}") !== false
+                && stripos($query, 'SET user_id') !== false
+                && stripos($query, 'lead_name') !== false) {
+                return "UPDATE {$table} SET user_id = (SELECT 1 FROM nonexistent_relink_table_xyz)";
             }
 
             return $query;

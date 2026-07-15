@@ -8,9 +8,16 @@ use Stride\Domain\RegistrationStatus;
 use WP_Error;
 
 /**
- * Repository for registration data access.
+ * Repository for registration data access — the ONLY $wpdb caller for
+ * wp_vad_registrations (INV-3). Need a query it doesn't expose? Add a method
+ * HERE; never reach around it.
  *
- * Unified table for edition and trajectory enrollments.
+ * ═══ READ docs/DATA-MODEL-REGISTRATIONS.md BEFORE ADDING QUERIES. ═══
+ * It documents the three row kinds (edition row / trajectory PARENT /
+ * cascade child — the edition_id IS NULL signature), the status lifecycle
+ * and its enum helpers, the M5 JSON rule, the five lead-identity invariants,
+ * the advisory-lock concurrency contract (no UNIQUE key — deliberately), and
+ * the applyScopePins scope contract every grid-family read must honor.
  */
 final class RegistrationRepository
 {
@@ -18,6 +25,21 @@ final class RegistrationRepository
     public const PATH_COLLEAGUE = 'colleague';
     public const PATH_TRAJECTORY = 'trajectory';
     public const PATH_PARTNER = 'partner';
+
+    /**
+     * Dutch display label for an enrollment_path value — the SINGLE label
+     * source (dossier read-model + exporters), next to the slugs it names.
+     */
+    public static function pathLabel(string $path): string
+    {
+        return match ($path) {
+            self::PATH_INDIVIDUAL => __('Individueel', 'stride'),
+            self::PATH_COLLEAGUE  => __('Via collega', 'stride'),
+            self::PATH_TRAJECTORY => __('Via traject', 'stride'),
+            self::PATH_PARTNER    => __('Via partner', 'stride'),
+            default => $path !== '' ? $path : '—',
+        };
+    }
 
     /**
      * Allowlisted values for the group_by filter in admin grid queries (M4).
@@ -73,6 +95,54 @@ final class RegistrationRepository
      * @param string|null          $submittedAt ISO-8601 UTC. Defaults to `gmdate('c')`.
      * @return array{submitted_at: string, submitted_by: int|null, data: array<string, mixed>}
      */
+    /**
+     * Extract the anonymous submitter's identity from an enrollment_data array.
+     *
+     * THE single definition of where a lead's name/email live (F-G3):
+     * enrollment_data[interest|waitlist]['data']['name'|'email']. Consumed by
+     * the write paths (create/reactivate/update stamp the denormalized
+     * lead_name/lead_email columns), the v5 migration backfill, and any read
+     * that would otherwise re-derive the JSON path. Empty strings when absent.
+     *
+     * @param  array<string,mixed> $enrollmentData Decoded enrollment_data.
+     * @return array{name:string, email:string}
+     */
+    public static function extractLeadIdentity(array $enrollmentData): array
+    {
+        foreach (['interest', 'waitlist'] as $stage) {
+            $data = $enrollmentData[$stage]['data'] ?? null;
+            if (is_array($data) && (!empty($data['name']) || !empty($data['email']))) {
+                return [
+                    'name' => mb_substr(sanitize_text_field((string) ($data['name'] ?? '')), 0, 191),
+                    'email' => mb_substr(sanitize_email((string) ($data['email'] ?? '')), 0, 191),
+                ];
+            }
+        }
+
+        return ['name' => '', 'email' => ''];
+    }
+
+    /**
+     * Present a row's denormalized lead identity for an admin surface — THE
+     * single home of the '(anoniem)' fallback rule. Both admin readers (the
+     * grid's AdminRegistrationQueryService::resolveAnonymousIdentity and the
+     * edition roster in AdminAPIController) call this, so the same anonymous
+     * row can never render two different identities across surfaces (INV-3).
+     *
+     * @param  object $row Row carrying ->lead_name / ->lead_email (v5 columns).
+     * @return array{name:string, email:string}
+     */
+    public static function presentLeadIdentity(object $row): array
+    {
+        $name  = (string) ($row->lead_name ?? '');
+        $email = (string) ($row->lead_email ?? '');
+
+        return [
+            'name'  => $name !== '' ? $name : __('(anoniem)', 'stride'),
+            'email' => $email,
+        ];
+    }
+
     public static function wrapStage(array $data, ?int $submittedBy = null, ?string $submittedAt = null): array
     {
         if ($submittedBy === null) {
@@ -277,20 +347,15 @@ final class RegistrationRepository
             if ($existing) {
                 $existingStatus = RegistrationStatus::tryFrom($existing->status);
 
-                // Reactivate-eligible statuses:
+                // Reactivate-eligible statuses (RegistrationStatus::isReactivatable):
                 // - Cancelled: terminal-cancel state, re-enrolling reopens the row.
                 // - Interest / Waitlist: pre-enrollment holding states, the user already
                 //   expressed intent — enrolling promotes that row instead of blocking.
-                // For Interest specifically, EnrollmentService::enroll() has a separate
-                // upgrade path that merges enrollment_data when the row is anonymous
-                // (user_id=0). That path runs BEFORE this method, so we only land here
-                // when the existing Interest row already belongs to this user.
-                $reactivatableStatuses = [
-                    RegistrationStatus::Cancelled,
-                    RegistrationStatus::Interest,
-                    RegistrationStatus::Waitlist,
-                ];
-                if (in_array($existingStatus, $reactivatableStatuses, true)) {
+                // For LEAD interest/waitlist rows, EnrollmentService::enroll() has a
+                // separate upgrade path (upgradeFromInterest) that runs BEFORE this
+                // method, so we only land here when the existing row already belongs
+                // to this user.
+                if ($existingStatus && $existingStatus->isReactivatable()) {
                     // Preserve existing enrollment_data (interest/waitlist stage payloads
                     // collected earlier) unless the caller passes new data to merge.
                     $existingData = is_string($existing->enrollment_data ?? null) && $existing->enrollment_data !== ''
@@ -311,6 +376,26 @@ final class RegistrationRepository
                         'completion_tasks' => null,
                         'completed_at' => null,
                     ];
+
+                    // Partner scoping parity on reactivation: a caller-computed
+                    // company_id (enroll(), the public form upsert) must not be
+                    // silently dropped — but never overwrite a company already
+                    // on the row (admin-set scope wins, same COALESCE semantics
+                    // as bindLeadToUser).
+                    if (!empty($data['company_id']) && empty($existing->company_id)) {
+                        $reactivate['company_id'] = absint($data['company_id']);
+                    }
+
+                    // Re-stamp the lead identity when the reactivated row is
+                    // still anonymous (F-G3). UNCONDITIONAL: the columns must
+                    // mirror the rewritten JSON exactly — an identity scrubbed
+                    // from enrollment_data (GDPR/privacy cleanup) must clear
+                    // the denormalized copy too, never outlive its source.
+                    if (empty($existing->user_id) && $mergedData) {
+                        $identity = self::extractLeadIdentity($mergedData);
+                        $reactivate['lead_name'] = $identity['name'];
+                        $reactivate['lead_email'] = $identity['email'];
+                    }
 
                     $result = $wpdb->update($this->table(), $reactivate, ['id' => (int) $existing->id]);
 
@@ -348,6 +433,16 @@ final class RegistrationRepository
                     ? wp_json_encode(self::normalizeEnrollmentData($data['enrollment_data']))
                     : null,
             ];
+
+            // Anonymous lead (no account): stamp the denormalized searchable
+            // identity columns from the submission payload (F-G3 — the JSON is
+            // deliberately never LIKEd, so without these columns a lead is
+            // unfindable by the name on their own form).
+            if (empty($insert['user_id']) && is_array($data['enrollment_data'] ?? null)) {
+                $identity = self::extractLeadIdentity($data['enrollment_data']);
+                $insert['lead_name'] = $identity['name'];
+                $insert['lead_email'] = $identity['email'];
+            }
 
             $result = $wpdb->insert($this->table(), $insert);
 
@@ -553,6 +648,49 @@ final class RegistrationRepository
     }
 
     /**
+     * Most recent live registration this actor created for SOMEONE ELSE on
+     * this edition (colleague enrollment). Rule 4 of the form-identity plan:
+     * the enrolled_by actor completes the non-personal tasks for the person
+     * they enrolled — the completion route resolves through here when the
+     * actor has no eligible registration of their own.
+     *
+     * Excludes the actor's own rows (owner path is findByUserAndEdition) and
+     * non-actionable statuses; most recent first because the enroll flow
+     * redirects here immediately after enrolling one colleague.
+     */
+    public function findByEditionAndEnroller(int $enrollerId, int $editionId): ?object
+    {
+        global $wpdb;
+
+        $row = $wpdb->get_row($wpdb->prepare(
+            "SELECT * FROM {$this->table()}
+             WHERE edition_id = %d
+               AND enrolled_by = %d
+               AND user_id != %d
+               AND status IN (%s, %s)
+             ORDER BY id DESC
+             LIMIT 1",
+            $editionId,
+            $enrollerId,
+            $enrollerId,
+            RegistrationStatus::Pending->value,
+            RegistrationStatus::Confirmed->value,
+        ));
+
+        if ($row && $row->selections) {
+            $row->selections = json_decode($row->selections, true);
+        }
+        if ($row && $row->completion_tasks) {
+            $row->completion_tasks = json_decode($row->completion_tasks, true);
+        }
+        if ($row && isset($row->enrollment_data) && $row->enrollment_data) {
+            $row->enrollment_data = json_decode($row->enrollment_data, true);
+        }
+
+        return $row;
+    }
+
+    /**
      * Find an interest registration by email and edition.
      *
      * Searches enrollment_data JSON for $.interest.data.email match.
@@ -574,20 +712,24 @@ final class RegistrationRepository
         global $wpdb;
         $table = $this->table();
 
+        // Match on the denormalized lead_email COLUMN, not the JSON: the JSON
+        // type forces utf8mb4_bin (MariaDB alias AND MySQL JSON_UNQUOTE), so a
+        // JSON_EXTRACT comparison is case-SENSITIVE — the only case-sensitive
+        // e-mail predicate in the system, while self-bind (strcasecmp), the
+        // grid search and batchGetUsersByEmail all match case-insensitively.
+        // A case-differing resubmission then missed its earlier lead row and
+        // minted a second one. lead_email is *_ci VARCHAR, stamped on every
+        // account-less write + the v5 backfill (invariant 3).
         $row = $wpdb->get_row($wpdb->prepare(
             "SELECT * FROM {$table}
              WHERE edition_id = %d
-             AND user_id IS NULL
+             AND (user_id IS NULL OR user_id = 0)
              AND status IN (%s, %s)
-             AND (
-                JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.interest.data.email')) = %s
-                OR JSON_UNQUOTE(JSON_EXTRACT(enrollment_data, '$.waitlist.data.email')) = %s
-             )
+             AND lead_email = %s
              LIMIT 1",
             $editionId,
             RegistrationStatus::Interest->value,
             RegistrationStatus::Waitlist->value,
-            $email,
             $email,
         ));
 
@@ -628,37 +770,54 @@ final class RegistrationRepository
     }
 
     /**
-     * Upgrade an interest registration to a full enrollment.
+     * Upgrade a LEAD pre-enrollment row (interest or waitlist) to a full
+     * enrollment — the enroll-time sibling of bindLeadToUser() with the same
+     * bind contract: guarded on the row still being account-less, clears the
+     * denormalized lead columns (once bound, identity lives on the account —
+     * lead-identity invariant), and stamps the partner affiliation in the
+     * same statement (COALESCE keeps a pre-existing non-zero company_id).
+     * Additionally flips status/path and resets registered_at, because
+     * enrolling IS the status change.
      *
-     * Sets user_id, status, enrollment_path, enrollment_data, and registered_at.
+     * Returns false on 0 affected rows too (concurrent bind won the row) —
+     * the caller must fall back to its normal duplicate-check path, never
+     * assume the upgrade happened.
      *
      * @param array<string, mixed> $enrollmentData Merged enrollment_data to store
      */
-    public function upgradeFromInterest(int $registrationId, int $userId, string $status, string $enrollmentPath, array $enrollmentData): bool
+    public function upgradeFromInterest(int $registrationId, int $userId, string $status, string $enrollmentPath, array $enrollmentData, ?int $companyId = null): bool
     {
         global $wpdb;
 
-        $result = $wpdb->update(
-            $this->table(),
-            [
-                'user_id'         => $userId,
-                'status'          => $status,
-                'enrollment_path' => $enrollmentPath,
-                'enrollment_data' => wp_json_encode(self::normalizeEnrollmentData($enrollmentData)),
-                'registered_at'   => current_time('mysql'),
-            ],
-            ['id' => $registrationId],
-        );
+        $companySql = $companyId
+            ? $wpdb->prepare(', company_id = COALESCE(NULLIF(company_id, 0), %d)', $companyId)
+            : '';
 
-        if ($result !== false) {
-            $this->clearCache();
+        $result = $wpdb->query($wpdb->prepare(
+            "UPDATE {$this->table()}
+             SET user_id = %d, status = %s, enrollment_path = %s,
+                 enrollment_data = %s, registered_at = %s,
+                 lead_name = '', lead_email = ''{$companySql}
+             WHERE id = %d AND (user_id IS NULL OR user_id = 0)",
+            $userId,
+            $status,
+            $enrollmentPath,
+            wp_json_encode(self::normalizeEnrollmentData($enrollmentData)),
+            current_time('mysql'),
+            $registrationId,
+        ));
+
+        $this->clearCache();
+
+        if ($result !== false && $result > 0) {
             $this->emitRowEvent('row_updated', $registrationId, [
                 'user_id' => $userId,
                 'status'  => $status,
             ], 'upgrade_from_interest');
+            return true;
         }
 
-        return $result !== false;
+        return false;
     }
 
     /**
@@ -941,6 +1100,12 @@ final class RegistrationRepository
 
     /**
      * Count enrollments for a trajectory.
+     *
+     * With no explicit $status, cancelled parents are excluded — the SAME
+     * population rule as countByTrajectoryIds, so the CPT list-table column
+     * (this method) and the workspace list (the batch method) can never show
+     * two different "deelnemers" numbers for one trajectory. An explicit
+     * $status (including 'cancelled') counts exactly that status.
      */
     public function countByTrajectory(int $trajectoryId, ?string $status = null): int
     {
@@ -952,6 +1117,9 @@ final class RegistrationRepository
         if ($status !== null) {
             $sql .= " AND status = %s";
             $params[] = $status;
+        } else {
+            $sql .= " AND status != %s";
+            $params[] = RegistrationStatus::Cancelled->value;
         }
 
         return (int) $wpdb->get_var($wpdb->prepare($sql, ...$params));
@@ -973,11 +1141,16 @@ final class RegistrationRepository
         $ids = array_map('intval', $trajectoryIds);
         $placeholders = implode(',', array_fill(0, count($ids), '%d'));
 
+        // Cancelled parents are not participants (F-T4: they inflated the
+        // Trajecten "deelnemers" count against a roster that reads as live).
+        // Same exclusion as findByTrajectoryIds — count and roster stay one
+        // population.
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT trajectory_id, COUNT(*) AS c FROM {$this->table()}
              WHERE trajectory_id IN ({$placeholders}) AND edition_id IS NULL
+               AND status != %s
              GROUP BY trajectory_id",
-            ...$ids,
+            ...array_merge($ids, [RegistrationStatus::Cancelled->value]),
         ));
 
         $out = array_fill_keys($ids, 0);
@@ -1085,15 +1258,21 @@ final class RegistrationRepository
         $idPlaceholders     = implode(',', array_fill(0, count($ids), '%d'));
         $statusPlaceholders = implode(',', array_fill(0, count($statuses), '%s'));
 
+        // completion_tasks rides along (decoded) for the pending-split
+        // readiness rule (WorklistQueueResolver::pendingSplit, decision 7a).
+        // Fetched for PENDING rows only — the blob can be KBs per row and no
+        // other status reads it; a bare column here dragged + decoded it for
+        // every confirmed/completed/interest row of the full-queue resolve.
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, user_id, edition_id, status, registered_at, completed_at
+            "SELECT id, user_id, edition_id, status, registered_at, completed_at,
+                    CASE WHEN status = 'pending' THEN completion_tasks END AS completion_tasks
              FROM {$this->table()}
              WHERE edition_id IN ({$idPlaceholders})
                AND status IN ({$statusPlaceholders})",
             ...array_merge($ids, $statuses),
         ));
 
-        return $rows ?: [];
+        return $this->decodeCompletionTaskRows($rows ?: []);
     }
 
     /**
@@ -1114,11 +1293,16 @@ final class RegistrationRepository
         $ids = array_map('intval', $trajectoryIds);
         $placeholders = implode(',', array_fill(0, count($ids), '%d'));
 
+        // lead_name/lead_email ride along for the deleted-account fallback
+        // (presentLeadIdentity — one presenter); cancelled parents excluded,
+        // matching countByTrajectoryIds (count ≡ roster population, F-T4).
         $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT id, trajectory_id, user_id, status, registered_at FROM {$this->table()}
+            "SELECT id, trajectory_id, user_id, status, registered_at, lead_name, lead_email
+             FROM {$this->table()}
              WHERE trajectory_id IN ({$placeholders}) AND edition_id IS NULL
+               AND status != %s
              ORDER BY trajectory_id, registered_at DESC",
-            ...$ids,
+            ...array_merge($ids, [RegistrationStatus::Cancelled->value]),
         ));
 
         $grouped = array_fill_keys($ids, []);
@@ -1544,33 +1728,85 @@ final class RegistrationRepository
     }
 
     /**
-     * Re-link an anonymous waitlist row to a resolved WP account.
+     * Work-list for the one-time lead adoption pass (scripts/adopt-leads.php,
+     * form-identity plan 2026-07-14): every account-less row that carries a
+     * lead e-mail. Minimal columns; the script resolves each e-mail against
+     * wp_users and binds matches via bindLeadToUser().
      *
-     * Minimal user_id-only write (INV-3, INV-9): sets ONLY `user_id`, leaving
-     * status, registered_at, enrollment_path and enrollment_data untouched —
-     * the promote capacity transaction owns the status flip, and the lead's
-     * captured data must stay per-registration. Deliberately NOT
-     * upgradeFromInterest(), which resets registered_at and forces status/path.
+     * @return array<object> {id, edition_id, lead_email} rows.
      */
-    public function attachUserToWaitlistRow(int $registrationId, int $userId): bool
+    public function findLeadRowsWithEmail(): array
     {
         global $wpdb;
 
-        $result = $wpdb->update(
-            $this->table(),
-            ['user_id' => $userId],
-            ['id' => $registrationId],
-            ['%d'],
-            ['%d'],
-        );
+        return $wpdb->get_results(
+            "SELECT id, edition_id, lead_email FROM {$this->table()}
+             WHERE (user_id IS NULL OR user_id = 0)
+               AND lead_email IS NOT NULL AND lead_email != ''",
+        ) ?: [];
+    }
+
+    /**
+     * Bind an account-less (lead) row to a WP account — THE one bind write
+     * (INV-3, INV-9). Used by every surface that turns a lead into an
+     * account-bound registration: waitlist promotion, the self-bind at
+     * interest/waitlist submission (form-identity plan 2026-07-14), and the
+     * one-time adoption script.
+     *
+     * Minimal write: sets `user_id` and clears the denormalized lead columns
+     * (once bound, identity lives on the account — lead-identity invariant;
+     * the captured stage data stays in enrollment_data untouched). Leaves
+     * status, registered_at and enrollment_path alone — the promote capacity
+     * transaction owns the status flip. The enroll-time adopt
+     * (upgradeFromInterest) is the ONE sibling write: same guard, same
+     * lead-column clear, but it additionally flips status/path in the same
+     * statement because enrolling IS the status change.
+     *
+     * $companyId travels in the SAME guarded statement so every bind surface
+     * stamps the account's partner affiliation exactly once (Partner API
+     * parity — a row must never stay invisible to /stride/v1/partner/*
+     * purely because it started as a lead). COALESCE keeps a non-zero
+     * pre-existing company_id: an admin-set scope is never overwritten.
+     *
+     * GUARDED on the row still being account-less: a concurrent bind (or a
+     * wrong id) can never silently re-home a row that already belongs to an
+     * account — 0 affected rows returns false, callers treat it as a failed
+     * bind and re-read.
+     */
+    public function bindLeadToUser(int $registrationId, int $userId, ?int $companyId = null): bool
+    {
+        global $wpdb;
+
+        if ($companyId) {
+            $sql = $wpdb->prepare(
+                "UPDATE {$this->table()}
+                 SET user_id = %d, lead_name = '', lead_email = '',
+                     company_id = COALESCE(NULLIF(company_id, 0), %d)
+                 WHERE id = %d AND (user_id IS NULL OR user_id = 0)",
+                $userId,
+                $companyId,
+                $registrationId,
+            );
+        } else {
+            $sql = $wpdb->prepare(
+                "UPDATE {$this->table()}
+                 SET user_id = %d, lead_name = '', lead_email = ''
+                 WHERE id = %d AND (user_id IS NULL OR user_id = 0)",
+                $userId,
+                $registrationId,
+            );
+        }
+
+        $result = $wpdb->query($sql);
 
         $this->clearCache();
 
-        if ($result !== false) {
-            $this->emitRowEvent('row_updated', $registrationId, ['user_id' => $userId], 'attach_user_to_waitlist_row');
+        if ($result !== false && $result > 0) {
+            $this->emitRowEvent('row_updated', $registrationId, ['user_id' => $userId], 'bind_lead_to_user');
+            return true;
         }
 
-        return $result !== false;
+        return false;
     }
 
     /**
@@ -1595,56 +1831,97 @@ final class RegistrationRepository
 
     /**
      * Approvals scan, enrollment phase (INV-3, panel drift Important-2):
-     * pending registrations that can still yield a pending-approvals item —
-     * an open admin-approval task or stale-aged. The caller's PHP re-checks
-     * stay authoritative; this SQL filter is shaped to only ever OVER-fetch.
-     * The task status comparison carries an explicit COLLATE utf8mb4_bin so
-     * SQL matches PHP's strict ===/!== exactly (CR-E1); the LIMIT is the
-     * caller's scan cap (CR-E2 — a full result set means "maybe clipped").
+     * EVERY pending registration in scope, oldest first, up to the scan cap.
+     * Deliberately no task-shape SQL pre-filter: the panel's bucket rule is
+     * EnrollmentCompletion::awaitsAdmin — "user side done, or no tasks at
+     * all" — which SQL cannot express, and every attempt to approximate it
+     * (IS NULL / open-$.approval predicates) silently hid a row subset the
+     * queue card counted (F-V5 twice). The PHP re-checks are authoritative;
+     * pending rows are few by nature and the LIMIT is the caller's scan cap
+     * (CR-E2 — a full result set means "maybe clipped").
      *
+     * $editionIds scopes the scan to the admin-active edition set (F-V4 —
+     * the same corpus the queue cards reason over); rows with NO edition
+     * (trajectory parents) always pass — the cards can't show them (they are
+     * edition-queues), the panel deliberately can. null = unscoped; an EMPTY
+     * array means "no active editions" and matches only edition-less rows —
+     * never a silent whole-table fallback (the cards would read 0 while the
+     * panel listed closed-edition rows).
+     *
+     * @param array<int>|null $editionIds
      * @return array<object> rows with ->id (int), ->user_id, ->edition_id,
      *                       ->registered_at and ->completion_tasks
      *                       (array|null — JSON-decoded, repo convention)
      */
-    public function findPendingWithOpenApproval(string $staleThreshold, int $scanCap): array
+    public function findPendingForApprovalScan(int $scanCap, ?array $editionIds = null): array
     {
         global $wpdb;
+
+        [$scopeSql, $scopeArgs] = $this->editionScopeSql($editionIds);
 
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT id, user_id, edition_id, registered_at, completion_tasks
              FROM {$this->table()}
              WHERE status = 'pending'
-               AND completion_tasks IS NOT NULL
-               AND (
-                   (JSON_EXTRACT(completion_tasks, '$.approval') IS NOT NULL
-                    AND COALESCE(JSON_VALUE(completion_tasks, '$.approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed')
-                   OR registered_at <= %s
-               )
+               {$scopeSql}
              ORDER BY registered_at ASC
              LIMIT %d",
-            $staleThreshold,
-            $scanCap,
+            ...array_merge($scopeArgs, [$scanCap]),
         ));
 
         return $this->decodeCompletionTaskRows($rows);
     }
 
     /**
+     * Admin-active edition scope fragment for the approvals scans, as a
+     * prepared [sql, args] pair (the repo's placeholder-throughout property
+     * is load-bearing for INV-3 — no interpolated id lists). null = no
+     * scope; [] = only edition-less rows (trajectory parents), NEVER an
+     * unscoped fallback.
+     *
+     * @param array<int>|null $editionIds
+     * @return array{0: string, 1: list<int>}
+     */
+    private function editionScopeSql(?array $editionIds): array
+    {
+        if ($editionIds === null) {
+            return ['', []];
+        }
+
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if (empty($ids)) {
+            return ['AND edition_id IS NULL', []];
+        }
+
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        return ["AND (edition_id IS NULL OR edition_id IN ({$placeholders}))", $ids];
+    }
+
+    /**
      * Approvals scan, post-course phase (INV-3): confirmed registrations
      * with an open post_approval task whose post-course user tasks (fixed
-     * keys) are absent-or-completed. Same over-fetch + COLLATE + scan-cap
-     * contract as findPendingWithOpenApproval().
+     * keys) are absent-or-completed. Same over-fetch + COLLATE + scan-cap +
+     * edition-scope contract as findPendingForApprovalScan(). Post-course
+     * approvals deliberately stay UNSCOPED at the call site (editionIds =
+     * null): the work arrives around/after course end, when admins have
+     * often already closed the edition — scoping it hid open post_approvals
+     * on closed editions from every surface.
      *
-     * @return array<object> same row shape as findPendingWithOpenApproval()
+     * @param array<int> $editionIds
+     * @return array<object> same row shape as findPendingForApprovalScan()
      */
-    public function findConfirmedWithOpenPostApproval(int $scanCap): array
+    public function findConfirmedWithOpenPostApproval(int $scanCap, ?array $editionIds = null): array
     {
         global $wpdb;
+
+        [$scopeSql, $scopeArgs] = $this->editionScopeSql($editionIds);
 
         $rows = $wpdb->get_results($wpdb->prepare(
             "SELECT id, user_id, edition_id, registered_at, completion_tasks
              FROM {$this->table()}
              WHERE status = 'confirmed'
+               {$scopeSql}
                AND completion_tasks IS NOT NULL
                AND JSON_EXTRACT(completion_tasks, '$.post_approval') IS NOT NULL
                AND COALESCE(JSON_VALUE(completion_tasks, '$.post_approval.status'), 'pending') COLLATE utf8mb4_bin <> 'completed'
@@ -1654,7 +1931,7 @@ final class RegistrationRepository
                     OR JSON_VALUE(completion_tasks, '$.post_documents.status') COLLATE utf8mb4_bin = 'completed')
              ORDER BY registered_at ASC
              LIMIT %d",
-            $scanCap,
+            ...array_merge($scopeArgs, [$scanCap]),
         ));
 
         return $this->decodeCompletionTaskRows($rows);
@@ -1715,6 +1992,24 @@ final class RegistrationRepository
         // Compares against $data (not $update) for JSON fields so the diff captures
         // structural changes, not just "different encoded string."
         $before = $this->find($id);
+
+        // Anonymous lead whose enrollment_data is being (re)written: keep the
+        // denormalized searchable identity in sync (F-G3). Not in $allowed —
+        // derived by the repo, never caller-settable.
+        // UNCONDITIONAL stamp: the columns mirror the rewritten JSON exactly,
+        // so an identity scrubbed from enrollment_data (GDPR/privacy cleanup)
+        // clears the denormalized copy too — it must never outlive its source
+        // in the Naam column or the grid search.
+        if (
+            array_key_exists('enrollment_data', $update)
+            && $before !== null
+            && empty($before->user_id)
+            && is_array($data['enrollment_data'] ?? null)
+        ) {
+            $identity = self::extractLeadIdentity($data['enrollment_data']);
+            $update['lead_name'] = $identity['name'];
+            $update['lead_email'] = $identity['email'];
+        }
 
         $result = $wpdb->update($this->table(), $update, ['id' => $id]) !== false;
 
@@ -1971,21 +2266,20 @@ final class RegistrationRepository
      *  - M5: NO code path puts enrollment_data/selections/completion_tasks into
      *        WHERE/ORDER/GROUP BY.
      *
-     * Active-scope predicate mirrors AdminAPIController::getEditions() (commit e2ace22b):
-     *  - LEFT JOIN on _ntdst_start_date.
-     *  - WHERE: start_date >= twoDaysAgo OR start_date IS NULL (sessionless carve-out §10.7).
-     *  - Bypassed when edition_scope='all' or an explicit edition_id is passed.
-     *
-     * trajectory_id filter is intentionally deferred to Task 1.4b (parent→child join).
-     * A naive WHERE trajectory_id=X would be wrong for trajectory enrollments.
+     * Active-edition scope is an ID-SET the caller passes (active_edition_ids,
+     * resolved by AdminRegistrationQueryService from
+     * EditionRepository::findAdminActiveIds — status-based, decision
+     * 2026-07-14). This repo carries NO scope predicate of its own; the
+     * service omits the key for edition_scope='all', an explicit edition_id,
+     * or a queue pin (whose ids already encode the scope).
      *
      * @param array $filters Accepts ONLY these keys (everything else ignored):
      *   status (string ∈ RegistrationStatus values),
      *   edition_id (int), company_id (int),
-     *   trajectory_id (int — deferred to Task 1.4b; accept+ignore),
-     *   offerte_status (string — endpoint-layer concern; ignore if passed),
+     *   trajectory_id (int — parent→child join, Task 1.4b),
      *   q (string, name search bound via prepare %s),
-     *   edition_scope ('active'|'all', default 'active'),
+     *   active_edition_ids (list<int> — the resolved admin-active scope),
+     *   queue_ids (list<int> — a WorklistQueueResolver id-set pin),
      *   sort (string ∈ SORT_ALLOWLIST), order ('asc'|'desc'),
      *   group_by (string ∈ GROUP_BY_ALLOWLIST),
      *   page (int ≥1), per_page (int, capped at 100, default 50).
@@ -1996,12 +2290,35 @@ final class RegistrationRepository
         global $wpdb;
 
         // --- M4: Sort allowlist (load-bearing security — do NOT add user input here) ---
-        $sortAllowlist = ['registered_at', 'status', 'edition_id', 'company_id', 'completed_at', 'cancelled_at'];
+        // Keys are the CLIENT sort keys (the grid's column headers); values are
+        // SERVER-OWNED SQL expressions — user input only ever selects a key.
+        // 'name' and 'edition' sort by what the admin SEES (display name /
+        // edition title), not by FK id — the headers used to silently fall
+        // back to registered_at, which read as a broken/random sort (F-G1).
+        $sortExpressions = [
+            'registered_at' => 'r.registered_at',
+            'status'        => 'r.status',
+            'edition_id'    => 'r.edition_id',
+            'company_id'    => 'r.company_id',
+            'completed_at'  => 'r.completed_at',
+            'cancelled_at'  => 'r.cancelled_at',
+            // NULLIF: an anonymous lead has NO users join (display_name NULL) —
+            // it must sort by its lead_name (what the Naam column SHOWS), not
+            // clump at '' regardless of the rendered name.
+            'name'          => "COALESCE(NULLIF(u.display_name, ''), r.lead_name, '')",
+            'edition'       => "COALESCE(ep.post_title, '')",
+        ];
 
         // --- Sanitize sort/order/pagination ---
-        $sort = in_array($filters['sort'] ?? '', $sortAllowlist, true)
-            ? $filters['sort']
+        $sortKey = array_key_exists((string) ($filters['sort'] ?? ''), $sortExpressions)
+            ? (string) $filters['sort']
             : 'registered_at';
+        $sortExpr = $sortExpressions[$sortKey];
+
+        // Edition-title sort needs the edition post joined for ORDER BY only.
+        $sortJoin = $sortKey === 'edition'
+            ? "LEFT JOIN {$wpdb->posts} ep ON ep.ID = r.edition_id"
+            : '';
 
         $order = strtolower($filters['order'] ?? '') === 'asc' ? 'ASC' : 'DESC';
 
@@ -2034,19 +2351,22 @@ final class RegistrationRepository
 
         // --- Fetch rows (structured columns only — M5) ---
         // ORDER BY: column name comes from the server-side allowlist (M4), never from user input.
-        // enrollment_data is selected SOLELY for the anonymous-lead name/email fallback
-        // (anon interest/waitlist rows have no wp_users join). It is NEVER filtered or
-        // sorted on, so it does not participate in the M4/M5 SQL-safety invariants.
+        // lead_name/lead_email are the denormalized anonymous-lead identity (v5) —
+        // the grid no longer ships the enrollment_data JSON blob per row just to
+        // decode a name out of it.
+        // Stable tiebreaker (r.id) so equal sort values can never shuffle rows
+        // across page boundaries between requests.
         $dataSql = "SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
                            r.parent_registration_id, r.status, r.enrollment_path,
                            r.company_id, r.registered_at, r.completed_at,
                            r.cancelled_at, r.quote_id, r.enrolled_by, r.notes,
-                           r.enrollment_data
+                           r.lead_name, r.lead_email
                     FROM {$regTable} r
                     LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
                     {$activeJoin}
+                    {$sortJoin}
                     {$whereClause}
-                    ORDER BY r.{$sort} {$order}
+                    ORDER BY {$sortExpr} {$order}, r.id DESC
                     LIMIT %d OFFSET %d";
 
         $dataParams = array_merge($params, [$perPage, $offset]);
@@ -2122,6 +2442,12 @@ final class RegistrationRepository
             : $wpdb->get_var($countSql));
 
         // --- Aggregate SELECT: one row per group, ordered by count DESC ---
+        // Deterministic tiebreaker on the group column: tied counts (cnt=1 is
+        // common) would otherwise order arbitrarily, so paging could repeat/
+        // skip groups between requests AND offerteVerdelingByGroup's mirror of
+        // this query could resolve the same page to a DIFFERENT group set —
+        // rendering groups whose tally is missing. Same stable-pagination rule
+        // as the flat path's r.id tiebreaker.
         $aggSql = "SELECT {$groupColSql} AS group_value,
                           COUNT(*) AS cnt,
                           SUM(CASE WHEN r.status = 'completed' THEN 1 ELSE 0 END) AS completed_count
@@ -2130,7 +2456,7 @@ final class RegistrationRepository
                    {$activeJoin}
                    {$whereClause}
                    GROUP BY {$groupColSql}
-                   ORDER BY cnt DESC
+                   ORDER BY cnt DESC, {$groupColSql} DESC
                    LIMIT %d OFFSET %d";
 
         $aggParams = array_merge($params, [$perPage, ($page - 1) * $perPage]);
@@ -2191,8 +2517,8 @@ final class RegistrationRepository
         // tally is computed separately in SQL (offerteVerdelingByGroup, FIX-10).
         //
         // Column set is byte-identical to queryForGrid's $dataSql (M5: structured
-        // columns only; enrollment_data solely for the anon-lead name fallback).
-        // enrollment_data participates in NO filter/sort, only SELECT.
+        // columns only; lead_name/lead_email are the denormalized anon-lead
+        // identity — no enrollment_data blob shipped per row).
         //
         // PARAM ORDER (M4): the inner subquery text consumes $params + the group
         // filter args (JOIN %d before WHERE params, then the group IN placeholders);
@@ -2202,13 +2528,13 @@ final class RegistrationRepository
                            parent_registration_id, status, enrollment_path,
                            company_id, registered_at, completed_at,
                            cancelled_at, quote_id, enrolled_by, notes,
-                           enrollment_data, group_val
+                           lead_name, lead_email, group_val
                     FROM (
                         SELECT r.id, r.user_id, r.edition_id, r.trajectory_id,
                                r.parent_registration_id, r.status, r.enrollment_path,
                                r.company_id, r.registered_at, r.completed_at,
                                r.cancelled_at, r.quote_id, r.enrolled_by, r.notes,
-                               r.enrollment_data,
+                               r.lead_name, r.lead_email,
                                r.{$groupBy} AS group_val,
                                ROW_NUMBER() OVER (
                                    PARTITION BY r.{$groupBy}
@@ -2296,16 +2622,18 @@ final class RegistrationRepository
 
         // --- Resolve the visible page's groups (mirror queryForGridGrouped) ---
         // The tally must cover EXACTLY the groups the aggregate page renders, so
-        // we recompute the same paginated group set (same ORDER BY cnt DESC /
-        // LIMIT/OFFSET) and narrow to it. A NULL group_value routes via IS NULL,
-        // never IN ('') (strval(null)='' would silently miss the IS NULL rows).
+        // we recompute the same paginated group set (same ORDER BY — incl. the
+        // deterministic group-column tiebreaker, or tied counts could resolve
+        // this page to a different group set than queryForGridGrouped's — and
+        // same LIMIT/OFFSET) and narrow to it. A NULL group_value routes via
+        // IS NULL, never IN ('') (strval(null)='' would miss the IS NULL rows).
         $aggSql = "SELECT {$groupColSql} AS group_value, COUNT(*) AS cnt
                    FROM {$regTable} r
                    LEFT JOIN {$wpdb->users} u ON u.ID = r.user_id
                    {$activeJoin}
                    {$whereClause}
                    GROUP BY {$groupColSql}
-                   ORDER BY cnt DESC
+                   ORDER BY cnt DESC, {$groupColSql} DESC
                    LIMIT %d OFFSET %d";
         $aggParams = array_merge($params, [$perPage, ($page - 1) * $perPage]);
         $aggRows   = $wpdb->get_results($wpdb->prepare($aggSql, ...$aggParams));
@@ -2408,8 +2736,14 @@ final class RegistrationRepository
      * Capped by $limit (the caller passes MAX_BATCH + 1) so an over-cap expansion
      * returns MAX_BATCH+1 ids and the bulk handler's EXISTING cap guard rejects it
      * with too_many — this method never truncates silently nor enforces a second
-     * cap. An empty $filters expands to the bounded active edition-grained corpus
-     * (base predicate + default active scope), never the whole table.
+     * cap.
+     *
+     * SCOPE CONTRACT: like queryForGrid, this method applies NO scope of its
+     * own — the caller MUST route client filter input through
+     * AdminRegistrationQueryService::applyScopePins() first, so the expansion
+     * carries the same queue_ids / active_edition_ids pins the grid READ
+     * rendered. A raw client filter here expands over the whole
+     * edition-grained table (the 2026-07-14 blast-radius regression).
      *
      * Param order mirrors queryForGrid exactly: buildGridFilters unshifts the
      * trajectory JOIN %d to the FRONT of $params, so array_merge($params, [$limit])
@@ -2463,12 +2797,11 @@ final class RegistrationRepository
      * Corpus & scope semantics (by design):
      *  - Base predicate `r.edition_id IS NOT NULL` excludes trajectory PARENT rows
      *    from EVERY scope — they are never an edition-grained grid row.
-     *  - The default 'active' scope JOINs editions with post_status='publish'. A
-     *    registration on a NON-published edition (trashed/draft) therefore gets
-     *    `ae.ID IS NULL` and is EXCLUDED from the default view (mirrors archived-
-     *    edition hiding). Such registrations remain reachable via an explicit
-     *    edition_id (which bypasses active scope) or edition_scope='all'. This is
-     *    intentional: a trashed edition is also absent from the picker.
+     *  - The default 'active' scope pins to the caller-resolved id-set
+     *    (active_edition_ids — published, admin-not-closed editions). A
+     *    registration on a NON-published or closed edition is EXCLUDED from the
+     *    default view but remains reachable via an explicit edition_id (the
+     *    service omits the scope key then) or edition_scope='all'.
      *
      * @param  array<string,mixed> $filters
      * @return array{active_join:string,where_clause:string,params:array,page:int,per_page:int}
@@ -2526,6 +2859,26 @@ final class RegistrationRepository
     {
         global $wpdb;
 
+        // Trip-wire (blast-radius class, 2026-07-14): every entry path that
+        // starts from CLIENT filter input must route through
+        // AdminRegistrationQueryService::applyScopePins first (it stamps this
+        // marker). This repo cannot resolve the scope itself (resolver DI
+        // would cycle), so an unmarked build — a future export/saved-view/
+        // bulk surface calling the grid family directly — logs loudly instead
+        // of silently reading the whole edition-grained table. Explicit
+        // pinned/scoped keys also count: a caller that resolved its own ids
+        // is scoped by definition.
+        if (
+            empty($filters['scope_pins_applied'])
+            && !array_key_exists('active_edition_ids', $filters)
+            && !array_key_exists('queue_ids', $filters)
+            && empty($filters['edition_id'])
+        ) {
+            ntdst_log('enrollment')->warning('grid filter built without scope pins — bounded to nothing but the base predicate', [
+                'keys' => array_keys($filters),
+            ]);
+        }
+
         $page    = max(1, absint($filters['page'] ?? 1));
         $perPage = min(100, max(1, absint($filters['per_page'] ?? 50)));
 
@@ -2544,11 +2897,6 @@ final class RegistrationRepository
 
         // q: name search (M4 — bound via prepare %s, never interpolated).
         $q = !empty($filters['q']) ? (string) $filters['q'] : null;
-
-        // edition_scope: 'active' (default) or 'all'.
-        // Active scope is bypassed when an explicit edition_id is provided.
-        $editionScope   = (string) ($filters['edition_scope'] ?? 'active');
-        $useActiveScope = ($editionScope !== 'all') && ($editionId === null);
 
         // M5: enrollment_data, selections, completion_tasks, offerte_status are
         // explicitly NOT read here. trajectory_id IS now read (task 1.4b) — but
@@ -2570,20 +2918,16 @@ final class RegistrationRepository
         // longer form.)
         $where[] = 'r.edition_id IS NOT NULL';
 
-        // Active-edition scope predicate (mirrors getEditions() commit e2ace22b).
-        // LEFT JOIN on start_date; WHERE start_date >= twoDaysAgo OR IS NULL.
-        // The dateless-edition carve-out (sessionless §10.7) rides on
-        // pm_start.meta_value IS NULL (edition_id SET, no _ntdst_start_date) —
-        // NOT on an edition_id-NULL disjunct (parents are already excluded above).
+        // Active-edition scope: the CALLER passes the resolved admin-active
+        // edition-id set (EditionRepository::findAdminActiveIds via
+        // AdminRegistrationQueryService — status-based, decision 2026-07-14).
+        // Pinning to the id-set keeps ONE scope definition; this repo no longer
+        // carries its own SQL twin of the predicate (the old start_date join
+        // drifted from the counts' rule by construction). An EMPTY set yields
+        // zero rows — a scope that resolves to nothing must never mean "all".
         $activeJoin = '';
-        if ($useActiveScope) {
-            $twoDaysAgo = wp_date('Y-m-d', strtotime('-2 days'));
-            $activeJoin
-                = "LEFT JOIN {$wpdb->posts} ae ON ae.ID = r.edition_id AND ae.post_type = 'vad_edition' AND ae.post_status = 'publish'
-                 LEFT JOIN {$wpdb->postmeta} pm_start ON pm_start.post_id = ae.ID AND pm_start.meta_key = '_ntdst_start_date'";
-            $where[]  = 'ae.ID IS NOT NULL';
-            $where[]  = '(pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)';
-            $params[] = $twoDaysAgo;
+        if (array_key_exists('active_edition_ids', $filters) && is_array($filters['active_edition_ids'])) {
+            $this->pinToIdSet('r.edition_id', $filters['active_edition_ids'], $where, $params);
         }
 
         // Trajectory scope (task 1.4b) — routes through the verified parent→child
@@ -2639,11 +2983,25 @@ final class RegistrationRepository
 
         if ($q !== null) {
             // Name search — bound as a prepared LIKE, never interpolated (M4).
-            $where[]   = '(u.display_name LIKE %s OR u.user_login LIKE %s OR u.user_email LIKE %s)';
+            // lead_name/lead_email are the DENORMALIZED anonymous-lead identity
+            // columns (schema v5) — searching a lead's own name/email used to
+            // return "Geen resultaten" because it only lives in enrollment_data
+            // JSON, which is deliberately never LIKEd (M5).
+            $where[]   = '(u.display_name LIKE %s OR u.user_login LIKE %s OR u.user_email LIKE %s'
+                . ' OR r.lead_name LIKE %s OR r.lead_email LIKE %s)';
             $likeTerm  = '%' . $wpdb->esc_like($q) . '%';
             $params[]  = $likeTerm;
             $params[]  = $likeTerm;
             $params[]  = $likeTerm;
+            $params[]  = $likeTerm;
+            $params[]  = $likeTerm;
+        }
+
+        // Worklist-queue pin (?queue=): the resolver's id-set IS the queue
+        // definition (WorklistQueueResolver — the same set the Vandaag card
+        // counted). Ids are server-resolved ints (never client input).
+        if (array_key_exists('queue_ids', $filters) && is_array($filters['queue_ids'])) {
+            $this->pinToIdSet('r.id', $filters['queue_ids'], $where, $params);
         }
 
         $whereClause = $where ? ('WHERE ' . implode(' AND ', $where)) : '';
@@ -2655,6 +3013,30 @@ final class RegistrationRepository
             'page'         => $page,
             'per_page'     => $perPage,
         ];
+    }
+
+    /**
+     * Pin a WHERE clause to a server-resolved id-set — the ONE home of the
+     * load-bearing invariant every pin shares: an EMPTY resolved set must
+     * yield ZERO rows ('1 = 0'), never "no filter" (a scope that resolves to
+     * nothing meaning "all" is the leak class both call sites exist to
+     * prevent). Ids are always server-resolved ints, bound via %d (M4);
+     * $column is a caller-owned literal, never user input.
+     *
+     * @param string     $column  SQL column literal (e.g. 'r.id').
+     * @param array      $ids     Server-resolved id-set.
+     * @param list<string> $where  WHERE fragments (appended to).
+     * @param list<mixed>  $params Bound params (appended to, in WHERE order).
+     */
+    private function pinToIdSet(string $column, array $ids, array &$where, array &$params): void
+    {
+        $ids = array_values(array_unique(array_map('intval', $ids)));
+        if ($ids === []) {
+            $where[] = '1 = 0';
+            return;
+        }
+        $where[] = "{$column} IN (" . implode(',', array_fill(0, count($ids), '%d')) . ')';
+        $params  = array_merge($params, $ids);
     }
 
     // === Legacy aliases ===

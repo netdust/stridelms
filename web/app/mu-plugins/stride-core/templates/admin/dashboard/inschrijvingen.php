@@ -32,6 +32,10 @@ defined('ABSPATH') || exit;
          x-show="view === 'inschrijvingen'"
          x-data="grid()"
          @ws-refresh.window="if ($event.detail && $event.detail.view === 'inschrijvingen') reload()"
+         <?php // Escape-close parity (F-S2): the result modal closed only via
+               // the overlay click / footer button. View-guarded like the
+               // trajecten slide-over — never close a hidden modal cross-view. ?>
+         @keydown.escape.window="view === 'inschrijvingen' && showResult && closeResult()"
          x-cloak>
 
     <!-- ===== TOOLBAR ===== -->
@@ -94,34 +98,93 @@ defined('ABSPATH') || exit;
             <span class="ws-toolbar__sep"></span>
             <span class="ws-toolbar__group-label"><?php echo esc_html__('Filters', 'stride'); ?></span>
 
-            <!-- search: server-side q (name/email/organisation LIKE) -->
+            <!-- search: server-side q — display name / login / e-mail of the
+                 account, PLUS the lead_name/lead_email columns so anonymous
+                 interest/waitlist leads are findable by their own submission.
+                 The placeholder promises exactly what the WHERE searches
+                 (it used to claim 'organisatie', which was never searched). -->
             <div class="ws-search ws-search--inline">
                 <span x-html="icon('search')"></span>
                 <input type="text"
-                       placeholder="<?php echo esc_attr__('Zoek op naam, e-mail, organisatie…', 'stride'); ?>"
+                       placeholder="<?php echo esc_attr__('Zoek op naam of e-mail…', 'stride'); ?>"
                        x-model="filters.q" @input.debounce.350ms="onSearchChange()">
             </div>
 
-            <!-- edition filter (server typeahead source: GET /admin/editions/options) -->
-            <div class="ws-select-wrap">
+            <!-- edition filter: a real server-side TYPEAHEAD. The old flat
+                 <select> was fed by ONE capped fetch (first 100, oldest
+                 first) — current editions were unpickable at scale (F-G10). -->
+            <div class="ws-select-wrap" style="position:relative" @click.outside="editionPickerOpen = false">
                 <span x-html="icon('grid')" style="width:14px;height:14px"></span>
-                <?php echo esc_html__('Editie', 'stride'); ?>
-                <select class="ws-select" x-model.number="filters.edition_id" @change="onFilterChange()">
-                    <option value="0"><?php echo esc_html__('Alle edities', 'stride'); ?></option>
-                    <template x-for="e in editionOptions" :key="e.id"><option :value="e.id" x-text="e.title"></option></template>
+                <input type="text" class="ws-select" style="min-width:180px"
+                       placeholder="<?php echo esc_attr__('Editie — typ om te zoeken…', 'stride'); ?>"
+                       x-model="editionQuery"
+                       @focus="openEditionPicker()"
+                       @input.debounce.300ms="loadEditionOptions(); editionPickerOpen = true">
+                <div class="ws-menu__pop" x-show="editionPickerOpen" x-transition
+                     style="position:absolute;top:100%;left:0;right:0;max-height:260px;overflow-y:auto;z-index:30">
+                    <button type="button" class="ws-menu__item" x-show="filters.edition_id" @click="clearEditionPick()">
+                        <span x-html="icon('x')"></span> <?php echo esc_html__('Editiefilter wissen', 'stride'); ?>
+                    </button>
+                    <template x-for="e in editionOptions" :key="e.id">
+                        <button type="button" class="ws-menu__item" @click="pickEdition(e)" x-text="e.title"></button>
+                    </template>
+                    <div class="ws-menu__label" x-show="!editionOptions.length"><?php echo esc_html__('Geen edities gevonden', 'stride'); ?></div>
+                </div>
+            </div>
+
+            <!-- trajectory filter (small flat set; the server-side parent→child
+                 join existed all along — the control and chip did not, F-G9) -->
+            <div class="ws-select-wrap">
+                <span x-html="icon('route')" style="width:14px;height:14px"></span>
+                <?php echo esc_html__('Traject', 'stride'); ?>
+                <select class="ws-select" x-model.number="filters.trajectory_id" @change="onFilterChange()">
+                    <option value="0"><?php echo esc_html__('Alle trajecten', 'stride'); ?></option>
+                    <template x-for="t in trajectoryOptions" :key="t.id"><option :value="t.id" x-text="t.title"></option></template>
                 </select>
             </div>
 
             <div class="ws-toolbar__spacer"></div>
+
+            <!-- "Exporteer huidige weergave" (F-A9): CSV of the EXACT
+                 predicate on screen — same filterParams() the grid read uses.
+                 stride_manage only (exports egress the full PII set — the
+                 per-edition exporter posture); hidden in grouped mode (the
+                 export is flat rows, not group aggregates). -->
+            <button class="ws-btn ws-btn--ghost ws-btn--sm" x-show="canManage && !groupBy && total > 0"
+                    @click="exportCurrentView()"
+                    title="<?php echo esc_attr__('Download deze weergave (met de actieve filters) als CSV', 'stride'); ?>">
+                <span x-html="icon('download')"></span> <?php echo esc_html__('Exporteer huidige weergave', 'stride'); ?>
+            </button>
+
+            <?php // Grouped mode: `total` is the DISTINCT GROUP count (server
+                  // contract) — the unit word must say so, or "Toont 1–25 van 3"
+                  // reads as nonsense (F-G5). ?>
             <div class="ws-count">
                 <?php echo esc_html__('Toont', 'stride'); ?> <b x-text="rangeFrom"></b>–<b x-text="rangeTo"></b>
                 <?php echo esc_html__('van', 'stride'); ?> <b x-text="total.toLocaleString('nl-BE')"></b>
+                <span x-show="groupBy"> <?php echo esc_html__('groepen', 'stride'); ?></span>
             </div>
         </div>
 
-        <!-- active filter chips -->
-        <div class="ws-toolbar__row" x-show="activeChips.length" style="padding-top:2px">
+        <!-- scope pill + active filter chips. The edition scope is ALWAYS
+             announced (spec §10.4): the default "Actieve edities" pill is
+             dismissable (widens to everything, incl. afgesloten/gearchiveerde
+             edities), and the widened state offers the way back — the scope is
+             never an invisible reason rows are missing. -->
+        <div class="ws-toolbar__row" x-show="activeChips.length || scopePillVisible" style="padding-top:2px">
             <span class="ws-filterbar__label" x-html="icon('filter')" style="width:14px;height:14px;color:var(--ws-text-3)"></span>
+            <template x-if="scopePillVisible && editionScope === 'active'">
+                <span class="ws-chip is-active" :title="'<?php echo esc_js(__('Standaard tonen we enkel actieve edities. Klik op ✕ om ook afgesloten en gearchiveerde edities te tonen.', 'stride')); ?>'">
+                    <span><?php echo esc_html__('Actieve edities', 'stride'); ?></span>
+                    <span class="ws-chip__x" @click="widenScope()" x-html="icon('x')"></span>
+                </span>
+            </template>
+            <template x-if="scopePillVisible && editionScope === 'all'">
+                <span class="ws-chip">
+                    <span><?php echo esc_html__('Alle edities (ook afgesloten)', 'stride'); ?></span>
+                    <span class="ws-chip__x" @click="narrowScope()" :title="'<?php echo esc_js(__('Terug naar enkel actieve edities', 'stride')); ?>'" x-html="icon('x')"></span>
+                </span>
+            </template>
             <template x-for="chip in activeChips" :key="chip.k">
                 <span class="ws-chip is-active">
                     <span x-text="chip.label"></span>
@@ -159,7 +222,7 @@ defined('ABSPATH') || exit;
                 <tr>
                     <th class="ws-col-check">
                         <input type="checkbox" class="ws-check"
-                               :checked="pageAllSelected" :indeterminate="pageSomeSelected" @click="togglePage()">
+                               :checked="pageAllSelected" x-effect="$el.indeterminate = pageSomeSelected" @click="togglePage()">
                     </th>
                     <th class="is-sortable" :class="sortKey==='name' && 'is-sorted'" @click="sort('name')">
                         <?php echo esc_html__('Naam', 'stride'); ?>
@@ -245,6 +308,12 @@ defined('ABSPATH') || exit;
             <div class="ws-empty__icon" x-html="icon('inbox')"></div>
             <h3 x-text="emptyTitle()"></h3>
             <p><?php echo esc_html__('Pas de filters aan of wis ze om meer inschrijvingen te zien.', 'stride'); ?></p>
+            <?php // The scope is a REASON rows can be missing — say so and offer
+                  // the one-click widen instead of blaming the user's filters. ?>
+            <p class="ws-muted" x-show="scopePillVisible && editionScope === 'active'" style="font-size:var(--ws-fs-sm)">
+                <?php echo esc_html__('Tip: je kijkt enkel naar actieve edities.', 'stride'); ?>
+                <a href="#" @click.prevent="widenScope()"><?php echo esc_html__('Toon ook afgesloten edities', 'stride'); ?></a>
+            </p>
             <button class="ws-btn ws-btn--ghost" style="margin-top:16px" x-show="hasFilters" @click="clearAllFilters()">
                 <span x-html="icon('x')"></span> <?php echo esc_html__('Filters wissen', 'stride'); ?>
             </button>
@@ -258,7 +327,13 @@ defined('ABSPATH') || exit;
                 <span class="ws-bulkbar__num" x-text="selectedCount"></span>
                 <span class="ws-bulkbar__label">
                     <?php echo esc_html__('geselecteerd', 'stride'); ?>
-                    <template x-if="!selectAllFilter && total > selectedIds.length && selectedIds.length > 0">
+                    <?php // Cross-page select-all only where the blast radius is
+                          // describable (canArmSelectAll): flat mode (grouped
+                          // `total` counts GROUPS) AND a status-homogeneous
+                          // context (status filter or queue pin) — otherwise the
+                          // bulk bar would offer actions for off-page rows in
+                          // states it cannot know. ?>
+                    <template x-if="canArmSelectAll && !selectAllFilter && total > selectedIds.length && selectedIds.length > 0">
                         <a @click="selectAllFiltered()"><?php echo esc_html__('— selecteer alle', 'stride'); ?> <span x-text="total"></span></a>
                     </template>
                 </span>
@@ -279,10 +354,16 @@ defined('ABSPATH') || exit;
                 </span>
             </template>
 
+            <?php // Deferred actions (a.deferred) render DISABLED with a
+                  // "volgt binnenkort" tooltip — a live button that fails 100%
+                  // of rows reads as broken, not as a roadmap (F-G6). ?>
             <div class="ws-bulkbar__actions">
                 <template x-for="(a, i) in topActions" :key="a.id">
-                    <button class="ws-bbtn" :class="i===0 && !a.danger ? 'ws-bbtn--primary' : (a.danger ? 'ws-bbtn--danger' : '')"
-                            :disabled="busyAction" @click="runBulk(a.id)">
+                    <button class="ws-bbtn" :class="i===0 && !a.danger && !a.deferred ? 'ws-bbtn--primary' : (a.danger ? 'ws-bbtn--danger' : '')"
+                            :disabled="busyAction || a.deferred"
+                            :style="a.deferred ? 'opacity:.5;cursor:not-allowed' : ''"
+                            :title="a.deferred ? '<?php echo esc_js(__('Volgt binnenkort — nog niet beschikbaar.', 'stride')); ?>' : a.label"
+                            @click="!a.deferred && runBulk(a.id)">
                         <template x-if="busyAction===a.id"><span x-html="icon('refresh')" style="animation:spin 0.8s linear infinite"></span></template>
                         <template x-if="busyAction!==a.id"><span x-html="icon(a.icon)"></span></template>
                         <span x-text="a.label"></span>
@@ -294,7 +375,11 @@ defined('ABSPATH') || exit;
                     <div class="ws-menu__pop" x-show="overflowOpen" x-transition>
                         <div class="ws-menu__label"><?php echo esc_html__('Acties', 'stride'); ?></div>
                         <template x-for="a in overflowActions" :key="a.id">
-                            <button class="ws-menu__item" :class="a.danger && 'ws-menu__item--danger'" @click="runBulk(a.id)">
+                            <button class="ws-menu__item" :class="a.danger && 'ws-menu__item--danger'"
+                                    :disabled="a.deferred"
+                                    :style="a.deferred ? 'opacity:.5;cursor:not-allowed' : ''"
+                                    :title="a.deferred ? '<?php echo esc_js(__('Volgt binnenkort — nog niet beschikbaar.', 'stride')); ?>' : a.label"
+                                    @click="!a.deferred && runBulk(a.id)">
                                 <span x-html="icon(a.icon)"></span> <span x-text="a.label"></span>
                             </button>
                         </template>
@@ -307,12 +392,19 @@ defined('ABSPATH') || exit;
         </div>
     </template>
 
-    <!-- ===== PAGINATION ===== -->
-    <div class="ws-pager" x-show="!error && total > 0 && !groupBy">
-        <div class="ws-count"><?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="pageCount"></b></div>
+    <!-- ===== PAGINATION =====
+         One pager for BOTH modes. Groups ARE server-paginated (LIMIT/OFFSET on
+         the distinct group values); the old grouped-mode footer HID the pager
+         and claimed "paginering uit", making groups beyond the first page
+         silently unreachable (F-G5). -->
+    <div class="ws-pager" x-show="!error && total > 0">
+        <div class="ws-count"><?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="pageCount"></b><span x-show="groupBy"> — <?php echo esc_html__('groepen per pagina', 'stride'); ?></span></div>
         <div class="ws-pager__pages">
             <button class="ws-page-btn" :disabled="page===1" @click="goPage(page-1)"><span x-html="icon('chevRight')" style="transform:rotate(180deg);width:15px;height:15px"></span></button>
-            <template x-for="p in pageList()" :key="p">
+            <!-- :key is the INDEX — pageList() emits the '…' sentinel twice
+                     mid-range, and duplicate keys corrupt Alpine's keyed
+                     reconciliation (shared ws-pager contract fix). -->
+            <template x-for="(p, pi) in pageList()" :key="pi">
                 <template x-if="p === '…'"><span class="ws-page-ellipsis">…</span></template>
                 <template x-if="p !== '…'"><button class="ws-page-btn" :class="p===page && 'is-active'" @click="goPage(p)" x-text="p"></button></template>
             </template>
@@ -321,9 +413,6 @@ defined('ABSPATH') || exit;
         <div class="ws-select-wrap"><?php echo esc_html__('Per pagina', 'stride'); ?>
             <select class="ws-select" x-model.number="perPage" @change="onPerPageChange()"><option>10</option><option>25</option><option>50</option></select>
         </div>
-    </div>
-    <div class="ws-pager" x-show="!error && groupBy && total > 0" style="justify-content:center">
-        <span class="ws-muted" style="font-size:var(--ws-fs-sm)"><?php echo esc_html__('Gegroepeerd — paginering uit.', 'stride'); ?> <b x-text="total"></b> <?php echo esc_html__('inschrijvingen in', 'stride'); ?> <b x-text="groups.length"></b> <?php echo esc_html__('groepen.', 'stride'); ?></span>
     </div>
 
     <!-- ===== RESULT MODAL (partial-failure report) ===== -->

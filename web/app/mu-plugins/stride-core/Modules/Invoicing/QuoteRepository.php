@@ -286,6 +286,31 @@ final class QuoteRepository extends AbstractRepository
     }
 
     /**
+     * WHERE fragment matching quotes whose quote_number contains the given
+     * pre-escaped LIKE pattern (the number half of the admin search, F-O2).
+     *
+     * Owned by the repo (INV-3: net-new query shapes live with the owning
+     * repository — the adminActiveWhereFragment precedent), spliced by
+     * AdminQuoteService into its OR search. Every dynamic value is a %s
+     * placeholder for the caller's $wpdb->prepare.
+     *
+     * @return array{0: string, 1: list<string>}
+     */
+    public function numberSearchWhereFragment(string $likePattern, string $alias = 'p'): array
+    {
+        global $wpdb;
+
+        $sql = "EXISTS (
+            SELECT 1 FROM {$wpdb->postmeta} pm_num
+            WHERE pm_num.post_id = {$alias}.ID
+            AND pm_num.meta_key = 'quote_number'
+            AND pm_num.meta_value LIKE %s
+        )";
+
+        return [$sql, [$likePattern]];
+    }
+
+    /**
      * Count quotes for the admin quote list, for a pre-built WHERE clause.
      *
      * The caller (AdminQuoteService::getQuoteList) assembles the WHERE clause +

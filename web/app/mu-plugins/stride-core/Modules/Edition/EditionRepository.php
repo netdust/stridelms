@@ -50,35 +50,114 @@ final class EditionRepository extends AbstractRepository
     }
 
     /**
-     * Canonical "active by date" edition-ID set — the single source of the
-     * date-scoped active rule (CR-6). Active = published editions whose
-     * start_date is within the grace window OR has NO start_date (the
-     * sessionless/dateless interest anchors — §10.7 carve-out,
-     * bug_sessionless_edition_cutoff). A bare `start_date >= X` filter would
-     * silently drop dateless editions; the NULL-permitting predicate lives
-     * HERE so every count surface (worklist queues, stats) routes through one
-     * definition instead of re-deriving it.
+     * Canonical ADMIN-ACTIVE edition-ID set — the single source of the
+     * admin-workspace scope rule (CR-6). Active = published editions the
+     * admin has NOT closed (status outside OfferingStatus::adminClosedValues).
+     * Dateless editions (the sessionless interest anchors, §10.7) are active
+     * by construction — the rule never looks at dates. Every scope consumer
+     * (worklist queues, stats, the grid's default scope via
+     * AdminRegistrationQueryService) routes through THIS set instead of
+     * re-deriving a predicate.
+     *
+     * NOTE this is deliberately DISTINCT from the Edities surface's own
+     * date-scoped default predicate (AdminAPIController::getEditions) — the
+     * Edities surface answers "what is coming up", this answers "where can
+     * admin work still live". Reconciled at the Edities slice (2026-07-14):
+     * the divergence STAYS by design; what changed is that it is no longer a
+     * trap — the surface's date cutoff is a visible "Aankomend"/"Alles"
+     * scope pill, and the Lijst view (NULL-date-permitting) reaches every
+     * edition this set can contain, including the dateless anchors. Not
+     * cached across requests, also by decision: one indexed scan over a
+     * corpus of hundreds is cheaper than carrying invalidation state for
+     * every status/publish transition.
+     *
+     * INV-7 note: this reads the STORED status meta on purpose, NOT
+     * getEffectiveStatus() — the effective layer's past-date → Completed
+     * inference is exactly the auto-closing this rule removes (an edition
+     * must stay admin-active until the admin closes it). Recorded in
+     * ARCHITECTURE-INVARIANTS.md's INV-7 known-bypass list; do not "fix"
+     * this back to the effective read.
      *
      * @return list<int>
      */
-    public function findActiveDateScopedIds(int $graceDays = 2): array
+    public function findAdminActiveIds(): array
     {
         global $wpdb;
 
-        $cutoff = wp_date('Y-m-d', strtotime('-' . max(0, $graceDays) . ' days'));
+        // REDEFINED (decision 2026-07-14, F-V3): "active" is STATUS-based, not
+        // date-based. The old predicate (start_date >= today − 2d) dropped an
+        // edition out of every worklist queue and the default grid TWO DAYS
+        // AFTER ITS FIRST SESSION — exactly when the post-course work the
+        // queues describe (approvals, quote follow-up, certificates) happens;
+        // the nocert queue was structurally ~0 for dated editions. An edition
+        // now stays active until the ADMIN closes it (status completed /
+        // archived — OfferingStatus::adminClosedValues; stored status only
+        // changes by admin action, there is no auto-recompute cron). Editions
+        // without a status meta row count as active (defensive: a missing row
+        // must never hide live work).
         $prefix = $this->getMetaPrefix();
+        $closed = \Stride\Domain\OfferingStatus::adminClosedValues();
+        $closedIn = implode(',', array_fill(0, count($closed), '%s'));
 
         $ids = $wpdb->get_col($wpdb->prepare(
             "SELECT p.ID FROM {$wpdb->posts} p
-             LEFT JOIN {$wpdb->postmeta} pm_start
-                    ON p.ID = pm_start.post_id AND pm_start.meta_key = '{$prefix}start_date'
+             LEFT JOIN {$wpdb->postmeta} pm_status
+                    ON p.ID = pm_status.post_id AND pm_status.meta_key = '{$prefix}status'
              WHERE p.post_type = %s AND p.post_status = 'publish'
-               AND (pm_start.meta_value >= %s OR pm_start.meta_value IS NULL)",
-            EditionCPT::POST_TYPE,
-            $cutoff,
+               AND (pm_status.meta_value IS NULL OR pm_status.meta_value NOT IN ({$closedIn}))",
+            array_merge([EditionCPT::POST_TYPE], $closed),
         ));
 
         return array_map('intval', $ids);
+    }
+
+    /**
+     * All published edition ids — the corpus the admin effective-status
+     * filter resolves over (AdminAPIController::effectiveStatusEditionIds).
+     * One indexed scan of wp_posts; editions number in the hundreds.
+     *
+     * @return list<int>
+     */
+    public function findPublishedIds(): array
+    {
+        global $wpdb;
+
+        $ids = $wpdb->get_col($wpdb->prepare(
+            "SELECT ID FROM {$wpdb->posts} WHERE post_type = %s AND post_status = 'publish'",
+            EditionCPT::POST_TYPE,
+        ));
+
+        return array_map('intval', $ids);
+    }
+
+    /**
+     * Of the given edition ids, return the subset that has a PLANNED date —
+     * a non-empty start_date meta. Owns the start_date meta vocabulary
+     * (INV-3: the CPT's field set is the schema; consumers ask the repo, they
+     * don't hardcode `_ntdst_*` keys). Consumed by WorklistQueueResolver's
+     * interest_to_invite queue: a formerly dateless interest anchor that now
+     * carries a date means its interest rows can be invited.
+     *
+     * @param  list<int> $editionIds
+     * @return list<int>  The dated subset, in input order.
+     */
+    public function filterIdsWithStartDate(array $editionIds): array
+    {
+        $editionIds = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if ($editionIds === []) {
+            return [];
+        }
+
+        $metaKey   = $this->getMetaPrefix() . 'start_date';
+        $startMeta = \Stride\Infrastructure\BatchQueryHelper::batchGetPostMeta($editionIds, [$metaKey]);
+
+        return array_values(array_filter(
+            $editionIds,
+            static function (int $editionId) use ($startMeta, $metaKey): bool {
+                $startDate = $startMeta[$editionId][$metaKey] ?? null;
+                return is_string($startDate) && trim($startDate) !== '';
+            },
+        ));
     }
 
     /**
@@ -512,9 +591,13 @@ final class EditionRepository extends AbstractRepository
      * @param string     $tagJoin      Optional taxonomy JOIN fragment ('' if none).
      * @return array<int, object{ID: int, post_title: string, start_date: ?string}>
      */
-    public function findAdminListRows(string $whereClause, array $params, string $tagJoin, int $limit, int $offset): array
+    public function findAdminListRows(string $whereClause, array $params, string $tagJoin, int $limit, int $offset, string $order = 'ASC'): array
     {
         global $wpdb;
+
+        // Direction whitelist — never interpolate caller input into ORDER BY.
+        // NULL-last stays put either way (dateless anchors close the list).
+        $order = strtoupper($order) === 'DESC' ? 'DESC' : 'ASC';
 
         $params[] = $limit;
         $params[] = $offset;
@@ -525,7 +608,7 @@ final class EditionRepository extends AbstractRepository
              LEFT JOIN {$wpdb->postmeta} pm_start ON p.ID = pm_start.post_id AND pm_start.meta_key = '_ntdst_start_date'
              {$tagJoin}
              WHERE {$whereClause}
-             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value ASC
+             ORDER BY pm_start.meta_value IS NULL, pm_start.meta_value {$order}
              LIMIT %d OFFSET %d",
             ...$params,
         ));
@@ -573,18 +656,22 @@ final class EditionRepository extends AbstractRepository
      * One paged page of admin AGENDA-view session rows (session + edition + date).
      *
      * Companion to countAgendaRows — owns the $wpdb execution moved out of
-     * getEditionsAgendaView (INV-3). The ORDER BY (session date ASC, then
-     * edition id ASC) is reproduced VERBATIM. $limit/$offset are appended as the
-     * final two placeholders, matching the pre-extraction param order.
+     * getEditionsAgendaView (INV-3). ORDER BY session date ($order, whitelist
+     * ASC|DESC — DESC serves the scope=all "most recent first" read), then
+     * edition id ASC. $limit/$offset are appended as the final two
+     * placeholders, matching the pre-extraction param order.
      *
      * @param string      $whereClause  Pre-built, placeholdered WHERE body.
      * @param list<mixed> $params       Bound params matching the WHERE placeholders.
      * @param string      $tagJoin      Optional taxonomy JOIN fragment ('' if none).
      * @return array<int, object{session_id: int, session_title: string, edition_id: int, edition_title: string, session_date: ?string}>
      */
-    public function findAgendaRows(string $whereClause, array $params, string $tagJoin, int $limit, int $offset): array
+    public function findAgendaRows(string $whereClause, array $params, string $tagJoin, int $limit, int $offset, string $order = 'ASC'): array
     {
         global $wpdb;
+
+        // Direction whitelist — never interpolate caller input into ORDER BY.
+        $order = strtoupper($order) === 'DESC' ? 'DESC' : 'ASC';
 
         $params[] = $limit;
         $params[] = $offset;
@@ -599,7 +686,7 @@ final class EditionRepository extends AbstractRepository
              INNER JOIN {$wpdb->postmeta} pm_date ON s.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
              {$tagJoin}
              WHERE {$whereClause}
-             ORDER BY pm_date.meta_value ASC, pm_edition.meta_value ASC
+             ORDER BY pm_date.meta_value {$order}, pm_edition.meta_value ASC
              LIMIT %d OFFSET %d",
             ...$params,
         ));

@@ -99,6 +99,36 @@ class EditionService extends AbstractService implements EditionQueryInterface
         return $registered < $capacity;
     }
 
+    /**
+     * Batch variant of hasAvailableSpots() — SAME rule (capacity 0 =
+     * unlimited; anything else, incl. a malformed negative meta, requires
+     * occupancy < capacity), one occupancy query for the whole set instead
+     * of per-edition getRegisteredCount round-trips. The Vandaag waitlist
+     * queue consumes this; the decision must never be re-implemented at a
+     * call site (the F-V6 drift class).
+     *
+     * @param array<int> $editionIds
+     * @return array<int, bool> edition id => has free spots
+     */
+    public function hasAvailableSpotsBatch(array $editionIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        if (empty($ids)) {
+            return [];
+        }
+
+        $occupied = \Stride\Infrastructure\BatchQueryHelper::batchGetRegistrationCounts($ids);
+
+        $spots = [];
+        foreach ($ids as $editionId) {
+            $capacity = $this->getCapacity($editionId);
+            $spots[$editionId] = $capacity === 0
+                || ($capacity > 0 && ($occupied[$editionId] ?? 0) < $capacity);
+        }
+
+        return $spots;
+    }
+
     public function getRegisteredCount(int $editionId): int
     {
         $cacheKey = 'stride_edition_reg_count_' . $editionId;
@@ -107,13 +137,10 @@ class EditionService extends AbstractService implements EditionQueryInterface
             return (int) $cached;
         }
 
-        global $wpdb;
-        $table = $wpdb->prefix . 'vad_registrations';
-
-        $count = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$table} WHERE edition_id = %d AND status IN ('confirmed', 'completed', 'pending')",
-            $editionId,
-        ));
+        // One occupancy SQL definition (F-V6): delegate to the batch helper
+        // (enum-derived seat-holding statuses) instead of a third hand-rolled
+        // copy of the same COUNT.
+        $count = \Stride\Infrastructure\BatchQueryHelper::batchGetRegistrationCounts([$editionId])[$editionId] ?? 0;
 
         set_transient($cacheKey, $count, 60);
 
@@ -280,15 +307,21 @@ class EditionService extends AbstractService implements EditionQueryInterface
      * The calendar predicate behind isPast(), on prefetched date values.
      *
      * end_date wins; start_date is the fallback; no dates at all → not past.
+     *
+     * PUBLIC so row shapers (AdminAPIController's isPast flag) delegate here
+     * instead of forking the empty-string guards — the row flag and the
+     * effective-status badge must come from ONE predicate. Site-TZ
+     * current_time (the one time basis, F-V9): the old server-TZ date() made
+     * the badge disagree with every current_time-based read around midnight.
      */
-    private static function isPastDates(?string $endDate, ?string $startDate): bool
+    public static function isPastDates(?string $endDate, ?string $startDate): bool
     {
         $reference = $endDate ?: $startDate;
         if (!$reference) {
             return false;
         }
 
-        return strtotime($reference) < strtotime(date('Y-m-d'));
+        return strtotime($reference) < strtotime(current_time('Y-m-d'));
     }
 
     /**
@@ -412,6 +445,39 @@ class EditionService extends AbstractService implements EditionQueryInterface
         }
 
         return $out;
+    }
+
+    /**
+     * All published edition ids whose EFFECTIVE status equals $status — the
+     * admin status-filter read (F-E2). Owns both the vocabulary and the
+     * resolution strategy: the effective layer's rules cannot be expressed in
+     * SQL (INV-7 — one decision engine, never forked), so the corpus is
+     * resolved in PHP via the batch read. Returns the full corpus map
+     * alongside the ids so the caller's badge shaping can REUSE it instead of
+     * resolving a second time in the same request.
+     *
+     * Corpus note: editions number in the hundreds (the CR-2 typeahead
+     * precedent); getEffectiveStatuses batches its reads so the cost is a
+     * handful of queries, not one per edition.
+     *
+     * @return array{ids: list<int>, statuses: array<int, OfferingStatus>}
+     */
+    public function findIdsByEffectiveStatus(OfferingStatus $status): array
+    {
+        $ids = $this->repository->findPublishedIds();
+        if ($ids === []) {
+            return ['ids' => [], 'statuses' => []];
+        }
+
+        $statuses = $this->getEffectiveStatuses($ids);
+
+        return [
+            'ids' => array_values(array_filter(
+                $ids,
+                static fn(int $id): bool => ($statuses[$id] ?? null) === $status,
+            )),
+            'statuses' => $statuses,
+        ];
     }
 
     /**

@@ -24,6 +24,12 @@ use Stride\Modules\Trajectory\TrajectoryCPT;
  */
 final class AdminRegistrationQueryService
 {
+    /**
+     * Ceiling for "Exporteer huidige weergave" (F-A9) — far above any real
+     * filtered view; hitting it logs a trip-wire (no silent caps).
+     */
+    private const EXPORT_MAX_ROWS = 10000;
+
     public function __construct(
         private readonly RegistrationRepository $registrations,
         private readonly QuoteRepository $quotes,
@@ -46,6 +52,11 @@ final class AdminRegistrationQueryService
      */
     public function getGridPage(array $params): array|\WP_Error
     {
+        $params = $this->applyScopePins($params);
+        if (is_wp_error($params)) {
+            return $params;
+        }
+
         $groupBy = $params['group_by'] ?? null;
 
         $page = $groupBy !== null
@@ -60,10 +71,128 @@ final class AdminRegistrationQueryService
         // current filter set MINUS the status filter itself, so the pipeline
         // funnel shows the live distribution under the OTHER active filters
         // (F4 acceptance). Independent of the flat/grouped shape — same key on
-        // both. Existing envelope keys are unchanged.
-        $page['statusCounts'] = $this->statusCounts($params);
+        // both. Existing envelope keys are unchanged. The flat total is passed
+        // so a queue view's single-bar funnel can be derived instead of
+        // re-shipping the whole queue id-set in a second GROUP BY query.
+        $page['statusCounts'] = $this->statusCounts(
+            $params,
+            $groupBy === null ? (int) $page['total'] : null,
+        );
 
         return $page;
+    }
+
+    /**
+     * Every composed row matching the CURRENT grid predicate — the read
+     * behind "Exporteer huidige weergave" (F-A9). Routes through the SAME
+     * applyScopePins + queryForGrid + composeFromRows pipeline as the grid
+     * read, so the CSV can never contain rows the admin was not looking at
+     * (or miss rows they were). Pages internally in repo-cap chunks; bounded
+     * by EXPORT_MAX_ROWS with a trip-wire log (no silent caps).
+     *
+     * @param  array<string,mixed> $params  Pre-sanitised filter params
+     *                                      (page/per_page/group_by ignored).
+     * @return array{items: array<int,array<string,mixed>>, total: int, clipped: bool}|\WP_Error
+     */
+    public function getExportRows(array $params): array|\WP_Error
+    {
+        $params = $this->applyScopePins($params);
+        if (is_wp_error($params)) {
+            return $params;
+        }
+        unset($params['group_by']);
+        $params['per_page'] = 100; // queryForGrid's hard page cap
+
+        $items = [];
+        $total = 0;
+        $page = 1;
+        while (true) {
+            $params['page'] = $page;
+            $result = $this->registrations->queryForGrid($params);
+            $total = (int) $result['total'];
+            $rows = $result['rows'];
+            if (empty($rows)) {
+                break;
+            }
+
+            $regIds = array_map(static fn($row) => (int) $row->id, $rows);
+            $offerteByReg = $this->resolveOfferteStatuses($regIds);
+            $items = array_merge($items, $this->composeFromRows($rows, $offerteByReg));
+
+            if (count($items) >= $total || count($items) >= self::EXPORT_MAX_ROWS) {
+                break;
+            }
+            $page++;
+        }
+
+        $clipped = $total > self::EXPORT_MAX_ROWS;
+        if ($clipped) {
+            ntdst_log('admin')->warning('Grid export clipped at the row ceiling — the file is incomplete', [
+                'total'   => $total,
+                'ceiling' => self::EXPORT_MAX_ROWS,
+            ]);
+            $items = array_slice($items, 0, self::EXPORT_MAX_ROWS);
+        }
+
+        return ['items' => $items, 'total' => $total, 'clipped' => $clipped];
+    }
+
+    /**
+     * Resolve the queue pin and the default active-edition scope into the
+     * server-owned id-set filter keys — THE one place scope enters a grid
+     * filter set. Every consumer of buildGridFilters that starts from CLIENT
+     * filter input must route through here first: the grid read (getGridPage)
+     * AND the bulk select-all expansion (BulkRunner::resolveBulkIds). Skipping
+     * this step made a select-all expand UNSCOPED over the whole registrations
+     * table while the grid showed a scoped subset — mutating rows the admin
+     * never saw (review 2026-07-14, blast-radius regression).
+     *
+     * Two injections, mirroring what the grid read renders:
+     *  - queue → queue_ids: the SAME id-set the Vandaag card counted
+     *    (WorklistQueueResolver — one definition, RC-2). The ids already
+     *    encode the active-edition scope, so the scope pin is skipped.
+     *    An unknown queue key is a hard 400 — never a silent no-filter.
+     *  - default 'active' scope → active_edition_ids: resolved ONCE (memoized
+     *    in the resolver). Omitted for edition_scope=all, an explicit
+     *    edition_id (a picked edition is reachable regardless of status), or
+     *    a queue pin. The repository carries no scope SQL of its own.
+     *
+     * @param  array<string,mixed> $params  Client filter/request params.
+     * @return array<string,mixed>|\WP_Error $params with queue_ids/active_edition_ids injected.
+     */
+    public function applyScopePins(array $params): array|\WP_Error
+    {
+        if (!empty($params['queue'])) {
+            $resolver = ntdst_get(WorklistQueueResolver::class);
+            $queueIds = $resolver->idsForQueue((string) $params['queue']);
+            if ($queueIds === null) {
+                return new \WP_Error(
+                    'invalid_queue',
+                    __('Onbekende wachtrij.', 'stride'),
+                    ['status' => 400],
+                );
+            }
+            $params['queue_ids'] = $queueIds;
+            $params['edition_scope'] = 'all';
+        }
+
+        $editionScope = (string) ($params['edition_scope'] ?? 'active');
+        if (
+            $editionScope !== 'all'
+            && empty($params['edition_id'])
+            && !array_key_exists('queue_ids', $params)
+        ) {
+            $params['active_edition_ids'] = ntdst_get(WorklistQueueResolver::class)->activeEditionIds();
+        }
+
+        // Trip-wire marker: buildGridFilters warns loudly when it receives a
+        // filter set that never passed through here — the repo API cannot
+        // enforce scope by construction (the resolver DI would cycle), so an
+        // unscoped call from a future surface must at least be a loud log,
+        // never a silent whole-table read (the 2026-07-14 blast-radius class).
+        $params['scope_pins_applied'] = true;
+
+        return $params;
     }
 
     /**
@@ -73,13 +202,31 @@ final class AdminRegistrationQueryService
      * structured columns through the repo, the status filter dropped there), then
      * zero-fills every RegistrationStatus so each funnel chip always has a number.
      *
-     * @param  array<string,mixed> $params  The grid request params.
+     * QUEUE SHORTCUT: a queue view's funnel is derivable — every queue's
+     * id-set is status-homogeneous (WorklistQueueResolver::statusForQueue,
+     * contract-tested) and the queue clears the status filter, so the GROUP BY
+     * over the pinned ids could only ever return one row equal to the flat
+     * total the page already computed. Deriving it skips re-shipping the
+     * whole queue id-set as an IN() list a second time per interaction.
+     *
+     * @param  array<string,mixed> $params    The grid request params (post-applyScopePins).
+     * @param  int|null            $flatTotal The flat path's total, when known (null in grouped mode).
      * @return array<string,int>  status value => count, all enum cases present.
      */
-    private function statusCounts(array $params): array
+    private function statusCounts(array $params, ?int $flatTotal = null): array
     {
         if (!RegistrationTable::exists()) {
             return $this->zeroStatusCounts();
+        }
+
+        // Only when no status filter composes on top (the funnel drops the
+        // status filter, the flat total would not — a client never sends both,
+        // but the derivation must not silently diverge if one ever does).
+        if ($flatTotal !== null && !empty($params['queue']) && empty($params['status'])) {
+            $queueStatus = WorklistQueueResolver::statusForQueue((string) $params['queue']);
+            if ($queueStatus !== null) {
+                return array_merge($this->zeroStatusCounts(), [$queueStatus => $flatTotal]);
+            }
         }
 
         $breakdown = $this->registrations->statusBreakdown($params);
@@ -186,6 +333,24 @@ final class AdminRegistrationQueryService
             update_meta_cache('user', $userIds);
         }
 
+        // Lead rows whose e-mail belongs to an EXISTING account (safer identity
+        // variant: such rows stay leads until promotion — the admin must see
+        // the match to act on it). One batched query over this page's lead
+        // e-mails, never per-row lookups.
+        $leadEmails = [];
+        foreach ($rows as $row) {
+            $userId = (int) $row->user_id;
+            // Same lead predicate as $isAnon below: no positive user record
+            // (batchGetUsers seeds misses with null, so isset() covers both
+            // the missing and the deleted-user case).
+            if (($userId <= 0 || !isset($users[$userId])) && !empty($row->lead_email)) {
+                $leadEmails[] = (string) $row->lead_email;
+            }
+        }
+        $accountsByEmail = !empty($leadEmails)
+            ? BatchQueryHelper::batchGetUsersByEmail($leadEmails)
+            : [];
+
         // Session counts per edition (for attendance %).
         // Delegated to SessionRepository (INV-3): dynamic meta prefix, published-only,
         // all input ids present (0 default) — no raw $wpdb / hardcoded meta key here.
@@ -211,19 +376,23 @@ final class AdminRegistrationQueryService
             $regId     = (int) $row->id;
 
             $user   = $userId > 0 ? ($users[$userId] ?? null) : null;
-            $isAnon = $userId <= 0;
+            // Anonymous = no resolvable user RECORD, not merely user_id <= 0:
+            // a registration whose WP user was since deleted must fall back to
+            // the lead columns / '(anoniem)' exactly like the roster does —
+            // keying on the id alone rendered those rows with a blank Naam.
+            $isAnon = $user === null;
 
             // Identity. Logged-in rows resolve from the joined user record.
-            // Anonymous interest/waitlist rows (user_id 0/NULL) have no user
-            // record — fall back to the name/email captured in enrollment_data,
-            // mirroring the per-edition roster path (INV-3: identical decode).
+            // Anonymous rows (no account, or a deleted account) fall back to
+            // the denormalized lead identity columns (v5), stamped by the
+            // SAME extractor the search columns use.
             if ($isAnon) {
                 $identity = $this->resolveAnonymousIdentity($row);
                 $name  = $identity['name'];
                 $email = $identity['email'];
             } else {
-                $name  = $user?->display_name ?? '';
-                $email = $user?->user_email ?? '';
+                $name  = $user->display_name ?? '';
+                $email = $user->user_email ?? '';
             }
 
             // Status
@@ -268,6 +437,19 @@ final class AdminRegistrationQueryService
             $editionPost  = $editionId > 0 ? ($editions[$editionId] ?? null) : null;
             $editionTitle = $editionPost?->post_title ?? '';
 
+            // A lead whose e-mail matches an existing account (not bound —
+            // binding only happens for self-submission or at promotion).
+            $accountMatch = null;
+            if ($isAnon && !empty($row->lead_email)) {
+                $matched = $accountsByEmail[strtolower((string) $row->lead_email)] ?? null;
+                if ($matched !== null) {
+                    $accountMatch = [
+                        'id'   => (int) $matched->ID,
+                        'name' => (string) ($matched->display_name ?? ''),
+                    ];
+                }
+            }
+
             $items[] = [
                 'id'           => $regId,
                 'user'         => [
@@ -276,6 +458,7 @@ final class AdminRegistrationQueryService
                     'email' => $email,
                 ],
                 'anonymous'    => $isAnon,
+                'accountMatch' => $accountMatch,
                 'edition'      => [
                     'id'    => $editionId,
                     'title' => $editionTitle,
@@ -298,39 +481,22 @@ final class AdminRegistrationQueryService
     }
 
     /**
-     * Resolve the captured name/email for an anonymous (user_id 0/NULL) row
-     * from its enrollment_data JSON.
+     * Resolve the captured name/email for an anonymous row from the
+     * denormalized lead_name/lead_email columns (schema v5).
      *
-     * Anonymous interest/waitlist submissions store the submitter's identity
-     * in the enrollment_data envelope: enrollment_data[<stage>]['data']['name'|'email'],
-     * where <stage> equals the row's status ('interest' or 'waitlist').
+     * Thin delegate: the '(anoniem)' fallback rule lives ONCE on
+     * RegistrationRepository::presentLeadIdentity (INV-3 — the edition roster
+     * reads the same presenter, so one row can never render two identities
+     * across admin surfaces). The columns are stamped on every write path AND
+     * backfilled via ONE extractor, so this read shares the exact identity
+     * definition the grid SEARCH matches against.
      *
-     * Decode semantics are IDENTICAL to the per-edition roster path
-     * (AdminAPIController::formatEditionRoster) — INV-3: the two reads of this
-     * one concern must not drift. Same envelope path, same '(anoniem)' / ''
-     * defaults.
-     *
-     * @param  object $row  Grid row with ->status and ->enrollment_data (raw JSON string|null).
+     * @param  object $row  Grid row with ->lead_name / ->lead_email.
      * @return array{name:string,email:string}
      */
     private function resolveAnonymousIdentity(object $row): array
     {
-        $stageData = [];
-        $raw = $row->enrollment_data ?? '';
-        if (is_string($raw) && $raw !== '') {
-            $decoded = json_decode($raw, true);
-            if (is_array($decoded)) {
-                // status maps to the stage key (interest/waitlist).
-                // Wrapped shape: $decoded[$status]['data'][field].
-                $stageEnvelope = $decoded[$row->status] ?? [];
-                $stageData = is_array($stageEnvelope['data'] ?? null) ? $stageEnvelope['data'] : [];
-            }
-        }
-
-        return [
-            'name'  => $stageData['name'] ?? '(anoniem)',
-            'email' => $stageData['email'] ?? '',
-        ];
+        return RegistrationRepository::presentLeadIdentity($row);
     }
 
     // =========================================================================
@@ -420,6 +586,26 @@ final class AdminRegistrationQueryService
             }
         }
 
+        // Server-resolved group display labels (F-G10 tail): the client used to
+        // resolve edition group headers against its capped edition-options
+        // list, degrading unlisted editions to "Editie #123". One batched read
+        // over THIS page's group values instead.
+        $groupLabels = [];
+        if ($groupBy === 'edition_id') {
+            $editionIds = array_values(array_filter(array_map(
+                static fn($row) => (int) ($row->group_value ?? 0),
+                $aggRows,
+            )));
+            $editionPosts = !empty($editionIds)
+                ? BatchQueryHelper::batchGetPosts($editionIds, EditionCPT::POST_TYPE)
+                : [];
+            foreach ($editionIds as $editionId) {
+                $groupLabels[$editionId] = isset($editionPosts[$editionId])
+                    ? (string) $editionPosts[$editionId]->post_title
+                    : sprintf(__('Editie #%d', 'stride'), $editionId);
+            }
+        }
+
         // Compose aggregate items, attaching each group's composed child rows.
         $items = [];
         foreach ($aggRows as $row) {
@@ -444,6 +630,9 @@ final class AdminRegistrationQueryService
 
             $items[] = [
                 'group_value'        => $row->group_value,
+                // Server-resolved header label (edition groups only — status
+                // labels are a closed client enum, company has no name entity).
+                'group_label'        => $groupLabels[(int) ($row->group_value ?? 0)] ?? null,
                 'count'              => $count,
                 'pct_afgerond'       => $pctAfgerond,
                 'avg_attendance_pct' => null,  // Deferred: cross-edition avg requires per-row resolution

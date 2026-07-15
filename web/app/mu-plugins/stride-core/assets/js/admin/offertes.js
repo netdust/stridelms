@@ -6,13 +6,13 @@
    (paging/filter server-owned) and re-loads on every filter/page change. It
    owns its own loading / empty / error state.
 
-   ENVELOPE CAVEAT (Phase-1 deferred, backend FROZEN): AdminQuoteService::
-   getQuoteList returns the normal envelope { items, total, page, perPage,
-   totalPages }, BUT on a zero-USER-search short-circuit it returns
-   { data:[], total:0, … } (the `data` key, NOT `items`). We TOLERATE BOTH
-   client-side via the pure quoteRows() normalizer below — we do NOT touch the
-   backend to normalize. quoteRows() is the only branching logic on this surface
-   and is exported (UMD tail) for the Tier-A unit test.
+   ENVELOPE: AdminQuoteService::getQuoteList returns ONE envelope on every
+   path — { items, total, page, perPage, totalPages }. (The Phase-1 zero-user-
+   search short-circuit that returned { data:[], … } was removed at the
+   Offertes slice, F-A8/F-O2 — search now also matches quote numbers, so the
+   zero-match branch is gone.) The pure quoteRows() normalizer below stays as
+   DEFENSIVE tolerance for both shapes and is exported (UMD tail) for the
+   Tier-A unit test.
 
    Quote `status` is WORKFLOW status (Draft/Sent/Exported/Cancelled) — NOT
    payment (Stride does not track payment; Exact Online owns invoicing). The
@@ -40,10 +40,11 @@
   'use strict';
 
   /* ---- envelope normalizer (PURE, Tier-A) --------------------------------
-     The backend emits `items` normally but `data` on the zero-user-search
-     short-circuit (Phase-1 deferred; backend frozen). Tolerate BOTH, in that
-     precedence (items wins if both somehow present), and degrade an
-     absent/malformed payload to [] — never a crash, never undefined rows. */
+     The backend emits ONE envelope (`items`) on every path since the Offertes
+     slice removed the zero-user-search short-circuit (F-A8). This normalizer
+     stays as DEFENSIVE tolerance only: it still accepts the legacy `data` key
+     (items wins if both somehow present) and degrades an absent/malformed
+     payload to [] — never a crash, never undefined rows. */
   function quoteRows(payload) {
     if (!payload || typeof payload !== 'object') return [];
     if (Array.isArray(payload.items)) return payload.items;
@@ -57,6 +58,10 @@
      only. Unknown/empty → 'cancelled' (the neutral slate hue), never an
      arbitrary class. */
   const QUOTE_BADGE = {
+    // DELIBERATE cross-surface exception: 'draft' is slate on the edition/
+    // trajectory tables (an inert concept), but a quote draft labels as
+    // "In behandeling" — work AWAITING the admin — so it takes the amber
+    // 'pending' hue on purpose. Not drift; do not "fix" for consistency.
     draft:     'pending',    // In behandeling — amber/awaiting
     sent:      'confirmed',  // Verzonden — out the door
     exported:  'completed',  // Verwerkt — done in Exact
@@ -80,22 +85,23 @@
          (same vocabulary the Edities surface uses). */
       tagOptions: [],
 
-      /* filter state — every change re-fetches. Search + Tag + Date only
-         (Status removed — mirrors the Edities filter set). */
-      filters: { q: '', tag: '', dateFrom: '', dateTo: '' },
+      /* filter state — every change re-fetches. Search (nummer/klant) +
+         Status (QuoteStatus dropdown, server-matched on the stored workflow
+         status — the same value the badge renders) + Tag + Date. */
+      filters: { q: '', status: '', tag: '', dateFrom: '', dateTo: '' },
 
-      /* per-surface load state */
+      /* per-surface load state. _listReq is a monotonic request token (the
+         grid/trajecten pattern): with search + status + tag + date all
+         triggering loads, a slow earlier response must never overwrite a
+         faster later one. */
       loading: false,
       error: '',
+      _listReq: 0,
 
       /* flatpickr instance (set in init, used by clearAllFilters). */
       _fp: null,
 
       init() {
-        // The Tag vocabulary is independent of the quote load — fetch it once,
-        // regardless of lazy-load, so the dropdown is populated on first paint.
-        this.loadFilterOptions();
-
         // The single date field is a flatpickr range picker (single date OR
         // range). Instantiate on the x-ref input AFTER it exists. Same pattern
         // as the Edities surface.
@@ -108,8 +114,13 @@
           });
         }
 
-        // I-1: load the FIRST time offertes becomes active, not on mount.
-        window.WS.lazyLoad(this, 'offertes', () => this.load(1));
+        // I-1: load the FIRST time offertes becomes active, not on mount. The
+        // Tag vocabulary rides the same gate (the F-E3 lesson — an eager fetch
+        // pays for a surface the admin may never open).
+        window.WS.lazyLoad(this, 'offertes', () => {
+          this.loadFilterOptions();
+          this.load(1);
+        });
       },
 
       /* Fetch the Tag vocabulary ONCE. Only the `.tag` array (free-form admin
@@ -138,6 +149,10 @@
           this.filters.dateFrom = fmt(dates[0]);
           this.filters.dateTo = fmt(dates[1]);
         } else {
+          // No-op when already both-empty — the guard clearAllFilters relies
+          // on (its _fp.clear() fires this handler; without the guard every
+          // 'Filters wissen' double-fetched — the edities review lesson).
+          if (!this.filters.dateFrom && !this.filters.dateTo) return;
           this.filters.dateFrom = '';
           this.filters.dateTo = '';
         }
@@ -146,35 +161,76 @@
 
       async load(page) {
         if (page != null) this.page = page;
+        const req = ++this._listReq;
         this.loading = true;
         this.error = ''; // clear at the TOP so a successful reload recovers (cluster-B lesson)
 
-        const params = new URLSearchParams();
+        // ONE filter-param source shared with the CSV export (F-A9) — the
+        // exported file provably matches the predicate on screen.
+        const params = this.filterParams();
         params.set('page', String(this.page));
         params.set('per_page', String(this.perPage));
-        const f = this.filters;
-        if (f.q) params.set('search', f.q);
-        if (f.tag) params.set('tag', String(f.tag));
-        if (f.dateFrom) params.set('date_from', f.dateFrom);
-        if (f.dateTo) params.set('date_to', f.dateTo);
 
         try {
           const data = await this.api(`/admin/quotes?${params.toString()}`);
-          this.rows = quoteRows(data); // tolerate items|data envelope
+          if (req !== this._listReq) return; // superseded mid-flight — drop stale response
+          this.rows = quoteRows(data); // defensive envelope tolerance
           this.total = (data && data.total) || 0;
           this.page = (data && data.page) || 1;
           this.perPage = (data && data.perPage) || this.perPage;
           this.pageCount = (data && data.totalPages) || 1;
+          // Keep-page reload clamp (the trajecten precedent): a background
+          // refresh can land past the shrunk result set — clamp + refetch.
+          if (this.page > this.pageCount) {
+            this.page = this.pageCount;
+            return this.load();
+          }
         } catch (e) {
+          if (req !== this._listReq) return;
           this.error = (e && e.message) ? e.message : 'Kon de offertes niet laden.';
           this.rows = [];
           this.total = 0;
         } finally {
-          this.loading = false;
+          if (req === this._listReq) this.loading = false;
         }
       },
 
-      reload() { this.load(1); },
+      /* Background/refresh reload keeps the CURRENT page — a ws-refresh
+         after a lens mutation must never snap the admin back to page 1
+         (their place in the list is work state). */
+      /* The CURRENT VIEW's filter predicate — consumed by load() (which adds
+         paging) and by the export URL, so the two can never drift (F-A9). */
+      filterParams() {
+        const params = new URLSearchParams();
+        const f = this.filters;
+        if (f.q) params.set('search', f.q);
+        if (f.status) params.set('status', f.status);
+        if (f.tag) params.set('tag', String(f.tag));
+        if (f.dateFrom) params.set('date_from', f.dateFrom);
+        if (f.dateTo) params.set('date_to', f.dateTo);
+        return params;
+      },
+
+      get canManage() { return !!(window.StrideConfig || {}).canManage; },
+
+      /* Exact-handoff CSV of the exact predicate on screen (F-A9), via the
+         shared WS.download (header-auth fetch + blob — an expired nonce
+         fails SOFT; a ?_wpnonce navigation nuked the workspace into a raw
+         JSON 403 after an overnight tab). Error display: window.alert — the
+         3d decision. This surface has no toast zone, the failure is rare and
+         user-initiated (a click), and a one-off toast system for it would be
+         over-engineering. The expired-nonce case additionally raises the
+         shell's persistent Vernieuwen banner (F-S5), so the alert is never
+         the only signal for the one failure that needs action. */
+      async exportCurrentView() {
+        try {
+          await window.WS.download(`/admin/quotes/export?${this.filterParams().toString()}`);
+        } catch (e) {
+          window.alert((e && e.message) || 'Export mislukt.');
+        }
+      },
+
+      reload() { this.load(); },
       onFilterChange() { this.load(1); },
       onSearchChange() { this.load(1); },
       goPage(p) { if (p >= 1 && p <= this.pageCount && p !== this.page) this.load(p); },
@@ -182,37 +238,45 @@
 
       get hasFilters() {
         const f = this.filters;
-        return !!(f.q || f.tag || f.dateFrom || f.dateTo);
+        return !!(f.q || f.status || f.tag || f.dateFrom || f.dateTo);
       },
       clearAllFilters() {
-        this.filters = { q: '', tag: '', dateFrom: '', dateTo: '' };
-        // clear() fires onChange([]) → guarded to both-empty; clear the picker
-        // first, then load once below to avoid a double load.
+        this.filters = { q: '', status: '', tag: '', dateFrom: '', dateTo: '' };
+        // clear() fires onChange([]) → its cleared branch no-ops when both
+        // dates are already empty (they are — just reset), so only the
+        // load(1) below runs. One fetch per reset.
         if (this._fp) this._fp.clear();
         this.load(1);
       },
 
       get rangeFrom() { return this.total === 0 ? 0 : (this.page - 1) * this.perPage + 1; },
       get rangeTo() { return Math.min(this.page * this.perPage, this.total); },
-      pageList() {
-        const last = this.pageCount, cur = this.page, out = [];
-        if (last <= 7) { for (let i = 1; i <= last; i++) out.push(i); return out; }
-        out.push(1);
-        if (cur > 3) out.push('…');
-        for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) out.push(i);
-        if (cur < last - 2) out.push('…');
-        out.push(last);
-        return out;
-      },
+      /* Delegates to THE shared pager model (WS.pageList in shell.js) — the
+         five per-surface copies of the ellipsis rule are gone (3d). */
+      pageList() { return window.WS.pageList(this.page, this.pageCount); },
 
       badgeClass(status) { return quoteBadgeClass(status); },
 
-      /* row → existing quote edit screen (WP post edit; the server already
-         sends editUrl = post.php?post=<id>&action=edit). */
+      /* row → the quote WORKBENCH (the WP edit screen with the actions
+         metabox: send, status transitions, voucher, PDF regenerate, locking).
+         The list deliberately does NOT duplicate those write flows (F-O1
+         decision) — it links to them honestly via the visible Bewerken
+         action; the row click is the same navigation. */
       openRow(r) { if (r && r.editUrl) window.location.href = r.editUrl; },
+
+      /* roster-style dossier jump: the quote's customer in the case view.
+         stopPropagation so the row's openRow() doesn't also navigate away. */
+      openPerson(r, ev) {
+        if (ev && typeof ev.stopPropagation === 'function') ev.stopPropagation();
+        const id = r && r.user && Number(r.user.id);
+        if (id) this.switchView('dossier', { user: id });
+      },
 
       emptyTitle() {
         if (this.filters.q) return `Geen offertes voor "${this.filters.q}"`;
+        // Any other active filter (status/tag/date): the emptiness is
+        // filter-caused, not data-caused — say so.
+        if (this.hasFilters) return 'Geen offertes voor deze filters';
         return 'Geen offertes gevonden';
       },
     };

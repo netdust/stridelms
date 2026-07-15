@@ -64,7 +64,8 @@ final class EnrollmentEnrollLockTest extends TestCase
 
         $this->lms->shouldReceive('grantAccess')->andReturn(true)->byDefault();
 
-        $this->registrations->shouldReceive('findByEmailAndEdition')->andReturn(null)->byDefault();
+        // enroll()'s lead-adopt pre-check (interest AND waitlist leads).
+        $this->registrations->shouldReceive('findAnonymousForEmailAndEdition')->andReturn(null)->byDefault();
 
         $this->service = new EnrollmentService(
             $this->registrations,

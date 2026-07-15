@@ -12,10 +12,15 @@ namespace Stride\Admin;
  */
 final class AdminActivityMapper
 {
-    /** Actions that should be shown in the admin activity feed. */
+    /** Actions that should be shown in the admin activity FEED (curated —
+     *  the dossier timeline shows everything and relies on resolve() for
+     *  labels; this list only filters the Vandaag/topbar feed). */
     private const KNOWN_ACTIONS = [
         'registration.created',
+        'registration.confirmed',
         'registration.cancelled',
+        'registration.interest_registered',
+        'registration.waitlisted',
         'attendance.marked_present',
         'attendance.marked_absent',
         'attendance.marked_excused',
@@ -24,12 +29,19 @@ final class AdminActivityMapper
         'completion.certificate_issued',
         'quote.created',
         'quote.sent',
+        // quote.email_sent is deliberately NOT in the feed list: its text
+        // carries the customer's email address, and the /admin/activity feed
+        // is gated only by stride_view — the same read-only role the dossier
+        // blocks from quote data (canSeeSensitive). It still renders on the
+        // dossier timeline, which is stride_manage-gated.
+        'quote.cancelled',
+        'trajectory.enrolled',
         'impersonation.started',
         'user.created',
-        'user.updated',
         'user.deleted',
         'user.role_changed',
         'user.profile_updated',
+        'user.anonymised',
         'edition.created',
         'edition.updated',
         'auth.login',
@@ -70,6 +82,16 @@ final class AdminActivityMapper
 
         [$type, $text] = self::resolve($entry->action, $actorName, $subject, $context);
 
+        // Attribution for the dossier's per-registration timeline: registration
+        // events store entity_id = registration id; other events may carry
+        // registration_id/edition_id in context. The client previously had to
+        // PARSE the edition id out of target_url — structurally unreliable
+        // (quote URLs carry quote ids, completion URLs course ids — F-D7).
+        $entityType = (string) ($entry->entity_type ?? '');
+        $registrationId = $entityType === 'registration'
+            ? (int) ($entry->entity_id ?? 0)
+            : (int) ($context['registration_id'] ?? 0);
+
         return [
             'id'         => (int) $entry->id,
             'type'       => $type,
@@ -77,6 +99,8 @@ final class AdminActivityMapper
             'target_url' => self::targetUrl($entry->action, $context),
             'actor_name' => $actorName,
             'timestamp'  => strtotime($entry->created_at),
+            'registration_id' => $registrationId,
+            'edition_id' => (int) ($context['edition_id'] ?? 0),
         ];
     }
 
@@ -135,6 +159,24 @@ final class AdminActivityMapper
             'registration.cancelled'
                 => ['enrollment', "Inschrijving van {$name} voor {$editionLabel} is geannuleerd"],
 
+            'registration.confirmed'
+                => ['enrollment', "Inschrijving bevestigd voor {$editionLabel}"],
+
+            'registration.interest_registered'
+                => ['enrollment', "Interesse geregistreerd voor {$editionLabel}"],
+
+            'registration.waitlisted'
+                => ['enrollment', "Op de wachtlijst gezet voor {$editionLabel}"],
+
+            'registration.updated'
+                => ['enrollment', 'Inschrijving bijgewerkt'],
+
+            'enrollment.task_completed'
+                => ['enrollment', sprintf(
+                    __('Taak afgerond: %s', 'stride'),
+                    \Stride\Modules\Enrollment\EnrollmentCompletion::taskTypeLabel((string) ($context['task_type'] ?? '')),
+                )],
+
             'attendance.marked_present'
                 => ['attendance', self::attendanceText($context, $editionLabel, 'aanwezig')],
 
@@ -144,8 +186,27 @@ final class AdminActivityMapper
             'attendance.marked_excused'
                 => ['attendance', self::attendanceText($context, $editionLabel, 'verontschuldigd')],
 
+            'attendance.marked'
+                => ['attendance', self::attendanceText($context, $editionLabel, 'gemarkeerd')],
+
             'session.selections_updated'
                 => ['enrollment', "Sessies gekozen voor {$editionLabel}"],
+
+            'session.created'
+                => ['edition', $edition !== ''
+                    ? "Sessie toegevoegd aan {$edition}"
+                    : 'Sessie toegevoegd'],
+
+            'session.note_updated'
+                => ['edition', "Sessienotitie bijgewerkt — {$editionLabel}"],
+
+            'completion.attendance_complete'
+                => ['completion', "Aanwezigheid volledig voor {$editionLabel}"],
+
+            'completion.completed'
+                => ['completion', $edition !== ''
+                    ? "Alle taken afgerond voor {$edition}"
+                    : 'Alle taken afgerond'],
 
             'completion.course_completed'
                 => ['completion', $edition !== ''
@@ -157,13 +218,52 @@ final class AdminActivityMapper
                     ? "Certificaat uitgereikt aan {$name} voor {$edition}"
                     : "Certificaat uitgereikt aan {$name}"],
 
+            // NEUTRAL texts: $name is the ACTOR (the admin/system that acted),
+            // NOT the quote's customer — "aangemaakt voor {$name}" named the
+            // acting admin as the recipient. The customer is only reachable via
+            // context.user_id, which the feed does not resolve to a name.
             'quote.created'
                 => ['quote', $edition !== ''
-                    ? "Offerte aangemaakt voor {$name} — {$edition}"
-                    : "Offerte aangemaakt voor {$name}"],
+                    ? "Offerte aangemaakt — {$edition}"
+                    : __('Offerte aangemaakt', 'stride')],
 
             'quote.sent'
-                => ['quote', "Offerte verzonden naar {$name}"],
+                => ['quote', __('Offerte gemarkeerd als verzonden', 'stride')],
+
+            'quote.email_sent'
+                => ['quote', ($context['to'] ?? '') !== ''
+                    ? sprintf(__('Offerte per e-mail verzonden naar %s', 'stride'), $context['to'])
+                    : __('Offerte per e-mail verzonden', 'stride')],
+
+            'quote.cancelled'
+                => ['quote', __('Offerte geannuleerd', 'stride')],
+
+            'quote.pdf_regenerated'
+                => ['quote', __('Offerte-PDF opnieuw gegenereerd', 'stride')],
+
+            'quote.modifier_blocked'
+                => ['quote', __('Sessiewijziging geblokkeerd — offerte is vergrendeld', 'stride')],
+
+            'voucher.created'
+                => ['action', sprintf(__('Voucher %s aangemaakt', 'stride'), $context['code'] ?? '')],
+
+            'voucher.redeemed'
+                => ['action', sprintf(__('Voucher %s ingewisseld', 'stride'), $context['code'] ?? '')],
+
+            'voucher.released'
+                => ['action', sprintf(__('Voucher %s vrijgegeven', 'stride'), $context['code'] ?? '')],
+
+            'trajectory.created'
+                => ['edition', __('Traject aangemaakt', 'stride')],
+
+            'trajectory.updated'
+                => ['edition', __('Traject bijgewerkt', 'stride')],
+
+            'trajectory.enrolled'
+                => ['enrollment', "{$name} ingeschreven voor een traject"],
+
+            'trajectory.choices_updated'
+                => ['enrollment', __('Trajectkeuzes bijgewerkt', 'stride')],
 
             'user.created'
                 => ['user', self::userText($context, $name, 'aangemaakt')],
@@ -179,6 +279,18 @@ final class AdminActivityMapper
 
             'impersonation.started'
                 => ['user', "{$name} bekijkt de site als " . ($context['target_name'] ?? 'andere gebruiker')],
+
+            'impersonation.ended'
+                => ['user', "{$name} gestopt met meekijken"],
+
+            'user.anonymised'
+                => ['user', self::userText($context, $name, 'geanonimiseerd')],
+
+            'gdpr.erasure_requested'
+                => ['user', __('GDPR-verwijdering aangevraagd', 'stride')],
+
+            'mail.sent'
+                => ['action', sprintf(__('E-mail verzonden (%s)', 'stride'), $context['template'] ?? 'mail')],
 
             'edition.created'
                 => ['edition', $edition !== ''
@@ -196,8 +308,13 @@ final class AdminActivityMapper
             'auth.logout'
                 => ['auth', "{$name} uitgelogd"],
 
+            'auth.login_failed'
+                => ['auth', "Mislukte aanmeldpoging voor {$name}"],
+
+            // Fallback for genuinely unmapped actions (assistant.*, plugin.*):
+            // a readable Dutch line instead of a raw dotted slug in the UI.
             default
-            => ['action', "{$name}: {$action}"],
+            => ['action', sprintf(__('%s — activiteit: %s', 'stride'), $name, str_replace(['.', '_'], ' ', $action))],
         };
     }
 

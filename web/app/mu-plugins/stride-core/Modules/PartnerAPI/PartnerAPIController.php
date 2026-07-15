@@ -557,8 +557,11 @@ final class PartnerAPIController
             $companyUserIds = [(int) $userId];
         }
 
-        // Batch-fetch attendance records
-        $records = $this->attendanceRepository->getByUsers($companyUserIds, $editionId ? (int) $editionId : null);
+        // Batch-fetch attendance records — the DEDUPED latest-wins read (one
+        // record per user+session; decision 2026-07-15): a duplicate
+        // historical record must never be invoiced/reported twice with hours,
+        // and the partner's numbers must match the admin lens.
+        $records = $this->attendanceRepository->getLatestBySessionForUsers($companyUserIds, $editionId ? (int) $editionId : null);
 
         // Batch-fetch sessions via the repository
         $sessionIds = array_unique(array_column($records, 'session_id'));

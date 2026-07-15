@@ -11,7 +11,6 @@ use Stride\Domain\QuoteStatus;
 use Stride\Infrastructure\BatchQueryHelper;
 use Stride\Modules\Attendance\AttendanceTable;
 use Stride\Modules\Edition\EditionCPT;
-use Stride\Modules\Edition\SessionCPT;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
 use Stride\Modules\User\ProfileTypeService;
@@ -38,6 +37,9 @@ final class AdminUserService
 {
     use AdminBatchHelpers;
 
+    /** @var array<int,string> per-request user display-name cache (stage actors). */
+    private array $userNameCache = [];
+
     /**
      * Assemble the user-detail (Dossier) case-view response.
      *
@@ -49,7 +51,10 @@ final class AdminUserService
 
         $userId = (int) $request->get_param('id');
         $regPage = max(1, (int) $request->get_param('reg_page'));
-        $regPerPage = 20;
+        // Default 20; the client may widen (clamped) so a soft refresh can
+        // re-fetch everything it already had loaded in ONE request instead of
+        // collapsing back to the first page.
+        $regPerPage = min(100, max(1, (int) ($request->get_param('reg_per_page') ?: 20)));
 
         // Sensitive fields (phone, audit trail, full quote listing) are only
         // returned to stride_manage. stride_view (read-only Supervisor role)
@@ -132,6 +137,10 @@ final class AdminUserService
         // --- Registrations (paginated, with edition title) ---
         $registrations = [];
         $registrationsTotal = 0;
+        $sessionDetailsById = [];
+        $sessionStatusByEdition = [];
+        $sessionCountByEdition = [];
+        $detailedEditionIds = [];
         $registrationTable = RegistrationTable::getTableName();
 
         if (RegistrationTable::exists()) {
@@ -141,12 +150,18 @@ final class AdminUserService
             ));
 
             $regOffset = ($regPage - 1) * $regPerPage;
+            // tp join: trajectory-parent rows (edition_id NULL, trajectory_id set —
+            // the cascade parent of a trajectory enrollment) previously fell through
+            // to "Onbekend" because only the edition title was selected. The
+            // trajectory title is the row's real name for those rows.
             $regRows = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.id, r.edition_id, r.status, r.enrollment_path, r.registered_at,
-                        r.completed_at, r.cancelled_at, r.selections, r.enrollment_data,
-                        r.completion_tasks, r.notes, r.quote_id, p.post_title AS edition_title
+                "SELECT r.id, r.edition_id, r.trajectory_id, r.status, r.enrollment_path,
+                        r.registered_at, r.completed_at, r.cancelled_at, r.selections,
+                        r.enrollment_data, r.completion_tasks, r.notes, r.quote_id,
+                        p.post_title AS edition_title, tp.post_title AS trajectory_title
                  FROM {$registrationTable} r
                  LEFT JOIN {$wpdb->posts} p ON r.edition_id = p.ID
+                 LEFT JOIN {$wpdb->posts} tp ON r.trajectory_id = tp.ID
                  WHERE r.user_id = %d
                  ORDER BY r.registered_at DESC
                  LIMIT %d OFFSET %d",
@@ -160,13 +175,21 @@ final class AdminUserService
             $editionIds = array_map(static fn($r) => (int) $r->edition_id, $regRows);
             $editionIds = array_values(array_unique(array_filter($editionIds)));
 
-            $attendanceByEdition = $this->fetchUserAttendanceByEdition($userId, $editionIds);
-            $sessionCountByEdition = $this->fetchSessionCountByEdition($editionIds);
+            $sessionCountByEdition = $this->sessions()->countByEditions($editionIds);
 
-            // Resolve session titles for the loaded editions so the case view can
-            // render `selections` (session/edition IDs in the JSON column) as human
-            // labels — never raw IDs. One batched read across all loaded editions.
-            $sessionTitlesById = $this->fetchSessionTitlesByEdition($editionIds);
+            // Session details (title/date/times) for the loaded editions — one
+            // batched repository read (INV-3: SessionRepository owns the session
+            // meta vocabulary). Feeds: selection-label resolution, the
+            // per-session attendance rows, and the HONEST hours sum (real
+            // durations of the sessions marked present — the old "present × 4h"
+            // convention fabricated hours for 2-hour or full-day sessions).
+            $sessionDetailsById = $this->sessions()->detailsByEditions($editionIds);
+            $sessionTitlesById = array_map(static fn(array $s) => $s['title'], $sessionDetailsById);
+            $sessionStatusByEdition = $this->attendanceRepo()->statusesByUserAndEditions($userId, $editionIds);
+            // Editions whose details/statuses are already in hand — the
+            // attendance-summary block below only fetches the DIFFERENCE
+            // instead of re-running both batched reads over the same set.
+            $detailedEditionIds = $editionIds;
 
             // Per-registration offerte status (the §0 #5 quote-workflow status, NEVER
             // "paid"). Resolve each reg → its linked quote: the explicit quote_id
@@ -186,28 +209,46 @@ final class AdminUserService
                 $editionId = (int) $row->edition_id;
                 $regQuoteIdByReg[(int) $row->id] = (int) ($row->quote_id ?? 0);
                 $regEditionByReg[(int) $row->id] = $editionId;
-                $att = $attendanceByEdition[$editionId] ?? null;
                 $totalSessions = $sessionCountByEdition[$editionId] ?? 0;
                 $attendanceSummary = null;
 
                 if ($totalSessions > 0) {
-                    $present = $att['present'] ?? 0;
-                    $absent = $att['absent'] ?? 0;
-                    $excused = $att['excused'] ?? 0;
-                    $hours = $att['hours'] ?? 0;
+                    $statusBySession = $sessionStatusByEdition[$editionId] ?? [];
+                    // Counts tallied from the SAME per-session statuses the rows
+                    // and hours read — one attendance query, no second GROUP BY
+                    // over identical rows (one row per session+user by schema).
+                    $marks = array_count_values($statusBySession);
                     $attendanceSummary = [
-                        'present' => $present,
-                        'absent' => $absent,
-                        'excused' => $excused,
+                        'present' => $marks['present'] ?? 0,
+                        'absent' => $marks['absent'] ?? 0,
+                        'excused' => $marks['excused'] ?? 0,
                         'total_sessions' => $totalSessions,
-                        'hours' => $hours,
+                        // Real hours: sum of the present sessions' start→end durations.
+                        'hours' => $this->presentHours($editionId, $statusBySession, $sessionDetailsById),
+                        // Per-session rows — WHICH day was missed, not just a count.
+                        'sessions' => $this->buildSessionRows($editionId, $statusBySession, $sessionDetailsById),
                     ];
                 }
+
+                // completion_tasks decoded ONCE per row — feeds the task list, the
+                // pending_reason, and the intake-answer fallback below. The Data
+                // layer may hand it already-decoded (array) or raw JSON (string).
+                $tasks = is_array($row->completion_tasks ?? null)
+                    ? $row->completion_tasks
+                    : (json_decode((string) ($row->completion_tasks ?? ''), true) ?: []);
 
                 // enrollment_data stages (3-key shape: {submitted_at, submitted_by, data}).
                 // Surfaced for the case view's collapsible stage panels — empty stages
                 // are filtered CLIENT-side (hidden), so only normalize the shape here.
-                $stages = $this->normalizeEnrollmentStages($row->enrollment_data ?? null);
+                $stages = $this->normalizeEnrollmentStages($row->enrollment_data ?? null, $sessionTitlesById);
+
+                // Intake answers live in TWO places depending on flow: the stride_intake
+                // shortcode writes enrollment_data.intake; the completion-task flow
+                // (the primary one) writes completion_tasks.questionnaire.data.answers.
+                // The dossier read only the former, so completion-flow intake answers
+                // were invisible. Merge the questionnaire answers in as the intake
+                // stage when the enrollment_data stage is empty.
+                $stages = $this->mergeQuestionnaireStage($stages, $tasks);
 
                 // selections column = session/edition IDs → resolve to titles.
                 // INV-6b: the SERVER owns the selection read; the client never parses
@@ -217,28 +258,42 @@ final class AdminUserService
                     $sessionTitlesById,
                 );
 
-                // pending_reason: only meaningful for pending rows. The Data layer
-                // may hand us completion_tasks already-decoded (array) or as the raw
-                // JSON column (string) — handle both.
+                // pending_reason: only meaningful for pending rows.
                 $pendingReason = null;
                 if ($row->status === 'pending') {
-                    $tasks = is_array($row->completion_tasks ?? null)
-                        ? $row->completion_tasks
-                        : (json_decode((string) ($row->completion_tasks ?? ''), true) ?: []);
                     $pendingReason = $completion->pendingReason($tasks);
+                }
+
+                // Row title: edition title for edition rows; for trajectory-parent
+                // rows (edition_id NULL + trajectory_id set) the trajectory title.
+                // Only a row whose linked post was DELETED still reads "Onbekend".
+                $trajectoryId = (int) ($row->trajectory_id ?? 0);
+                $isTrajectory = $editionId === 0 && $trajectoryId > 0;
+                $rowTitle = (string) ($row->edition_title ?? '');
+                if ($rowTitle === '' && $isTrajectory) {
+                    $rowTitle = (string) ($row->trajectory_title ?? '');
                 }
 
                 $registrations[] = [
                     'id' => (int) $row->id,
                     'edition_id' => $editionId,
-                    'edition_title' => $row->edition_title ?: __('Onbekend', 'stride'),
+                    'trajectory_id' => $trajectoryId,
+                    'is_trajectory' => $isTrajectory,
+                    'edition_title' => $rowTitle !== '' ? $rowTitle : __('Onbekend', 'stride'),
                     'status' => $row->status,
                     'enrollment_path' => $row->enrollment_path,
+                    'enrollment_path_label' => \Stride\Modules\Enrollment\RegistrationRepository::pathLabel((string) $row->enrollment_path),
                     'registered_at' => $row->registered_at,
+                    'registered_at_display' => $this->formatLocalDate((string) ($row->registered_at ?? '')),
                     'completed_at' => $row->completed_at,
+                    'completed_at_display' => $this->formatLocalDate((string) ($row->completed_at ?? '')),
                     'cancelled_at' => $row->cancelled_at,
+                    'cancelled_at_display' => $this->formatLocalDate((string) ($row->cancelled_at ?? '')),
                     'has_sessions' => $totalSessions > 0,
                     'attendance' => $attendanceSummary,
+                    // The REAL completion tasks (Dutch label + per-task status) —
+                    // the dossier renders THIS list, never a client-derived checklist.
+                    'tasks' => \Stride\Modules\Enrollment\EnrollmentCompletion::taskDisplayList($tasks),
                     'stages' => $stages,
                     'selections' => $selectionLabels,
                     'notes' => (string) ($row->notes ?? ''),
@@ -314,6 +369,7 @@ final class AdminUserService
                 continue; // Skip building the sensitive detail row entirely.
             }
 
+            $quoteTotal = Money::cents((int) ($meta['total'] ?? 0));
             $quotes[] = [
                 'id' => $quoteId,
                 'title' => $quotePost->post_title,
@@ -322,10 +378,14 @@ final class AdminUserService
                 'edition_title' => isset($quoteEditions[$quoteEditionId]) ? $quoteEditions[$quoteEditionId]->post_title : '',
                 'status' => $quoteStatus,
                 'status_label' => $statusLabel,
-                'total' => Money::cents((int) ($meta['total'] ?? 0))->amount(),
+                'total' => $quoteTotal->amount(),
+                'total_display' => $quoteTotal->format(),
                 'created_at' => $quotePost->post_date,
+                'created_at_display' => $this->formatLocalDate((string) $quotePost->post_date),
                 'sent_at' => ($meta['sent_at'] ?? '') ?: null,
                 'valid_until' => ($meta['valid_until'] ?? '') ?: null,
+                'valid_until_display' => $this->formatLocalDate((string) ($meta['valid_until'] ?? '')),
+                'edit_url' => admin_url('post.php?post=' . $quoteId . '&action=edit'),
             ];
         }
 
@@ -405,11 +465,17 @@ final class AdminUserService
             // Enrich with total session count + hours per edition
             $summaryEditionIds = array_keys($grouped);
             if (!empty($summaryEditionIds)) {
-                $sessionCounts = $this->fetchSessionCountByEdition($summaryEditionIds);
-                $hoursByEdition = $this->fetchUserAttendanceByEdition($userId, $summaryEditionIds);
+                // Only fetch what the registrations block didn't already load —
+                // for typical users the summary set is a subset, so this is free.
+                $missing = array_values(array_diff($summaryEditionIds, $detailedEditionIds));
+                if ($missing !== []) {
+                    $sessionCountByEdition += $this->sessions()->countByEditions($missing);
+                    $sessionDetailsById += $this->sessions()->detailsByEditions($missing);
+                    $sessionStatusByEdition += $this->attendanceRepo()->statusesByUserAndEditions($userId, $missing);
+                }
                 foreach ($grouped as $editionId => &$row) {
-                    $row['total_sessions'] = $sessionCounts[$editionId] ?? 0;
-                    $row['hours'] = $hoursByEdition[$editionId]['hours'] ?? 0;
+                    $row['total_sessions'] = $sessionCountByEdition[$editionId] ?? 0;
+                    $row['hours'] = $this->presentHours($editionId, $sessionStatusByEdition[$editionId] ?? [], $sessionDetailsById);
                 }
                 unset($row);
             }
@@ -427,35 +493,81 @@ final class AdminUserService
             // Three match patterns for "this person's timeline":
             //   1. actor_id = U                          — things U did
             //   2. entity_type='user' AND entity_id = U  — user.* events about U
-            //   3. entity_type='registration' AND subject_user_id = U
-            //      — registration-scoped lifecycle events (created/confirmed/
-            //        cancelled/waitlisted, attendance.marked_*) whose
-            //        context.user_id is U. subject_user_id is the STORED
-            //        generated column over context.user_id (ntdst-audit schema
-            //        v2) — indexable AND an EXACT per-user match, so a
-            //        registration event for a DIFFERENT user can never leak
-            //        onto U's timeline (the cross-user-leak guard).
-            $auditTrailTotal = (int) $wpdb->get_var($wpdb->prepare(
-                "SELECT COUNT(*) FROM {$auditTable}
-                 WHERE actor_id = %d
-                    OR (entity_type = 'user' AND entity_id = %d)
-                    OR (entity_type = 'registration' AND subject_user_id = %d)",
-                $userId,
-                $userId,
-                $userId,
-            ));
-
+            //   3. subject_user_id = U — ANY event whose context.user_id is U.
+            //      subject_user_id is the STORED generated column over
+            //      context.user_id (ntdst-audit schema v2) — indexable AND an
+            //      EXACT per-user match, so an event for a DIFFERENT user can
+            //      never leak onto U's timeline (the cross-user-leak guard).
+            //      Previously restricted to entity_type='registration', which
+            //      silently dropped attendance.marked_* (entity=attendance,
+            //      marked BY an admin), quote.created (entity=quote) and
+            //      completion events from the dossier — the "quote/attendance
+            //      events invisible" half of F-D7. mail.sent deliberately
+            //      records no context.user_id (audit H-4), so it stays out.
+            // action <> 'mail.sent': the send-log is excluded BY DESIGN (audit
+            // H-4 records it without context.user_id, but historical/drifted
+            // rows may carry one — the explicit guard keeps the send-log out of
+            // the per-person trail regardless of row vintage, mirroring
+            // NotificationService::EXCLUDED_ACTIONS).
             $auditEntries = $wpdb->get_results($wpdb->prepare(
                 "SELECT * FROM {$auditTable}
-                 WHERE actor_id = %d
+                 WHERE (actor_id = %d
                     OR (entity_type = 'user' AND entity_id = %d)
-                    OR (entity_type = 'registration' AND subject_user_id = %d)
+                    OR subject_user_id = %d)
+                   AND action <> 'mail.sent'
                  ORDER BY created_at DESC
                  LIMIT 50",
                 $userId,
                 $userId,
                 $userId,
             ));
+
+            // Total: derivable from the window when it isn't full — the 3-arm
+            // OR COUNT is the most expensive query in this method on a grown
+            // audit table, so only pay for it when >50 rows actually exist.
+            $auditTrailTotal = count($auditEntries);
+            if ($auditTrailTotal === 50) {
+                $auditTrailTotal = (int) $wpdb->get_var($wpdb->prepare(
+                    "SELECT COUNT(*) FROM {$auditTable}
+                     WHERE (actor_id = %d
+                        OR (entity_type = 'user' AND entity_id = %d)
+                        OR subject_user_id = %d)
+                       AND action <> 'mail.sent'",
+                    $userId,
+                    $userId,
+                    $userId,
+                ));
+            }
+
+            // Collapse bursts of PROFILE-WRITE rows BEFORE mapping (on the raw
+            // entries, which natively carry ->action — the mapped payload does
+            // not expose internal action slugs to the client). usermeta.updated
+            // is recorded PER meta key: one profile save yields ~10 identical
+            // "Profielgegevens bijgewerkt" lines that pushed real lifecycle
+            // events out of the visible window (F-D10). Scoped to profile
+            // actions only: other events can be text-identical yet DISTINCT
+            // (two attendance marks on different sessions of one edition) and
+            // must never be swallowed. Rows are DESC-ordered; keep the newest
+            // of each burst (same action family + actor + entity within 5 min
+            // of the kept anchor).
+            $isProfileNoise = static fn(object $row): bool => str_starts_with((string) ($row->action ?? ''), 'usermeta.')
+                || ($row->action ?? '') === 'user.profile_updated';
+            $collapsedEntries = [];
+            $prevRow = null;
+            foreach ($auditEntries as $row) {
+                if ($prevRow !== null
+                    && $isProfileNoise($row)
+                    && $isProfileNoise($prevRow)
+                    && (int) ($row->actor_id ?? 0) === (int) ($prevRow->actor_id ?? 0)
+                    && (int) ($row->entity_id ?? 0) === (int) ($prevRow->entity_id ?? 0)
+                    && abs(strtotime((string) $row->created_at) - strtotime((string) $prevRow->created_at)) <= 300
+                ) {
+                    continue;
+                }
+                $collapsedEntries[] = $row;
+                $prevRow = $row;
+            }
+            $auditEntries = $collapsedEntries;
 
             // Collect actor IDs AND target user IDs for batch fetch
             $userIdsToResolve = [];
@@ -494,8 +606,14 @@ final class AdminUserService
             'user' => $user,
             'registrations' => $registrations,
             'registrations_total' => $registrationsTotal,
+            'reg_page' => $regPage,
+            'reg_per_page' => $regPerPage,
             'quotes' => $canSeeSensitive ? $quotes : [],
             'attendance' => $attendance,
+            // Explicit gate flag: an EMPTY audit trail and a GATED audit trail
+            // both serialize as [] — without this the UI could not distinguish
+            // "no history yet" from "afgeschermd voor jouw rol" (F-D14).
+            'can_see_timeline' => $canSeeSensitive,
             'audit_trail' => $canSeeSensitive ? $auditTrail : [],
             'audit_trail_total' => $canSeeSensitive ? $auditTrailTotal : 0,
         ]);
@@ -515,9 +633,10 @@ final class AdminUserService
      * we only normalize the shape here so the renderer never sees a half-formed stage.
      *
      * @param  mixed $raw  JSON string or already-decoded array from the column.
+     * @param  array<int,string> $sessionTitlesById  Batched titles for initial_selection resolution.
      * @return array<string, array{submitted_at:string, submitted_by:string, data:array<string,mixed>}>
      */
-    private function normalizeEnrollmentStages(mixed $raw): array
+    private function normalizeEnrollmentStages(mixed $raw, array $sessionTitlesById = []): array
     {
         $decoded = is_string($raw) && $raw !== '' ? json_decode($raw, true) : (is_array($raw) ? $raw : []);
         if (!is_array($decoded)) {
@@ -529,19 +648,19 @@ final class AdminUserService
             if (!is_array($stage)) {
                 continue;
             }
-            // initial_selection is un-wrapped — surface its scalar/array fields as `data`
-            // so the renderer's label→value loop still works without a special case.
+            // initial_selection is un-wrapped (`{type, phases[]}`) — its phases are
+            // arrays-of-arrays, which the generic flattener reduced to an empty
+            // string (garbage panel). Build proper label→value pairs instead:
+            // one row per capture phase, values = resolved post titles.
             if ($key === 'initial_selection') {
-                $stages[$key] = [
-                    'submitted_at' => '',
-                    'submitted_by' => '',
-                    'data' => $this->flattenStageData($stage),
-                ];
+                $stages[$key] = $this->initialSelectionStage($stage, $sessionTitlesById);
                 continue;
             }
+            // submitted_at is stored gmdate('c') (UTC ISO) → Dutch site-TZ moment;
+            // submitted_by is a raw user ID → display name (was printed as "door 5").
             $stages[$key] = [
-                'submitted_at' => (string) ($stage['submitted_at'] ?? ''),
-                'submitted_by' => (string) ($stage['submitted_by'] ?? ''),
+                'submitted_at' => $this->formatIsoMoment((string) ($stage['submitted_at'] ?? '')),
+                'submitted_by' => $this->resolveUserName($stage['submitted_by'] ?? null),
                 'data' => is_array($stage['data'] ?? null) ? $this->flattenStageData($stage['data']) : [],
             ];
         }
@@ -578,6 +697,119 @@ final class AdminUserService
     }
 
     /**
+     * Merge completion-flow intake answers into the stage map.
+     *
+     * The `stride_intake` shortcode flow writes `enrollment_data.intake`; the
+     * completion-task flow stores the SAME questionnaire's answers in
+     * `completion_tasks.questionnaire.data.answers`. When the enrollment_data
+     * stage is empty but questionnaire answers exist, synthesize the intake
+     * stage from them so the dossier shows the answers regardless of flow.
+     * A populated enrollment_data.intake always wins (never overwritten).
+     *
+     * @param  array<string,array{submitted_at:string,submitted_by:string,data:array<string,string>}> $stages
+     * @param  array<string,mixed> $tasks  Decoded completion_tasks column.
+     * @return array<string,array{submitted_at:string,submitted_by:string,data:array<string,string>}>
+     */
+    private function mergeQuestionnaireStage(array $stages, array $tasks): array
+    {
+        if (!empty($stages['intake']['data'])) {
+            return $stages;
+        }
+
+        $answers = $tasks['questionnaire']['data']['answers'] ?? null;
+        if (!is_array($answers) || $answers === []) {
+            return $stages;
+        }
+
+        $stages['intake'] = [
+            'submitted_at' => $this->formatIsoMoment((string) ($tasks['questionnaire']['completed_at'] ?? '')),
+            // The completion flow records no separate actor — it is always the
+            // participant; leave submitted_by empty rather than guessing.
+            'submitted_by' => '',
+            'data' => $this->flattenStageData($answers),
+        ];
+
+        return $stages;
+    }
+
+    /**
+     * Render the un-wrapped `initial_selection` (`{type, phases[]}`) as a stage.
+     *
+     * One data row per capture phase: label = phase name + capture moment,
+     * value = the chosen sessions'/editions' titles (deleted posts keep their
+     * id with a "(verwijderd)" marker — the trail must stay honest). The stage
+     * header carries the FIRST capture's moment + actor.
+     *
+     * @param  array<string,mixed> $initial
+     * @param  array<int,string> $sessionTitlesById  Batched titles (avoids a
+     *         get_post per id for the common case — selected sessions of the
+     *         loaded editions are already fetched; only outsiders fall back).
+     * @return array{submitted_at:string, submitted_by:string, data:array<string,string>}
+     */
+    private function initialSelectionStage(array $initial, array $sessionTitlesById = []): array
+    {
+        $data = [];
+        $headerAt = '';
+        $headerBy = '';
+
+        foreach ((array) ($initial['phases'] ?? []) as $phase) {
+            if (!is_array($phase)) {
+                continue;
+            }
+            $ids = $phase['session_ids'] ?? $phase['edition_ids'] ?? [];
+            if (!is_array($ids)) {
+                continue;
+            }
+
+            $items = [];
+            foreach ($ids as $id) {
+                $id = (int) $id;
+                if (isset($sessionTitlesById[$id])) {
+                    $items[] = $sessionTitlesById[$id];
+                    continue;
+                }
+                $post = get_post($id);
+                $items[] = $post
+                    ? $post->post_title
+                    : sprintf(__('#%d (verwijderd)', 'stride'), $id);
+            }
+
+            $label = match ($phase['phase'] ?? 'enrollment') {
+                'enrollment' => __('Bij inschrijving', 'stride'),
+                default => ucfirst(str_replace('_', ' ', (string) ($phase['phase'] ?? ''))),
+            };
+
+            $atDisplay = $this->formatIsoMoment((string) ($phase['captured_at'] ?? ''));
+            if ($atDisplay !== '') {
+                $label .= ' · ' . $atDisplay;
+                if ($headerAt === '') {
+                    $headerAt = $atDisplay;
+                }
+            }
+            if ($headerBy === '') {
+                $headerBy = $this->resolveUserName($phase['captured_by'] ?? null);
+            }
+
+            // Two phases can share a label (same phase, same minute) — suffix
+            // instead of silently overwriting the earlier capture.
+            $key = $label;
+            $n = 2;
+            while (isset($data[$key])) {
+                $key = $label . ' (' . $n++ . ')';
+            }
+            $data[$key] = $items !== []
+                ? implode(', ', $items)
+                : __('Geen keuze', 'stride');
+        }
+
+        return [
+            'submitted_at' => $headerAt,
+            'submitted_by' => $headerBy,
+            'data' => $data,
+        ];
+    }
+
+    /**
      * Resolve the `selections` JSON column (session/edition IDs) to display labels.
      *
      * INV-6b: the server owns the selection read — the client never parses the raw
@@ -611,131 +843,138 @@ final class AdminUserService
     }
 
     /**
-     * Map session-post IDs → titles for a set of editions, so selection IDs resolve
-     * to human labels. Sessions are `vad_session` posts linked to an edition via
-     * `_ntdst_edition_id`. One batched query across all loaded editions.
-     *
-     * @param  array<int> $editionIds
-     * @return array<int, string>  session post ID => title
+     * INV-3: session details and per-session attendance come from the OWNING
+     * repositories (SessionRepository / AttendanceRepository) — this read-model
+     * composes, it never decodes those tables itself.
      */
-    private function fetchSessionTitlesByEdition(array $editionIds): array
+    private function sessions(): \Stride\Modules\Edition\SessionRepository
     {
-        if (empty($editionIds)) {
-            return [];
-        }
+        return ntdst_get(\Stride\Modules\Edition\SessionRepository::class);
+    }
 
-        global $wpdb;
-        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
-        $params = array_merge([SessionCPT::POST_TYPE], $editionIds);
-
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID, p.post_title
-             FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
-             WHERE p.post_type = %s
-               AND p.post_status = 'publish'
-               AND pm.meta_value IN ({$placeholders})",
-            ...$params,
-        ));
-
-        $map = [];
-        foreach ($rows as $row) {
-            $map[(int) $row->ID] = (string) $row->post_title;
-        }
-
-        return $map;
+    private function attendanceRepo(): \Stride\Modules\Attendance\AttendanceRepository
+    {
+        return ntdst_get(\Stride\Modules\Attendance\AttendanceRepository::class);
     }
 
     /**
-     * Count sessions per edition for a set of edition IDs.
+     * Sum of the real durations (start→end) of the sessions the user was
+     * marked PRESENT at, for one edition. Sessions without both times
+     * contribute 0 — hours are never fabricated (the previous convention
+     * was a hard-coded 4h per present mark). Rounded to 1 decimal.
      *
-     * Returns [edition_id => session_count]. Editions with no sessions are absent
-     * from the map; callers should treat missing keys as 0 (no sessions ⇒ e-learning).
-     *
-     * Moved verbatim from AdminAPIController::fetchSessionCountByEdition — its only
-     * call sites were inside getUserDetail (S2 hazard analysis).
-     *
-     * @param array<int> $editionIds
-     * @return array<int, int>
+     * @param array<int,string> $statusBySession  session_id => status
+     * @param array<int,array{edition_id:int,title:string,date:string,start_time:string,end_time:string}> $details
      */
-    private function fetchSessionCountByEdition(array $editionIds): array
+    private function presentHours(int $editionId, array $statusBySession, array $details): float
     {
-        if (empty($editionIds)) {
-            return [];
+        $hours = 0.0;
+        foreach ($statusBySession as $sessionId => $status) {
+            if ($status !== 'present') {
+                continue;
+            }
+            $s = $details[$sessionId] ?? null;
+            if (!$s || (int) $s['edition_id'] !== $editionId || $s['start_time'] === '' || $s['end_time'] === '') {
+                continue;
+            }
+            $start = strtotime($s['start_time']);
+            $end = strtotime($s['end_time']);
+            if ($start !== false && $end !== false && $end > $start) {
+                $hours += ($end - $start) / 3600;
+            }
         }
 
-        global $wpdb;
-        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
-        $params = array_merge([SessionCPT::POST_TYPE], $editionIds);
-
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT pm.meta_value AS edition_id, COUNT(*) AS cnt
-             FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = '_ntdst_edition_id'
-             WHERE p.post_type = %s
-               AND p.post_status = 'publish'
-               AND pm.meta_value IN ({$placeholders})
-             GROUP BY pm.meta_value",
-            ...$params,
-        ));
-
-        $map = [];
-        foreach ($rows as $row) {
-            $map[(int) $row->edition_id] = (int) $row->cnt;
-        }
-        return $map;
+        return round($hours, 1);
     }
 
     /**
-     * Aggregate attendance for a user across a set of editions.
+     * Per-session attendance rows for one edition: every session of the
+     * edition (date-ordered) with the user's mark — so the dossier answers
+     * "WHICH day was missed", not just how many.
      *
-     * Returns [edition_id => [present, absent, excused, hours]]. Hours assumes
-     * 4 hours per "present" session (current convention in the user-detail
-     * attendance summary). Editions with no recorded attendance are absent.
-     *
-     * Moved verbatim from AdminAPIController::fetchUserAttendanceByEdition — its only
-     * call sites were inside getUserDetail (S2 hazard analysis).
-     *
-     * @param array<int> $editionIds
-     * @return array<int, array{present:int, absent:int, excused:int, hours:int}>
+     * @param array<int,string> $statusBySession  session_id => status
+     * @param array<int,array{edition_id:int,title:string,date:string,start_time:string,end_time:string}> $details
+     * @return list<array{id:int, title:string, date:string, time:string, status:string}>
      */
-    private function fetchUserAttendanceByEdition(int $userId, array $editionIds): array
+    private function buildSessionRows(int $editionId, array $statusBySession, array $details): array
     {
-        if (empty($editionIds) || !AttendanceTable::exists()) {
-            return [];
-        }
-
-        global $wpdb;
-        $attendanceTable = AttendanceTable::getTableName();
-        $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
-        $params = array_merge([$userId], $editionIds);
-
-        $rows = $wpdb->get_results($wpdb->prepare(
-            "SELECT edition_id, status, COUNT(*) AS cnt
-             FROM {$attendanceTable}
-             WHERE user_id = %d
-               AND edition_id IN ({$placeholders})
-             GROUP BY edition_id, status",
-            ...$params,
-        ));
-
-        $map = [];
-        foreach ($rows as $row) {
-            $editionId = (int) $row->edition_id;
-            if (!isset($map[$editionId])) {
-                $map[$editionId] = ['present' => 0, 'absent' => 0, 'excused' => 0, 'hours' => 0];
+        $rows = [];
+        foreach ($details as $sessionId => $s) {
+            if ((int) $s['edition_id'] !== $editionId) {
+                continue;
             }
-            if (isset($map[$editionId][$row->status])) {
-                $map[$editionId][$row->status] = (int) $row->cnt;
-            }
+            $time = $s['start_time'] !== '' && $s['end_time'] !== ''
+                ? substr($s['start_time'], 0, 5) . '–' . substr($s['end_time'], 0, 5)
+                : '';
+            $rows[] = [
+                'id' => $sessionId,
+                'title' => $s['title'],
+                'date' => $this->formatLocalDate($s['date']),
+                'time' => $time,
+                // '' = not (yet) marked; the template renders a muted dash state.
+                'status' => $statusBySession[$sessionId] ?? '',
+                '_sort' => $s['date'],
+            ];
         }
+        usort($rows, static fn(array $a, array $b) => strcmp($a['_sort'], $b['_sort']));
 
-        // Hours = present count × 4 (matches existing convention)
-        foreach ($map as &$entry) {
-            $entry['hours'] = $entry['present'] * 4;
-        }
-        unset($entry);
-
-        return $map;
+        return array_map(static function (array $r): array {
+            unset($r['_sort']);
+            return $r;
+        }, $rows);
     }
+
+    /**
+     * Dutch date for a site-local MySQL datetime ('' for empty/zero/garbage).
+     * Thin guard over the shared stride_format_date (Support/formatting.php).
+     */
+    private function formatLocalDate(string $value): string
+    {
+        if ($value === '' || str_starts_with($value, '0000-00-00')) {
+            return '';
+        }
+
+        return stride_format_date($value, 'd/m/Y');
+    }
+
+    /**
+     * Dutch site-TZ moment for a stored UTC ISO-8601 stamp (gmdate('c')).
+     */
+    private function formatIsoMoment(string $value): string
+    {
+        if ($value === '') {
+            return '';
+        }
+        $ts = strtotime($value);
+
+        return $ts !== false ? wp_date('d/m/Y H:i', $ts) : $value;
+    }
+
+    /**
+     * Display name for a stage actor (stored as a raw user ID). Cached
+     * per request; a deleted user or empty value yields ''.
+     */
+    private function resolveUserName(mixed $userId): string
+    {
+        $id = (int) (is_scalar($userId) ? $userId : 0);
+        if ($id <= 0) {
+            // Legacy stages may already carry a name string — pass it through.
+            return is_string($userId) && !is_numeric($userId) ? $userId : '';
+        }
+        if (!isset($this->userNameCache[$id])) {
+            $user = get_userdata($id);
+            $this->userNameCache[$id] = $user ? $user->display_name : '';
+        }
+
+        return $this->userNameCache[$id];
+    }
+
+    // (fetchSessionCountByEdition removed — SessionRepository::countByEditions
+    // already provided the identical publish-only per-edition count; the
+    // read-model now consumes the repository like everything else.)
+
+    // (fetchUserAttendanceByEdition removed — the per-registration counts are
+    // tallied from AttendanceRepository::statusesByUserAndEditions' rows, the
+    // same read that feeds the per-session rows and hours: one attendance
+    // query per edition set instead of two over identical rows.)
 }

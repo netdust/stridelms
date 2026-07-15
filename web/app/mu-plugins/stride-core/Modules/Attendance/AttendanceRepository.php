@@ -134,6 +134,42 @@ final class AttendanceRepository
     }
 
     /**
+     * A user's per-session attendance statuses across a set of editions,
+     * in ONE query (the batched sibling of getByUserAndEdition).
+     *
+     * @param array<int> $editionIds
+     * @return array<int, array<int, string>>  edition_id => [session_id => status]
+     */
+    public function statusesByUserAndEditions(int $userId, array $editionIds): array
+    {
+        $ids = array_values(array_unique(array_filter(array_map('intval', $editionIds))));
+        // Table guard INSIDE the repo — pre-migration installs must get [],
+        // not a failing query per dossier load (callers shouldn't each have
+        // to remember the exists() check).
+        if (empty($ids) || !AttendanceTable::exists()) {
+            return [];
+        }
+
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($ids), '%d'));
+
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT edition_id, session_id, status
+             FROM {$this->table()}
+             WHERE user_id = %d
+               AND edition_id IN ({$placeholders})",
+            array_merge([$userId], $ids),
+        ));
+
+        $map = [];
+        foreach ($rows as $row) {
+            $map[(int) $row->edition_id][(int) $row->session_id] = (string) $row->status;
+        }
+
+        return $map;
+    }
+
+    /**
      * Get attendance records for multiple users.
      *
      * @param array<int> $userIds
@@ -157,9 +193,62 @@ final class AttendanceRepository
             $params[] = $editionId;
         }
 
-        $sql .= " ORDER BY marked_at DESC";
+        // id DESC tiebreaker: two records sharing a marked_at second must
+        // still have a deterministic "latest" — getLatestBySessionForUsers'
+        // dedup takes the FIRST record it sees per (user, session).
+        $sql .= " ORDER BY marked_at DESC, id DESC";
 
         return $wpdb->get_results($wpdb->prepare($sql, ...$params));
+    }
+
+    /**
+     * ONE record per (user, session) — the latest (marked_at DESC, id DESC)
+     * wins. THE attendance-truth read: nobody attends a session twice, so
+     * duplicate rows are artifacts (pre-upsert history, migrated v3 data).
+     * Both the admin roster (AdminEditionRosterService) and the Partner API
+     * consume THIS, so an admin count and a partner hours reconciliation can
+     * never disagree about the same records (decision 2026-07-15).
+     *
+     * @param array<int> $userIds
+     * @return array<object>
+     */
+    public function getLatestBySessionForUsers(array $userIds, ?int $editionId = null): array
+    {
+        return self::dedupeLatestBySession($this->getByUsers($userIds, $editionId));
+    }
+
+    /**
+     * The pure dedup over an ALREADY latest-first-ordered record list: keep
+     * the first NON-EMPTY-status record seen per (user_id, session_id).
+     * Static + pure so the unit suite pins the contract without a database.
+     *
+     * Empty-status rows are SKIPPED WITHOUT claiming the slot: a clear
+     * deletes its record today, so an empty status is a legacy/migration
+     * artifact carrying no state — it must neither be reported (the Partner
+     * API would emit status "" WITH billable hours) nor mask an older real
+     * mark (the admin roster's original guard let the older mark win; both
+     * consumers now share that rule).
+     *
+     * @param array<object> $records
+     * @return array<object>
+     */
+    public static function dedupeLatestBySession(array $records): array
+    {
+        $seen = [];
+        $out = [];
+        foreach ($records as $record) {
+            if ((string) ($record->status ?? '') === '') {
+                continue; // artifact — carries no state, claims no slot
+            }
+            $key = (int) ($record->user_id ?? 0) . ':' . (int) ($record->session_id ?? 0);
+            if (isset($seen[$key])) {
+                continue;
+            }
+            $seen[$key] = true;
+            $out[] = $record;
+        }
+
+        return $out;
     }
 
     /**

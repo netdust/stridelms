@@ -76,12 +76,19 @@ final class BatchQueryHelper
 
         $placeholders = implode(',', array_fill(0, count($editionIds), '%d'));
 
+        // Occupancy counts the enum's seat-holding statuses (F-V6): callers
+        // render this against capacity (Edities agenda, waitlist free-spots
+        // probe), so it must agree with EditionService::getRegisteredCount
+        // and the capacity melding — one definition, not a fourth list.
+        $statuses = \Stride\Domain\RegistrationStatus::capacityValues();
+        $statusPlaceholders = implode(',', array_fill(0, count($statuses), '%s'));
+
         $results = $wpdb->get_results($wpdb->prepare(
             "SELECT edition_id, COUNT(*) as count
              FROM {$table}
-             WHERE edition_id IN ({$placeholders}) AND status = 'confirmed'
+             WHERE edition_id IN ({$placeholders}) AND status IN ({$statusPlaceholders})
              GROUP BY edition_id",
-            ...$editionIds,
+            ...array_merge($editionIds, $statuses),
         ));
 
         $counts = array_fill_keys($editionIds, 0);
@@ -117,6 +124,51 @@ final class BatchQueryHelper
         }
 
         return $userMap;
+    }
+
+    /**
+     * Batch resolve e-mail addresses to existing WP accounts (one query).
+     *
+     * Consumed by the grid's lead rows: under the safer identity variant
+     * (form-identity plan 2026-07-14) a lead whose e-mail belongs to an
+     * existing account stays a lead until promotion — this lookup lets the
+     * admin SEE that ("Account gevonden") instead of discovering it at
+     * promote time. Keys are lower-cased for case-insensitive matching
+     * (e-mail case is not significant).
+     *
+     * @param  array<string> $emails
+     * @return array<string, object> Map of lower-cased email => {ID, display_name} (misses absent).
+     */
+    public static function batchGetUsersByEmail(array $emails): array
+    {
+        $emails = array_values(array_unique(array_filter(array_map(
+            static fn($email): string => strtolower(trim((string) $email)),
+            $emails,
+        ))));
+
+        if (empty($emails)) {
+            return [];
+        }
+
+        // get_users has no email__in arg — resolve via ONE prepared IN() query.
+        // No LOWER() on the column: user_email's *_ci collation already matches
+        // case-insensitively AND keeps the index sargable (LOWER() would force
+        // a full wp_users scan per grid page). Minimal columns on purpose — the
+        // consumer (the grid's accountMatch) needs id + display name only; this
+        // is NOT a general user-by-email API.
+        global $wpdb;
+        $placeholders = implode(',', array_fill(0, count($emails), '%s'));
+        $rows = $wpdb->get_results($wpdb->prepare(
+            "SELECT ID, user_email, display_name FROM {$wpdb->users} WHERE user_email IN ({$placeholders})",
+            ...$emails,
+        ));
+
+        $byEmail = [];
+        foreach ($rows ?: [] as $row) {
+            $byEmail[strtolower((string) $row->user_email)] = $row;
+        }
+
+        return $byEmail;
     }
 
     /**

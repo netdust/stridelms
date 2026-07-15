@@ -84,22 +84,30 @@
   };
 
   /* ---- queue → endpoint params (PURE, Tier-A) ----------------------------
-     The Vandaag deep-link sends a queue KEY; the endpoint does NOT accept a
-     `queue` param, so this translates each key to the closest REAL filter.
-     For queues that aren't a clean single status (offerte/nocert/oldinterest)
-     we map to the status that best approximates and do NOT invent a backend
-     param. An unknown key returns {} — no fabricated param, no leak. */
-  const QUEUE_STATUS = {
-    pending:     'pending',
-    waitlist:    'waitlist',
-    offerte:     'confirmed',   // offerte-opvolging ≈ confirmed (no offerte param on the endpoint)
-    nocert:      'completed',   // afgerond zonder certificaat ≈ completed
-    oldinterest: 'interest',    // oude interesse ≈ interest
-    interest_to_invite: 'interest', // interesse — editie nu gepland ≈ interest (view the list; mail send deferred)
+     The Vandaag deep-link sends a queue KEY and the endpoint accepts it
+     directly (?queue= → WorklistQueueResolver id-set server-side) — the grid
+     shows EXACTLY the rows the card counted, never a lossy status
+     approximation. An unknown key returns {} — no fabricated param, no leak.
+
+     ONE closed-enum table per queue key: the Dutch chip label AND the single
+     registration status every row in that queue's id-set carries (each server
+     predicate is status-homogeneous — WorklistQueueResolver::queueStatuses,
+     pinned by the cross-language contract test). One table, one key-set: a
+     queue added to the label half but not the status half broke the armed
+     bulk bar silently when these were two parallel tables. `status` is NOT a
+     filter approximation (the server pins the real id-set); it only lets an
+     ARMED cross-page selection inside a queue offer the right bulk actions
+     instead of guessing from the visible page (F-G7). */
+  const QUEUE_META = {
+    pending:            { label: 'Wacht op goedkeuring',          status: 'pending' },
+    waitlist:           { label: 'Wachtlijst — plaatsen vrij',    status: 'waitlist' },
+    offerte:            { label: 'Offerte-opvolging',             status: 'confirmed' },
+    nocert:             { label: 'Afgerond zonder certificaat',   status: 'completed' },
+    oldinterest:        { label: 'Oude interesse',                status: 'interest' },
+    interest_to_invite: { label: 'Interesse — editie nu gepland', status: 'interest' },
   };
   function queueToParams(queueKey) {
-    const status = QUEUE_STATUS[queueKey];
-    return status ? { status } : {};
+    return QUEUE_META[queueKey] ? { queue: queueKey } : {};
   }
 
   /* ---- offerte LABEL → CSS modifier key (PURE, Tier-A) -------------------
@@ -118,14 +126,21 @@
 
   /* ---- select-all blast-radius payload (PURE, Tier-A) --------------------
      The structured filter subset the server expands a cross-page select-all
-     against — mirrors what loadGrid sends MINUS page/per_page/sort/group_by
-     (the expansion ignores paging). Empty filters are omitted so an empty
-     payload means "the whole active set", not a malformed query. Numeric
-     filters are coerced (a <select> yields strings). Lifted from the proven
-     god-component gridFilterPayload(). */
-  function gridFilterPayload(filters) {
-    const f = filters || {};
+     against — mirrors what load() sends MINUS page/per_page/sort/group_by
+     (the expansion ignores paging). Takes the grid STATE (not just .filters):
+     the queue pin and the edition scope are part of what the grid SHOWS, so
+     they MUST be part of what a select-all expands over — omitting them made
+     the server expand an armed queue selection over the whole table
+     (blast-radius regression, review 2026-07-14). The server re-resolves
+     queue → id-set and the default active scope via the SAME applyScopePins
+     the grid read uses. Empty filters are omitted; numeric filters are
+     coerced (a <select> yields strings). */
+  function gridFilterPayload(state) {
+    const s = state || {};
+    const f = s.filters || {};
     const out = {};
+    if (s.queue && QUEUE_META[s.queue]) out.queue = s.queue;
+    if (s.editionScope === 'all') out.edition_scope = 'all';
     if (f.status) out.status = f.status;
     if (f.edition_id) out.edition_id = Number(f.edition_id);
     if (f.company_id) out.company_id = Number(f.company_id);
@@ -160,6 +175,8 @@
     const s = state || {};
     const f = s.filters || {};
     const out = {};
+    if (s.queue && QUEUE_META[s.queue]) out.queue = s.queue;
+    if (s.editionScope === 'all') out.edition_scope = 'all';
     if (f.status) out.status = f.status;
     if (f.edition_id) out.edition_id = String(f.edition_id);
     if (f.company_id) out.company_id = String(f.company_id);
@@ -200,6 +217,7 @@
       },
       sortKey: p.get('sort') || '',
       sortDir: order === 'desc' ? 'desc' : 'asc',
+      editionScope: p.get('edition_scope') === 'all' ? 'all' : 'active',
       groupBy: GROUP_BY_ALLOWLIST.includes(gb) ? gb : '',
       page: toInt(p.get('p'), 1),   // `p` — NOT `page` (WP admin routing param)
       perPage: toInt(p.get('per_page'), DEFAULT_PER_PAGE),
@@ -230,6 +248,7 @@
     return {
       key: String(g.group_value ?? ''),
       group_value: g.group_value,      // passthrough so groupLabel(g) still resolves
+      group_label: g.group_label || '', // server-resolved header label (edition groups)
       rows,
       count: g.count,
       rowTotal,
@@ -252,8 +271,12 @@
     { id: 'stride_bulk_quote_sent',          label: 'Offerte verzonden',        icon: 'send',        states: ['confirmed'] },
     { id: 'stride_bulk_quote_exported',      label: 'Offerte verwerkt',         icon: 'checkCircle', states: ['confirmed'] },
     { id: 'stride_bulk_approve_post_course', label: 'Goedkeuren na cursus',     icon: 'award',       states: ['confirmed', 'completed'] },
-    { id: 'stride_bulk_message',             label: 'Bericht sturen',           icon: 'mail',        states: ['confirmed', 'completed', 'interest', 'pending', 'waitlist'] },
-    { id: 'stride_bulk_generate_doc',        label: 'Document genereren',       icon: 'fileText',    states: ['completed'] },
+    // deferred: the handlers are honest server stubs (fail every row with
+    // not_available) — render DISABLED with a "volgt binnenkort" tooltip,
+    // never a live button whose only outcome is a full-red failure modal
+    // (F-G6, decision 2026-07-14).
+    { id: 'stride_bulk_message',             label: 'Bericht sturen',           icon: 'mail',        states: ['confirmed', 'completed', 'interest', 'pending', 'waitlist'], deferred: true },
+    { id: 'stride_bulk_generate_doc',        label: 'Document genereren',       icon: 'fileText',    states: ['completed'], deferred: true },
     { id: 'stride_bulk_cancel',              label: 'Annuleren',                icon: 'xCircle',     states: ['pending', 'interest', 'confirmed', 'waitlist'], danger: true },
   ];
   const LIFECYCLE_TARGET = {
@@ -303,17 +326,35 @@
       groupBy: '',                 // '' | 'edition_id' | 'status' | 'company_id' (real GROUP_BY_ALLOWLIST)
       collapsed: {},
       queue: '',                   // active worklist context (from ?queue=)
+      // Edition scope: 'active' (default — published editions the admin has
+      // not closed) or 'all'. The DEFAULT is announced by a dismissable
+      // "Actieve edities" pill (spec §10.4) — the old invisible scope made
+      // historical registrations unreachable with zero explanation (F-G2).
+      editionScope: 'active',
 
-      /* filter sources (edition options from the server; companies derived from
-         the loaded page since there is no company-options endpoint) */
+      /* filter sources. Editions come from the SERVER TYPEAHEAD
+         (/admin/editions/options?q= — it was always searchable server-side;
+         the grid consumed it once as a flat 100-cap dropdown, so editions
+         beyond the first 100 could never be filtered on, F-G10). Trajectories
+         are a small flat set (/admin/trajectories/options). Companies stay
+         un-listed (a company is a bare int — no name entity exists). */
       editionOptions: [],
+      editionQuery: '',
+      editionPickerOpen: false,
+      editionPickerLabel: '',      // the picked edition's title (chip + input display)
+      editionOptsSeq: 0,           // stale-response token for the typeahead fetches
+      editionOptsBusy: false,      // an options fetch is in flight (focus-fetch dedupe)
+      trajectoryOptions: [],
+      trajectoryLabelById: {},
 
       /* per-surface load state — a failed load shows its own banner, never blanks */
       loading: false,
       error: '',
+      loadSeq: 0,                  // monotonic load token (stale-response guard, F-G8)
 
       /* selection + bulk */
       selected: {},                // id -> true
+      selectedStatusById: {},      // id -> status value, stamped at SELECT time (F-G7)
       selectAllFilter: false,      // armed cross-page select-all
       busyAction: null,
       overflowOpen: false,
@@ -342,7 +383,11 @@
         // user who never opens this surface.
         window.WS.lazyLoad(this, 'inschrijvingen', () => {
           this.loadEditionOptions();
-          this.load(1);
+          this.loadTrajectoryOptions();
+          // No page arg: load(1) would stomp the ?p= restored by
+          // hydrateStateFromUrl — a bookmarked page-3 view must land on
+          // page 3, not silently reset (and rewrite the URL) to page 1.
+          this.load();
         });
 
         // The lazyLoad latch fires its callback ONCE. But a queue deep-link from
@@ -353,6 +398,12 @@
         window.addEventListener('ws-view-changed', (e) => {
           if (!e || !e.detail || e.detail.view !== 'inschrijvingen') return;
           if (this.applyQueueDeepLink()) {
+            // The deep-link re-targeted the view (new/dropped queue or
+            // trajectory): a selection — especially an ARMED cross-page
+            // select-all — from the previous context must not survive onto
+            // the new id-set, or the bulk bar arrives pre-armed over rows
+            // the admin never selected. Same discipline as onFilterChange.
+            this.clearSelection();
             this.load(1);
           }
         });
@@ -365,22 +416,64 @@
          switchView wrote ?queue= (plan §5 / shell contract). */
       applyQueueDeepLink() {
         const p = new URLSearchParams(window.location.search);
+        let changed = false;
+
         const q = p.get('queue');
         if (q) {
           const qp = queueToParams(q);
-          if (qp.status && (this.queue !== q || this.filters.status !== qp.status)) {
-            this.queue = q;
-            this.filters.status = qp.status;
-            return true;
+          if (qp.queue && this.queue !== qp.queue) {
+            this.queue = qp.queue;
+            // The queue is its own server-side filter — a leftover status chip
+            // would double-filter the pinned id-set (each queue is
+            // single-status anyway; the funnel reflects it via statusCounts).
+            this.filters.status = '';
+            changed = true;
           }
-          return false;
+        } else {
+          // The URL is the deep-link contract BOTH ways: the shell DELETES
+          // ?queue= on every switchView, so a re-activation without it must
+          // DROP a lingering queue pin. Keeping it silently composed the old
+          // queue with the new deep-link (e.g. Trajecten's "Toon
+          // inschrijvingen" → queue=pending AND trajectory_id=X → an empty
+          // intersection rendered as "Geen resultaten").
+          if (this.queue) {
+            this.queue = '';
+            changed = true;
+          }
+          const directStatus = p.get('status');
+          if (!this.filters.status && directStatus && STATUS_META[directStatus]) {
+            this.filters.status = directStatus;
+            changed = true;
+          }
         }
-        const directStatus = p.get('status');
-        if (!this.filters.status && directStatus && STATUS_META[directStatus]) {
-          this.filters.status = directStatus;
-          return true;
+
+        // Trajectory deep-link ("Toon inschrijvingen" on a trajectory):
+        // ABSORB-only. Unlike ?queue= (deep-link-owned — mirrored from the
+        // URL both ways), trajectory_id is ALSO a first-class grid filter
+        // (the Traject select), so it behaves like status/edition/q: it
+        // survives view round-trips until its chip is cleared, and the shell
+        // no longer deletes it on switchView. A NEW deep-link target simply
+        // overwrites it (the 2nd+ jump also filters, F-T1/F-G9); composing
+        // visibly with a queue chip is the same admin-visible composition as
+        // any other filter under a queue.
+        const trajectoryId = parseInt(p.get('trajectory_id') || '', 10);
+        if (Number.isFinite(trajectoryId) && trajectoryId > 0 && this.filters.trajectory_id !== trajectoryId) {
+          this.filters.trajectory_id = trajectoryId;
+          changed = true;
         }
-        return false;
+
+        // Edition deep-link (Vandaag meldingen: capacity / editie-start
+        // alerts open the grid scoped to that edition). Same absorb-only
+        // contract as trajectory_id above: it is also a first-class filter,
+        // survives round-trips until its chip is cleared, and a NEW deep-link
+        // target simply overwrites it.
+        const editionId = parseInt(p.get('edition_id') || '', 10);
+        if (Number.isFinite(editionId) && editionId > 0 && this.filters.edition_id !== editionId) {
+          this.filters.edition_id = editionId;
+          changed = true;
+        }
+
+        return changed;
       },
 
       /* Restore the grid's view state from the URL on cold init — the read half
@@ -394,6 +487,7 @@
         this.filters = s.filters;
         this.sortKey = s.sortKey;
         this.sortDir = s.sortDir;
+        this.editionScope = s.editionScope;
         this.groupBy = s.groupBy;
         this.page = s.page;
         this.perPage = s.perPage;
@@ -408,20 +502,17 @@
         // cleanly (learned from cluster B — a stale error must not survive a
         // now-successful load).
         this.error = '';
+        // Race token: rapid filter/search changes can overlap requests; a slow
+        // OLDER response resolving last must never overwrite the newer view
+        // (the classic "filters don't work" symptom, F-G8).
+        const seq = ++this.loadSeq;
 
-        const params = new URLSearchParams();
+        // ONE filter-param source (filterParams) shared by the grid read AND
+        // the CSV export — "Exporteer huidige weergave" provably exports the
+        // exact predicate this view renders (F-A9).
+        const params = this.filterParams();
         params.set('page', String(this.page));
         params.set('per_page', String(this.perPage));
-        const f = this.filters;
-        if (f.status) params.set('status', f.status);
-        if (f.edition_id) params.set('edition_id', String(f.edition_id));
-        if (f.company_id) params.set('company_id', String(f.company_id));
-        if (f.trajectory_id) params.set('trajectory_id', String(f.trajectory_id));
-        if (f.q) params.set('q', f.q);
-        if (this.sortKey) {
-          params.set('sort', this.sortKey);
-          params.set('order', this.sortDir);
-        }
         if (this.groupBy) params.set('group_by', this.groupBy);
 
         // Sync the grid's view state into the browser URL so a filtered/sorted/
@@ -429,8 +520,44 @@
         // as shell.js) and PRESERVES shell's own params — never clobbers them.
         this.syncStateToUrl();
 
+        return this.performLoad(params, seq);
+      },
+
+      /* The CURRENT VIEW's filter predicate as URLSearchParams — DERIVED from
+         gridStateToParams (the tested pure mapper that also feeds the URL
+         sync), minus the non-predicate keys. One encoding of the grid state:
+         a new filter added to gridStateToParams automatically rides load()
+         AND the export URL — hand-enumerating a third copy here is how an
+         export silently ships without the newest filter (more PII rows than
+         the screen shows, the exact F-A9 egress promise). */
+      filterParams() {
+        const state = gridStateToParams(this);
+        delete state.p;
+        delete state.per_page;
+        delete state.group_by;
+        const params = new URLSearchParams();
+        Object.keys(state).forEach((k) => params.set(k, state[k]));
+        return params;
+      },
+
+      /* "Exporteer huidige weergave" (F-A9 — the owner's explicit ask): a
+         server-streamed CSV of the EXACT predicate on screen, via the shared
+         WS.download (header-auth fetch + blob — an expired nonce fails SOFT
+         as a toast; a ?_wpnonce navigation replaced the whole workspace with
+         a raw JSON 403 after an overnight tab). */
+      async exportCurrentView() {
+        try {
+          await window.WS.download(`/admin/registrations/export?${this.filterParams().toString()}`);
+        } catch (e) {
+          this.toast('mixed', '', (e && e.message) || 'Export mislukt.');
+        }
+      },
+
+      async performLoad(params, seq) {
+
         try {
           const data = await this.api(`/admin/registrations?${params.toString()}`);
+          if (seq !== this.loadSeq) return;   // superseded by a newer load()
           if (this.groupBy) {
             this.groups = data.items || [];
             this.rows = [];
@@ -443,13 +570,34 @@
           this.page = data.page || 1;
           this.perPage = data.perPage || this.perPage;
           this.pageCount = data.totalPages || 1;
+          // Keep-page reload clamp (the trajecten precedent): a background
+          // refresh can land on a page past the shrunk result set — clamp
+          // and refetch instead of rendering a lying empty state.
+          if (this.page > this.pageCount) {
+            this.page = this.pageCount;
+            return this.load();
+          }
+          // A bookmarked ?edition_id= restores the FILTER but not the picked
+          // title (the typeahead options are a capped search result, so the
+          // chip degraded to "Editie: #123"). The loaded rows carry the
+          // edition title — resolve the label from the first matching row.
+          if (this.filters.edition_id && !this.editionPickerLabel) {
+            const hit = this.allVisibleRows.find(
+              (r) => r.edition && Number(r.edition.id) === Number(this.filters.edition_id) && r.edition.title,
+            );
+            if (hit) {
+              this.editionPickerLabel = hit.edition.title;
+              this.editionQuery = hit.edition.title;
+            }
+          }
         } catch (e) {
+          if (seq !== this.loadSeq) return;   // a stale failure must not blank the newer view
           this.error = (e && e.message) ? e.message : 'Kon de inschrijvingen niet laden.';
           this.rows = [];
           this.groups = [];
           this.total = 0;
         } finally {
-          this.loading = false;
+          if (seq === this.loadSeq) this.loading = false;
         }
       },
 
@@ -465,28 +613,88 @@
         if (typeof window === 'undefined' || !window.history || !window.history.replaceState) return;
         const url = new URL(window.location.href);
         // Clear only the keys THIS grid owns (leave shell/WP params untouched).
+        // `queue` is grid-owned once the deep-link has arrived: the shell WRITES
+        // it on switchView, but clearing the queue chip in-grid must also drop
+        // it from the URL or a reload would resurrect the dismissed queue.
         // Pagination is `p`, NEVER `page` — `page` is WP admin's routing param
         // (?page=stride-dashboard); deleting it here blanks the dashboard on reload.
-        ['status', 'edition_id', 'company_id', 'trajectory_id', 'q', 'sort', 'order', 'group_by', 'p', 'per_page']
+        ['queue', 'edition_scope', 'status', 'edition_id', 'company_id', 'trajectory_id', 'q', 'sort', 'order', 'group_by', 'p', 'per_page']
           .forEach((k) => url.searchParams.delete(k));
         const gridParams = gridStateToParams(this);
         Object.keys(gridParams).forEach((k) => url.searchParams.set(k, gridParams[k]));
-        window.history.replaceState(null, '', url.toString());
+        // Preserve history.state: replaceState(null) wiped the wsFrom origin
+        // the shell's pushState navigation records (F-S2) — a background grid
+        // reload (ws-refresh after a lens mutation) must never break the
+        // dossier's origin-aware Terug.
+        window.history.replaceState(window.history.state, '', url.toString());
       },
 
+      /* Edition typeahead: every (debounced) keystroke queries the server-side
+         searchable options endpoint — no client-side 100-cap corpus. Same
+         stale-response discipline as load(): a slow older response (e.g. the
+         empty-query focus fetch) must never overwrite the options for what
+         the user has since typed. */
       async loadEditionOptions() {
+        const seq = ++this.editionOptsSeq;
+        this.editionOptsBusy = true;
         try {
-          const data = await this.api('/admin/editions/options?scope=all&per_page=100');
+          const q = encodeURIComponent(this.editionQuery || '');
+          const data = await this.api(`/admin/editions/options?scope=all&per_page=25&q=${q}`);
+          if (seq !== this.editionOptsSeq) return;
           this.editionOptions = data.items || [];
         } catch (e) {
+          if (seq !== this.editionOptsSeq) return;
           this.editionOptions = [];
+        } finally {
+          if (seq === this.editionOptsSeq) this.editionOptsBusy = false;
+        }
+      },
+      openEditionPicker() {
+        this.editionPickerOpen = true;
+        // Fetch on open only when nothing is loaded AND nothing is in flight —
+        // a focus immediately followed by typing otherwise double-fetches
+        // (the debounced input handler owns the typed query's fetch).
+        if (!this.editionOptions.length && !this.editionOptsBusy) this.loadEditionOptions();
+      },
+      pickEdition(e) {
+        this.filters.edition_id = Number(e.id) || 0;
+        this.editionPickerLabel = e.title || '';
+        this.editionQuery = e.title || '';
+        this.editionPickerOpen = false;
+        this.onFilterChange();
+      },
+      clearEditionPick() {
+        this.filters.edition_id = 0;
+        this.editionPickerLabel = '';
+        this.editionQuery = '';
+        this.editionPickerOpen = false;
+        this.onFilterChange();
+      },
+
+      /* Trajectory filter — small set, one lazy fetch (F-G9: the server join
+         existed all along; the UI control and chip did not). */
+      async loadTrajectoryOptions() {
+        try {
+          const data = await this.api('/admin/trajectories/options?scope=all&per_page=100');
+          this.trajectoryOptions = data.items || [];
+          this.trajectoryLabelById = {};
+          this.trajectoryOptions.forEach((t) => { this.trajectoryLabelById[t.id] = t.title; });
+        } catch (e) {
+          this.trajectoryOptions = [];
         }
       },
 
       /* re-fetch helpers bound by the markup */
-      reload() { this.load(1); },
+      /* Background/refresh reload keeps the CURRENT page — a ws-refresh
+         after a lens mutation must never snap the admin back to page 1
+         (their place in the list is work state). */
+      reload() { this.load(); },
       onFilterChange() { this.clearSelection(); this.load(1); },
-      onSearchChange() { this.load(1); },
+      // Search changes the filtered set — an ARMED cross-page select-all (or
+      // a manual selection) must not silently re-target to the new set, same
+      // discipline as onFilterChange (the armed payload is built at submit
+      // time from live state).
+      onSearchChange() { this.clearSelection(); this.load(1); },
       onGroupChange() { this.collapsed = {}; this.clearSelection(); this.load(1); },
       goPage(p) { if (p >= 1 && p <= this.pageCount && p !== this.page) this.load(p); },
       onPerPageChange() { this.load(1); },
@@ -502,50 +710,63 @@
       statusCount(status) { return Number(this.statusCounts[status]) || 0; },
       setStatus(s) {
         this.filters.status = (this.filters.status === s) ? '' : s;
+        // A funnel click is an explicit re-filter — the queue context (and its
+        // queue-specific empty state) must not linger under it (F-G14).
+        this.queue = '';
         this.onFilterChange();
       },
 
       /* ===== filter chips ===== */
       get hasFilters() {
         const f = this.filters;
-        return !!(f.status || f.edition_id || f.company_id || f.trajectory_id || f.q);
+        return !!(this.queue || f.status || f.edition_id || f.company_id || f.trajectory_id || f.q);
       },
       get activeChips() {
         const out = [];
         const f = this.filters;
+        if (this.queue && QUEUE_META[this.queue]) out.push({ k: 'queue', label: 'Wachtrij: ' + QUEUE_META[this.queue].label });
         if (f.status && STATUS_META[f.status]) out.push({ k: 'status', label: 'Status: ' + STATUS_META[f.status].label });
         if (f.edition_id) {
           const ed = this.editionOptions.find((e) => String(e.id) === String(f.edition_id));
-          out.push({ k: 'edition_id', label: 'Editie: ' + (ed ? ed.title : ('#' + f.edition_id)) });
+          out.push({ k: 'edition_id', label: 'Editie: ' + (this.editionPickerLabel || (ed ? ed.title : ('#' + f.edition_id))) });
+        }
+        if (f.trajectory_id) {
+          out.push({ k: 'trajectory_id', label: 'Traject: ' + (this.trajectoryLabelById[f.trajectory_id] || ('#' + f.trajectory_id)) });
         }
         if (f.company_id) out.push({ k: 'company_id', label: 'Organisatie #' + f.company_id });
         if (f.q) out.push({ k: 'q', label: '"' + f.q + '"' });
         return out;
       },
       removeChip(k) {
-        if (k === 'edition_id' || k === 'company_id' || k === 'trajectory_id') this.filters[k] = 0;
+        if (k === 'queue') this.queue = '';
+        else if (k === 'edition_id') { this.filters.edition_id = 0; this.editionPickerLabel = ''; this.editionQuery = ''; }
+        else if (k === 'company_id' || k === 'trajectory_id') this.filters[k] = 0;
         else this.filters[k] = '';
         this.onFilterChange();
       },
       clearAllFilters() {
         this.filters = { status: '', edition_id: 0, company_id: 0, trajectory_id: 0, q: '' };
         this.queue = '';
+        this.editionScope = 'active';   // back to the announced default
+        this.editionPickerLabel = '';
+        this.editionQuery = '';
         this.onFilterChange();
       },
+
+      /* ===== edition scope pill (spec §10.4) =====
+         The DEFAULT scope is announced, dismissable, and restorable — never
+         invisible. Hidden while a queue pin or an explicit edition filter is
+         active (both bypass the scope; showing the pill then would lie). */
+      get scopePillVisible() { return !this.queue && !this.filters.edition_id; },
+      widenScope() { this.editionScope = 'all'; this.onFilterChange(); },
+      narrowScope() { this.editionScope = 'active'; this.onFilterChange(); },
 
       /* ===== pagination model (compact 1 … cur-1 cur cur+1 … last) ===== */
       get rangeFrom() { return this.total === 0 ? 0 : (this.page - 1) * this.perPage + 1; },
       get rangeTo() { return Math.min(this.page * this.perPage, this.total); },
-      pageList() {
-        const last = this.pageCount, cur = this.page, out = [];
-        if (last <= 7) { for (let i = 1; i <= last; i++) out.push(i); return out; }
-        out.push(1);
-        if (cur > 3) out.push('…');
-        for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) out.push(i);
-        if (cur < last - 2) out.push('…');
-        out.push(last);
-        return out;
-      },
+      /* Delegates to THE shared pager model (WS.pageList in shell.js) — the
+         five per-surface copies of the ellipsis rule are gone (3d). */
+      pageList() { return window.WS.pageList(this.page, this.pageCount); },
 
       /* ===== grouping rendering ===== */
       get groupKindLabel() {
@@ -555,6 +776,10 @@
         const v = g.group_value;
         if (this.groupBy === 'status') return (STATUS_META[v] && STATUS_META[v].label) || v || '—';
         if (this.groupBy === 'edition_id') {
+          // Server-resolved label first (batched over THIS page's groups) —
+          // the client options list is a capped typeahead result, so falling
+          // back to it degraded unlisted editions to "Editie #123".
+          if (g.group_label) return g.group_label;
           const ed = this.editionOptions.find((e) => String(e.id) === String(v));
           return ed ? ed.title : (v ? ('Editie #' + v) : 'Geen editie');
         }
@@ -591,40 +816,84 @@
       },
 
       /* ===== selection ===== */
+      /* The rows selection/bulk reason over — the FLAT page, or every group's
+         embedded child rows in grouped mode. Reading bare `this.rows` here was
+         F-G4: grouped mode sets rows=[], so a homogeneous grouped selection
+         permanently degraded to "Gemengde statussen — geen gedeelde actie". */
+      get allVisibleRows() {
+        return this.groupBy
+          ? this.groups.flatMap((g) => g.rows || [])
+          : this.rows;
+      },
       get selectedIds() { return Object.keys(this.selected).filter((id) => this.selected[id]).map(Number); },
       get selectedCount() { return this.selectAllFilter ? this.total : this.selectedIds.length; },
-      get selectedRows() { return this.rows.filter((r) => this.selected[r.id]); },
+      get selectedRows() { return this.allVisibleRows.filter((r) => this.selected[r.id]); },
       isSelected(id) { return !!this.selected[id]; },
-      toggle(id) { this.selected[id] = !this.selected[id]; if (!this.selected[id]) this.selectAllFilter = false; },
+      /* Selection stamps the row's STATUS at select time (selectedStatusById):
+         deriving states from visible rows only meant a cross-page selection's
+         bulk bar reflected just the current page — an action could be offered
+         for (and sent to) off-screen rows in other states (F-G7). */
+      stampStatus(id) {
+        const row = this.allVisibleRows.find((r) => r.id === Number(id));
+        if (row && row.status) this.selectedStatusById[id] = row.status.value;
+      },
+      toggle(id) {
+        this.selected[id] = !this.selected[id];
+        if (this.selected[id]) this.stampStatus(id);
+        else { delete this.selectedStatusById[id]; this.selectAllFilter = false; }
+      },
       get pageAllSelected() {
-        const ids = this.rows.map((r) => r.id);
+        const ids = this.allVisibleRows.map((r) => r.id);
         return ids.length > 0 && ids.every((id) => this.selected[id]);
       },
       get pageSomeSelected() {
-        const ids = this.rows.map((r) => r.id);
+        const ids = this.allVisibleRows.map((r) => r.id);
         return ids.some((id) => this.selected[id]) && !this.pageAllSelected;
       },
       togglePage() {
         const target = !this.pageAllSelected;
-        this.rows.forEach((r) => { this.selected[r.id] = target; });
+        this.allVisibleRows.forEach((r) => {
+          this.selected[r.id] = target;
+          if (target) this.stampStatus(r.id);
+          else delete this.selectedStatusById[r.id];
+        });
         if (!target) this.selectAllFilter = false;
       },
-      /* arm the cross-page select-all: the bulk action carries the FILTER, the
-         server expands the blast radius over the whole filtered set. */
+      /* arm the cross-page select-all: the bulk action carries the FILTER
+         (including the queue pin + edition scope), the server expands the
+         blast radius over the whole filtered set. Arming is only OFFERED in a
+         status-homogeneous context (a status filter or a queue pin) — an
+         armed selection spanning unknown off-page statuses would let the bulk
+         bar offer actions the server then rejects row by row. */
+      get canArmSelectAll() {
+        return !this.groupBy && !!(this.filters.status || this.queue);
+      },
       selectAllFiltered() {
         this.selectAllFilter = true;
-        this.rows.forEach((r) => { this.selected[r.id] = true; });
+        this.allVisibleRows.forEach((r) => { this.selected[r.id] = true; this.stampStatus(r.id); });
         this.toast('mixed', String(this.total), `inschrijvingen geselecteerd over alle pagina's. De bulkactie draagt het filter, niet ${this.total} rijen.`);
       },
-      clearSelection() { this.selected = {}; this.selectAllFilter = false; },
+      clearSelection() { this.selected = {}; this.selectedStatusById = {}; this.selectAllFilter = false; },
 
       /* ===== state-aware bulk bar (intersection of selected statuses) ===== */
       get canManage() { return !!(window.StrideConfig || {}).canManage; },
       get selectedStates() {
-        // Across pages the armed filter may have a single status filter; on a
-        // page we read the loaded rows' statuses.
-        if (this.selectAllFilter && this.filters.status) return [this.filters.status];
-        return [...new Set(this.selectedRows.map((r) => r.status.value))];
+        // An ARMED selection derives its status from the FILTER it carries
+        // (status filter or the queue's single row status) — never from the
+        // visible page's stamps, which say nothing about off-page rows the
+        // expansion will include (F-G7). Arming is gated to these two
+        // contexts (canArmSelectAll); the empty-array fallback is defensive —
+        // it offers NO action rather than one that lies about its blast radius.
+        if (this.selectAllFilter) {
+          if (this.filters.status) return [this.filters.status];
+          if (this.queue && QUEUE_META[this.queue]) return [QUEUE_META[this.queue].status];
+          return [];
+        }
+        // Manual selection: statuses stamped at SELECT time.
+        const stamped = this.selectedIds
+          .map((id) => this.selectedStatusById[id])
+          .filter(Boolean);
+        return [...new Set(stamped)];
       },
       get bulkActions() { return actionsForStates(this.selectedStates); },
       get topActions() { return this.bulkActions.slice(0, 3); },
@@ -649,7 +918,10 @@
         });
         const json = await response.json().catch(() => ({}));
         if (!json || json.success !== true) {
-          throw new Error((json && json.data && json.data.message) || 'Bulkactie mislukt.');
+          // F-S5: the wp_rest cookie-nonce failure surfaces the shell's
+          // Vernieuwen banner + Dutch message instead of a generic retry-bait.
+          throw new Error(window.WS.nonceExpired(json)
+            || (json && json.data && json.data.message) || 'Bulkactie mislukt.');
         }
         return json.data;
       },
@@ -673,13 +945,13 @@
         this.busyAction = actionId;
         try {
           const payload = armed
-            ? { select_all: true, filter: gridFilterPayload(this.filters) }
+            ? { select_all: true, filter: gridFilterPayload(this) }
             : { ids };
           const report = await this.bulkApi(actionId, payload);
           const succeeded = report.succeeded || [];
           const failed = report.failed || [];
           const nameById = {};
-          this.rows.forEach((r) => { nameById[r.id] = (r.user && r.user.name) || ('#' + r.id); });
+          this.allVisibleRows.forEach((r) => { nameById[r.id] = (r.user && r.user.name) || ('#' + r.id); });
           const failRows = failed.map((f) => ({ ...f, name: nameById[f.id] || ('#' + f.id) }));
 
           this.result = {
@@ -712,22 +984,37 @@
         const next = {};
         failIds.forEach((id) => { next[id] = true; });
         this.selected = next;
+        this.selectedStatusById = {};
         this.selectAllFilter = false;
+        // Re-stamp the statuses of the retry selection from the (re-loaded)
+        // visible rows — without stamps selectedStates is empty and the bulk
+        // bar offers NO action for the very rows it invites the user to
+        // retry. Off-page failed rows stay unstamped (their status is
+        // unknown client-side); the bar then honestly narrows to the
+        // stamped subset's shared actions.
+        failIds.forEach((id) => this.stampStatus(id));
         this.result = null;
       },
 
-      /* row click → the person's dossier (cluster D reads ?user=) */
+      /* row click → the person's dossier (cluster D reads ?user=). A lead
+         has NO account and thus no dossier yet — say so instead of a silent
+         no-op on a row that looks clickable (F-G14). When the lead's e-mail
+         matches an existing account, name it: that IS the admin's next step
+         (the row binds to it at enrollment/promotion). */
       openRow(r) {
         const id = r && r.user && r.user.id;
-        if (id) this.switchView('dossier', { user: id });
+        if (id) {
+          this.switchView('dossier', { user: id });
+        } else if (r && r.accountMatch) {
+          this.toast('mixed', r.accountMatch.name, ': e-mailadres hoort bij dit bestaande account. De lead wordt eraan gekoppeld bij inschrijving of promotie.');
+        } else {
+          this.toast('mixed', '', 'Lead zonder account — er is nog geen dossier.');
+        }
       },
 
       /* ===== presentational helpers ===== */
       offerteClass(label) { return offerteClass(label); },
       attClass(v) { return v == null ? '' : v >= 80 ? 'ws-meter__fill--high' : v >= 60 ? 'ws-meter__fill--mid' : 'ws-meter__fill--low'; },
-      distColor(label) {
-        return { 'Geen offerte': '#cbd5e1', 'In behandeling': '#94a3b8', 'Verzonden': '#2563eb', 'Verwerkt': '#16a34a' }[label] || '#cbd5e1';
-      },
       avatarColor(name) { return avatarColor(name); },
       initials(name) { return initials(name); },
 
@@ -764,5 +1051,6 @@
     actionsForStates,
     avatarColor,
     initials,
+    QUEUE_META,
   };
 });

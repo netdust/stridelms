@@ -105,32 +105,13 @@ final class BulkRegistrationHandler
             return $deny;
         }
 
-        return $this->finishBatch($this->runBulk($params, function (int $id, object $reg): true|WP_Error {
-            // M3 / B5: a row may be approved into the pipe only if the ONE
-            // transition map (RegistrationTransitions, V15) permits
-            // <status> -> Confirmed. A confirmed/terminal row is rejected HERE,
-            // before the domain confirm path is re-entered — this is the gate that
-            // prevents a second LD grant (D2). Deriving from the map (not a
-            // hard-coded Pending|Interest literal) keeps the handler from drifting
-            // if the map changes; the domain confirmRegistration() re-guards.
-            $from = RegistrationStatus::tryFrom((string) $reg->status);
-            if ($from === null || !RegistrationTransitions::isAllowed($from, RegistrationStatus::Confirmed)) {
-                return new WP_Error('invalid_status', __('Deze inschrijving kan niet goedgekeurd worden.', 'stride'));
-            }
-
-            $completion = ntdst_get(EnrollmentCompletion::class);
-            $enrollment = ntdst_get(EnrollmentService::class);
-
-            $task = $completion->completeTask($id, 'approval');
-            if (is_wp_error($task)) {
-                // task_not_required is benign for an already-approved row — still report it.
-                return $task;
-            }
-
-            // D2: confirmRegistration returns WP_Error('invalid_status') for non-pending,
-            // so an already-confirmed row never double-grants.
-            return $enrollment->confirmRegistration($id);
-        }));
+        // The approve core (transition gate -> approval task -> domain confirm)
+        // is the SHARED BulkRunner::approveRow — one implementation for the
+        // grid/dossier, edition-roster and trajectory-roster surfaces.
+        return $this->finishBatch($this->runBulk(
+            $params,
+            fn (int $id, object $reg): true|WP_Error => $this->approveRow($id, $reg),
+        ));
     }
 
     /**
@@ -178,8 +159,20 @@ final class BulkRegistrationHandler
         // runBulk re-resolves idempotently. Task 4.1 — expand select-all HERE
         // (post-deny) so the B2 reg→quote map below and runBulk both read the
         // SAME expanded id set. The quote handlers delegate their authz to this
-        // method, so this is their post-deny seam.
+        // method, so this is their post-deny seam. A scope error (unknown
+        // queue in the carried filter) must propagate as the 400 — indexing
+        // ['ids'] on a WP_Error fatals.
         $params = $this->resolveBulkIds($params);
+        if (is_wp_error($params)) {
+            return $params;
+        }
+        // Drop select_all so runBulk's chokepoint re-resolve is a no-op: a
+        // SECOND expansion could resolve a slightly different set (a row
+        // entering the filter between the two queries), and any id in the
+        // second set but not in $map below would be falsely failed no_quote.
+        // The single-set guarantee ("the B2 map and runBulk iterate the SAME
+        // expanded ids") only holds when the ids are expanded exactly once.
+        unset($params['select_all']);
 
         $quoteRepo = ntdst_get(QuoteRepository::class);
 
@@ -191,6 +184,16 @@ final class BulkRegistrationHandler
         $map = $quoteRepo->findQuoteIdsByRegistrations($ids); // regId => quoteId (V11)
 
         return $this->runBulk($params, function (int $id, object $reg) use ($quoteRepo, $status, $map): true|WP_Error {
+            // Quote workflow actions belong to LIVE enrollments (spec §2.1:
+            // offered for confirmed; completed keeps its quote actionable for
+            // late follow-up). The action was status-BLIND, so a cross-page
+            // selection whose bulk bar was derived from other rows could mark
+            // a pending/interest row's quote as sent (F-G7 server half).
+            $rowStatus = (string) $reg->status;
+            if (!in_array($rowStatus, [RegistrationStatus::Confirmed->value, RegistrationStatus::Completed->value], true)) {
+                return new WP_Error('invalid_status', __('Offerte-acties zijn enkel mogelijk voor bevestigde of afgeronde inschrijvingen.', 'stride'));
+            }
+
             $quoteId = (int) ($map[$id] ?? 0);
             if (!$quoteId) {
                 return new WP_Error('no_quote', __('Geen offerte voor deze inschrijving.', 'stride'));

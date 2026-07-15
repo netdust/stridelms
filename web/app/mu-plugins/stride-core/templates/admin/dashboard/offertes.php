@@ -5,8 +5,9 @@
  * In-shell list of quotes. Its own per-surface Alpine factory
  * (assets/js/admin/offertes.js) owns ALL its data: fetches GET /admin/quotes
  * server-side, owns its loading/empty/error state, re-loads on filter/page
- * change. It tolerates the Phase-1-deferred items|data envelope client-side
- * (quoteRows) — the backend is FROZEN, never normalized here.
+ * change. The backend emits ONE envelope on every path (the zero-user-search
+ * divergence was removed at the Offertes slice, F-A8); quoteRows() stays as
+ * defensive tolerance only.
  *
  * Quote `status` is WORKFLOW status (Draft/Sent/Exported/Cancelled), NOT
  * payment. The server sends `statusLabel` AS RECEIVED (INV-7) — rendered
@@ -40,7 +41,22 @@ defined('ABSPATH') || exit;
 
             <div class="ws-select-wrap">
                 <span x-html="icon('filter')" style="width:14px;height:14px"></span>
-                <?php echo esc_html__('Tag', 'stride'); ?>
+                <?php echo esc_html__('Status', 'stride'); ?>
+                <select class="ws-select" x-model="filters.status" @change="onFilterChange()">
+                    <option value=""><?php echo esc_html__('Alle statussen', 'stride'); ?></option>
+                    <?php
+                    // The filter speaks the SAME vocabulary the badge renders —
+                    // the QuoteStatus enum (workflow status, not payment).
+                    foreach (\Stride\Domain\QuoteStatus::cases() as $quoteStatus) : ?>
+                        <option value="<?php echo esc_attr($quoteStatus->value); ?>"><?php echo esc_html($quoteStatus->label()); ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+
+            <div class="ws-select-wrap"
+                 title="<?php echo esc_attr__('Filtert via de cursustag van de gekoppelde editie — offertes zonder editie vallen buiten elke tag.', 'stride'); ?>">
+                <span x-html="icon('filter')" style="width:14px;height:14px"></span>
+                <?php echo esc_html__('Editietag', 'stride'); ?>
                 <select class="ws-select" x-model="filters.tag" @change="onFilterChange()">
                     <option value=""><?php echo esc_html__('Alle tags', 'stride'); ?></option>
                     <template x-for="o in tagOptions" :key="o.id"><option :value="o.id" x-text="o.name"></option></template>
@@ -61,6 +77,16 @@ defined('ABSPATH') || exit;
             </button>
 
             <div class="ws-toolbar__spacer"></div>
+
+            <!-- Exact-handoff CSV (F-A9): the exact predicate on screen, via
+                 the same filterParams() the list read uses. stride_manage
+                 only (financial + PII egress). -->
+            <button class="ws-btn ws-btn--ghost ws-btn--sm" x-show="canManage && total > 0"
+                    @click="exportCurrentView()"
+                    title="<?php echo esc_attr__('Download deze weergave (met de actieve filters) als CSV voor Exact', 'stride'); ?>">
+                <span x-html="icon('download')"></span> <?php echo esc_html__('Exporteer voor Exact', 'stride'); ?>
+            </button>
+
             <div class="ws-count">
                 <?php echo esc_html__('Toont', 'stride'); ?> <b x-text="rangeFrom"></b>–<b x-text="rangeTo"></b>
                 <?php echo esc_html__('van', 'stride'); ?> <b x-text="total.toLocaleString('nl-BE')"></b>
@@ -92,8 +118,10 @@ defined('ABSPATH') || exit;
                     <th><?php echo esc_html__('Offerte', 'stride'); ?></th>
                     <th><?php echo esc_html__('Klant', 'stride'); ?></th>
                     <th><?php echo esc_html__('Editie', 'stride'); ?></th>
+                    <th><?php echo esc_html__('Datum', 'stride'); ?></th>
                     <th class="ws-col-status"><?php echo esc_html__('Status', 'stride'); ?></th>
                     <th style="text-align:right"><?php echo esc_html__('Bedrag', 'stride'); ?></th>
+                    <th style="text-align:right;white-space:nowrap"></th>
                 </tr>
             </thead>
             <tbody>
@@ -119,11 +147,52 @@ defined('ABSPATH') || exit;
                             </template>
                             <template x-if="!(r.edition && r.edition.title)"><span class="ws-muted">—</span></template>
                         </td>
+                        <!-- Datum (F-O2): the date filter finally filters a
+                             VISIBLE column. Server-owned Dutch label. -->
+                        <td>
+                            <span class="ws-org-cell">
+                                <span x-html="icon('calendar')"></span>
+                                <span x-text="r.dateLabel || '—'"></span>
+                            </span>
+                        </td>
                         <td>
                             <span class="ws-badge" :class="'ws-badge--'+badgeClass(r.status)" x-text="r.statusLabel"></span>
+                            <!-- lock (F-O1): finalized on the edit screen —
+                                 the admin sees a row is read-only BEFORE
+                                 clicking through. inline-flex so the 13px box
+                                 actually applies (a bare inline span ignores
+                                 width/height and the SVG blows up to the
+                                 cell). -->
+                            <span x-show="r.locked" x-html="icon('lock')"
+                                  style="display:inline-flex;width:13px;height:13px;vertical-align:middle;margin-left:4px;color:var(--ws-text-3)"
+                                  title="<?php echo esc_attr__('Vergrendeld — niet meer bewerkbaar', 'stride'); ?>"></span>
                         </td>
                         <td style="text-align:right">
                             <b x-text="'€ ' + (r.totalFormatted || '0,00')"></b>
+                        </td>
+                        <!-- row actions (F-O1): dossier jump + an HONEST edit
+                             affordance (the row click already navigates to the
+                             WP edit screen — the quote workbench; now it says
+                             so instead of being a surprise). -->
+                        <td style="text-align:right;white-space:nowrap">
+                            <button class="ws-btn ws-btn--ghost ws-btn--sm" @click="openPerson(r, $event)"
+                                    :disabled="!(r.user && r.user.id)"
+                                    title="<?php echo esc_attr__('Open het dossier van deze klant', 'stride'); ?>">
+                                <span x-html="icon('users')"></span> <?php echo esc_html__('Dossier', 'stride'); ?>
+                            </button>
+                            <!-- .stop: without it the click bubbles to the
+                                 row's @click="openRow" and fires twice.
+                                 Locked rows say Bekijken — the workbench
+                                 opens read-only there, and a button promising
+                                 write actions next to a lock icon is the
+                                 exact surprise F-O1 removes. Strings inside
+                                 the Alpine expressions are JS-string
+                                 context → esc_js. -->
+                            <button class="ws-btn ws-btn--ghost ws-btn--sm" @click.stop="openRow(r)"
+                                    :title="r.locked ? '<?php echo esc_js(__('Opent het bewerkscherm (alleen-lezen — vergrendeld)', 'stride')); ?>' : '<?php echo esc_js(__('Opent het bewerkscherm (verzenden, status, voucher, PDF)', 'stride')); ?>'">
+                                <span x-html="icon('edit')"></span>
+                                <span x-text="r.locked ? '<?php echo esc_js(__('Bekijken', 'stride')); ?>' : '<?php echo esc_js(__('Bewerken', 'stride')); ?>'"></span>
+                            </button>
                         </td>
                     </tr>
                 </template>
@@ -145,7 +214,10 @@ defined('ABSPATH') || exit;
         <div class="ws-count"><?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="pageCount"></b></div>
         <div class="ws-pager__pages">
             <button class="ws-page-btn" :disabled="page===1" @click="goPage(page-1)"><span x-html="icon('chevRight')" style="transform:rotate(180deg);width:15px;height:15px"></span></button>
-            <template x-for="p in pageList()" :key="p">
+            <!-- :key is the INDEX — pageList() emits the '…' sentinel twice
+                     mid-range, and duplicate keys corrupt Alpine's keyed
+                     reconciliation (shared ws-pager contract fix). -->
+            <template x-for="(p, pi) in pageList()" :key="pi">
                 <template x-if="p === '…'"><span class="ws-page-ellipsis">…</span></template>
                 <template x-if="p !== '…'"><button class="ws-page-btn" :class="p===page && 'is-active'" @click="goPage(p)" x-text="p"></button></template>
             </template>

@@ -2,11 +2,13 @@
 /**
  * Admin Workspace — Gebruikers search surface (cluster F).
  *
- * A search-DRIVEN surface (not a paged list). Its own per-surface Alpine
- * factory (assets/js/admin/gebruikers.js) queries GET /admin/users/search?q=
- * which returns a BARE ARRAY of {id,name,email,organisation,registration_count}.
- * On an empty query it shows a "search for a user" prompt — not an error, not a
- * request. Row click → switchView('dossier', {user:u.id}) (reuses cluster-D).
+ * A search-DRIVEN surface, PAGED since the Gebruikers slice (F-U1). Its own
+ * per-surface Alpine factory (assets/js/admin/gebruikers.js) queries
+ * GET /admin/users/search?q=&page=&per_page= which returns the standard
+ * envelope of {id,name,email,organisation,registration_count,anonymised}
+ * items. On an empty or too-short (<2 chars) query it shows the prompt —
+ * not an error, not a request. Anonymised (GDPR-scrubbed) accounts carry a
+ * "Geanonimiseerd" badge. Row click → switchView('dossier', {user:u.id}).
  *
  * Mounted x-data="gebruikers()" inside wsShell() — inherits api/switchView/icon.
  * INV-5: x-html binds CONSTANT icon names only. Names/emails/orgs via x-text.
@@ -31,7 +33,7 @@ defined('ABSPATH') || exit;
                 <span x-html="icon('search')"></span>
                 <input type="text"
                        placeholder="<?php echo esc_attr__('Zoek op naam, e-mail of login…', 'stride'); ?>"
-                       x-model="query" @input.debounce.350ms="search()">
+                       x-model="query" @input.debounce.350ms="onQueryChange()">
             </div>
 
             <button class="ws-btn ws-btn--subtle ws-btn--sm" x-show="query" @click="clearSearch()">
@@ -39,8 +41,14 @@ defined('ABSPATH') || exit;
             </button>
 
             <div class="ws-toolbar__spacer"></div>
-            <div class="ws-count" x-show="searched && rows.length > 0">
-                <b x-text="rows.length"></b> <?php echo esc_html__('resultaten', 'stride'); ?>
+            <!-- honest count (F-U1: "10 resultaten" presented a capped page
+                 as the complete set) — the true total, ranged. Hidden while
+                 a request is in flight so a NEW term never displays the
+                 PREVIOUS term's total. -->
+            <div class="ws-count" x-show="!loading && searched && total > 0">
+                <?php echo esc_html__('Toont', 'stride'); ?> <b x-text="rangeFrom"></b>–<b x-text="rangeTo"></b>
+                <?php echo esc_html__('van', 'stride'); ?> <b x-text="total.toLocaleString('nl-BE')"></b>
+                <?php echo esc_html__('gebruikers', 'stride'); ?>
             </div>
         </div>
     </div>
@@ -63,11 +71,12 @@ defined('ABSPATH') || exit;
             <div class="ws-empty" style="padding-top:64px"><p><?php echo esc_html__('Zoeken…', 'stride'); ?></p></div>
         </template>
 
-        <!-- search prompt (no query yet) -->
+        <!-- search prompt (no query yet, or shorter than the 2-char minimum —
+             the client guards, so the server's 400 never flashes, F-U1) -->
         <div class="ws-empty" x-show="showPrompt" style="padding-top:80px">
             <div class="ws-empty__icon" x-html="icon('search')"></div>
             <h3><?php echo esc_html__('Zoek een gebruiker', 'stride'); ?></h3>
-            <p><?php echo esc_html__('Typ een naam, e-mailadres of login om gebruikers te vinden.', 'stride'); ?></p>
+            <p><?php echo esc_html__('Typ minstens 2 tekens van een naam, e-mailadres of login.', 'stride'); ?></p>
         </div>
 
         <!-- no results -->
@@ -92,7 +101,16 @@ defined('ABSPATH') || exit;
                             <div class="ws-namecell">
                                 <div class="ws-namecell__avatar" style="background:#6366f1" x-text="initials(u.name)"></div>
                                 <div>
-                                    <div class="ws-namecell__name" x-text="u.name"></div>
+                                    <div class="ws-namecell__name">
+                                        <span x-text="u.name"></span>
+                                        <!-- GDPR-scrubbed account kept for history (F-U1):
+                                             flagged, so it never reads as an odd real person.
+                                             is_anonymised — the same key name as the dossier
+                                             and cohort-lens payloads. -->
+                                        <span class="ws-badge ws-badge--cancelled" x-show="u.is_anonymised"
+                                              style="margin-left:6px"
+                                              title="<?php echo esc_attr__('GDPR-geanonimiseerd account — persoonsgegevens zijn gewist', 'stride'); ?>"><?php echo esc_html__('Geanonimiseerd', 'stride'); ?></span>
+                                    </div>
                                     <div class="ws-namecell__sub" x-text="u.email"></div>
                                 </div>
                             </div>
@@ -110,5 +128,22 @@ defined('ABSPATH') || exit;
                 </template>
             </tbody>
         </table>
+    </div>
+
+    <!-- ===== PAGINATION (F-U1: the capped 10 had no way to reach the rest) =====
+         Hidden while loading (a stale pager for the previous term invites an
+         out-of-range page click). :key is the INDEX — pageList() emits the
+         '…' sentinel twice mid-range, and duplicate keys corrupt Alpine's
+         keyed reconciliation. -->
+    <div class="ws-pager" x-show="!loading && !error && searched && pageCount > 1">
+        <div class="ws-count"><?php echo esc_html__('Pagina', 'stride'); ?> <b x-text="page"></b> <?php echo esc_html__('van', 'stride'); ?> <b x-text="pageCount"></b></div>
+        <div class="ws-pager__pages">
+            <button class="ws-page-btn" :disabled="page===1" @click="goPage(page-1)"><span x-html="icon('chevRight')" style="transform:rotate(180deg);width:15px;height:15px"></span></button>
+            <template x-for="(p, pi) in pageList()" :key="pi">
+                <template x-if="p === '…'"><span class="ws-page-ellipsis">…</span></template>
+                <template x-if="p !== '…'"><button class="ws-page-btn" :class="p===page && 'is-active'" @click="goPage(p)" x-text="p"></button></template>
+            </template>
+            <button class="ws-page-btn" :disabled="page===pageCount" @click="goPage(page+1)"><span x-html="icon('chevRight')" style="width:15px;height:15px"></span></button>
+        </div>
     </div>
 </section>

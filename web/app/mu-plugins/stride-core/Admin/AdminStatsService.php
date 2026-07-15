@@ -4,19 +4,13 @@ declare(strict_types=1);
 
 namespace Stride\Admin;
 
-use Stride\Domain\OfferingStatus;
 use Stride\Domain\QuoteStatus;
 use Stride\Domain\RegistrationStatus;
-use Stride\Infrastructure\BatchQueryHelper;
-use Stride\Integrations\LearnDash\LearnDashHelper;
 use Stride\Modules\Edition\EditionCPT;
 use Stride\Modules\Edition\EditionRepository;
-use Stride\Modules\Edition\EditionService;
 use Stride\Modules\Edition\SessionCPT;
-use Stride\Modules\Enrollment\RegistrationRepository;
 use Stride\Modules\Enrollment\RegistrationTable;
 use Stride\Modules\Invoicing\QuoteCPT;
-use Stride\Modules\Trajectory\TrajectoryCPT;
 
 /**
  * Read-model assembly for the admin dashboard stats + action-queue surfaces.
@@ -30,13 +24,6 @@ use Stride\Modules\Trajectory\TrajectoryCPT;
  */
 final class AdminStatsService
 {
-    /**
-     * Interest rows older than this many days surface in the "Oude interesse"
-     * worklist queue. Matches the mockup QUEUES def ("interesse + ouder dan
-     * 90 dagen", docs/mockups/admin-workspace/assets/js/data.js).
-     */
-    private const OLD_INTEREST_DAYS = 90;
-
     /**
      * Transient key + TTL for the cached dashboard stats payload (S6).
      *
@@ -55,13 +42,85 @@ final class AdminStatsService
     public const STATS_TRANSIENT_KEY = 'stride_admin_stats';
     private const STATS_TTL = 2 * MINUTE_IN_SECONDS;
 
+    /** Transient key for the cached action-queue items (getActionQueueItems). */
+    public const ACTION_QUEUE_TRANSIENT_KEY = 'stride_action_queue';
+
+    /**
+     * Revision counter salting WorklistQueueResolver's short-TTL id-set
+     * cache. The cache keys are dynamic (edition-set + queue-subset hash),
+     * so they cannot be deleted by name — bumping the rev invalidates every
+     * cached id-set at once.
+     */
+    public const QUEUE_REV_OPTION = 'stride_queue_rev';
+
     public function __construct(
         private readonly ActionQueueService $actionQueue,
-        private readonly RegistrationRepository $registrations,
-        private readonly AdminRegistrationQueryService $registrationQuery,
-        private readonly EditionService $editions,
         private readonly EditionRepository $editionRepository,
-    ) {}
+    ) {
+        $this->init();
+    }
+
+    /**
+     * The write-event bust hooks live HERE — with the cache owner — and NOT
+     * in AdminDashboardService: that service is admin_only, and the ntdst
+     * Bootstrap skips admin_only services when !is_admin(). Workspace
+     * mutations run through REST (is_admin() false), so hooks registered
+     * there never fired for exactly the writes the workspace makes —
+     * approve/promote/bulk left every dashboard count stale until the TTL.
+     */
+    private function init(): void
+    {
+        $bust = static function (): void {
+            self::bustCaches();
+        };
+        add_action('stride/registration/created', $bust);
+        add_action('stride/registration/confirmed', $bust);
+        add_action('stride/registration/cancelled', $bust);
+        add_action('stride/attendance/marked', $bust);
+        add_action('save_post_vad_quote', $bust);
+        // Bulk batch completion + quote-status changes set via the repo
+        // (which never touch save_post_vad_quote) must recount the queue.
+        add_action('stride/registration/bulk_completed', $bust);
+        add_action('stride/registration/quote_status_changed', $bust);
+        // Interest/waitlist public sign-ups feed worklistQueues.oldinterest /
+        // .waitlist_open (not covered by created/confirmed/cancelled).
+        add_action('stride/registration/interest_registered', $bust);
+        add_action('stride/registration/waitlisted', $bust);
+        // Any other status transition (e.g. a single reg → completed feeding
+        // .nocert) fires the repo's generic updated event — the catch-all.
+        add_action('stride/registration/updated', $bust);
+        // Edition / session / trajectory CPT writes feed upcomingEditions,
+        // todaySessions and the queue scope (findAdminActiveIds).
+        add_action('save_post_vad_edition', $bust);
+        add_action('save_post_vad_session', $bust);
+        add_action('save_post_vad_trajectory', $bust);
+        // learndash_course_completed (feeds the nocert count) fires on
+        // frontend requests — that bust lives in LearnDashService, which
+        // loads on every request. It calls the same bustCaches().
+    }
+
+    /**
+     * Bust every cached dashboard read this service owns (stats + action
+     * queue + the resolver's id-sets) — THE single bust both hook sites
+     * call (init() above and LearnDashService's course-completion hook), so
+     * a cache added here is busted everywhere at once instead of drifting
+     * between two hand-copied delete_transient lists.
+     */
+    public static function bustCaches(): void
+    {
+        delete_transient(self::ACTION_QUEUE_TRANSIENT_KEY);
+        delete_transient(self::STATS_TRANSIENT_KEY);
+        self::bumpQueueRev();
+    }
+
+    /**
+     * Invalidate the resolver's id-set cache (dynamic keys — validated
+     * against this rev inside the cached value).
+     */
+    public static function bumpQueueRev(): void
+    {
+        update_option(self::QUEUE_REV_OPTION, (int) get_option(self::QUEUE_REV_OPTION, 0) + 1, true);
+    }
 
     // =========================================================================
     // DASHBOARD STATS  (GET /admin/stats)
@@ -123,14 +182,6 @@ final class AdminStatsService
             QuoteStatus::Draft->value,
         ));
 
-        // Pending registrations (for actionCount)
-        $pendingRegistrations = 0;
-        if ($registrationTableExists) {
-            $pendingRegistrations = (int) $wpdb->get_var(
-                "SELECT COUNT(*) FROM {$registrationTable} WHERE status = 'pending'",
-            );
-        }
-
         // Sessions today count
         $todaySessions = (int) $wpdb->get_var($wpdb->prepare(
             "SELECT COUNT(*) FROM {$wpdb->posts} p
@@ -141,154 +192,6 @@ final class AdminStatsService
             SessionCPT::POST_TYPE,
             $today,
         ));
-
-        // Open trajectories (status = 'open')
-        $openTrajectories = (int) $wpdb->get_var($wpdb->prepare(
-            "SELECT COUNT(*) FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm ON p.ID = pm.post_id AND pm.meta_key = %s
-             WHERE p.post_type = %s AND p.post_status = 'publish'
-             AND pm.meta_value = %s",
-            '_ntdst_status',
-            TrajectoryCPT::POST_TYPE,
-            'open',
-        ));
-
-        // === TODAY'S SESSIONS WITH DETAILS (batch fetch) ===
-
-        $todaySessionDetails = [];
-        $sessions = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID, p.post_title, pm_time.meta_value as start_time, pm_end.meta_value as end_time,
-                    pm_edition.meta_value as edition_id
-             FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_date'
-             LEFT JOIN {$wpdb->postmeta} pm_time ON p.ID = pm_time.post_id AND pm_time.meta_key = '_ntdst_start_time'
-             LEFT JOIN {$wpdb->postmeta} pm_end ON p.ID = pm_end.post_id AND pm_end.meta_key = '_ntdst_end_time'
-             LEFT JOIN {$wpdb->postmeta} pm_edition ON p.ID = pm_edition.post_id AND pm_edition.meta_key = '_ntdst_edition_id'
-             WHERE p.post_type = %s AND p.post_status = 'publish'
-             AND pm_date.meta_value = %s
-             ORDER BY pm_time.meta_value ASC",
-            SessionCPT::POST_TYPE,
-            $today,
-        ));
-
-        if (!empty($sessions)) {
-            // Collect edition IDs for batch fetch
-            $sessionEditionIds = [];
-            foreach ($sessions as $session) {
-                $editionId = (int) $session->edition_id;
-                if ($editionId > 0) {
-                    $sessionEditionIds[] = $editionId;
-                }
-            }
-
-            // Batch fetch editions and registration counts
-            $editionsMap = BatchQueryHelper::batchGetPosts($sessionEditionIds, EditionCPT::POST_TYPE);
-            $regCountsMap = $registrationTableExists
-                ? BatchQueryHelper::batchGetRegistrationCounts($sessionEditionIds)
-                : [];
-
-            foreach ($sessions as $session) {
-                $editionId = (int) $session->edition_id;
-                $edition = $editionsMap[$editionId] ?? null;
-                $registeredCount = $regCountsMap[$editionId] ?? 0;
-
-                $todaySessionDetails[] = [
-                    'id' => (int) $session->ID,
-                    'title' => $session->post_title,
-                    'editionTitle' => $edition ? $edition->post_title : '',
-                    'startTime' => $session->start_time ?: '',
-                    'endTime' => $session->end_time ?: '',
-                    'registeredCount' => $registeredCount,
-                ];
-            }
-        }
-
-        // === UPCOMING EDITIONS (next 5, batch fetch registration counts) ===
-
-        $upcomingEditionDetails = [];
-        $upcomingList = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
-                    pm_capacity.meta_value as capacity
-             FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
-             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = '_ntdst_capacity'
-             WHERE p.post_type = %s AND p.post_status = 'publish'
-             AND pm_date.meta_value >= %s
-             ORDER BY pm_date.meta_value ASC
-             LIMIT 5",
-            EditionCPT::POST_TYPE,
-            $today,
-        ));
-
-        if (!empty($upcomingList)) {
-            // Collect edition IDs for batch fetch
-            $upcomingEditionIds = array_map(fn($ed) => (int) $ed->ID, $upcomingList);
-
-            // Batch fetch registration counts
-            $upcomingRegCounts = $registrationTableExists
-                ? BatchQueryHelper::batchGetRegistrationCounts($upcomingEditionIds)
-                : [];
-
-            foreach ($upcomingList as $ed) {
-                $editionId = (int) $ed->ID;
-                $capacity = (int) $ed->capacity;
-                $registeredCount = $upcomingRegCounts[$editionId] ?? 0;
-
-                $upcomingEditionDetails[] = [
-                    'id' => $editionId,
-                    'title' => $ed->post_title,
-                    'startDate' => $ed->start_date,
-                    'capacity' => $capacity,
-                    'registeredCount' => $registeredCount,
-                    'spotsLeft' => $capacity > 0 ? max(0, $capacity - $registeredCount) : null,
-                ];
-            }
-        }
-
-        // === RECENT REGISTRATIONS (last 7 days, batch fetch users and editions) ===
-
-        $recentRegistrations = [];
-        if ($registrationTableExists) {
-            $weekAgo = wp_date('Y-m-d H:i:s', strtotime('-7 days'));
-            $recentRegs = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.id, r.user_id, r.edition_id, r.status, r.registered_at
-                 FROM {$registrationTable} r
-                 WHERE r.registered_at >= %s
-                 ORDER BY r.registered_at DESC
-                 LIMIT 10",
-                $weekAgo,
-            ));
-
-            if (!empty($recentRegs)) {
-                // Collect IDs for batch fetch
-                $userIds = [];
-                $editionIds = [];
-                foreach ($recentRegs as $reg) {
-                    $userIds[] = (int) $reg->user_id;
-                    $editionIds[] = (int) $reg->edition_id;
-                }
-
-                // Batch fetch users and editions
-                $usersMap = BatchQueryHelper::batchGetUsers($userIds);
-                $editionsMap = BatchQueryHelper::batchGetPosts($editionIds, EditionCPT::POST_TYPE);
-
-                foreach ($recentRegs as $reg) {
-                    $userId = (int) $reg->user_id;
-                    $editionId = (int) $reg->edition_id;
-                    $user = $usersMap[$userId] ?? null;
-                    $edition = $editionsMap[$editionId] ?? null;
-
-                    $recentRegistrations[] = [
-                        'id' => (int) $reg->id,
-                        'userName' => $user ? $user->display_name : 'Unknown',
-                        'userEmail' => $user ? $user->user_email : '',
-                        'editionTitle' => $edition ? $edition->post_title : 'Unknown',
-                        'status' => $reg->status,
-                        'createdAt' => $reg->registered_at,
-                    ];
-                }
-            }
-        }
 
         // === REGISTRATIONS THIS WEEK VS LAST WEEK (single queries) ===
 
@@ -309,87 +212,19 @@ final class AdminStatsService
             ));
         }
 
-        // === ALERTS (batch fetch registration counts) ===
-
-        $alerts = [];
-        $twoWeeksFromNow = wp_date('Y-m-d', strtotime('+14 days'));
-        $alertEditions = $wpdb->get_results($wpdb->prepare(
-            "SELECT p.ID, p.post_title, pm_date.meta_value as start_date,
-                    pm_capacity.meta_value as capacity
-             FROM {$wpdb->posts} p
-             INNER JOIN {$wpdb->postmeta} pm_date ON p.ID = pm_date.post_id AND pm_date.meta_key = '_ntdst_start_date'
-             LEFT JOIN {$wpdb->postmeta} pm_capacity ON p.ID = pm_capacity.post_id AND pm_capacity.meta_key = '_ntdst_capacity'
-             WHERE p.post_type = %s AND p.post_status = 'publish'
-             AND pm_date.meta_value >= %s AND pm_date.meta_value <= %s
-             ORDER BY pm_date.meta_value ASC",
-            EditionCPT::POST_TYPE,
-            $today,
-            $twoWeeksFromNow,
-        ));
-
-        if (!empty($alertEditions)) {
-            // Filter to only editions with capacity > 0, collect IDs
-            $alertEditionIds = [];
-            $alertEditionsFiltered = [];
-            foreach ($alertEditions as $ed) {
-                $capacity = (int) $ed->capacity;
-                if ($capacity > 0) {
-                    $alertEditionIds[] = (int) $ed->ID;
-                    $alertEditionsFiltered[] = $ed;
-                }
-            }
-
-            // Batch fetch registration counts
-            $alertRegCounts = $registrationTableExists
-                ? BatchQueryHelper::batchGetRegistrationCounts($alertEditionIds)
-                : [];
-
-            foreach ($alertEditionsFiltered as $ed) {
-                $editionId = (int) $ed->ID;
-                $capacity = (int) $ed->capacity;
-                $registeredCount = $alertRegCounts[$editionId] ?? 0;
-                $fillRate = ($registeredCount / $capacity) * 100;
-
-                if ($fillRate >= 80) {
-                    $alerts[] = [
-                        'type' => 'almost_full',
-                        'editionId' => $editionId,
-                        'editionTitle' => $ed->post_title,
-                        'startDate' => $ed->start_date,
-                        'message' => sprintf('%d/%d plaatsen bezet', $registeredCount, $capacity),
-                        'fillRate' => (int) round($fillRate),
-                    ];
-                } elseif ($fillRate < 30) {
-                    $alerts[] = [
-                        'type' => 'low_registration',
-                        'editionId' => $editionId,
-                        'editionTitle' => $ed->post_title,
-                        'startDate' => $ed->start_date,
-                        'message' => sprintf('Slechts %d/%d inschrijvingen', $registeredCount, $capacity),
-                        'fillRate' => (int) round($fillRate),
-                    ];
-                }
-            }
-        }
-
+        // F-V12: the payload carries ONLY consumed keys. The pre-workspace
+        // dashboard's detail blocks (todaySessionDetails, upcomingEditionDetails,
+        // recentRegistrations, openTrajectories, alerts, actionCount) were
+        // computed on every cache miss — batch fetches included — and consumed
+        // by NOTHING after the workspace replaced that UI. Grep before
+        // re-adding a key: vandaag.js mapStats/mapQueues is the consumer.
         $stats = [
             'upcomingEditions' => $upcomingEditions,
             'totalRegistrations' => $totalRegistrations,
             'pendingQuotes' => $pendingQuotes,
             'todaySessions' => $todaySessions,
-            'openTrajectories' => $openTrajectories,
-            'actionCount' => $pendingRegistrations + $pendingQuotes,
-            // Dashboard detail data
-            'todaySessionDetails' => $todaySessionDetails,
-            'upcomingEditionDetails' => $upcomingEditionDetails,
-            'recentRegistrations' => $recentRegistrations,
             'registrationsThisWeek' => $registrationsThisWeek,
             'registrationsLastWeek' => $registrationsLastWeek,
-            'alerts' => $alerts,
-            // ADDITIVE (Phase-1D Task 3.3 / drift #4): the Vandaag worklist queue
-            // counts, scoped to the active-edition subset. Existing keys above are
-            // UNCHANGED — other UI consumes them. Adding a 6th queue key
-            // (interest_to_invite) flows through here without a whitelist.
             'worklistQueues' => $this->getWorklistQueueCounts($this->activeEditionIds()),
         ];
 
@@ -420,7 +255,8 @@ final class AdminStatsService
      *  - nocert            — 'completed' rows with completed_at set but no
      *                        LearnDash certificate.
      *  - oldinterest       — 'interest' rows registered more than
-     *                        OLD_INTEREST_DAYS ago. Counts DATELESS-edition rows
+     *                        WorklistQueueResolver::OLD_INTEREST_DAYS ago.
+     *                        Counts DATELESS-edition rows
      *                        too, because the active subset includes dateless
      *                        editions (§10.7 carve-out — the active-set predicate
      *                        is NULL-permitting, not a start_date >= X filter).
@@ -441,194 +277,55 @@ final class AdminStatsService
      */
     public function getWorklistQueueCounts(array $activeEditionIds): array
     {
-        $empty = [
-            'pending'            => 0,
-            'waitlist_open'      => 0,
-            'offerte_opvolging'  => 0,
-            'nocert'             => 0,
-            'oldinterest'        => 0,
-            'interest_to_invite' => 0,
-        ];
+        // THE queue definitions live in WorklistQueueResolver — the counts are
+        // count() of the SAME id-sets the grid's ?queue= filter applies, so the
+        // card number and its click-through can never drift (RC-2). Lazy
+        // container read: the resolver also serves AdminRegistrationQueryService,
+        // which this service already owns — a constructor dep would cycle.
+        $resolver = ntdst_get(WorklistQueueResolver::class);
+        $ids = $resolver->idsByQueue($activeEditionIds);
 
-        $activeEditionIds = array_values(array_unique(array_filter(array_map('intval', $activeEditionIds))));
-        if (empty($activeEditionIds) || !RegistrationTable::exists()) {
-            return $empty;
-        }
+        // Decision 7a: the pending card renders a ready/blocked split —
+        // same fetch+definition as the pending set itself (ready ∪ blocked
+        // ≡ pending, so the split can never disagree with the card total).
+        $split = $resolver->pendingSplit($activeEditionIds);
 
-        // --- pending: a single grouped count, no row fetch needed ---
-        $breakdown = $this->registrations->statusBreakdownByEditions($activeEditionIds);
-        $pending   = (int) ($breakdown[RegistrationStatus::Pending->value] ?? 0);
-
-        // --- Fetch the rows the other four queues reason over (structured cols, M5) ---
-        $rows = $this->registrations->findByEditionsAndStatuses(
-            $activeEditionIds,
-            [
-                RegistrationStatus::Waitlist->value,
-                RegistrationStatus::Confirmed->value,
-                RegistrationStatus::Completed->value,
-                RegistrationStatus::Interest->value,
-            ],
-        );
-
-        if (empty($rows)) {
-            return ['pending' => $pending] + $empty;
-        }
-
-        // Effective status per edition (INV-7) — one batched decision pass.
-        $effectiveStatuses = $this->editions->getEffectiveStatuses($activeEditionIds);
-
-        // Offerte resolver (single paid-proxy definition) over the confirmed regs.
-        $confirmedRegIds = [];
-        foreach ($rows as $row) {
-            if ($row->status === RegistrationStatus::Confirmed->value) {
-                $confirmedRegIds[] = (int) $row->id;
-            }
-        }
-        $offerteByReg  = !empty($confirmedRegIds)
-            ? $this->registrationQuery->offerteStatusesForRegistrations($confirmedRegIds)
-            : [];
-        $exportedLabel = QuoteStatus::Exported->label();
-
-        // Pre-resolve the per-edition lookups ONCE per distinct edition, not per
-        // row (CR-2/CR-3): the waitlist capacity check and the completed-row
-        // course lookup otherwise fire a query per matching row even when many
-        // rows share an edition. Build the distinct-edition maps up front.
-        $waitlistEditionIds = [];
-        $completedEditionIds = [];
-        $interestEditionIds = [];
-        foreach ($rows as $row) {
-            $editionId = (int) $row->edition_id;
-            if ($row->status === RegistrationStatus::Waitlist->value) {
-                $waitlistEditionIds[$editionId] = true;
-            } elseif ($row->status === RegistrationStatus::Completed->value && !empty($row->completed_at)) {
-                $completedEditionIds[$editionId] = true;
-            } elseif ($row->status === RegistrationStatus::Interest->value) {
-                $interestEditionIds[$editionId] = true;
-            }
-        }
-        $hasSpotsByEdition = [];
-        foreach (array_keys($waitlistEditionIds) as $editionId) {
-            $hasSpotsByEdition[$editionId] = $this->editions->hasAvailableSpots($editionId);
-        }
-        $courseIdByEdition = [];
-        foreach (array_keys($completedEditionIds) as $editionId) {
-            $courseIdByEdition[$editionId] = $this->editions->getCourseId($editionId) ?? 0;
-        }
-
-        // interest_to_invite: a per-distinct-edition start_date presence map for
-        // the interest rows' editions (one batched meta read, mirroring the
-        // prefetch-per-distinct-edition style above). A non-empty start_date means
-        // the formerly-dateless interest anchor now has a PLANNED date → invite.
-        $datedByEdition = [];
-        if (!empty($interestEditionIds)) {
-            $startMeta = BatchQueryHelper::batchGetPostMeta(
-                array_keys($interestEditionIds),
-                ['_ntdst_start_date'],
-            );
-            foreach (array_keys($interestEditionIds) as $editionId) {
-                $startDate = $startMeta[$editionId]['_ntdst_start_date'] ?? null;
-                $datedByEdition[$editionId] = is_string($startDate) && trim($startDate) !== '';
-            }
-        }
-
-        $oldInterestCutoff = strtotime('-' . self::OLD_INTEREST_DAYS . ' days');
-
-        $waitlistOpen     = 0;
-        $offerteOpvolging = 0;
-        $nocert           = 0;
-        $oldinterest      = 0;
-        $interestToInvite = 0;
-
-        foreach ($rows as $row) {
-            $regId     = (int) $row->id;
-            $userId    = (int) $row->user_id;
-            $editionId = (int) $row->edition_id;
-            $effective = $effectiveStatuses[$editionId] ?? null;
-
-            switch ($row->status) {
-                case RegistrationStatus::Waitlist->value:
-                    // Open capacity = edition not terminal/past (effective status)
-                    // AND the per-edition capacity check shows free spots
-                    // (prefetched per distinct edition above).
-                    if (
-                        $effective !== null
-                        && !$effective->isTerminal()
-                        && $effective !== OfferingStatus::Completed
-                        && ($hasSpotsByEdition[$editionId] ?? false)
-                    ) {
-                        $waitlistOpen++;
-                    }
-                    break;
-
-                case RegistrationStatus::Confirmed->value:
-                    // Absent quote (not in the resolver map / 'Geen offerte') OR
-                    // any label that is not the Exported label → follow-up needed.
-                    $label = $offerteByReg[$regId] ?? null;
-                    if ($label !== $exportedLabel) {
-                        $offerteOpvolging++;
-                    }
-                    break;
-
-                case RegistrationStatus::Completed->value:
-                    if (empty($row->completed_at)) {
-                        break;
-                    }
-                    $courseId = $courseIdByEdition[$editionId] ?? 0;
-                    if ($courseId <= 0) {
-                        $nocert++; // No course → no certificate path → needs attention.
-                        break;
-                    }
-                    // Cert link is a per-(course,user) fact, so it stays per-row,
-                    // but the courseId lookup it depends on is now prefetched.
-                    if (LearnDashHelper::getCertificateLink($courseId, $userId) === '') {
-                        $nocert++;
-                    }
-                    break;
-
-                case RegistrationStatus::Interest->value:
-                    $registeredTs = $row->registered_at ? strtotime((string) $row->registered_at) : false;
-                    if ($registeredTs !== false && $registeredTs < $oldInterestCutoff) {
-                        $oldinterest++;
-                    }
-                    // interest_to_invite: edition now has a planned date. Counted
-                    // INDEPENDENTLY of the age check — a row may belong to both
-                    // queues (they answer different questions).
-                    if ($datedByEdition[$editionId] ?? false) {
-                        $interestToInvite++;
-                    }
-                    break;
-            }
-        }
-
+        // Payload keys are the legacy stats vocabulary (vandaag.js countKey map).
         return [
-            'pending'            => $pending,
-            'waitlist_open'      => $waitlistOpen,
-            'offerte_opvolging'  => $offerteOpvolging,
-            'nocert'             => $nocert,
-            'oldinterest'        => $oldinterest,
-            'interest_to_invite' => $interestToInvite,
+            'pending'            => count($ids['pending']),
+            'pending_ready'      => count($split['ready']),
+            'waitlist_open'      => count($ids['waitlist']),
+            'offerte_opvolging'  => count($ids['offerte']),
+            'nocert'             => count($ids['nocert']),
+            'oldinterest'        => count($ids['oldinterest']),
+            'interest_to_invite' => count($ids['interest_to_invite']),
+            // F-V8: DISTINCT registrations across all queues — a row may
+            // legitimately sit in two queues (oldinterest ∩ interest_to_invite),
+            // so the headline "N openstaande acties" must not sum the cards.
+            'total'              => count(array_unique(array_merge(...array_values($ids)))),
         ];
     }
 
     /**
      * Derive the active-edition ID set for the worklist queue counts.
      *
-     * Active = published editions whose start_date is within the 2-day grace
-     * window OR has NO start_date at all (the sessionless/dateless interest
-     * anchors — §10.7 carve-out, bug_sessionless_edition_cutoff). Mirrors the
-     * NULL-permitting predicate in AdminAPIController::getEditions() (the
-     * canonical active-scope rule): a `start_date >= X` filter would silently
-     * drop dateless editions and undercount "Oude interesse".
+     * Active = published editions the admin has NOT closed (status-based —
+     * OfferingStatus::adminClosedValues; decision 2026-07-14, F-V3). Dateless
+     * editions (the sessionless interest anchors, §10.7) are active by
+     * construction — the rule never looks at dates. NOTE this deliberately
+     * DIVERGES from the Edities agenda's date-scoped list predicate
+     * (AdminAPIController::getEditions) — reconciliation is scheduled for the
+     * Edities slice; do not treat that predicate as this rule's mirror.
      *
      * @return array<int>
      */
     private function activeEditionIds(): array
     {
-        // Canonical date-scoped active set (CR-6) — owned by the edition domain
-        // (EditionRepository::findActiveDateScopedIds), including the §10.7
-        // dateless carve-out. No second copy of the predicate here. Call the
-        // repo directly: the former EditionService pass-through was drift.
-        return $this->editionRepository->findActiveDateScopedIds();
+        // Canonical admin-active set (CR-6) — owned by the edition domain
+        // (EditionRepository::findAdminActiveIds). No second copy of the
+        // predicate here. Call the repo directly: the former EditionService
+        // pass-through was drift.
+        return $this->editionRepository->findAdminActiveIds();
     }
 
     // =========================================================================
@@ -652,7 +349,7 @@ final class AdminStatsService
         global $wpdb;
 
         // Check transient cache
-        $cached = get_transient('stride_action_queue');
+        $cached = get_transient(self::ACTION_QUEUE_TRANSIENT_KEY);
         if ($cached !== false) {
             return $cached;
         }
@@ -663,8 +360,14 @@ final class AdminStatsService
 
         $data = [];
 
-        // Editions with capacity (for capacity_threshold rule)
+        // Editions with capacity (for capacity_threshold rule). Occupancy
+        // counts the enum's seat-holding statuses (F-V6) — the same
+        // definition as EditionService::getRegisteredCount/hasAvailableSpots,
+        // so a "near capacity" melding and the waitlist-open queue can never
+        // reason over two different numbers.
         if (!empty($rules['capacity_threshold']['enabled'])) {
+            $capacityStatuses = RegistrationStatus::capacityValues();
+            $statusPlaceholders = implode(',', array_fill(0, count($capacityStatuses), '%s'));
             $editions = $wpdb->get_results($wpdb->prepare(
                 "SELECT p.ID as id, p.post_title as title,
                         pm_cap.meta_value as capacity,
@@ -674,13 +377,12 @@ final class AdminStatsService
                  LEFT JOIN {$wpdb->postmeta} pm_cap ON p.ID = pm_cap.post_id AND pm_cap.meta_key = '_ntdst_capacity'
                  LEFT JOIN (
                      SELECT edition_id, COUNT(*) as cnt FROM {$registrationTable}
-                     WHERE status = 'confirmed' GROUP BY edition_id
+                     WHERE status IN ({$statusPlaceholders}) GROUP BY edition_id
                  ) rc ON rc.edition_id = p.ID
                  WHERE p.post_type = %s AND p.post_status = 'publish'
                  AND pm_date.meta_value >= %s
                  AND pm_cap.meta_value > 0",
-                EditionCPT::POST_TYPE,
-                $today,
+                ...array_merge($capacityStatuses, [EditionCPT::POST_TYPE, $today]),
             ), ARRAY_A);
             $data['editions'] = $editions ?: [];
         }
@@ -744,26 +446,46 @@ final class AdminStatsService
             $data['starting_soon'] = $startingSoon ?: [];
         }
 
-        // Incomplete tasks (editions where last session passed, registrations with incomplete tasks)
+        // Registrations sitting on an open USER task past the cutoff — the
+        // same population as the "Wacht op gebruiker" tab this melding
+        // deep-links to. The old predicate LIKE '"completed":false' matched
+        // a boolean key no writer ever produces (F-V1: could never fire);
+        // a bare LIKE '"status":"pending"' over-matched admin-side approval
+        // tasks and told the admin users were dawdling when the admin was
+        // the blocker. SQL over-fetches (any pending sub-object), the shared
+        // rule (EnrollmentCompletion::awaitsAdmin — the actor decider) is
+        // authoritative in PHP.
         if (!empty($rules['incomplete_tasks']['enabled']) && $registrationTableExists) {
             $taskDays = (int) ($rules['incomplete_tasks']['value'] ?? 7);
             $taskCutoff = wp_date('Y-m-d', strtotime("-{$taskDays} days"));
-            $incompleteTasks = $wpdb->get_results($wpdb->prepare(
-                "SELECT r.id
+            $candidates = $wpdb->get_results($wpdb->prepare(
+                "SELECT r.id, r.completion_tasks
                  FROM {$registrationTable} r
-                 WHERE r.status = 'confirmed'
+                 WHERE r.status = %s
                  AND r.completion_tasks IS NOT NULL
                  AND r.completion_tasks LIKE %s
-                 AND r.registered_at < %s",
-                '%"completed":false%',
+                 AND r.registered_at < %s
+                 LIMIT 500",
+                RegistrationStatus::Pending->value,
+                '%"status":"pending"%',
                 $taskCutoff,
             ), ARRAY_A);
-            $data['incomplete_tasks'] = $incompleteTasks ?: [];
+
+            $completion = ntdst_get(\Stride\Modules\Enrollment\EnrollmentCompletion::class);
+            $data['incomplete_tasks'] = array_values(array_filter(
+                $candidates ?: [],
+                static function (array $row) use ($completion): bool {
+                    $tasks = json_decode((string) ($row['completion_tasks'] ?? ''), true);
+
+                    // Waiting on the USER = not awaiting the admin.
+                    return is_array($tasks) && !$completion->awaitsAdmin($tasks);
+                },
+            ));
         }
 
         $items = $this->actionQueue->evaluate($rules, $data);
 
-        set_transient('stride_action_queue', $items, 5 * MINUTE_IN_SECONDS);
+        set_transient(self::ACTION_QUEUE_TRANSIENT_KEY, $items, 5 * MINUTE_IN_SECONDS);
 
         return $items;
     }

@@ -9,8 +9,17 @@
                                 <div>
                                     <div class="ws-namecell__name">
                                         <span x-text="r.user.name"></span>
+                                        <?php // Identity state (never "anonymous" — a lead is a participant
+                                              // without an account yet). "Account gevonden" = this lead's
+                                              // e-mail matches an existing account; it binds at promotion.
+                                              // ONE span for both states — two near-copies of the lead
+                                              // predicate is the one-row-two-identities drift class. ?>
                                         <span class="ws-badge ws-badge--dotless ws-badge--lead"
-                                              x-show="r.anonymous || r.user.id === 0"><?php echo esc_html__('Lead', 'stride'); ?></span>
+                                              x-show="r.anonymous || r.user.id === 0"
+                                              x-text="r.accountMatch ? '<?php echo esc_js(__('Account gevonden', 'stride')); ?>' : '<?php echo esc_js(__('Geen account', 'stride')); ?>'"
+                                              :title="r.accountMatch
+                                                  ? '<?php echo esc_js(__('E-mailadres hoort bij een bestaand account:', 'stride')); ?> ' + r.accountMatch.name + '. <?php echo esc_js(__('Wordt gekoppeld bij inschrijving of promotie.', 'stride')); ?>'
+                                                  : '<?php echo esc_js(__('Lead — nog geen account.', 'stride')); ?>'"></span>
                                     </div>
                                     <div class="ws-namecell__sub" x-text="r.user.email || '—'"></div>
                                 </div>

@@ -49,6 +49,8 @@ final class AuditBridge extends AbstractService
         add_action('stride/voucher/released', [$this, 'onVoucherReleased']);
 
         // Quote events
+        add_action('stride/quote/created', [$this, 'onQuoteCreated']);
+        add_action('stride/quote/sent', [$this, 'onQuoteSent']);
         add_action('stride/quote/cancelled', [$this, 'onQuoteCancelled']);
         add_action('stride/quote/send_email', [$this, 'onQuoteEmailSent'], 10, 3);
         add_action('stride/quote/regenerate_pdf', [$this, 'onQuotePdfRegenerated'], 10, 1);
@@ -324,14 +326,72 @@ final class AuditBridge extends AbstractService
 
     // === Quote ===
 
-    public function onQuoteCancelled(array $data): void
+    /**
+     * Shared linkage context for EVERY quote.* audit row: quote_id (the
+     * mapper's targetUrl reads it — the entity_id is not in its reach) plus
+     * the customer/registration/edition resolved from the quote's own fields
+     * via QuoteRepository (INV-3 — never raw get_post_meta), so each row is
+     * attributable on the customer's dossier timeline (subject_user_id) and
+     * linkable. Event-payload values win when present.
+     *
+     * @param array<string,mixed> $data Event payload (may carry the ids already).
+     * @return array<string,int|null>
+     */
+    private function quoteContext(int $quoteId, array $data = []): array
     {
+        // Null-tolerant: the audit bridge must record SOMETHING even when the
+        // container can't hand out the repository (unit stubs, partial boot) —
+        // a degraded context beats a fatal inside an audit hook.
+        $repo = ntdst_get(\Stride\Modules\Invoicing\QuoteRepository::class);
+        $field = static fn(string $key): int => $repo ? (int) $repo->getField($quoteId, $key, 0) : 0;
+        $userId = (int) ($data['user_id'] ?? $field('user_id'));
+        $registrationId = (int) ($data['registration_id'] ?? $field('registration_id'));
+        $editionId = (int) ($data['edition_id'] ?? $field('edition_id'));
+
+        return [
+            'quote_id' => $quoteId > 0 ? $quoteId : null,
+            'user_id' => $userId > 0 ? $userId : null,
+            'registration_id' => $registrationId > 0 ? $registrationId : null,
+            'edition_id' => $editionId > 0 ? $editionId : null,
+        ];
+    }
+
+    public function onQuoteCreated(array $data): void
+    {
+        // quote.created/sent were mapped + queried (AdminActivityMapper,
+        // AdminActivityService::getNotifications, health checks) but never
+        // RECORDED — every consumer keyed on them matched zero rows (F-D9).
+        $quoteId = (int) ($data['quote_id'] ?? 0);
         $this->auditService->record(
             'quote',
-            (int) ($data['quote_id'] ?? 0),
+            $quoteId,
+            'quote.created',
+            null,
+            $this->quoteContext($quoteId, $data),
+        );
+    }
+
+    public function onQuoteSent(array $data): void
+    {
+        $quoteId = (int) ($data['quote_id'] ?? 0);
+        $this->auditService->record(
+            'quote',
+            $quoteId,
+            'quote.sent',
+            null,
+            $this->quoteContext($quoteId, $data),
+        );
+    }
+
+    public function onQuoteCancelled(array $data): void
+    {
+        $quoteId = (int) ($data['quote_id'] ?? 0);
+        $this->auditService->record(
+            'quote',
+            $quoteId,
             'quote.cancelled',
             null,
-            [],
+            $this->quoteContext($quoteId, $data),
         );
     }
 
@@ -345,7 +405,7 @@ final class AuditBridge extends AbstractService
             [
                 'to' => $sendTo,
                 'cc' => $sendCc ?: null,
-            ],
+            ] + $this->quoteContext($quoteId),
         );
     }
 
@@ -356,7 +416,7 @@ final class AuditBridge extends AbstractService
             $quoteId,
             'quote.pdf_regenerated',
             null,
-            [],
+            $this->quoteContext($quoteId),
         );
     }
 

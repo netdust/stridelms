@@ -186,3 +186,101 @@ test.describe('mapStats', () => {
     }
   });
 });
+
+/**
+ * F-V1/F-V13 — meldingen navigation contract. A melding carries at most one
+ * affordance: a workspace `target` ({view, params}, routed through
+ * switchView), a wp-admin `url` (quotes), or neither (informational — the
+ * old code linked post.php?post=0 for sessions without edition meta).
+ */
+test.describe('mapMeldingen — navigation targets', () => {
+  test('passes a workspace target through and keeps url empty', () => {
+    const rows = mappers.mapMeldingen([
+      { rule: 'capacity_threshold', priority: 'amber', text: 'Excel: 19/20', subject_id: 9, url: '', target: { view: 'inschrijvingen', params: { edition_id: 9 } } },
+    ]);
+    expect(rows[0].target).toEqual({ view: 'inschrijvingen', params: { edition_id: 9 } });
+    expect(rows[0].url).toBe('');
+    expect(rows[0].isMelding).toBe(true);
+  });
+
+  test('a target without a view is normalized to null (no half-affordance)', () => {
+    const rows = mappers.mapMeldingen([
+      { rule: 'session_approaching', priority: 'blue', text: 'Zwevende sessie', subject_id: 32, url: '', target: null },
+      { rule: 'weird', priority: 'blue', text: 'x', subject_id: 1, url: '', target: { params: {} } },
+    ]);
+    expect(rows[0].target).toBeNull();
+    expect(rows[1].target).toBeNull();
+  });
+
+  test('quote meldingen keep their wp-admin url and no target', () => {
+    const rows = mappers.mapMeldingen([
+      { rule: 'stale_quote', priority: 'amber', text: 'Offerte Q-1 wacht', subject_id: 201, url: '/wp/wp-admin/post.php?post=201&action=edit' },
+    ]);
+    expect(rows[0].url).toContain('post.php?post=201');
+    expect(rows[0].target).toBeNull();
+  });
+});
+
+/**
+ * Decision 7a — the approval card's ready/blocked split. Server-derived
+ * (worklistQueues.pending_ready, same definition as the count); the card
+ * renders it instead of the static def line. Older cached payloads within
+ * the stats TTL may lack the key → no split, no NaN.
+ */
+test.describe('mapQueues — pending split (7a)', () => {
+  test('renders the split line when pending_ready is present', () => {
+    const queues = mappers.mapQueues({ pending: 5, pending_ready: 2 });
+    const pending = queues.find((q: any) => q.key === 'pending');
+    expect(pending.sub).toBe('2 klaar voor goedkeuring · 3 wachten op deelnemer');
+    expect(pending.count).toBe(5);
+    // Dutch inflection: singular 'wacht', plural 'wachten'.
+    expect(mappers.mapQueues({ pending: 3, pending_ready: 2 }).find((q: any) => q.key === 'pending').sub)
+      .toContain('1 wacht op deelnemer');
+  });
+
+  test('no split without the payload key (stale cache) or at count 0', () => {
+    expect(mappers.mapQueues({ pending: 5 }).find((q: any) => q.key === 'pending').sub).toBe('');
+    expect(mappers.mapQueues({ pending: 0, pending_ready: 0 }).find((q: any) => q.key === 'pending').sub).toBe('');
+  });
+
+  test('a ready count above the total never renders a negative blocked number', () => {
+    const pending = mappers.mapQueues({ pending: 2, pending_ready: 9 }).find((q: any) => q.key === 'pending');
+    expect(pending.sub).toContain('0 wachten op deelnemer');
+  });
+});
+
+/**
+ * 6a — per-row melding dismissal (F-V7: the endpoint shipped with zero JS
+ * consumers, so aggregate alerts reappeared forever). Optimistic removal,
+ * restore on failure. The factory method only touches this.api/this.aq, so
+ * it is testable without a browser.
+ */
+test.describe('dismissMelding (6a)', () => {
+  const rows = () => [
+    { regId: 'stale_quote-0', rule: 'stale_quote', subjectId: 0 },
+    { regId: 'capacity_threshold-9', rule: 'capacity_threshold', subjectId: 9 },
+  ];
+
+  test('optimistically removes the row and POSTs rule + subject_id', async () => {
+    const f = mappers.vandaag();
+    const calls: any[] = [];
+    f.api = async (url: string, opts: any) => { calls.push([url, opts]); return {}; };
+    f.aq = { mij: [], gebruiker: [], meldingen: rows() };
+
+    await f.dismissMelding(f.aq.meldingen[1]);
+
+    expect(f.aq.meldingen.map((m: any) => m.regId)).toEqual(['stale_quote-0']);
+    expect(calls[0][0]).toBe('/admin/action-queue/dismiss');
+    expect(JSON.parse(calls[0][1].body)).toEqual({ rule: 'capacity_threshold', subject_id: 9 });
+  });
+
+  test('restores the row when the write fails', async () => {
+    const f = mappers.vandaag();
+    f.api = async () => { throw new Error('nope'); };
+    f.aq = { mij: [], gebruiker: [], meldingen: rows() };
+
+    await f.dismissMelding(f.aq.meldingen[0]);
+
+    expect(f.aq.meldingen.length).toBe(2);
+  });
+});

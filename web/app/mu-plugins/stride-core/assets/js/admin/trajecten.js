@@ -14,7 +14,9 @@
      GET /admin/trajectories            (list — server owns filter/scope/paging)
         { items:[ <item> ], total, page, perPage, totalPages }
      GET /admin/trajectories/{id}       (detail)
-        <item> PLUS { registrations:[{id,name,email,status,status_label}] }
+        <item> PLUS { registrations:[{regId,id,name,email,status,status_label}] }
+        (regId = registration row id, THE stable key; id = user id, 0 for a
+         deleted account — never key or Map on id, that collapses those rows)
 
      <item> = {
        id, title, description, status, statusLabel, mode, modeLabel,
@@ -64,28 +66,47 @@
   'use strict';
 
   /* ---- status VALUE → badge hue class (styling only — INV-5/INV-7) --------
-     Ported from the mockup TRAJ_STATUS table. The LABEL is never taken from
-     here (the API's statusLabel wins, INV-7); this maps only the closed status
-     value to a CSS hue class. An unknown status falls back to the neutral
-     slate ('completed') class — never a crash, never raw passthrough. */
+     The LABEL is never taken from here (the API's statusLabel wins, INV-7);
+     this maps only the closed status value to a CSS hue class. An unknown
+     status falls back to the neutral slate ('completed') class — never a
+     crash, never raw passthrough.
+
+     Two REAL vocabularies (F-T2/F-T3 — the mockup's table knew a fictional
+     'closed' and a fictional 'active', and missed the most common actual
+     values, so confirmed/waitlist roster rows and in_progress trajectories
+     all fell through to the neutral slate):
+       - trajectory statuses = the nine OfferingStatus values, hues mirroring
+         edities.js STATUS_META (same status, same hue across surfaces);
+       - registration statuses = the six RegistrationStatus values, hues
+         mirroring grid.js STATUS_META.
+     Where the two domains share a value (completed, cancelled) the hue is
+     identical, so one flat map is safe. */
   const STATUS_BADGE = {
-    // trajectory statuses (the list + detail header badge)
-    draft: 'completed',
+    // trajectory (OfferingStatus) — the list + detail header badge
+    draft: 'cancelled',
+    announcement: 'waitlist',
     open: 'confirmed',
-    full: 'waitlist',
-    closed: 'pending',
+    full: 'pending',
+    in_progress: 'interest',
+    postponed: 'waitlist',
     archived: 'cancelled',
-    // registration statuses (the roster row badge — I-1: these were missing, so
-    // every roster badge fell through to the neutral slate hue regardless of
-    // the actual enrolment state). Distinct keys, so the two domains coexist.
-    active: 'confirmed',
+    // registration (RegistrationStatus) — the roster row badge
+    interest: 'interest',
+    waitlist: 'waitlist',
+    pending: 'pending',
+    confirmed: 'confirmed',
+    // shared values, same hue in both domains
     completed: 'completed',
     cancelled: 'cancelled',
-    pending: 'pending',
   };
   function badgeClass(status) {
     return STATUS_BADGE[status] || 'completed';
   }
+
+  /* Mirror of OfferingStatus::adminClosedValues() (PHP) — the statuses the
+     active scope structurally excludes, so picking one auto-widens. Pinned
+     by TrajectenStatusVocabularyTest; never inline these strings. */
+  const ADMIN_CLOSED = ['completed', 'archived'];
 
   /* ---- mapTrajectories(payload): the list read-model ----------------------
      Reads payload.ITEMS (the real list key). Each row carries the server's
@@ -139,6 +160,8 @@
       // list state
       rows: [],
       total: 0,
+      page: 1,
+      pageCount: 1,
       loading: true,
       error: '',
 
@@ -148,11 +171,14 @@
       statusFilter: '',
       q: '',
 
-      // detail slide-over state (its own load lifecycle)
+      // detail slide-over state (its own load lifecycle). _detailReq is a
+      // monotonic request token: closeDetail()/a newer openDetail() bumps it,
+      // so a stale in-flight response can never resurrect a closed slide-over.
       detail: null,
       detailCourses: { editions: [], online: [] },
       detailLoading: false,
       detailError: '',
+      _detailReq: 0,
 
       init() {
         // I-1: load the list the FIRST time trajecten becomes active, not on
@@ -173,7 +199,9 @@
       loadList() {
         this.loading = true;
         this.error = '';
-        const params = new URLSearchParams({ per_page: '50' });
+        // Server-paged (F-T4): the old client hard-capped at the first 50
+        // with no pager, so trajecten past 50 were unreachable.
+        const params = new URLSearchParams({ per_page: '50', page: String(this.page) });
         if (this.scope === 'active') params.set('scope', 'active');
         if (this.statusFilter) params.set('status', this.statusFilter);
         if (this.q.trim()) params.set('search', this.q.trim());
@@ -181,6 +209,13 @@
           .then((data) => {
             this.rows = window.WS.mapTrajectories(data);
             this.total = Number(data && data.total) || this.rows.length;
+            this.pageCount = Math.max(1, Number(data && data.totalPages) || 1);
+            // Page pointer past the (shrunk) result set → clamp and refetch,
+            // so a delete on the last page never strands an empty view.
+            if (this.page > this.pageCount) {
+              this.page = this.pageCount;
+              this.loadList();
+            }
           })
           .catch(() => {
             this.error = 'Kon de trajecten niet laden.';
@@ -189,37 +224,69 @@
           .finally(() => { this.loading = false; });
       },
 
-      onFilterChange() { this.loadList(); },
+      /* Filter/scope changes restart at page 1 — a page pointer past the new
+         result set would render a misleading empty list. Picking a status the
+         active scope structurally excludes (completed/archived = the
+         admin-closed set) auto-widens to 'all' — otherwise that filter could
+         only EVER show an empty list. */
+      onFilterChange() {
+        this.page = 1;
+        if (this.scope === 'active' && ADMIN_CLOSED.includes(this.statusFilter)) {
+          this.scope = 'all';
+        }
+        this.loadList();
+      },
 
       toggleScope() {
         this.scope = (this.scope === 'active' ? 'all' : 'active');
+        this.page = 1;
         this.loadList();
       },
+
+      /* Absolute page jump — the SAME contract as edities/offertes/grid
+         (goPage(p), never a delta; the template's pageList() buttons pass
+         absolute numbers). */
+      goPage(p) {
+        if (p >= 1 && p <= this.pageCount && p !== this.page) {
+          this.page = p;
+          this.loadList();
+        }
+      },
+      /* Delegates to THE shared pager model (WS.pageList in shell.js) — the
+         five per-surface copies of the ellipsis rule are gone (3d). */
+      pageList() { return window.WS.pageList(this.page, this.pageCount); },
 
       /* Open the detail slide-over: a single O(1) fetch (the F1-fixed path that
          resolves a trajectory beyond the first page). Own loading/error/empty
          (empty roster is NOT an error — the t3 edge). */
       openDetail(id) {
         if (!id) return;
+        const req = ++this._detailReq;
         this.detail = null;
         this.detailCourses = { editions: [], online: [] };
         this.detailLoading = true;
         this.detailError = '';
         this.api('/admin/trajectories/' + encodeURIComponent(id))
           .then((data) => {
+            if (req !== this._detailReq) return; // closed / superseded mid-flight
             this.detail = data;
             this.detailCourses = window.WS.groupCourses(data && data.courses);
           })
           .catch(() => {
+            if (req !== this._detailReq) return;
             this.detailError = 'Kon dit traject niet laden.';
           })
-          .finally(() => { this.detailLoading = false; });
+          .finally(() => {
+            if (req === this._detailReq) this.detailLoading = false;
+          });
       },
 
       closeDetail() {
+        this._detailReq++; // invalidate any in-flight detail fetch
         this.detail = null;
         this.detailError = '';
         this.detailCourses = { editions: [], online: [] };
+        this.detailLoading = false;
       },
 
       /* Jump to a roster person's dossier via the shell's extended switchView

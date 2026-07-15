@@ -39,7 +39,16 @@ defined('ABSPATH') || exit;
         <div class="ws-page-head">
             <div>
                 <span class="ws-eyebrow"><?php echo esc_html__('Werklijst', 'stride'); ?> · <span x-text="today"></span></span>
-                <h1><?php echo esc_html__('Goeiemorgen.', 'stride'); ?></h1>
+                <!-- F-V13: time-of-day greeting (was "Goeiemorgen." all day).
+                     Server-rendered: translatable ('stride' text domain, unlike
+                     a JS literal) and on SITE time, consistent with every
+                     other timestamp on this surface. -->
+                <?php $strideGreetingHour = (int) current_time('G'); ?>
+                <h1><?php echo esc_html(
+                    $strideGreetingHour < 12
+                        ? __('Goeiemorgen.', 'stride')
+                        : ($strideGreetingHour < 18 ? __('Goeiemiddag.', 'stride') : __('Goeienavond.', 'stride'))
+                ); ?></h1>
                 <p>
                     <?php echo esc_html__('Je hebt', 'stride'); ?>
                     <b x-text="totalActions"></b>
@@ -105,22 +114,35 @@ defined('ABSPATH') || exit;
                 </button>
             </div>
             <div>
-                <!-- error state for the approvals/action-queue calls -->
+                <!-- F-V13: a failed call is an inline notice, never a panel
+                     replacement — the buckets that DID load keep rendering
+                     (previously one failed meldingen call hid loaded
+                     mij/gebruiker rows behind a full-panel error). -->
                 <template x-if="errors.actions">
-                    <div class="ws-empty" style="padding:32px">
-                        <div class="ws-empty__icon" x-html="icon('alert')"></div>
-                        <h3><?php echo esc_html__('Acties niet geladen', 'stride'); ?></h3>
-                        <p x-text="errors.actions"></p>
+                    <div class="ws-inline-notice ws-inline-notice--error">
+                        <span x-html="icon('alert')" style="width:14px;height:14px"></span>
+                        <span x-text="errors.actions"></span>
+                    </div>
+                </template>
+                <!-- F-V11: the approvals scan hit its cap — pills are lower
+                     bounds. NOT gated on errors.actions: clipped comes from a
+                     SUCCEEDED approvals call whose rows render below, so the
+                     lower-bound warning must show even when the separate
+                     meldingen call failed. -->
+                <template x-if="clipped">
+                    <div class="ws-inline-notice">
+                        <span x-html="icon('info')" style="width:14px;height:14px"></span>
+                        <span><?php echo esc_html__('Grote wachtrij — de tellingen tonen de oudste items; er kunnen er meer zijn.', 'stride'); ?></span>
                     </div>
                 </template>
                 <!-- loading -->
-                <template x-if="loading.actions && !errors.actions">
+                <template x-if="loading.actions">
                     <div class="ws-empty" style="padding:32px">
                         <p><?php echo esc_html__('Laden…', 'stride'); ?></p>
                     </div>
                 </template>
                 <!-- populated rows -->
-                <template x-if="!loading.actions && !errors.actions">
+                <template x-if="!loading.actions">
                     <div>
                         <template x-for="item in aq[actTab]" :key="item.regId">
                             <a class="ws-actitem" href="#" @click.prevent="openAction(item)">
@@ -136,10 +158,21 @@ defined('ABSPATH') || exit;
                                       x-show="item.deadline"
                                       :class="item.deadline && item.deadline.kind === 'overdue' ? 'ws-badge--overdue' : 'ws-badge--due-soon'"
                                       x-text="item.deadline && item.deadline.label"></span>
-                                <span x-html="icon('chevRight')" style="width:16px;height:16px;color:var(--ws-text-3)"></span>
+                                <!-- 6a: per-row melding dismissal (per-admin, 30 dagen) -->
+                                <button x-show="item.isMelding"
+                                        class="ws-actitem__dismiss"
+                                        type="button"
+                                        title="<?php echo esc_attr__('Melding verbergen (30 dagen)', 'stride'); ?>"
+                                        @click.prevent.stop="dismissMelding(item)">
+                                    <span x-html="icon('x')" style="width:14px;height:14px"></span>
+                                </button>
+                                <!-- No affordance on informational meldingen (no target and no url) -->
+                                <span x-show="!item.isMelding || item.target || item.url"
+                                      x-html="icon('chevRight')" style="width:16px;height:16px;color:var(--ws-text-3)"></span>
                             </a>
                         </template>
-                        <div x-show="aq[actTab].length===0" class="ws-empty" style="padding:32px">
+                        <!-- "Alles afgehandeld" under a load error would be a lie — the notice above tells the truth then -->
+                        <div x-show="aq[actTab].length===0 && !errors.actions" class="ws-empty" style="padding:32px">
                             <div class="ws-empty__icon" x-html="icon('checkCircle')"></div>
                             <h3><?php echo esc_html__('Niets in deze wachtrij', 'stride'); ?></h3>
                             <p><?php echo esc_html__('Alles afgehandeld. Goed bezig.', 'stride'); ?></p>
@@ -173,7 +206,8 @@ defined('ABSPATH') || exit;
                         <div class="ws-queue__count" :class="q.count===0 && 'is-zero'" x-text="q.count"></div>
                     </div>
                     <div class="ws-queue__title" x-text="q.label"></div>
-                    <div class="ws-queue__def" x-text="q.def"></div>
+                    <!-- 7a: the approval card shows its ready/blocked split instead of the static definition -->
+                    <div class="ws-queue__def" x-text="q.sub || q.def"></div>
                     <div class="ws-queue__foot">
                         <span class="ws-queue__action">
                             <span x-show="q.count>0" x-html="icon(q.actionIcon)"></span>

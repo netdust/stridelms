@@ -83,34 +83,11 @@ class AdminDashboardService extends AbstractService
         // staler than the last such write (within their TTL). Void closure: do
         // not surface delete_transient()'s bool to the action dispatcher (an
         // action callback must return nothing).
-        $invalidateQueue = static function (): void {
-            delete_transient('stride_action_queue');
-            delete_transient(\Stride\Admin\AdminStatsService::STATS_TRANSIENT_KEY);
-        };
-        add_action('stride/registration/created', $invalidateQueue);
-        add_action('stride/registration/confirmed', $invalidateQueue);
-        add_action('stride/registration/cancelled', $invalidateQueue);
-        add_action('stride/attendance/marked', $invalidateQueue);
-        add_action('save_post_vad_quote', $invalidateQueue);
-        // M10 (Task 2.4) — bulk batch completion + quote-status changes set via
-        // the repo (which never touch save_post_vad_quote) must recount the queue.
-        add_action('stride/registration/bulk_completed', $invalidateQueue);
-        add_action('stride/registration/quote_status_changed', $invalidateQueue);
-        // Cluster-F gate (perf-oracle F-1): the stats key counts more inputs than
-        // the action-queue did, so it needs a wider bust set or it shows stale
-        // headline counts for up to STATS_TTL.
-        //  - interest/waitlist public sign-ups feed worklistQueues.oldinterest /
-        //    .waitlist_open (not covered by created/confirmed/cancelled).
-        add_action('stride/registration/interest_registered', $invalidateQueue);
-        add_action('stride/registration/waitlisted', $invalidateQueue);
-        //  - any other status transition (e.g. a single reg → completed feeding
-        //    .nocert) fires the repo's generic updated event — the catch-all.
-        add_action('stride/registration/updated', $invalidateQueue);
-        //  - edition / session / trajectory CPT writes feed upcomingEditions,
-        //    todaySessions, openTrajectories, upcomingEditionDetails, alerts.
-        add_action('save_post_vad_edition', $invalidateQueue);
-        add_action('save_post_vad_session', $invalidateQueue);
-        add_action('save_post_vad_trajectory', $invalidateQueue);
+        // The write-event cache-bust hooks live in AdminStatsService::init()
+        // (the cache owner, booted on EVERY request). They used to live here
+        // — but this service is admin_only and never boots on REST requests,
+        // which is where every workspace mutation runs: the busts silently
+        // never fired for exactly the writes the workspace makes.
 
         add_action('admin_menu', [$this, 'registerAdminPage']);
         add_action('admin_menu', [$this, 'reorderSubmenus'], 999);
@@ -296,15 +273,13 @@ class AdminDashboardService extends AbstractService
             'stride_bulk_message',
             'stride_bulk_generate_doc',
             'stride_bulk_set_field',
-            // Cohort-lens roster bulk (Phase 2a, Task 2a.9). Each maps to a
-            // Handlers/RosterBulkHandler ntdst/api_data/* filter; the cohort UI
-            // arms the matching nonce per action via cohortActionName().
-            'stride_roster_bulk_approve',
-            'stride_roster_bulk_message',
-            'stride_roster_bulk_generate_doc',
-            'stride_traj_roster_bulk_approve',
-            'stride_traj_roster_bulk_message',
-            'stride_traj_roster_bulk_generate_doc',
+            // The stride_roster_bulk_* / stride_traj_roster_bulk_* nonces were
+            // DROPPED here at the Cohort slice (decision 5a): the lens bulk bar
+            // was removed and NO client consumes those RosterBulkHandler
+            // actions anymore. Without an armed nonce the registered handlers
+            // are unreachable — deliberately: never hand every admin page a
+            // pre-armed CSRF token for a mutation surface no UI exercises.
+            // Re-add the specific action here if a surface adopts the registry.
         ];
 
         $nonces = [];
@@ -440,6 +415,9 @@ class AdminDashboardService extends AbstractService
             // on the shell, opened over any surface via the `ws-cohort-open` event
             // the Edities row dispatches. Reads /admin/editions/{id}/roster (frozen).
             'admin/cohort.js',
+            // Global search palette (⌘K, Phase 3c / F-S1) — searches the three
+            // existing typeahead endpoints; opened via ⌘K or the topbar box.
+            'admin/gsearch.js',
         ];
     }
 

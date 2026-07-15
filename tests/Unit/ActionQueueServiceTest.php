@@ -107,6 +107,59 @@ class ActionQueueServiceTest extends TestCase
         $this->assertLessThan($blueIdx, $amberIdx);
     }
 
+    /**
+     * Navigation contract (F-V1/F-V13): edition-scoped meldingen carry a
+     * workspace `target` (grid filtered to the edition) instead of raw
+     * wp-admin edit URLs; the stale-tasks aggregate targets the Acties
+     * panel's gebruiker tab (the old link was a dead #action-required
+     * anchor); a session without edition meta gets NO affordance at all
+     * (the old code linked post.php?post=0); quotes keep their wp-admin
+     * URL — that screen IS the quote workflow.
+     */
+    public function test_meldingen_navigation_targets(): void
+    {
+        $service = new ActionQueueService();
+        $rules = $this->defaultRules([
+            'capacity_threshold' => ['enabled' => true, 'value' => 80],
+            'session_approaching' => ['enabled' => true, 'value' => 1],
+            'stale_quote' => ['enabled' => true, 'value' => 7],
+            'incomplete_tasks' => ['enabled' => true, 'value' => 7],
+        ]);
+        $result = $service->evaluate($rules, [
+            'editions' => [['id' => 9, 'title' => 'Excel', 'registered' => 19, 'capacity' => 20]],
+            'approaching_sessions' => [
+                ['id' => 31, 'edition_id' => 9, 'edition_title' => 'Excel', 'date' => '2026-07-15'],
+                ['id' => 32, 'edition_id' => null, 'edition_title' => 'Zwevend', 'date' => '2026-07-15'],
+            ],
+            'stale_quotes' => [['id' => 201, 'number' => 'Q-2026-042']],
+            'incomplete_tasks' => [['id' => 1], ['id' => 2]],
+        ]);
+
+        $byRule = [];
+        foreach ($result as $item) {
+            $byRule[$item['rule']][] = $item;
+        }
+
+        $this->assertSame(
+            ['view' => 'inschrijvingen', 'params' => ['edition_id' => 9]],
+            $byRule['capacity_threshold'][0]['target'],
+        );
+        $this->assertSame('', $byRule['capacity_threshold'][0]['url']);
+
+        $sessions = $byRule['session_approaching'];
+        $this->assertSame(['view' => 'inschrijvingen', 'params' => ['edition_id' => 9]], $sessions[0]['target']);
+        $this->assertNull($sessions[1]['target'], 'session without edition meta must carry no target');
+        $this->assertSame('', $sessions[1]['url'], 'session without edition meta must carry no url (was post.php?post=0)');
+
+        $this->assertNull($byRule['stale_quote'][0]['target']);
+        $this->assertStringContainsString('post.php?post=201', $byRule['stale_quote'][0]['url']);
+
+        $this->assertSame(
+            ['view' => 'vandaag', 'params' => ['tab' => 'gebruiker']],
+            $byRule['incomplete_tasks'][0]['target'],
+        );
+    }
+
     private function defaultRules(array $overrides = []): array
     {
         $defaults = [

@@ -34,6 +34,18 @@ final class LearnDashService extends AbstractService implements LMSAdapterInterf
         add_action('init', function () {
             (new CourseTaxonomies())->register();
         }, 5);
+
+        // Bust the admin dashboard's cached counts when a course completes —
+        // completion is when a certificate becomes available, the nocert
+        // queue count's only input not covered by a Stride write event. The
+        // hook lives HERE (not with the other busts in AdminDashboardService)
+        // because that service is admin_only while completion fires on
+        // frontend page requests and REST calls; this integration service
+        // boots on every request. One shared bust — never a hand-copied
+        // delete_transient list that can drift from the admin-side closure.
+        add_action('learndash_course_completed', static function (): void {
+            \Stride\Admin\AdminStatsService::bustCaches();
+        });
     }
 
     // === LMSAdapterInterface ===
