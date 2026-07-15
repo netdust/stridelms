@@ -2589,7 +2589,11 @@ final class AdminAPIController
                 get_current_user_id() ?: null,
                 [
                     'target_user_id' => $userId,
-                    'fields' => array_keys($profileData) + ($hasCoreChange ? ['core'] : []),
+                    // array_merge, NOT `+`: both operands are numeric-keyed
+                    // lists, so union keeps the LEFT index 0 and silently
+                    // dropped the 'core' marker whenever meta fields changed
+                    // in the same request (F-A8).
+                    'fields' => array_merge(array_keys($profileData), $hasCoreChange ? ['core'] : []),
                 ],
             );
         }

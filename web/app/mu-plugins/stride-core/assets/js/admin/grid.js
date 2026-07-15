@@ -764,16 +764,9 @@
       /* ===== pagination model (compact 1 … cur-1 cur cur+1 … last) ===== */
       get rangeFrom() { return this.total === 0 ? 0 : (this.page - 1) * this.perPage + 1; },
       get rangeTo() { return Math.min(this.page * this.perPage, this.total); },
-      pageList() {
-        const last = this.pageCount, cur = this.page, out = [];
-        if (last <= 7) { for (let i = 1; i <= last; i++) out.push(i); return out; }
-        out.push(1);
-        if (cur > 3) out.push('…');
-        for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) out.push(i);
-        if (cur < last - 2) out.push('…');
-        out.push(last);
-        return out;
-      },
+      /* Delegates to THE shared pager model (WS.pageList in shell.js) — the
+         five per-surface copies of the ellipsis rule are gone (3d). */
+      pageList() { return window.WS.pageList(this.page, this.pageCount); },
 
       /* ===== grouping rendering ===== */
       get groupKindLabel() {
@@ -925,7 +918,10 @@
         });
         const json = await response.json().catch(() => ({}));
         if (!json || json.success !== true) {
-          throw new Error((json && json.data && json.data.message) || 'Bulkactie mislukt.');
+          // F-S5: the wp_rest cookie-nonce failure surfaces the shell's
+          // Vernieuwen banner + Dutch message instead of a generic retry-bait.
+          throw new Error(window.WS.nonceExpired(json)
+            || (json && json.data && json.data.message) || 'Bulkactie mislukt.');
         }
         return json.data;
       },

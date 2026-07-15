@@ -252,16 +252,9 @@
           this.loadList();
         }
       },
-      pageList() {
-        const last = this.pageCount, cur = this.page, out = [];
-        if (last <= 7) { for (let i = 1; i <= last; i++) out.push(i); return out; }
-        out.push(1);
-        if (cur > 3) out.push('…');
-        for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) out.push(i);
-        if (cur < last - 2) out.push('…');
-        out.push(last);
-        return out;
-      },
+      /* Delegates to THE shared pager model (WS.pageList in shell.js) — the
+         five per-surface copies of the ellipsis rule are gone (3d). */
+      pageList() { return window.WS.pageList(this.page, this.pageCount); },
 
       /* Open the detail slide-over: a single O(1) fetch (the F1-fixed path that
          resolves a trajectory beyond the first page). Own loading/error/empty

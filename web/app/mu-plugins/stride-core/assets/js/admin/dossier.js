@@ -377,7 +377,10 @@
         });
         const json = await response.json().catch(() => ({}));
         if (!json || json.success !== true) {
-          throw new Error((json && json.data && json.data.message) || 'Actie mislukt.');
+          // F-S5: the wp_rest cookie-nonce failure surfaces the shell's
+          // Vernieuwen banner + Dutch message instead of a generic retry-bait.
+          throw new Error(window.WS.nonceExpired(json)
+            || (json && json.data && json.data.message) || 'Actie mislukt.');
         }
         return json.data;
       },

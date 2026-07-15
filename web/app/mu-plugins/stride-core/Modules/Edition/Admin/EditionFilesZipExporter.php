@@ -51,6 +51,10 @@ class EditionFilesZipExporter
         $downloadName = 'uploads-' . $slug . '-' . date('Y-m-d') . '.zip';
         $this->streamZipToBrowser($zipPath, $downloadName);
         @unlink($zipPath);
+        // F-A5: terminal, like the other three exporters. Without this the REST
+        // route appends its error-JSON envelope (and admin-ajax appends '0')
+        // AFTER the ZIP bytes — a corrupt archive on every download.
+        exit;
     }
 
     /**

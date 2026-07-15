@@ -29,13 +29,31 @@
 
 defined('ABSPATH') || exit;
 ?>
-<div class="ws-shell" x-data="wsShell()" x-init="init()" x-cloak>
+<?php // NO x-init="init()" — Alpine auto-invokes a component's init() method;
+      // declaring it again registered the shell's popstate listener and the
+      // view $watch TWICE, double-firing ws-view-changed on every switch
+      // (the same double-init bug the gsearch review confirmed, 3d). ?>
+<div class="ws-shell" x-data="wsShell()" x-cloak>
 
     <?php require __DIR__ . '/_ws-rail.php'; ?>
 
     <main class="ws-main">
 
         <?php require __DIR__ . '/_ws-topbar.php'; ?>
+
+        <?php // F-S5: the expired-nonce banner. The wp_rest nonce printed at page
+              // load expires after ~12-24h while the login cookie lives on — an
+              // overnight tab then fails EVERY request. api()/WS.download/bulkApi
+              // recognize rest_cookie_invalid_nonce and dispatch ws-nonce-expired;
+              // the shell latches it here. Persistent (not a toast): the only
+              // remedy is a reload, so the banner stays until the admin takes it. ?>
+        <div class="ws-nonce-banner" x-show="nonceExpired" x-cloak role="alert">
+            <span x-html="icon('alert', 'ws-ico')"></span>
+            <span class="ws-nonce-banner__text"><?php echo esc_html__('Je sessie is verlopen. Vernieuw de pagina om verder te werken.', 'stride'); ?></span>
+            <button type="button" class="ws-btn ws-btn--sm" @click="reloadPage()">
+                <?php echo esc_html__('Vernieuwen', 'stride'); ?>
+            </button>
+        </div>
 
         <?php // Vandaag — its own per-surface Alpine factory owns ALL its data (cluster B).
         require __DIR__ . '/dashboard/vandaag.php'; ?>

@@ -193,8 +193,15 @@ final class AdminActivityService
         $userId = get_current_user_id();
         $lastReadId = (int) get_user_meta($userId, 'stride_last_read_notification_id', true);
 
+        // F-A8: same table-name resolution + existence guard as the feed and
+        // health-check reads above — the raw prefix.'audit_log' literal ignored
+        // the ntdst/audit/table_name filter and queried an unguarded table.
+        if (!AuditTable::exists()) {
+            return ['notifications' => [], 'unread_count' => 0];
+        }
+
         global $wpdb;
-        $table = $wpdb->prefix . 'audit_log';
+        $table = AuditTable::getTableName();
 
         // Only notification-worthy events
         $actions = [
@@ -241,8 +248,13 @@ final class AdminActivityService
     {
         $userId = get_current_user_id();
 
+        // F-A8: same guard as getNotifications — no table, nothing to mark.
+        if (!AuditTable::exists()) {
+            return true;
+        }
+
         global $wpdb;
-        $table = $wpdb->prefix . 'audit_log';
+        $table = AuditTable::getTableName();
         $latestId = (int) $wpdb->get_var("SELECT MAX(id) FROM {$table}");
 
         update_user_meta($userId, 'stride_last_read_notification_id', $latestId);

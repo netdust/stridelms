@@ -216,9 +216,12 @@
       /* Exact-handoff CSV of the exact predicate on screen (F-A9), via the
          shared WS.download (header-auth fetch + blob — an expired nonce
          fails SOFT; a ?_wpnonce navigation nuked the workspace into a raw
-         JSON 403 after an overnight tab). Error display: alert until the
-         shared notice pattern lands in the 3d helper pass — this surface has
-         no toast zone yet. */
+         JSON 403 after an overnight tab). Error display: window.alert — the
+         3d decision. This surface has no toast zone, the failure is rare and
+         user-initiated (a click), and a one-off toast system for it would be
+         over-engineering. The expired-nonce case additionally raises the
+         shell's persistent Vernieuwen banner (F-S5), so the alert is never
+         the only signal for the one failure that needs action. */
       async exportCurrentView() {
         try {
           await window.WS.download(`/admin/quotes/export?${this.filterParams().toString()}`);
@@ -248,16 +251,9 @@
 
       get rangeFrom() { return this.total === 0 ? 0 : (this.page - 1) * this.perPage + 1; },
       get rangeTo() { return Math.min(this.page * this.perPage, this.total); },
-      pageList() {
-        const last = this.pageCount, cur = this.page, out = [];
-        if (last <= 7) { for (let i = 1; i <= last; i++) out.push(i); return out; }
-        out.push(1);
-        if (cur > 3) out.push('…');
-        for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) out.push(i);
-        if (cur < last - 2) out.push('…');
-        out.push(last);
-        return out;
-      },
+      /* Delegates to THE shared pager model (WS.pageList in shell.js) — the
+         five per-surface copies of the ellipsis rule are gone (3d). */
+      pageList() { return window.WS.pageList(this.page, this.pageCount); },
 
       badgeClass(status) { return quoteBadgeClass(status); },
 

@@ -31,6 +31,9 @@ final class EditionBundleZipExporter
 
         $this->filesExporter->streamZipToBrowser($zipPath, $downloadName);
         $this->cleanupTempDir(dirname($zipPath));
+        // F-A5: terminal, like the other three exporters — see
+        // EditionFilesZipExporter::export(). Cleanup runs BEFORE the exit.
+        exit;
     }
 
     /**

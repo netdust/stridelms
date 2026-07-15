@@ -111,6 +111,44 @@
     }
   }
 
+  /* wsPageList(page, pageCount) — THE compact pager model (PURE):
+     1 … cur-1 cur cur+1 … last, ≤7 pages verbatim. Consolidates the five
+     per-surface copies (grid/trajecten/edities/offertes/gebruikers) that had
+     already drifted once into a template bug (duplicate '…' entries corrupted
+     Alpine's keyed reconciliation until the templates switched to index keys).
+     One encoding of the ellipsis rule; surfaces delegate:
+       pageList() { return window.WS.pageList(this.page, this.pageCount); }
+     NOTE for the templates: the two '…' entries are identical strings — pager
+     x-for MUST key by INDEX ((p, pi) :key="pi"), never by value. */
+  function wsPageList(page, pageCount) {
+    const last = pageCount, cur = page, out = [];
+    if (last <= 7) { for (let i = 1; i <= last; i++) out.push(i); return out; }
+    out.push(1);
+    if (cur > 3) out.push('…');
+    for (let i = Math.max(2, cur - 1); i <= Math.min(last - 1, cur + 1); i++) out.push(i);
+    if (cur < last - 2) out.push('…');
+    out.push(last);
+    return out;
+  }
+
+  /* wsNonceExpired(body) — F-S5: the ONE place that recognizes the
+     expired-nonce REST failure. The workspace nonce (wp_rest) expires after
+     ~12-24h while the login cookie lives on, so an overnight tab fails EVERY
+     action with what used to be a generic per-surface error the admin would
+     retry forever. When the WP_Error body is rest_cookie_invalid_nonce this
+     dispatches ws-nonce-expired (the shell shows its persistent Vernieuwen
+     banner) and returns the Dutch message for the caller to throw; any other
+     body returns null and the caller keeps its own message. */
+  function wsNonceExpired(body) {
+    if (!body || body.code !== 'rest_cookie_invalid_nonce') {
+      return null;
+    }
+    if (typeof window !== 'undefined' && window.dispatchEvent) {
+      window.dispatchEvent(new CustomEvent('ws-nonce-expired'));
+    }
+    return 'Je sessie is verlopen. Vernieuw de pagina om verder te werken.';
+  }
+
   /* icon(name, cls) — INV-5 safe: `name` is a literal key from the markup,
      resolved to a CONSTANT SVG path. An unknown name renders an empty SVG. */
   function icon(name, cls) {
@@ -136,6 +174,8 @@
     window.WS.ICONS = ICONS;
     window.WS.lazyLoad = wsLazyLoad;
     window.WS.download = wsDownload;
+    window.WS.pageList = wsPageList;
+    window.WS.nonceExpired = wsNonceExpired;
     window.wsShell = wsShell;
   }
 
@@ -153,7 +193,7 @@
     });
     if (!response.ok) {
       const error = await response.json().catch(() => ({}));
-      throw new Error(error.message || 'Download mislukt.');
+      throw new Error(wsNonceExpired(error) || error.message || 'Download mislukt.');
     }
     const blob = await response.blob();
     const dispo = response.headers.get('Content-Disposition') || '';
@@ -176,8 +216,15 @@
       views: VIEWS,
       view: 'vandaag',
 
+      /* F-S5: the wp_rest nonce has expired (an overnight tab). Latched by the
+         ws-nonce-expired event wsNonceExpired() dispatches from api()/download;
+         the shell renders a persistent banner with a Vernieuwen button — the
+         only remedy IS a reload (a fresh page prints a fresh nonce). */
+      nonceExpired: false,
+
       init() {
         this.view = this.resolveView();
+        window.addEventListener('ws-nonce-expired', () => { this.nonceExpired = true; });
         // Keep the URL in sync when the active surface changes (bookmarkable
         // ?view= per the dashboard-tabs convention) AND broadcast the change so
         // each nested per-surface factory can lazily load on its first
@@ -295,6 +342,11 @@
         return icon(name, cls);
       },
 
+      /* The nonce-banner Vernieuwen action (F-S5). */
+      reloadPage() {
+        window.location.reload();
+      },
+
       /* The shared API helper EVERY per-surface loader reuses. Sends the
          X-WP-Nonce header (StrideConfig.nonce = wp_rest). Reads `.message`
          from the WP_Error JSON shape {code,message,data:{status}} on failure. */
@@ -310,7 +362,7 @@
         });
         if (!response.ok) {
           const error = await response.json().catch(() => ({}));
-          throw new Error(error.message || 'API error');
+          throw new Error(wsNonceExpired(error) || error.message || 'API error');
         }
         return response.json();
       },
@@ -324,6 +376,11 @@
      wsShell() itself reads window at CALL time, so the spec defines its stub
      first. */
   if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { wsLazyLoad: wsLazyLoad, wsShell: wsShell };
+    module.exports = {
+      wsLazyLoad: wsLazyLoad,
+      wsShell: wsShell,
+      wsPageList: wsPageList,
+      wsNonceExpired: wsNonceExpired,
+    };
   }
 })();

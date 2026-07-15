@@ -279,6 +279,19 @@ button { font-family: inherit; cursor: pointer; }
 .ws-content { flex: 1; overflow-y: auto; padding: var(--ws-8); }
 .ws-content--flush { padding: 0; display: flex; flex-direction: column; min-height: 0; }
 
+/* F-S5: the expired-nonce banner — persistent (the only remedy is a reload),
+   rendered between the topbar and the active surface. */
+.ws-nonce-banner {
+    display: flex; align-items: center; gap: var(--ws-3);
+    background: var(--ws-warning-bg);
+    color: var(--ws-warning-text);
+    border-bottom: 1px solid var(--ws-warning);
+    padding: var(--ws-3) var(--ws-6);
+    font-size: var(--ws-fs);
+}
+.ws-nonce-banner svg { width: 16px; height: 16px; flex: none; }
+.ws-nonce-banner__text { flex: 1; }
+
 /* --------------------------------------------------------------------------
    3. PRIMITIVES — buttons, badges, cards, chips
    -------------------------------------------------------------------------- */

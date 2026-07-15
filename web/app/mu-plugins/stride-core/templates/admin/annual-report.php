@@ -10,7 +10,9 @@ if (!defined('ABSPATH')) {
     exit;
 }
 ?>
-<div class="wrap stride-annual-report" x-data="strideAnnualReport()" x-init="init()">
+<?php // NO x-init="init()" — Alpine auto-invokes init(); declaring it again
+      // rendered the chart twice (the shared double-init lesson, 3d). ?>
+<div class="wrap stride-annual-report" x-data="strideAnnualReport()">
     <div class="sar-header">
         <h1><?php esc_html_e('Jaarrapport', 'stride'); ?></h1>
         <div class="sar-controls">
