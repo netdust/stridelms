@@ -101,8 +101,11 @@ final class AdminEditionRosterService
         // Selections through the convergence point (batched — no raw decode here).
         $selectionsByReg = $this->registrations->getSelectionsForRegistrations($regIds);
 
-        // Attendance batch-read over the loaded set (CM-3).
-        $attendanceByUser = $this->aggregateAttendance($userIds, $editionId);
+        // Attendance batch-read over the loaded set (CM-3): a per-session
+        // latest-wins map per user, with the aggregate counts DERIVED from
+        // that same map (one definition — the client's optimistic patch
+        // recomputes its aggregate the identical way, F-C2).
+        [$attendanceByUser, $attendanceSessionsByUser] = $this->attendanceMaps($userIds, $editionId);
 
         $rows = [];
         $extrasKeys = [];
@@ -131,6 +134,12 @@ final class AdminEditionRosterService
                 'is_anonymised'   => $isAnonymised,
                 'selections'      => $selectionsByReg[$regId] ?? [],
                 'attendance'      => $attendanceByUser[$userId] ?? $this->emptyAttendance(),
+                // Per-session state (F-C2): {sessionId: 'present'|'absent'|
+                // 'excused'} so the lens can show WHO is marked for the
+                // selected session and light the active mark button. Keys are
+                // strings (JSON object keys always are — the client matches
+                // on String(sessionId)).
+                'attendance_by_session' => $attendanceSessionsByUser[$userId] ?? [],
                 'extras'          => $extras,
             ];
         }
@@ -171,32 +180,52 @@ final class AdminEditionRosterService
     }
 
     /**
-     * Aggregate attendance per user for the loaded set in one batched read.
+     * Attendance per user for the loaded set in one batched read: a
+     * per-session latest-wins status map, plus aggregate counts DERIVED from
+     * that map (one definition, F-C2 — duplicate historical records for the
+     * same user+session no longer double-count, and the client's optimistic
+     * recompute matches byte-for-byte).
+     *
+     * getByUsers orders by marked_at DESC, so the FIRST record seen per
+     * (user, session) is the latest — later duplicates are skipped.
      *
      * @param  array<int> $userIds
-     * @return array<int, array{present:int, absent:int, excused:int}>
+     * @return array{
+     *   0: array<int, array{present:int, absent:int, excused:int}>,
+     *   1: array<int, array<string, string>>
+     * } [aggregates by user, sessionId=>status map by user]
      */
-    private function aggregateAttendance(array $userIds, int $editionId): array
+    private function attendanceMaps(array $userIds, int $editionId): array
     {
         if (empty($userIds)) {
-            return [];
+            return [[], []];
         }
 
         $records = $this->attendance->getByUsers($userIds, $editionId);
 
-        $byUser = [];
+        $sessionsByUser = [];
         foreach ($records as $record) {
             $uid = (int) $record->user_id;
-            if (!isset($byUser[$uid])) {
-                $byUser[$uid] = $this->emptyAttendance();
-            }
+            $sessionKey = (string) (int) ($record->session_id ?? 0);
             $status = (string) $record->status;
-            if (isset($byUser[$uid][$status])) {
-                $byUser[$uid][$status]++;
+            if ($status === '' || isset($sessionsByUser[$uid][$sessionKey])) {
+                continue; // latest-wins (DESC order) / cleared marks carry no state
             }
+            $sessionsByUser[$uid][$sessionKey] = $status;
         }
 
-        return $byUser;
+        $byUser = [];
+        foreach ($sessionsByUser as $uid => $map) {
+            $agg = $this->emptyAttendance();
+            foreach ($map as $status) {
+                if (isset($agg[$status])) {
+                    $agg[$status]++;
+                }
+            }
+            $byUser[$uid] = $agg;
+        }
+
+        return [$byUser, $sessionsByUser];
     }
 
     /**

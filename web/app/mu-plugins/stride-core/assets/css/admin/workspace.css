@@ -301,6 +301,10 @@ button { font-family: inherit; cursor: pointer; }
 .ws-btn--ghost:hover { background: var(--ws-surface-alt); border-color: var(--ws-text-3); }
 .ws-btn--subtle { background: var(--ws-surface-sunken); color: var(--ws-text-2); border-color: transparent; }
 .ws-btn--subtle:hover { background: var(--ws-border); color: var(--ws-text); }
+/* The lit state for toggle-style buttons (the cohort lens's active
+   attendance mark, F-C2) — keeps the button's own text color so the
+   present/absent/excused hue stays readable. */
+.ws-btn--subtle.is-active { background: var(--ws-primary-subtle); border-color: var(--ws-primary); box-shadow: inset 0 0 0 1px var(--ws-primary); }
 .ws-btn--danger { background: var(--ws-danger); }
 .ws-btn--danger:hover { background: #b91c1c; }
 .ws-btn--danger-ghost { background: #fff; color: var(--ws-danger-text); border-color: #fecaca; }

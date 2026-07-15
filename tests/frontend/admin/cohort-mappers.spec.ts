@@ -11,11 +11,16 @@
  *      set (never an invented/echoed key), so the denial branch (no row carries
  *      extras → []) is the contract that matters.
  *
- *   2. rosterActionsForStates(states) — the roster bulk safe state-intersection:
- *      an action is offered only when EVERY selected state supports it. The
- *      empty-selection branch and the no-shared-action branch are the falsifiable
- *      contracts (offering a bulk action a mixed selection can't all take ships a
- *      real "approve a confirmed registration" bug).
+ *   2. cohortApplyMark(row, sessionId, status) — the F-C2 optimistic mark
+ *      applier: patches the per-session map (status '' clears) and recomputes
+ *      the aggregate FROM that map — the same definition the server derives
+ *      its counts from, so an optimistic patch and the next fetch can never
+ *      disagree. Purity matters: it must return a NEW row (rollback keeps the
+ *      previous object).
+ *
+ * (rosterActionsForStates and the ROSTER_ACTIONS catalog were REMOVED with the
+ * bulk bar — decision 5a, F-C1: the cohort roster is confirmed/completed only,
+ * so the one lifecycle action could never appear.)
  *
  * Imported directly via the UMD tail on cohort.js (module.exports under Node),
  * exactly like the sibling *-mappers specs.
@@ -57,31 +62,42 @@ test.describe('cohortExtrasOptionsFrom (CF3 loaded-set builder)', () => {
   });
 });
 
-test.describe('rosterActionsForStates (safe intersection)', () => {
-  const ids = (st: string[]) => cohort.rosterActionsForStates(st).map((a: { id: string }) => a.id);
-
-  test('offers approve only when EVERY selected state can be approved', () => {
-    expect(ids(['pending'])).toContain('approve');
-    expect(ids(['pending', 'waitlist'])).toContain('approve');
-    // confirmed is NOT in approve.states → approve drops out of the intersection
-    expect(ids(['pending', 'confirmed'])).not.toContain('approve');
+test.describe('cohortApplyMark (F-C2 optimistic mark applier)', () => {
+  const row = () => ({
+    registration_id: 1,
+    attendance_by_session: { '10': 'present', '11': 'absent' },
+    attendance: { present: 1, absent: 1, excused: 0 },
   });
 
-  test('DENIAL: returns [] for an empty selection (no actions on nothing)', () => {
-    expect(cohort.rosterActionsForStates([])).toEqual([]);
+  test('stamps a new mark and recomputes the aggregate from the map', () => {
+    const next = cohort.cohortApplyMark(row(), 12, 'excused');
+    expect(next.attendance_by_session).toEqual({ '10': 'present', '11': 'absent', '12': 'excused' });
+    expect(next.attendance).toEqual({ present: 1, absent: 1, excused: 1 });
   });
 
-  test('intersects to the SHARED action, or [] when none covers all selected states', () => {
-    // interest: approve+message ; completed: message+generate_doc.
-    // Only `message` is shared → that is the intersection (NOT empty).
-    expect(ids(['interest', 'completed'])).toEqual(['message']);
-    // A state outside every action's set yields [].
-    expect(ids(['cancelled'])).toEqual([]);
+  test('overwrites an existing mark for the same session (latest wins, no double count)', () => {
+    const next = cohort.cohortApplyMark(row(), 10, 'absent');
+    expect(next.attendance_by_session['10']).toBe('absent');
+    expect(next.attendance).toEqual({ present: 0, absent: 2, excused: 0 });
   });
 
-  test('ROSTER_ACTIONS carries scope-agnostic ids the cohortActionName() can prefix', () => {
-    expect(cohort.ROSTER_ACTIONS.map((a: { id: string }) => a.id)).toEqual([
-      'approve', 'message', 'generate_doc',
-    ]);
+  test("status '' CLEARS the session's mark", () => {
+    const next = cohort.cohortApplyMark(row(), 10, '');
+    expect(next.attendance_by_session).toEqual({ '11': 'absent' });
+    expect(next.attendance).toEqual({ present: 0, absent: 1, excused: 0 });
+  });
+
+  test('PURITY: returns a NEW row and never mutates the input (the rollback snapshot)', () => {
+    const before = row();
+    const next = cohort.cohortApplyMark(before, 12, 'present');
+    expect(next).not.toBe(before);
+    expect(before.attendance_by_session).toEqual({ '10': 'present', '11': 'absent' });
+    expect(before.attendance).toEqual({ present: 1, absent: 1, excused: 0 });
+  });
+
+  test('EDGE: a row without a map starts from empty; numeric and string session ids meet on the string key', () => {
+    const next = cohort.cohortApplyMark({ registration_id: 2 }, 7, 'present');
+    expect(next.attendance_by_session).toEqual({ '7': 'present' });
+    expect(next.attendance).toEqual({ present: 1, absent: 0, excused: 0 });
   });
 });

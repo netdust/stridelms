@@ -292,6 +292,12 @@ class AdminEditionRosterTest extends IntegrationTestCase
         $this->assertSame(1, $byId[self::$selectorRegId]['attendance']['present']);
         // Plain registrant has no attendance records.
         $this->assertSame(0, $byId[self::$plainRegId]['attendance']['present']);
+
+        // F-C2: the per-session latest-wins map rides every row (string keys —
+        // JSON object keys). The selector's present mark is for session A.
+        $bySession = $byId[self::$selectorRegId]['attendance_by_session'];
+        $this->assertSame('present', $bySession[(string) self::$sessionAId] ?? null);
+        $this->assertSame([], $byId[self::$plainRegId]['attendance_by_session']);
     }
 
     public function test_signature_accepts_no_param_that_binds_json_into_sql(): void
