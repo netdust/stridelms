@@ -193,7 +193,10 @@
         }
       },
 
-      reload() { this.load(1); },
+      /* Background/refresh reload keeps the CURRENT page — a ws-refresh
+         after a lens mutation must never snap the admin back to page 1
+         (their place in the list is work state). */
+      reload() { this.load(); },
       onFilterChange() { this.load(1); },
       onSearchChange() { this.load(1); },
       goPage(p) { if (p >= 1 && p <= this.pageCount && p !== this.page) this.load(p); },

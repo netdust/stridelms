@@ -648,7 +648,10 @@
       },
 
       /* re-fetch helpers bound by the markup */
-      reload() { this.load(1); },
+      /* Background/refresh reload keeps the CURRENT page — a ws-refresh
+         after a lens mutation must never snap the admin back to page 1
+         (their place in the list is work state). */
+      reload() { this.load(); },
       onFilterChange() { this.clearSelection(); this.load(1); },
       // Search changes the filtered set — an ARMED cross-page select-all (or
       // a manual selection) must not silently re-target to the new set, same

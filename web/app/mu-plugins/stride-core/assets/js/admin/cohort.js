@@ -10,8 +10,11 @@
    action (approve — pending/interest/waitlist) could never appear, and the
    remaining catalog entries were stubs failing every row. Lifecycle work lives
    on the Inschrijvingen grid; the lens is the per-session view + attendance
-   marker. (The RosterBulkHandler backend registry remains for the grid/future
-   surfaces — only the lens UI consumed it here.)
+   marker. (The RosterBulkHandler backend registry is CURRENTLY UNCONSUMED —
+   no surface POSTs stride_roster_bulk_* / stride_traj_roster_bulk_* anymore,
+   and their nonces are no longer armed in StrideConfig.bulkNonces, which makes
+   the handlers unreachable by design. Re-arm the specific action if a surface
+   adopts the registry.)
 
    BACKEND — consumed exactly as emitted:
 
@@ -141,16 +144,21 @@
       sessionId: 0,      // active per-session filter (0 = all rows)
       extrasFilter: '',  // active "key=value" extras filter ('' = none)
 
-      /* a successful mark happened — close() then refreshes the surfaces
-         underneath (F-C3). */
+      /* a mark was attempted — close() then refreshes the surfaces
+         underneath (F-C3). Set BEFORE the POST awaits: close() reads it
+         synchronously, and a mark still in flight at close time must not
+         skip the refresh (a spurious refresh is cheap; a missed one leaves
+         stale numbers). */
       _mutated: false,
+
+      /* registration_id -> true while that row's mark POST is in flight —
+         the per-row guard that makes rapid clicks safe (buttons disable). */
+      _marking: {},
 
       toasts: [],
       toastSeq: 0,
 
       get canManage() { return !!(window.StrideConfig || {}).canManage; },
-
-      init() {},
 
       /* Open the lens for an edition (relayed from the Edities surface via the
          `ws-cohort-open` window event). Resets all state, then fetches the
@@ -198,6 +206,7 @@
         this.sessionId = 0;
         this.extrasFilter = '';
         this._mutated = false;
+        this._marking = {};
       },
 
       /* Close + propagate (F-C3): attendance marks change numbers the
@@ -284,11 +293,20 @@
       get canMarkAttendance() {
         return !!(this.canManage && this.sessionId);
       },
-      async markAttendance(userId, status) {
-        if (!this.canMarkAttendance) return;
+      isMarking(row) {
+        return !!(row && this._marking[row.registration_id]);
+      },
+      /* Takes the ROW, never a bare user id: rows are keyed by
+         registration_id (a user CAN hold two cohort rows — the registrations
+         table deliberately has no UNIQUE(user_id, edition_id)), so a
+         user-id lookup would route every click to the first row. */
+      async markAttendance(row, status) {
+        if (!this.canMarkAttendance || !row) return;
+        const regId = row.registration_id;
+        if (this._marking[regId]) return; // one in-flight mark per row
         const sessionId = Number(this.sessionId);
-        const uid = Number(userId);
-        const idx = this.rows.findIndex((r) => Number(r.user_id) === uid);
+        const editionAtSend = this.editionId;
+        const idx = this.rows.findIndex((r) => r.registration_id === regId);
         if (idx === -1) return;
 
         // Toggle semantics: clicking the row's CURRENT mark clears it (the
@@ -300,18 +318,25 @@
         // mark on another row must never be clobbered).
         const previous = this.rows[idx];
         this.rows.splice(idx, 1, cohortApplyMark(previous, sessionId, next));
+        this._marking[regId] = true;
+        this._mutated = true; // before the await — close() reads it sync (F-C3)
 
         try {
           await this.api('/admin/attendance', {
             method: 'POST',
-            body: JSON.stringify({ session_id: sessionId, user_id: uid, status: next }),
+            body: JSON.stringify({ session_id: sessionId, user_id: Number(row.user_id), status: next }),
           });
-          this._mutated = true;
         } catch (e) {
-          // Roll back JUST this row (find it again — the index may have moved).
-          const at = this.rows.findIndex((r) => Number(r.user_id) === uid);
-          if (at !== -1) this.rows.splice(at, 1, previous);
-          this.toast('mixed', '', 'Aanwezigheid opslaan mislukt.');
+          // Roll back JUST this row — and ONLY if the lens still shows the
+          // same edition (a late failure after close/reopen must never splice
+          // another edition's row object into this roster).
+          if (this.editionId === editionAtSend) {
+            const at = this.rows.findIndex((r) => r.registration_id === regId);
+            if (at !== -1) this.rows.splice(at, 1, previous);
+            this.toast('mixed', '', 'Aanwezigheid opslaan mislukt.');
+          }
+        } finally {
+          delete this._marking[regId];
         }
       },
 

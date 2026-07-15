@@ -30,7 +30,6 @@
 defined('ABSPATH') || exit;
 ?>
 <div x-data="cohort()"
-     x-init="init()"
      @ws-cohort-open.window="openForEdition($event.detail && $event.detail.editionId)"
      @keydown.escape.window="open && close()"
      x-cloak>
@@ -150,25 +149,28 @@ defined('ABSPATH') || exit;
                                                 <div class="ws-row" style="gap:4px">
                                                     <!-- the ACTIVE mark is lit; clicking it again
                                                          clears (toggle) — buttons finally reflect
-                                                         current state (F-C2) -->
+                                                         current state (F-C2). The ROW is passed
+                                                         (rows key on registration_id — a user can
+                                                         hold two cohort rows) and buttons disable
+                                                         while that row's mark is in flight. -->
                                                     <button type="button" class="ws-btn ws-btn--subtle ws-btn--sm" style="color:var(--ws-success-text)"
-                                                            :class="{ 'is-active': markFor(row) === 'present' }"
-                                                            @click="markAttendance(row.user_id, 'present')" title="<?php echo esc_attr__('Aanwezig', 'stride'); ?>">
+                                                            :class="{ 'is-active': markFor(row) === 'present' }" :disabled="isMarking(row)"
+                                                            @click="markAttendance(row, 'present')" title="<?php echo esc_attr__('Aanwezig', 'stride'); ?>">
                                                         <span x-html="icon('check')"></span>
                                                     </button>
                                                     <button type="button" class="ws-btn ws-btn--subtle ws-btn--sm" style="color:var(--ws-danger)"
-                                                            :class="{ 'is-active': markFor(row) === 'absent' }"
-                                                            @click="markAttendance(row.user_id, 'absent')" title="<?php echo esc_attr__('Afwezig', 'stride'); ?>">
+                                                            :class="{ 'is-active': markFor(row) === 'absent' }" :disabled="isMarking(row)"
+                                                            @click="markAttendance(row, 'absent')" title="<?php echo esc_attr__('Afwezig', 'stride'); ?>">
                                                         <span x-html="icon('x')"></span>
                                                     </button>
                                                     <button type="button" class="ws-btn ws-btn--subtle ws-btn--sm" style="color:var(--ws-warning-text)"
-                                                            :class="{ 'is-active': markFor(row) === 'excused' }"
-                                                            @click="markAttendance(row.user_id, 'excused')" title="<?php echo esc_attr__('Verontschuldigd', 'stride'); ?>">
+                                                            :class="{ 'is-active': markFor(row) === 'excused' }" :disabled="isMarking(row)"
+                                                            @click="markAttendance(row, 'excused')" title="<?php echo esc_attr__('Verontschuldigd', 'stride'); ?>">
                                                         <span x-html="icon('info')"></span>
                                                     </button>
                                                     <button type="button" class="ws-btn ws-btn--subtle ws-btn--sm ws-muted"
-                                                            x-show="markFor(row)"
-                                                            @click="markAttendance(row.user_id, '')" title="<?php echo esc_attr__('Wissen', 'stride'); ?>">
+                                                            x-show="markFor(row)" :disabled="isMarking(row)"
+                                                            @click="markAttendance(row, '')" title="<?php echo esc_attr__('Wissen', 'stride'); ?>">
                                                         <span x-html="icon('slash')"></span>
                                                     </button>
                                                 </div>

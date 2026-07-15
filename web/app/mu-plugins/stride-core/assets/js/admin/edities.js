@@ -110,8 +110,12 @@
 
       filters: { q: '', status: '', tag: '', dateFrom: '', dateTo: '' },
 
+      /* _listReq is a monotonic request token (the shared list-race rule):
+         search/status/tag/date/scope/view all trigger loads, and a slow
+         earlier response must never overwrite a faster later one. */
       loading: false,
       error: '',
+      _listReq: 0,
 
       /* flatpickr instance (set in init, used by clearAllFilters). */
       _fp: null,
@@ -176,6 +180,7 @@
 
       async load(page) {
         if (page != null) this.page = page;
+        const req = ++this._listReq;
         this.loading = true;
         this.error = ''; // clear at the TOP (cluster-B lesson)
 
@@ -193,21 +198,26 @@
 
         try {
           const data = await this.api(`/admin/editions?${params.toString()}`);
+          if (req !== this._listReq) return; // superseded — drop stale response
           this.rows = (data && data.items) || [];
           this.total = (data && data.total) || 0;
           this.page = (data && data.page) || 1;
           this.perPage = (data && data.perPage) || this.perPage;
           this.pageCount = (data && data.totalPages) || 1;
         } catch (e) {
+          if (req !== this._listReq) return;
           this.error = (e && e.message) ? e.message : 'Kon de edities niet laden.';
           this.rows = [];
           this.total = 0;
         } finally {
-          this.loading = false;
+          if (req === this._listReq) this.loading = false;
         }
       },
 
-      reload() { this.load(1); },
+      /* Background/refresh reload keeps the CURRENT page — a ws-refresh
+         after a lens mutation must never snap the admin back to page 1
+         (their place in the list is work state). */
+      reload() { this.load(); },
 
       onFilterChange() { this.load(1); },
 

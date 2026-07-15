@@ -273,15 +273,13 @@ class AdminDashboardService extends AbstractService
             'stride_bulk_message',
             'stride_bulk_generate_doc',
             'stride_bulk_set_field',
-            // Cohort-lens roster bulk (Phase 2a, Task 2a.9). Each maps to a
-            // Handlers/RosterBulkHandler ntdst/api_data/* filter; the cohort UI
-            // arms the matching nonce per action via cohortActionName().
-            'stride_roster_bulk_approve',
-            'stride_roster_bulk_message',
-            'stride_roster_bulk_generate_doc',
-            'stride_traj_roster_bulk_approve',
-            'stride_traj_roster_bulk_message',
-            'stride_traj_roster_bulk_generate_doc',
+            // The stride_roster_bulk_* / stride_traj_roster_bulk_* nonces were
+            // DROPPED here at the Cohort slice (decision 5a): the lens bulk bar
+            // was removed and NO client consumes those RosterBulkHandler
+            // actions anymore. Without an armed nonce the registered handlers
+            // are unreachable — deliberately: never hand every admin page a
+            // pre-armed CSRF token for a mutation surface no UI exercises.
+            // Re-add the specific action here if a surface adopts the registry.
         ];
 
         $nonces = [];

@@ -193,7 +193,11 @@ final class AttendanceRepository
             $params[] = $editionId;
         }
 
-        $sql .= " ORDER BY marked_at DESC";
+        // id DESC tiebreaker: two records sharing a marked_at second must
+        // still have a deterministic "latest" — the roster's latest-wins
+        // per-session map (AdminEditionRosterService::attendanceMaps) takes
+        // the FIRST record it sees per (user, session).
+        $sql .= " ORDER BY marked_at DESC, id DESC";
 
         return $wpdb->get_results($wpdb->prepare($sql, ...$params));
     }
