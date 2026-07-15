@@ -201,15 +201,18 @@ final class AdminEditionRosterService
             return [[], []];
         }
 
-        $records = $this->attendance->getByUsers($userIds, $editionId);
+        // THE deduped latest-wins read (one record per user+session) — the
+        // same reader the Partner API consumes, so the two surfaces can never
+        // disagree about duplicate historical records.
+        $records = $this->attendance->getLatestBySessionForUsers($userIds, $editionId);
 
         $sessionsByUser = [];
         foreach ($records as $record) {
             $uid = (int) $record->user_id;
             $sessionKey = (string) (int) ($record->session_id ?? 0);
             $status = (string) $record->status;
-            if ($status === '' || isset($sessionsByUser[$uid][$sessionKey])) {
-                continue; // latest-wins (DESC order) / cleared marks carry no state
+            if ($status === '') {
+                continue; // cleared marks carry no state
             }
             $sessionsByUser[$uid][$sessionKey] = $status;
         }
