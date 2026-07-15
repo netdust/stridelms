@@ -118,6 +118,13 @@
      Alpine's keyed reconciliation until the templates switched to index keys).
      One encoding of the ellipsis rule; surfaces delegate:
        pageList() { return window.WS.pageList(this.page, this.pageCount); }
+     The delegation dereferences window at CALL time, which is safe because
+     pageList() is a RENDER-path method (only Alpine templates invoke it,
+     always in a browser with shell.js loaded first). Node specs test this
+     function directly via module.exports — never through a surface factory.
+     That render-only property is exactly what the load()/search() race-token
+     counters DON'T have (specs drive them under bare Node), which is why
+     those stay inline per surface instead of becoming a shared WS helper.
      NOTE for the templates: the two '…' entries are identical strings — pager
      x-for MUST key by INDEX ((p, pi) :key="pi"), never by value. */
   function wsPageList(page, pageCount) {
@@ -138,7 +145,9 @@
      retry forever. When the WP_Error body is rest_cookie_invalid_nonce this
      dispatches ws-nonce-expired (the shell shows its persistent Vernieuwen
      banner) and returns the Dutch message for the caller to throw; any other
-     body returns null and the caller keeps its own message. */
+     body returns null and the caller keeps its own message. The sentence
+     below is DUPLICATED in the banner template (dashboard.php, translatable
+     via esc_html__) — keep the two in sync when editing the copy. */
   function wsNonceExpired(body) {
     if (!body || body.code !== 'rest_cookie_invalid_nonce') {
       return null;

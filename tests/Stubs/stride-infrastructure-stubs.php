@@ -217,6 +217,16 @@ namespace NTDST\Audit {
                 global $wpdb;
                 return $wpdb->prefix . self::TABLE_NAME;
             }
+
+            /**
+             * Mirrors the real guard AdminActivityService calls before every
+             * audit read; unit tests assume the table is present (the $wpdb
+             * mock supplies the rows).
+             */
+            public static function exists(): bool
+            {
+                return true;
+            }
         }
     }
 }

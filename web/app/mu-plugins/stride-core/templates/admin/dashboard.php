@@ -47,13 +47,20 @@ defined('ABSPATH') || exit;
               // recognize rest_cookie_invalid_nonce and dispatch ws-nonce-expired;
               // the shell latches it here. Persistent (not a toast): the only
               // remedy is a reload, so the banner stays until the admin takes it. ?>
-        <div class="ws-nonce-banner" x-show="nonceExpired" x-cloak role="alert">
-            <span x-html="icon('alert', 'ws-ico')"></span>
-            <span class="ws-nonce-banner__text"><?php echo esc_html__('Je sessie is verlopen. Vernieuw de pagina om verder te werken.', 'stride'); ?></span>
-            <button type="button" class="ws-btn ws-btn--sm" @click="reloadPage()">
-                <?php echo esc_html__('Vernieuwen', 'stride'); ?>
-            </button>
-        </div>
+        <?php // x-if, not x-show: role="alert" is announced on INSERTION into
+              // the accessibility tree — a display toggle on an always-present
+              // node is unreliable across screen readers. The sentence below
+              // must stay in sync with wsNonceExpired() in shell.js (the same
+              // message thrown into each surface's own error zone). ?>
+        <template x-if="nonceExpired">
+            <div class="ws-nonce-banner" role="alert">
+                <span x-html="icon('alert', 'ws-ico')"></span>
+                <span class="ws-nonce-banner__text"><?php echo esc_html__('Je sessie is verlopen. Vernieuw de pagina om verder te werken.', 'stride'); ?></span>
+                <button type="button" class="ws-btn ws-btn--sm" @click="reloadPage()">
+                    <?php echo esc_html__('Vernieuwen', 'stride'); ?>
+                </button>
+            </div>
+        </template>
 
         <?php // Vandaag — its own per-surface Alpine factory owns ALL its data (cluster B).
         require __DIR__ . '/dashboard/vandaag.php'; ?>
